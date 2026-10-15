@@ -21,13 +21,15 @@ final class Backbone {
     let frames: Buf          // [capacity, 11] int32, the whole sequence
     let x: Buf, h: Buf, big: Buf, z: Buf, a: Buf, b: Buf, convOut: Buf, core: Buf, normed: Buf
     let qn: Buf, kbuf: Buf, vbuf: Buf, kn: Buf, attnOut: Buf, mixOut: Buf
-    let routerLogits: Buf, ids: Buf, rw: Buf, counts: Buf, lists: Buf, act: Buf, slotOut: Buf
+    let routerLogits: Buf, ids: Buf, rw: Buf, counts: Buf, lists: Buf, active: Buf, act: Buf, slotOut: Buf
     let sharedG: Buf, sharedU: Buf, sharedAct: Buf, sharedOut: Buf, sharedGate: Buf
     let hiddenOut: Buf       // [maxRows, 2048] final-norm output
     let candEos: Buf, candBand: Buf
     /// Residual stream after each layer for the first row (dump support).
     var captureLayers: Bool = false
     var captureRow: Int = 0
+    /// Benchmark aid: stages named here are not encoded ("linear", "full", "moe").
+    var skipStages: Set<String> = []
     private(set) var layerCapture: [Buf] = []
 
     init(ctx: MetalContext, config: ModelConfig, weights: BackboneWeights, codebooks: TensorRef, precision: Precision, capacity: Int, maxRows: Int = 128) {
@@ -50,7 +52,8 @@ final class Backbone {
         kn = Buf(d, floats: R * 512, label: "kn"); attnOut = Buf(d, floats: R * 4096, label: "attnOut"); mixOut = Buf(d, floats: R * H, label: "mixOut")
         routerLogits = Buf(d, floats: R * config.numExperts, label: "routerLogits")
         ids = Buf(d, floats: R * config.topK, label: "ids"); rw = Buf(d, floats: R * config.topK, label: "rw")
-        counts = Buf(d, floats: config.numExperts, label: "counts"); lists = Buf(d, floats: config.numExperts * R * config.topK, label: "lists")
+        counts = Buf(d, floats: config.numExperts + 1, label: "counts"); lists = Buf(d, floats: config.numExperts * R * config.topK, label: "lists")
+        active = Buf(d, floats: config.numExperts, label: "active")
         act = Buf(d, floats: R * config.topK * config.moeIntermediate, label: "act")
         slotOut = Buf(d, floats: R * config.topK * H, label: "slotOut")
         sharedG = Buf(d, floats: R * 512, label: "sharedG"); sharedU = Buf(d, floats: R * 512, label: "sharedU")
@@ -94,14 +97,14 @@ final class Backbone {
             try k.rmsnorm(enc, out: h, outStride: H, x: x, view: .contiguous(H), rows: M, dim: H, w: layer.inputNorm, eps: c.rmsNormEps)
             try k.roundIfMimic(enc, x: h, count: M * H)
             switch layer.mixer {
-            case .linear(let w): try linearAttention(enc, w, layer: i, rows: M)
-            case .full(let w): try fullAttention(enc, w, layer: i, rows: M, pos0: pos0)
+            case .linear(let w): if !skipStages.contains("linear") { try linearAttention(enc, w, layer: i, rows: M) }
+            case .full(let w): if !skipStages.contains("full") { try fullAttention(enc, w, layer: i, rows: M, pos0: pos0) }
             }
             try k.residualAdd(enc, x: x, y: mixOut, count: M * H)
             try k.roundIfMimic(enc, x: x, count: M * H)
             try k.rmsnorm(enc, out: h, outStride: H, x: x, view: .contiguous(H), rows: M, dim: H, w: layer.postNorm, eps: c.rmsNormEps)
             try k.roundIfMimic(enc, x: h, count: M * H)
-            try moe(enc, layer.moe, rows: M)
+            if !skipStages.contains("moe") { try moe(enc, layer.moe, rows: M) }
             if captureLayers {
                 try k.residualAdd(enc, x: layerCapture[i], y: Buf(view: x, byteOffset: captureRow * H * 4), count: H)
             }
@@ -176,9 +179,10 @@ final class Backbone {
         try k.gemv(enc, w.router, x: h, y: routerLogits, n: config.numExperts, k: H, m: M)
         try k.moeRouter(enc, ids: ids, weights: rw, logits: routerLogits, rows: M, config: config)
         try k.zero(enc, counts)
-        try k.moeBucket(enc, counts: counts, lists: lists, ids: ids, pairs: M * config.topK, capacity: capacityPairs)
-        try k.moeGateUp(enc, act: act, x: h, table: w.table, counts: counts, lists: lists, capacity: capacityPairs, config: config)
-        try k.moeDown(enc, slotOut: slotOut, act: act, weights: rw, table: w.table, counts: counts, lists: lists, capacity: capacityPairs, config: config)
+        let maxActive = min(M * config.topK, config.numExperts)
+        try k.moeBucket(enc, counts: counts, lists: lists, ids: ids, active: active, pairs: M * config.topK, capacity: capacityPairs)
+        try k.moeGateUp(enc, act: act, x: h, table: w.table, counts: counts, lists: lists, active: active, maxActive: maxActive, capacity: capacityPairs, config: config)
+        try k.moeDown(enc, slotOut: slotOut, act: act, weights: rw, table: w.table, counts: counts, lists: lists, active: active, maxActive: maxActive, capacity: capacityPairs, config: config)
         try k.gemv(enc, w.sharedGate, x: h, y: sharedG, n: 512, k: H, m: M)
         try k.gemv(enc, w.sharedUp, x: h, y: sharedU, n: 512, k: H, m: M)
         try k.siluMul(enc, out: sharedAct, a: sharedG, b: sharedU, count: M * 512)

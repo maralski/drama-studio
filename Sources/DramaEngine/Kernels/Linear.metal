@@ -27,6 +27,7 @@ kernel void gemv_bf16(device const ushort* W [[buffer(0)]],
     for (uint m0 = 0; m0 < p.M; m0 += GEMV_MTILE) {
         uint mcount = min(uint(GEMV_MTILE), p.M - m0);
         float acc[GEMV_MTILE];
+#pragma unroll
         for (uint t = 0; t < GEMV_MTILE; t++) acc[t] = 0.0f;
         for (uint tile = 0; tile < tiles; tile++) {
             uint2 lo = wrow[(tile * 32 + lane) * 2];
@@ -37,17 +38,24 @@ kernel void gemv_bf16(device const ushort* W [[buffer(0)]],
                 bf16_to_float(hi.x & 0xffffu), bf16_to_float(hi.x >> 16),
                 bf16_to_float(hi.y & 0xffffu), bf16_to_float(hi.y >> 16)};
             uint k0 = tile * 256 + lane * 8;
-            for (uint t = 0; t < mcount; t++) {
-                device const float4* xp = (device const float4*)(x + (m0 + t) * p.K + k0);
-                float4 a = xp[0];
-                float4 b = xp[1];
-                acc[t] += w[0] * a.x + w[1] * a.y + w[2] * a.z + w[3] * a.w
-                        + w[4] * b.x + w[5] * b.y + w[6] * b.z + w[7] * b.w;
+            // Constant trip count keeps acc in registers; the guard predicates.
+#pragma unroll
+            for (uint t = 0; t < GEMV_MTILE; t++) {
+                if (t < mcount) {
+                    device const float4* xp = (device const float4*)(x + (m0 + t) * p.K + k0);
+                    float4 a = xp[0];
+                    float4 b = xp[1];
+                    acc[t] += w[0] * a.x + w[1] * a.y + w[2] * a.z + w[3] * a.w
+                            + w[4] * b.x + w[5] * b.y + w[6] * b.z + w[7] * b.w;
+                }
             }
         }
-        for (uint t = 0; t < mcount; t++) {
-            float s = simd_sum(acc[t]);
-            if (lane == 0) y[(m0 + t) * p.N + n] = p.roundOutput ? round_to_bf16(s) : s;
+#pragma unroll
+        for (uint t = 0; t < GEMV_MTILE; t++) {
+            if (t < mcount) {
+                float s = simd_sum(acc[t]);
+                if (lane == 0) y[(m0 + t) * p.N + n] = p.roundOutput ? round_to_bf16(s) : s;
+            }
         }
     }
 }

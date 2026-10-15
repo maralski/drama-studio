@@ -31,7 +31,7 @@ inline float fp8_e4m3_to_float(uchar b) {
 
 inline float silu_f(float x) { return x / (1.0f + exp(-x)); }
 inline float sigmoid_f(float x) { return 1.0f / (1.0f + exp(-x)); }
-inline float softplus_f(float x) { return x > 20.0f ? x : log1p(exp(x)); }
+inline float softplus_f(float x) { return x > 20.0f ? x : log(1.0f + exp(x)); }
 
 // A view of per-head rows inside a wider row: element (row, i) lives at
 // base[(row / heads) * groupStride + (row % heads) * headStride + i].

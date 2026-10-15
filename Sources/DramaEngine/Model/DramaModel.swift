@@ -27,6 +27,40 @@ public final class DramaModel: @unchecked Sendable {
         tower = Tower(ctx: ctx, config: config, weights: weights.tower, precision: precision, capacity: capacity)
     }
 
+    /// GPU seconds for one backbone forward of `rows` rows at position 0.
+    public func benchBackbone(rows: Int, skip: Set<String>) throws -> Double {
+        backbone.skipStages = skip
+        defer { backbone.skipStages = [] }
+        for r in 0..<rows { let p = backbone.frames.ints + r * 11; p[0] = 1000 + Int32(r); for i in 1..<11 { p[i] = 0 } }
+        let (cb, enc) = commandBuffer()
+        try backbone.forward(enc, rows: rows, pos0: 0)
+        enc.endEncoding()
+        cb.commit(); cb.waitUntilCompleted()
+        if let e = cb.error { throw EngineError.badModel("\(e)") }
+        return cb.gpuEndTime - cb.gpuStartTime
+    }
+
+    /// GPU seconds for one tower prefill of `rows` rows.
+    public func benchTower(rows: Int) throws -> Double {
+        var fake: [Frame] = []
+        for r in 0..<rows {
+            var f: Frame = [config.semanticStart + Int32(r)]
+            for c in 0..<10 { f.append(Int32((c * 7 + r) % 1024)) }
+            fake.append(f)
+        }
+        tower.setTargets(nextFrames: fake)
+        let (cb, enc) = commandBuffer()
+        try tower.prefill(enc, hidden: backbone.hiddenOut, frames: backbone.framesView(0), rows: rows, pos0: 0, codebooks: weights.tower.codebookEmbeddings)
+        enc.endEncoding()
+        cb.commit(); cb.waitUntilCompleted()
+        if let e = cb.error { throw EngineError.badModel("\(e)") }
+        return cb.gpuEndTime - cb.gpuStartTime
+    }
+
+    public func benchWarmUp() -> Double {
+        let t0 = Date(); warmUp(); return Date().timeIntervalSince(t0)
+    }
+
     func commandBuffer() -> (MTLCommandBuffer, MTLComputeCommandEncoder) {
         let cb = ctx.queue.makeCommandBuffer()!
         let enc = cb.makeComputeCommandEncoder()!
@@ -35,21 +69,27 @@ public final class DramaModel: @unchecked Sendable {
     }
 
     /// Touches every weight page once so the first request does not pay for
-    /// page faults. Returns the number of bytes walked.
+    /// page faults. Shards are walked on parallel threads. Returns bytes walked.
     @discardableResult
     public func warmUp() -> Int {
+        let shards = store.shards
         var total = 0
-        for shard in store.shards {
-            let p = shard.contents().assumingMemoryBound(to: UInt8.self)
-            let stride = 16384
-            var sink: UInt8 = 0
-            var i = 0
-            while i < shard.length { sink &+= p[i]; i += stride }
-            total += shard.length
-            _ = sink
+        DispatchQueue.concurrentPerform(iterations: shards.count) { i in
+            let shard = shards[i]
+            madvise(shard.contents(), shard.length, MADV_WILLNEED)
+            let p = shard.contents().assumingMemoryBound(to: UInt64.self)
+            var sink: UInt64 = 0
+            var j = 0
+            let stride = 16384 / 8
+            while j * 8 < shard.length { sink &+= p[j]; j += stride }
+            withExtendedLifetime(sink) {}
+            Self.sinkLock.lock(); Self.sinkSum &+= sink; total += shard.length; Self.sinkLock.unlock()
         }
         return total
     }
+    private static var sinkSum: UInt64 = 0
+    private static let sinkLock = NSLock()
+
 }
 
 /// Per-step logits the evaluation suite compares.

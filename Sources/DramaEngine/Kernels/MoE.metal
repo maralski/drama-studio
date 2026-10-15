@@ -56,15 +56,21 @@ kernel void moe_router(device int* ids [[buffer(0)]],
     if (e < p.topK) weights[m * p.topK + e] /= picked;
 }
 
-// Per-expert lists of (token * topK + slot) pairs. counts must be zeroed first.
+// Per-expert lists of (token * topK + slot) pairs, plus the list of experts
+// that have any. counts[0..255] and counts[256] (the active count) must be zero.
 kernel void moe_bucket(device atomic_uint* counts [[buffer(0)]],
                        device uint* lists [[buffer(1)]],
                        device const int* ids [[buffer(2)]],
-                       constant uint& capacity [[buffer(3)]],
+                       device uint* active [[buffer(3)]],
+                       constant uint& capacity [[buffer(4)]],
                        uint pair [[thread_position_in_grid]]) {
     uint e = uint(ids[pair]);
     uint slot = atomic_fetch_add_explicit(&counts[e], 1u, memory_order_relaxed);
     lists[e * capacity + slot] = pair;
+    if (slot == 0) {
+        uint a = atomic_fetch_add_explicit(&counts[256], 1u, memory_order_relaxed);
+        active[a] = e;
+    }
 }
 
 // Expert address table: per expert [gateW, gateScale, upW, upScale, downW, downScale].
@@ -78,7 +84,7 @@ struct MoEParams {
 };
 
 inline float fp8_weight(uchar b, float scale, uint roundW) {
-    float w = fp8_e4m3_to_float(b) * scale;
+    float w = FP8_LUT[b] * scale;
     return roundW ? round_to_bf16(w) : w;
 }
 
@@ -90,12 +96,13 @@ kernel void moe_gate_up_fp8(device float* act [[buffer(0)]],
                             device const uint* counts [[buffer(3)]],
                             device const uint* lists [[buffer(4)]],
                             constant MoEParams& p [[buffer(5)]],
+                            device const uint* active [[buffer(6)]],
                             uint2 tg [[threadgroup_position_in_grid]],
                             uint lane [[thread_index_in_simdgroup]],
                             uint sg [[simdgroup_index_in_threadgroup]]) {
-    uint e = tg.x;
+    if (tg.x >= counts[256]) return;
+    uint e = active[tg.x];
     uint count = counts[e];
-    if (count == 0) return;
     uint n = tg.y * 8 + sg;
     device const uchar* gateW = (device const uchar*)table[e * 6 + 0] + n * p.hidden;
     device const float* gateS = (device const float*)table[e * 6 + 1];
@@ -143,12 +150,13 @@ kernel void moe_down_fp8(device float* slotOut [[buffer(0)]],
                          device const uint* counts [[buffer(4)]],
                          device const uint* lists [[buffer(5)]],
                          constant MoEParams& p [[buffer(6)]],
+                         device const uint* active [[buffer(7)]],
                          uint2 tg [[threadgroup_position_in_grid]],
                          uint lane [[thread_index_in_simdgroup]],
                          uint sg [[simdgroup_index_in_threadgroup]]) {
-    uint e = tg.x;
+    if (tg.x >= counts[256]) return;
+    uint e = active[tg.x];
     uint count = counts[e];
-    if (count == 0) return;
     uint n = tg.y * 8 + sg;
     device const uchar* W = (device const uchar*)table[e * 6 + 4] + n * p.intermediate;
     device const float* S = (device const float*)table[e * 6 + 5];

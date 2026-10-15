@@ -212,11 +212,12 @@ struct Kernels {
         try dispatchGroups(enc, "moe_router", groups: MTLSize(width: rows, height: 1, depth: 1), group: MTLSize(width: 256, height: 1, depth: 1))
     }
 
-    func moeBucket(_ enc: MTLComputeCommandEncoder, counts: Buf, lists: Buf, ids: Buf, pairs: Int, capacity: Int) throws {
+    func moeBucket(_ enc: MTLComputeCommandEncoder, counts: Buf, lists: Buf, ids: Buf, active: Buf, pairs: Int, capacity: Int) throws {
         enc.setBuffer(counts.buffer, offset: counts.byteOffset + (0), index: 0)
         enc.setBuffer(lists.buffer, offset: lists.byteOffset + (0), index: 1)
         enc.setBuffer(ids.buffer, offset: ids.byteOffset + (0), index: 2)
-        set(enc, UInt32(capacity), index: 3)
+        enc.setBuffer(active.buffer, offset: active.byteOffset + (0), index: 3)
+        set(enc, UInt32(capacity), index: 4)
         try dispatch(enc, "moe_bucket", grid: MTLSize(width: pairs, height: 1, depth: 1), group: MTLSize(width: 256, height: 1, depth: 1))
     }
 
@@ -225,7 +226,7 @@ struct Kernels {
          precision.roundExpertWeights ? 1 : 0, precision.mimicBF16 ? 1 : 0)
     }
 
-    func moeGateUp(_ enc: MTLComputeCommandEncoder, act: Buf, x: Buf, table: MTLBuffer, counts: Buf, lists: Buf, capacity: Int, config: ModelConfig) throws {
+    func moeGateUp(_ enc: MTLComputeCommandEncoder, act: Buf, x: Buf, table: MTLBuffer, counts: Buf, lists: Buf, active: Buf, maxActive: Int, capacity: Int, config: ModelConfig) throws {
         struct P { var hidden: UInt32; var intermediate: UInt32; var topK: UInt32; var capacity: UInt32; var roundWeights: UInt32; var roundOutput: UInt32 }
         let p = moeParams(capacity: capacity, config: config)
         enc.setBuffer(act.buffer, offset: act.byteOffset + (0), index: 0)
@@ -234,10 +235,11 @@ struct Kernels {
         enc.setBuffer(counts.buffer, offset: counts.byteOffset + (0), index: 3)
         enc.setBuffer(lists.buffer, offset: lists.byteOffset + (0), index: 4)
         set(enc, P(hidden: p.0, intermediate: p.1, topK: p.2, capacity: p.3, roundWeights: p.4, roundOutput: p.5), index: 5)
-        try dispatchGroups(enc, "moe_gate_up_fp8", groups: MTLSize(width: config.numExperts, height: config.moeIntermediate / 8, depth: 1), group: MTLSize(width: 256, height: 1, depth: 1))
+        enc.setBuffer(active.buffer, offset: active.byteOffset, index: 6)
+        try dispatchGroups(enc, "moe_gate_up_fp8", groups: MTLSize(width: maxActive, height: config.moeIntermediate / 8, depth: 1), group: MTLSize(width: 256, height: 1, depth: 1))
     }
 
-    func moeDown(_ enc: MTLComputeCommandEncoder, slotOut: Buf, act: Buf, weights: Buf, table: MTLBuffer, counts: Buf, lists: Buf, capacity: Int, config: ModelConfig) throws {
+    func moeDown(_ enc: MTLComputeCommandEncoder, slotOut: Buf, act: Buf, weights: Buf, table: MTLBuffer, counts: Buf, lists: Buf, active: Buf, maxActive: Int, capacity: Int, config: ModelConfig) throws {
         struct P { var hidden: UInt32; var intermediate: UInt32; var topK: UInt32; var capacity: UInt32; var roundWeights: UInt32; var roundOutput: UInt32 }
         let p = moeParams(capacity: capacity, config: config)
         enc.setBuffer(slotOut.buffer, offset: slotOut.byteOffset + (0), index: 0)
@@ -247,7 +249,8 @@ struct Kernels {
         enc.setBuffer(counts.buffer, offset: counts.byteOffset + (0), index: 4)
         enc.setBuffer(lists.buffer, offset: lists.byteOffset + (0), index: 5)
         set(enc, P(hidden: p.0, intermediate: p.1, topK: p.2, capacity: p.3, roundWeights: p.4, roundOutput: p.5), index: 6)
-        try dispatchGroups(enc, "moe_down_fp8", groups: MTLSize(width: config.numExperts, height: config.hiddenSize / 8, depth: 1), group: MTLSize(width: 256, height: 1, depth: 1))
+        enc.setBuffer(active.buffer, offset: active.byteOffset, index: 7)
+        try dispatchGroups(enc, "moe_down_fp8", groups: MTLSize(width: maxActive, height: config.hiddenSize / 8, depth: 1), group: MTLSize(width: 256, height: 1, depth: 1))
     }
 
     func moeCombine(_ enc: MTLComputeCommandEncoder, x: Buf, slotOut: Buf, sharedOut: Buf, sharedGate: Buf, rows: Int, config: ModelConfig) throws {

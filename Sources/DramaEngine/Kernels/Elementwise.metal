@@ -36,9 +36,9 @@ kernel void embed_mix(device float* out [[buffer(0)]],
     uint d = gid.x;
     uint m = gid.y;
     if (d >= p.dim) return;
-    int main = frames[m * 11];
-    float text = bf16_to_float(embed[uint(main) * p.dim + d]);
-    bool semantic = main >= p.semanticStart && main <= p.semanticEnd;
+    int mainId = frames[m * 11];
+    float text = bf16_to_float(embed[uint(mainId) * p.dim + d]);
+    bool semantic = mainId >= p.semanticStart && mainId <= p.semanticEnd;
     if (semantic) {
         uint row = p.codebookSize + uint(frames[m * 11 + 2]);
         float extra = bf16_to_float(codebooks[row * p.dim + d]);
@@ -76,8 +76,8 @@ kernel void tower_embed(device float* out [[buffer(0)]],
         e = bf16_to_float(table[uint(c) * p.dim + d]);
     }
     if (p.addUnseen != 0) {
-        int main = frames[m * 11];
-        if (main >= p.semanticStart && main <= p.semanticEnd) {
+        int mainId = frames[m * 11];
+        if (mainId >= p.semanticStart && mainId <= p.semanticEnd) {
             for (uint k = 2; k < p.numCodebooks; k++) {
                 uint row = k * p.codebookSize + uint(frames[m * 11 + 1 + k]);
                 e += bf16_to_float(codebooks[row * p.dim + d]);

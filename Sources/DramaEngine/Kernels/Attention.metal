@@ -12,15 +12,15 @@ kernel void rope_neox(device float* x [[buffer(0)]],
                       uint2 gid [[thread_position_in_grid]]) {
     uint i = gid.x;
     uint row = gid.y;
-    uint half = p.rotaryDim / 2;
-    if (i >= half) return;
+    uint halfDim = p.rotaryDim / 2;
+    if (i >= halfDim) return;
     float pos = float(p.pos0 + row / p.heads);
     float angle = pos * pow(p.theta, -float(2 * i) / float(p.rotaryDim));
     float c = cos(angle), s = sin(angle);
     device float* r = x + row * 256;
-    float a = r[i], b = r[i + half];
+    float a = r[i], b = r[i + halfDim];
     r[i] = a * c - b * s;
-    r[i + half] = b * c + a * s;
+    r[i + halfDim] = b * c + a * s;
 }
 
 // Interleaved layout: pairs (2i, 2i + 1).
@@ -29,8 +29,8 @@ kernel void rope_interleaved(device float* x [[buffer(0)]],
                              uint2 gid [[thread_position_in_grid]]) {
     uint i = gid.x;
     uint row = gid.y;
-    uint half = p.rotaryDim / 2;
-    if (i >= half) return;
+    uint halfDim = p.rotaryDim / 2;
+    if (i >= halfDim) return;
     float pos = float(p.pos0 + row / p.heads);
     float angle = pos * pow(p.theta, -float(2 * i) / float(p.rotaryDim));
     float c = cos(angle), s = sin(angle);
@@ -76,7 +76,8 @@ kernel void attention(device float* out [[buffer(0)]],
                       uint2 tg [[threadgroup_position_in_grid]],
                       uint lane [[thread_index_in_simdgroup]],
                       uint sg [[simdgroup_index_in_threadgroup]],
-                      uint tid [[thread_position_in_threadgroup]]) {
+                      uint2 tid2 [[thread_position_in_threadgroup]]) {
+    uint tid = tid2.x;
     threadgroup float tgMax[8];
     threadgroup float tgSum[8];
     threadgroup float tgAcc[8][256];

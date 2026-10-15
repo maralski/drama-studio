@@ -29,7 +29,22 @@ public final class MetalContext {
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
         // Common.metal carries the shared declarations and must come first.
         let ordered = files.filter { $0.lastPathComponent == "Common.metal" } + files.filter { $0.lastPathComponent != "Common.metal" }
-        return try ordered.map { try String(contentsOf: $0, encoding: .utf8) }.joined(separator: "\n")
+        let sources = try ordered.map { try String(contentsOf: $0, encoding: .utf8) }
+        return sources[0] + "\n" + fp8Table() + "\n" + sources.dropFirst().joined(separator: "\n")
+    }
+
+    /// FP8 E4M3FN byte to float, as a constant table the kernels index.
+    static func fp8Table() -> String {
+        let values = (0..<256).map { b -> Float in
+            let s = b >> 7, e = (b >> 3) & 0xf, m = b & 7
+            var v: Float
+            if e == 0 { v = Float(m) * Float(pow(2.0, -9.0)) }
+            else if e == 15 && m == 7 { v = .nan }
+            else { v = (1 + Float(m) / 8) * Float(pow(2.0, Double(e) - 7)) }
+            return s == 1 ? -v : v
+        }
+        let body = values.map { $0.isNaN ? "NAN" : String(format: "%.9ef", $0) }.joined(separator: ", ")
+        return "constant float FP8_LUT[256] = {" + body + "};"
     }
 
     static func compileKernels(device: MTLDevice) throws -> MTLLibrary {

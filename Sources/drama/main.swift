@@ -89,13 +89,30 @@ func dump(_ args: Args) throws {
         ("layer_out_step0", .float32(session.layerOutStep0.flatMap { $0 }, shape: [model.config.numLayers, H])),
         ("tower_hidden_step0", .float32(session.towerHiddenStep0.flatMap { $0 }, shape: [session.towerHiddenStep0.count, H])),
     ]
-    entries.append(("meta", NPY.Array(dtype: .int32, shape: [meta.utf8.count], data: Data(meta.utf8))))
+    entries.append(("meta", NPY.Array(dtype: .uint8, shape: [meta.utf8.count], data: Data(meta.utf8))))
     try NPY.writeNPZ(entries, to: URL(fileURLWithPath: outPath))
     print("prefill \(prompt.count) rows: \(String(format: "%.2f", prefillSeconds))s; \(F) steps: \(String(format: "%.2f", decodeSeconds))s (\(String(format: "%.1f", Double(F) / max(decodeSeconds, 1e-9))) frames/s); wrote \(outPath)")
+}
+
+func bench(_ args: Args) throws {
+    let model = try loadModel(args)
+    if args.flags.contains("warm") { print(String(format: "warm-up walk: %.2fs", model.benchWarmUp())) }
+    let t0 = Date(); _ = try model.benchBackbone(rows: 1, skip: []); print(String(format: "first forward (page faults): %.2fs", Date().timeIntervalSince(t0)))
+    for rows in [1, 8, 32, 128] {
+        var line = "rows \(rows):"
+        for skip in [Set<String>(), ["moe"], ["linear"], ["full"], ["moe", "linear", "full"]] {
+            let t = try model.benchBackbone(rows: rows, skip: skip)
+            line += String(format: "  %@=%.1fms", skip.isEmpty ? "all" : "no-" + skip.sorted().joined(separator: "-"), t * 1000)
+        }
+        let tt = try model.benchTower(rows: rows)
+        line += String(format: "  tower=%.1fms", tt * 1000)
+        print(line)
+    }
 }
 
 let args = Args(Array(CommandLine.arguments.dropFirst()))
 switch args.positional.first {
 case "dump": try dump(args)
+case "bench": try bench(args)
 default: fail("usage: drama <dump> [options]")
 }

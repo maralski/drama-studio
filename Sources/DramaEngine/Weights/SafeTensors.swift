@@ -78,7 +78,7 @@ public final class SafeTensorsStore: @unchecked Sendable {
         let fileSize = Int(st.st_size)
         let pageSize = Int(getpagesize())
         let mappedLength = (fileSize + pageSize - 1) / pageSize * pageSize
-        guard let base = mmap(nil, mappedLength, PROT_READ, MAP_PRIVATE, fd, 0), base != MAP_FAILED else {
+        guard let base = mmap(nil, mappedLength, PROT_READ, MAP_SHARED, fd, 0), base != MAP_FAILED else {
             throw EngineError.badModel("mmap failed for \(url.lastPathComponent)")
         }
         mappings.append((base, mappedLength))

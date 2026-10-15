@@ -3,7 +3,7 @@ import zlib
 
 /// Minimal NumPy `.npy` reading and writing, plus uncompressed `.npz`.
 public enum NPY {
-    public enum DType: String { case int64 = "<i8", int32 = "<i4", float32 = "<f4", float64 = "<f8" }
+    public enum DType: String { case int64 = "<i8", int32 = "<i4", float32 = "<f4", float64 = "<f8", uint8 = "|u1" }
 
     public struct Array {
         public var dtype: DType
