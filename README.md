@@ -156,12 +156,17 @@ reference clip for the cloned runs.
 | --- | --- | --- | --- | --- | --- |
 | reference chunking (300 bytes), no probe | 0.141 | 69% | 89% | 103 frames | 0.867 |
 | one sentence per turn | 0.063 | 86% | 100% | 30 frames | 0.867 |
-| sentence per turn, silence stop, short-chunk retry | FINAL_WER | FINAL_LE | FINAL_EOS | FINAL_TAIL | FINAL_SPK |
+| sentence per turn, silence stop, short-chunk retry (shipped defaults) | 0.016 | 92% | 100% | 2 frames | 0.867 |
 
 Uncloned outputs score 0.54 to 0.56 against the reference clip, so the cloned
-0.87 is the voice carrying over, not the metric's floor. The remaining errors
-in the second row were two single-sentence prompts whose random voice gave up
-mid-sentence, and Whisper rendering "the 21st of March" as "21 March".
+0.87 is the voice carrying over, not the metric's floor. The only misses in the
+last row are Whisper rendering "the 21st of March" as "21 March" in three runs;
+every other run transcribes exactly. The retry rule's threshold was chosen on
+the same 72 runs of the first two rows and then applied to the third, so treat
+it as tuned to this sentence set. The word error rates above use the PyTorch
+codec to decode. Decoding the same 36 frame sequences with the shipped Core ML
+fp16 decoder instead (`eval/coreml_vs_pytorch_wer.py`) gives the same mean
+word error rate, 0.063 against 0.063, with no run scoring worse.
 
 ## Performance (M3 Max, 128 GB)
 

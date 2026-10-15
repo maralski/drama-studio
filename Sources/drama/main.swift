@@ -1,3 +1,4 @@
+import AVFoundation
 import DramaEngine
 import Foundation
 
@@ -123,6 +124,28 @@ func bench(_ args: Args) throws {
     }
 }
 
+/// Decodes frames with the Core ML codec and writes a 44.1 kHz float WAV.
+func writeWav(frames: [Frame], to wavPath: String) throws {
+    guard DramaCodec.modelsExist() else { fail("the Core ML codec models are missing; run tools/convert_codec.py") }
+    let codec = try awaitBlocking { try await DramaCodec(directory: DramaCodec.defaultDirectory) }
+    let t0 = Date()
+    let codes = (0..<ModelConstants.numCodebooks).map { c in frames.map { $0[1 + c] } }
+    let samples = try DramaSynthesizer.decodeBlocking(codec, codes: codes)
+    let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 44_100, channels: 1, interleaved: false)!
+    let file = try AVAudioFile(forWriting: URL(fileURLWithPath: wavPath), settings: format.settings, commonFormat: .pcmFormatFloat32, interleaved: false)
+    let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count))!
+    buffer.frameLength = AVAudioFrameCount(samples.count)
+    samples.withUnsafeBufferPointer { buffer.floatChannelData![0].update(from: $0.baseAddress!, count: samples.count) }
+    try file.write(from: buffer)
+    print(String(format: "decoded %.1fs of audio with the Core ML codec in %.2fs -> %@", Double(samples.count) / 44_100, Date().timeIntervalSince(t0), wavPath))
+}
+
+/// drama decode --frames frames.npy --wav out.wav
+func decodeCommand(_ args: Args) throws {
+    guard let framesPath = args["frames"], let wavPath = args["wav"] else { fail("usage: drama decode --frames frames.npy --wav out.wav") }
+    try writeWav(frames: try readFrames(framesPath), to: wavPath)
+}
+
 /// drama generate --text "..." [--ref clip_codes.npy --ref-text "..."] --out frames.npy
 func generate(_ args: Args) throws {
     guard let text = args["text"], let outPath = args["out"] else { fail("usage: drama generate --text <text> [--ref codes.npy --ref-text <transcript>] --out frames.npy") }
@@ -168,6 +191,7 @@ func generate(_ args: Args) throws {
     }
     try NPY.write(.int64(all.flatMap { $0.map(Int64.init) }, shape: [all.count, 11]), to: URL(fileURLWithPath: outPath))
     print("wrote \(all.count) frames (\(String(format: "%.1f", Double(all.count) * 2048 / 44100))s of audio) to \(outPath)")
+    if let wavPath = args["wav"], !all.isEmpty { try writeWav(frames: all, to: wavPath) }
 }
 
 let args = Args(Array(CommandLine.arguments.dropFirst()))
@@ -175,5 +199,6 @@ switch args.positional.first {
 case "dump": try dump(args)
 case "bench": try bench(args)
 case "generate": try generate(args)
+case "decode": try decodeCommand(args)
 default: fail("usage: drama <dump> [options]")
 }
