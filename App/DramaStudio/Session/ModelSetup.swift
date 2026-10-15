@@ -6,12 +6,14 @@ enum ModelSetup {
     static let customDirectoryKey = "modelDirectory"
     static let licenseURL = URL(string: "https://huggingface.co/fishaudio/drama-3/blob/main/LICENSE")!
 
-    /// The Metal engine is not wired in yet; the app runs the mock so the whole
-    /// flow works end to end.
-    static let isPreviewEngine = true
+    /// Set DRAMA_PREVIEW_ENGINE=1 to run the app on the mock instead of the Metal engine.
+    static let isPreviewEngine = ProcessInfo.processInfo.environment["DRAMA_PREVIEW_ENGINE"] == "1"
 
     static func makeSynthesizer() -> any SpeechSynthesizer {
-        MockSynthesizer()
+        if isPreviewEngine { return MockSynthesizer() }
+        let customPath = UserDefaults.standard.string(forKey: customDirectoryKey) ?? ""
+        guard let location = location(customPath: customPath) else { return MockSynthesizer() }
+        return DramaSynthesizer(location: location, codecDirectory: DramaCodec.defaultDirectory)
     }
 
     enum Status: Equatable {

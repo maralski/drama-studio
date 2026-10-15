@@ -119,7 +119,7 @@ public actor DramaSynthesizer: SpeechSynthesizer {
             allFrames += r.frames
             guard !r.frames.isEmpty else { continue }
             let t0 = Date()
-            let samples = try await codec!.decode(codes: r.codes)
+            let samples = try await codec.decode(codes: r.codes)
             timings.codecSeconds += Date().timeIntervalSince(t0)
             allSamples += samples
             continuation.yield(.audio(samples: samples, chunkIndex: r.index))
