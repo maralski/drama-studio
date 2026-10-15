@@ -1,0 +1,10 @@
+{
+  "text": "<|speaker:0|> I hope you have a wonderful day.",
+  "references": [
+    {
+      "transcript": "<|speaker:0|> Every morning I walk to the little bakery at the end of our street.",
+      "codes": "../data/clip_codes.npy"
+    }
+  ],
+  "history": []
+}
