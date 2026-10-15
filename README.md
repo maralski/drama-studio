@@ -15,10 +15,12 @@ cloning a real person's voice without their consent is not permitted.
 - **Script editor** with import of `.txt`, `.md`, `.rtf`, `.rtfd`, `.html`,
   `.docx`, `.srt` and `.vtt`, drag and drop, and a screenplay mode that turns
   `Name: line` dialogue into Drama 3 speaker tags (up to 16 speakers).
-- **Voice tuning**: temperature, top-p, top-k, frames per chunk, chunking
-  policy (one sentence per turn, or the reference's 300-byte chunks), seed, and
-  an insert menu for performance cues such as `[laughs]`, `[sighs]` and
-  `<whisper>…</whisper>`.
+- **Takes**: a New Take button that generates the script again with a fresh
+  seed, a Quick preview toggle that skips retries and tightens the frame cap
+  for faster rough takes, an Expressiveness slider under Advanced (one control
+  over temperature and top-p, with the vendor's defaults in the middle), and an
+  insert menu for performance cues such as `[laughs]`, `[sighs]` and
+  `<whisper>…</whisper>`. Each chunk's frame cap follows the length of its text.
 - **Voice cloning** from one or more reference clips (any format AVFoundation
   reads) plus their transcripts, kept in a local voice library.
 - **Streaming playback** as chunks finish, scrubbing, and export to WAV or M4A.
@@ -161,6 +163,10 @@ reference clip for the cloned runs.
 | reference chunking (300 bytes), no probe | 0.141 | 69% | 89% | 103 frames | 0.867 |
 | one sentence per turn | 0.063 | 86% | 100% | 30 frames | 0.867 |
 | sentence per turn, silence stop, short-chunk retry (shipped defaults) | 0.016 | 92% | 100% | 2 frames | 0.867 |
+
+The app now fixes the chunking and retry policies at the shipped defaults; the
+`drama` CLI still reaches them through `--chunking`, `--no-retry` and
+`--max-frames`.
 
 Uncloned outputs score 0.54 to 0.56 against the reference clip, so the cloned
 0.87 is the voice carrying over, not the metric's floor. The only misses in the

@@ -5,7 +5,8 @@ import SwiftUI
 final class SessionModel {
     var script = ""
     var screenplayMode = false
-    var config = GenerationConfig()
+    var expressiveness = GenerationConfig.defaultExpressiveness
+    var quickPreview = false
     var speakerVoices: [Int: ReferenceVoice.ID] = [:]
     var selection: TextSelection?
     var notice: String?
@@ -42,7 +43,11 @@ final class SessionModel {
         Casting(speakers: (try? prepared.get())?.speakers ?? [], assignments: speakerVoices, library: library.voices)
     }
 
+    /// No seed, so every generation draws a fresh one.
+    var config: GenerationConfig { .make(expressiveness: expressiveness, quickPreview: quickPreview) }
+
     var canGenerate: Bool { !state.isGenerating && (try? prepared.get()) != nil }
+    var canTakeAgain: Bool { canGenerate && !audio.isEmpty }
     var canPlay: Bool { !audio.isEmpty }
     var canExport: Bool { !audio.isEmpty && !state.isGenerating }
 

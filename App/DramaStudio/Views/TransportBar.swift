@@ -2,12 +2,16 @@ import DramaEngine
 import SwiftUI
 
 struct TransportBar: View {
-    let model: SessionModel
+    @Bindable var model: SessionModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
                 generateButton
+                Button("New Take", systemImage: "dice") { model.generate() }
+                    .labelStyle(.iconOnly)
+                    .disabled(!model.canTakeAgain)
+                    .help("Generate the script again for a different read")
                 Button(model.state.isPlaying ? "Pause" : "Play", systemImage: model.state.isPlaying ? "pause.fill" : "play.fill") {
                     model.togglePlayback()
                 }
@@ -25,7 +29,13 @@ struct TransportBar: View {
                 }
                 exportMenu
             }
-            StatusLine(model: model)
+            HStack(spacing: 8) {
+                StatusLine(model: model)
+                Toggle(isOn: $model.quickPreview) { HelpLabel("Quick preview", help: .quickPreview) }
+                    .toggleStyle(.checkbox)
+                    .controlSize(.small)
+                    .disabled(model.state.isGenerating)
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)

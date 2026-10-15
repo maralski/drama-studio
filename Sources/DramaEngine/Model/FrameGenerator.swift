@@ -108,9 +108,9 @@ public final class FrameGenerator {
             guard shouldContinue() else { break }
             onEvent(.chunkStarted(index: index, count: chunks.count, text: chunk))
             let (prompt, prefixRows) = try chunkPrompt(text: chunk, references: references, history: history)
-            let budget = min(config.maxNewFrames, model.capacity - prompt.count - 1)
-            guard budget >= 1 else { throw PromptError.tooLong(prompt.count) }
             let expected = Self.expectedSeconds(for: chunk)
+            let budget = min(config.frameCap.frames(expectedSeconds: expected), model.capacity - prompt.count - 1)
+            guard budget >= 1 else { throw PromptError.tooLong(prompt.count) }
             var best: ChunkResult?
             for attempt in 0...max(0, config.maxRetries) {
                 guard shouldContinue() else { break }

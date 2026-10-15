@@ -29,7 +29,6 @@ final class AppSessionTests: XCTestCase {
     func testGenerationStreamsEveryChunkThenSettlesReady() async {
         let session = makeSession()
         session.script = String(repeating: "This sentence is about forty bytes long. ", count: 20)
-        session.config.chunkBytes = 200
         var states: [PlaybackState] = []
         session.generate()
         await waitUntil {
@@ -37,17 +36,30 @@ final class AppSessionTests: XCTestCase {
             return !session.state.isGenerating
         }
         XCTAssertEqual(session.state, .ready)
-        XCTAssertTrue(states.contains { if case .generating(_, let of, _) = $0 { return of == 5 } else { return false } }, "\(states)")
+        XCTAssertTrue(states.contains { if case .generating(_, let of, _) = $0 { return of == 3 } else { return false } }, "\(states)")
         let result = try? XCTUnwrap(session.result)
         XCTAssertEqual(session.audio.count, result?.samples.count)
         XCTAssertEqual(session.audio.count, (result?.frames.count ?? 0) * ModelConstants.samplesPerFrame)
         XCTAssertTrue(session.canExport)
     }
 
+    func testRequestFollowsTheControlsAndNewTakeNeedsATake() async {
+        let session = makeSession()
+        session.script = "One line to say."
+        XCTAssertEqual(session.config, GenerationConfig())
+        session.quickPreview = true
+        session.expressiveness = 1
+        XCTAssertEqual(session.config, .make(expressiveness: 1, quickPreview: true))
+
+        XCTAssertFalse(session.canTakeAgain, "nothing to take again yet")
+        session.generate()
+        await waitUntil { !session.state.isGenerating }
+        XCTAssertTrue(session.canTakeAgain)
+    }
+
     func testStopKeepsPartialAudioAndDropsLateEvents() async {
         let session = makeSession(pace: MockSynthesizer.Pace(loadSeconds: 0, framesPerSecond: 2000))
         session.script = String(repeating: "A sentence that will be spoken by the mock. ", count: 30)
-        session.config.chunkBytes = 120
         session.generate()
         await waitUntil { !session.audio.isEmpty }
         session.stopGeneration()

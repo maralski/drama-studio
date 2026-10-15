@@ -22,8 +22,18 @@ public struct GenerationConfig: Sendable, Codable, Equatable {
     public var temperature: Double = 0.7
     public var topK: Int = 30
     public var topP: Double = 0.7
-    /// Frames per chunk. 600 frames is about 27.9 s of audio.
-    public var maxNewFrames: Int = 600
+    /// The most frames one chunk may run.
+    public var frameCap: FrameCap = .fromText(margin: 1.5, floorSeconds: 2.0)
+    /// The CLI's `--max-frames`: setting it pins `frameCap` to `.fixed`.
+    public var maxNewFrames: Int {
+        get {
+            switch frameCap {
+            case .fixed(let frames): frames
+            case .fromText: FrameCap.maximumFrames
+            }
+        }
+        set { frameCap = .fixed(newValue) }
+    }
     /// Seed for the sampler. `nil` draws a fresh seed per request.
     public var seed: UInt64? = nil
     /// Cut long text into chunks of about this many UTF-8 bytes (the hosted
@@ -47,6 +57,27 @@ public struct GenerationConfig: Sendable, Codable, Equatable {
         case reference
         /// One sentence per turn, with the previous turns as history.
         case sentences
+    }
+}
+
+public enum FrameCap: Sendable, Codable, Equatable {
+    case fixed(Int)
+    /// The text's expected duration times `margin`, plus `floorSeconds`.
+    case fromText(margin: Double, floorSeconds: Double)
+
+    /// About 2 s and 27.9 s of audio.
+    public static let minimumFrames = 43
+    public static let maximumFrames = 600
+
+    public func frames(expectedSeconds: Double) -> Int {
+        switch self {
+        case .fixed(let frames):
+            return frames
+        case .fromText(let margin, let floorSeconds):
+            let seconds = expectedSeconds * margin + floorSeconds
+            let frames = Int((seconds * Double(ModelConstants.sampleRate) / Double(ModelConstants.samplesPerFrame)).rounded(.up))
+            return min(Self.maximumFrames, max(Self.minimumFrames, frames))
+        }
     }
 }
 

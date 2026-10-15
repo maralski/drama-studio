@@ -90,14 +90,15 @@ public actor MockSynthesizer: SpeechSynthesizer {
             emit(.prefill(rows: promptRows))
 
             let spokenSeconds = Double(text.count) / 15
-            let target = min(request.config.maxNewFrames, max(8, Int(spokenSeconds * framesPerSecondOfAudio)))
+            let budget = request.config.frameCap.frames(expectedSeconds: FrameGenerator.expectedSeconds(for: text))
+            let target = min(budget, max(8, Int(spokenSeconds * framesPerSecondOfAudio)))
             let start = ContinuousClock.now
             for frameIndex in 0..<target {
                 try await wait(pace.framesPerSecond > 0 ? 1 / pace.framesPerSecond : 0)
                 let c0 = Int32(rng.next() % UInt64(ModelConstants.codebookSize))
                 let residual = (1..<ModelConstants.numCodebooks).map { _ in Int32(rng.next() % UInt64(ModelConstants.residualCodebookSize)) }
                 frames.append([c0 + ModelConstants.semanticStart, c0] + residual)
-                emit(.frame(index: frameIndex, maxFrames: request.config.maxNewFrames))
+                emit(.frame(index: frameIndex, maxFrames: budget))
             }
             timings.decodeSeconds += (ContinuousClock.now - start).seconds
             timings.framesGenerated += target

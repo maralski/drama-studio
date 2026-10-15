@@ -3,14 +3,49 @@ import XCTest
 @testable import DramaStudio
 
 final class AppSettingHelpTests: XCTestCase {
-    /// `maxRetries` has no control in the inspector; the retry threshold's entry mentions it.
-    private let unsurfacedConfigFields: Set<String> = ["maxRetries"]
+    /// Fields the app sets itself, and why none of them is a control.
+    private let hiddenConfigFields: [String: String] = [
+        "temperature": "Derived from Expressiveness.",
+        "topP": "Derived from Expressiveness.",
+        "topK": "Fixed at the vendor's 30; top-p already bounds the choices.",
+        "maxNewFrames": "The CLI's fixed cap; the app derives frameCap from the text.",
+        "chunkBytes": "Only used by reference chunking, which the app never picks.",
+        "chunking": "Fixed by measurement: one sentence per turn cut mean WER from 0.141 to 0.063.",
+        "stopAfterSilenceSeconds": "Fixed by measurement: with the retry it took the mean quiet tail from 30 frames to 2.",
+        "minSpokenRatio": "Fixed by measurement at 0.6; Quick preview sets it to 0.",
+        "maxRetries": "Fixed at 2 alongside the retry threshold.",
+    ]
 
     func testEveryGenerationConfigFieldIsExplainedOrDeliberatelyHidden() {
-        let fields = Set(Mirror(reflecting: GenerationConfig()).children.compactMap(\.label))
-        let explained = SettingHelp.allCases.compactMap(\.configField)
-        XCTAssertEqual(Set(explained), fields.subtracting(unsurfacedConfigFields))
-        XCTAssertTrue(unsurfacedConfigFields.isSubset(of: fields), "stale exclusion: \(unsurfacedConfigFields.subtracting(fields))")
+        let stored = Set(Mirror(reflecting: GenerationConfig()).children.compactMap(\.label))
+        let cliAliases: Set = ["maxNewFrames"]
+        let explained = Set(SettingHelp.allCases.compactMap(\.configField))
+        XCTAssertEqual(explained.union(hiddenConfigFields.keys), stored.union(cliAliases))
+        XCTAssertTrue(explained.isDisjoint(with: hiddenConfigFields.keys))
+    }
+
+    func testStudioConfigKeepsTheMeasuredDefaults() {
+        XCTAssertEqual(GenerationConfig.make(expressiveness: GenerationConfig.defaultExpressiveness, quickPreview: false), GenerationConfig())
+        XCTAssertNil(GenerationConfig.make(expressiveness: 0.5, quickPreview: false).seed, "every take draws a fresh seed")
+    }
+
+    func testExpressivenessSpansTemperatureAndTopPFromHalfToNineTenths() {
+        for (value, expected) in [(0.0, 0.5), (1.0, 0.9), (0.25, 0.6)] {
+            let config = GenerationConfig.make(expressiveness: value, quickPreview: false)
+            XCTAssertEqual(config.temperature, expected, accuracy: 1e-12)
+            XCTAssertEqual(config.topP, expected, accuracy: 1e-12)
+            XCTAssertEqual(config.topK, 30)
+        }
+    }
+
+    func testQuickPreviewDropsRetriesAndTightensTheFrameCap() {
+        let preview = GenerationConfig.make(expressiveness: 0.5, quickPreview: true)
+        XCTAssertEqual(preview.minSpokenRatio, 0)
+        XCTAssertEqual(preview.frameCap, .fromText(margin: 1.2, floorSeconds: 1.0))
+        var expected = GenerationConfig()
+        expected.minSpokenRatio = 0
+        expected.frameCap = .fromText(margin: 1.2, floorSeconds: 1.0)
+        XCTAssertEqual(preview, expected, "preview changes nothing else")
     }
 
     func testEntriesAreUnique() {
@@ -38,15 +73,9 @@ final class AppSettingHelpTests: XCTestCase {
         XCTAssertTrue(SettingHelp.license.text.contains("Fish Audio Community License"))
     }
 
-    func testMeasuredDefaultsMatchTheEngine() {
+    func testExpressivenessHelpNamesTheEngineDefaults() {
         let defaults = GenerationConfig()
-        XCTAssertTrue(SettingHelp.temperature.text.contains("default is \(defaults.temperature)"))
-        XCTAssertTrue(SettingHelp.topP.text.contains("default is \(defaults.topP)"))
-        XCTAssertTrue(SettingHelp.topK.text.contains("default is \(defaults.topK)"))
-        XCTAssertTrue(SettingHelp.maxFrames.text.contains("default is \(defaults.maxNewFrames) frames"))
-        XCTAssertTrue(SettingHelp.chunkBytes.text.contains("default is \(defaults.chunkBytes) bytes"))
-        XCTAssertTrue(SettingHelp.retryThreshold.text.contains("default is \(defaults.minSpokenRatio)"))
-        XCTAssertTrue(SettingHelp.stopAfterSilence.text.contains("default is \(Int(defaults.stopAfterSilenceSeconds ?? 0)) seconds"))
+        XCTAssertTrue(SettingHelp.expressiveness.text.contains("temperature \(defaults.temperature) and top-p \(defaults.topP)"))
     }
 }
 
