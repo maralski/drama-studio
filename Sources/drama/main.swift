@@ -1,26 +1,101 @@
 import DramaEngine
 import Foundation
-import Metal
 
-let ctx = try MetalContext()
-print("Metal device:", ctx.device.name)
-let pipe = try ctx.pipeline("probe_addr")
+struct Args {
+    var values: [String: String] = [:]
+    var flags: Set<String> = []
+    var positional: [String] = []
+    init(_ argv: [String]) {
+        var i = 0
+        while i < argv.count {
+            let a = argv[i]
+            if a.hasPrefix("--") {
+                let key = String(a.dropFirst(2))
+                if i + 1 < argv.count, !argv[i + 1].hasPrefix("--") { values[key] = argv[i + 1]; i += 1 } else { flags.insert(key) }
+            } else { positional.append(a) }
+            i += 1
+        }
+    }
+    subscript(_ k: String) -> String? { values[k] }
+    func int(_ k: String, _ d: Int) -> Int { values[k].flatMap(Int.init) ?? d }
+    func double(_ k: String, _ d: Double) -> Double { values[k].flatMap(Double.init) ?? d }
+}
 
-// Table of four bf16 values 1,2,3,4 starting 8 bytes into a buffer (8-aligned, not 16-aligned).
-let bf16: [UInt16] = [0, 0, 0, 0, 0x3F80, 0x4000, 0x4040, 0x4080]
-let weights = ctx.device.makeBuffer(bytes: bf16, length: bf16.count * 2, options: .storageModeShared)!
-var addr: UInt64 = weights.gpuAddress + 8
-let table = ctx.device.makeBuffer(bytes: &addr, length: 8, options: .storageModeShared)!
-let out = ctx.device.makeBuffer(length: 8 * 4, options: .storageModeShared)!
-let cb = ctx.queue.makeCommandBuffer()!
-let enc = cb.makeComputeCommandEncoder()!
-enc.setComputePipelineState(pipe)
-enc.setBuffer(table, offset: 0, index: 0)
-enc.setBuffer(weights, offset: 8, index: 1)
-enc.setBuffer(out, offset: 0, index: 2)
-enc.useResource(weights, usage: .read)
-enc.dispatchThreads(MTLSize(width: 4, height: 1, depth: 1), threadsPerThreadgroup: MTLSize(width: 4, height: 1, depth: 1))
-enc.endEncoding()
-cb.commit(); cb.waitUntilCompleted()
-let res = Array(UnsafeBufferPointer(start: out.contents().assumingMemoryBound(to: Float.self), count: 8))
-print("via address table:", res[0..<4], "via 8-byte offset:", res[4..<8])
+func fail(_ m: String) -> Never { FileHandle.standardError.write((m + "\n").data(using: .utf8)!); exit(1) }
+
+func loadModel(_ args: Args) throws -> DramaModel {
+    guard let loc = args["model"].map({ ModelLocation(directory: URL(fileURLWithPath: $0)) }) ?? ModelLocation.huggingFaceCache() else {
+        fail("no model found; pass --model <dir> or run: hf download fishaudio/drama-3")
+    }
+    var precision = Precision.exact
+    if args["precision"] == "reference" { precision = .reference }
+    let t0 = Date()
+    let model = try DramaModel(location: loc, precision: precision, capacity: args.int("capacity", DramaModel.defaultCapacity))
+    FileHandle.standardError.write("loaded \(loc.directory.lastPathComponent) in \(String(format: "%.2f", Date().timeIntervalSince(t0)))s\n".data(using: .utf8)!)
+    return model
+}
+
+func readFrames(_ path: String) throws -> [Frame] {
+    let a = try NPY.read(url: URL(fileURLWithPath: path))
+    guard a.shape.count == 2, a.shape[1] == 11 else { fail("\(path): expected [N, 11]") }
+    let v = a.int64Values
+    return (0..<a.shape[0]).map { r in (0..<11).map { Int32(v[r * 11 + $0]) } }
+}
+
+/// drama dump --rows prompt_rows.npy [--frames frames.npy | --steps N] --out out.npz
+func dump(_ args: Args) throws {
+    guard let rowsPath = args["rows"], let outPath = args["out"] else { fail("usage: drama dump --rows prompt_rows.npy [--frames frames.npy | --steps N] --out out.npz") }
+    let prompt = try readFrames(rowsPath)
+    let forced = try args["frames"].map(readFrames)
+    let steps = forced?.count ?? args.int("steps", 8)
+    let temperature = args.double("temperature", 0.7), topK = args.int("top-k", 30), topP = args.double("top-p", 0.7)
+    let seed = UInt64(args.int("seed", 0))
+    let model = try loadModel(args)
+    let t0 = Date()
+    let session = try GenerationSession(model: model, prompt: prompt, trace: true)
+    let prefillSeconds = Date().timeIntervalSince(t0)
+    var sampler = Sampler(seed: seed)
+    var hidden: [[Float]] = [], cand: [[Float]] = [], towerLogits: [[[Float]]] = [], frames: [Frame] = []
+    let t1 = Date()
+    for i in 0..<steps {
+        hidden.append(session.lastHidden)
+        let frame: Frame
+        let trace: StepTrace
+        if let forced {
+            frame = forced[i]
+            trace = try session.force(frame)
+        } else {
+            let r = try session.step(temperature: temperature, topK: topK, topP: topP, sampler: &sampler)
+            guard let f = r.frame else { hidden.removeLast(); break }
+            frame = f
+            trace = r.trace
+        }
+        cand.append(trace.candidateLogits)
+        towerLogits.append(trace.towerLogits)
+        frames.append(frame)
+    }
+    hidden.append(session.lastHidden)
+    cand.append(session.currentCandidateLogits)
+    let decodeSeconds = Date().timeIntervalSince(t1)
+    let H = model.config.hiddenSize
+    let F = frames.count
+    let meta = "{\"engine\": \"metal\", \"precision\": \"\(args["precision"] ?? "exact")\", \"seed\": \(seed), \"temperature\": \(temperature), \"top_k\": \(topK), \"top_p\": \(topP), \"prefill_seconds\": \(prefillSeconds), \"decode_seconds\": \(decodeSeconds), \"steps\": \(F)}"
+    var entries: [(String, NPY.Array)] = [
+        ("prompt_rows", .int64(prompt.flatMap { $0.map(Int64.init) }, shape: [prompt.count, 11])),
+        ("frames", .int64(frames.flatMap { $0.map(Int64.init) }, shape: [F, 11])),
+        ("hidden", .float32(hidden.flatMap { $0 }, shape: [F + 1, H])),
+        ("cand_logits", .float32(cand.flatMap { $0 }, shape: [F + 1, model.config.codebookSize + 1])),
+        ("tower_logits", .float32(towerLogits.flatMap { $0.flatMap { $0 } }, shape: [F, model.config.numCodebooks - 1, model.config.codebookSize])),
+        ("layer_out_step0", .float32(session.layerOutStep0.flatMap { $0 }, shape: [model.config.numLayers, H])),
+        ("tower_hidden_step0", .float32(session.towerHiddenStep0.flatMap { $0 }, shape: [session.towerHiddenStep0.count, H])),
+    ]
+    entries.append(("meta", NPY.Array(dtype: .int32, shape: [meta.utf8.count], data: Data(meta.utf8))))
+    try NPY.writeNPZ(entries, to: URL(fileURLWithPath: outPath))
+    print("prefill \(prompt.count) rows: \(String(format: "%.2f", prefillSeconds))s; \(F) steps: \(String(format: "%.2f", decodeSeconds))s (\(String(format: "%.1f", Double(F) / max(decodeSeconds, 1e-9))) frames/s); wrote \(outPath)")
+}
+
+let args = Args(Array(CommandLine.arguments.dropFirst()))
+switch args.positional.first {
+case "dump": try dump(args)
+default: fail("usage: drama <dump> [options]")
+}

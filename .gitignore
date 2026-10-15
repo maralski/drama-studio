@@ -11,3 +11,4 @@ eval/data/
 DerivedData/
 dist/
 .DS_Store
+.claude/
