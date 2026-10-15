@@ -54,15 +54,11 @@ fails.
 ## End to end (`eval/e2e.py`)
 
 A fixed sentence set (`eval/sentences.json`), with and without a reference
-voice. For each item: engine frames and audio, then
-
-- oracle teacher-forced mean NLL of the engine's frames versus the oracle's own
-  samples at the same settings (same order of magnitude means the engine
-  samples from the same distribution),
-- word error rate of an on-device transcription (`drama transcribe`, Apple
-  Speech framework) against the input text,
-- speaker similarity between the reference clip and the output for cloned
-  items.
-
-`eval/hillclimb.md` logs each iteration: what changed, the metrics before and
-after, keep or revert.
+voice, three seeds each. For each run: engine frames via the `drama` CLI,
+audio via the reference PyTorch codec on the CPU (`eval/decode_codes.py`),
+Whisper small.en transcription and word error rate against the input text,
+eos reached or not, trailing silent frames, and (`eval/speaker_similarity.py`)
+the resemblyzer cosine between the reference clip and the output. Results land
+in `eval/out/e2e/<tag>/report.json`; the README's hill-climb table is built from
+those summaries. `eval/check_sampler.py` checks a sampled trace against the
+engine's own logits.

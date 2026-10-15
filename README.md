@@ -25,8 +25,9 @@ cloning a real person's voice without their consent is not permitted.
 
 ## Requirements
 
-- Apple silicon Mac with 64 GB of unified memory or more (the weights are
-  41.5 GB and are mapped, not copied; 128 GB was used for development).
+- Apple silicon Mac with plenty of unified memory. The weights are 41.5 GB and
+  are mapped, not copied, plus about 2 GB of state and codec; only a 128 GB M3
+  Max has been tested.
 - macOS 15 or newer, Xcode 26 command line tools.
 - The model in the Hugging Face cache:
 
@@ -96,23 +97,26 @@ prompt and frames. Numbers from `eval/compare.py`:
 
 | quantity | relative L2 vs float32 oracle | top-1 agreement | mean KL |
 | --- | --- | --- | --- |
-| backbone hidden state (121 positions) | 6.5e-7 | | |
+| backbone hidden state, 121 positions (worst position 1.7e-6) | 6.5e-7 | | |
 | main-token candidate logits | 3.3e-7 | 1.000 | 1.5e-12 |
 | nine tower head logits | 5.0e-7 | 1.000 | 4.9e-12 |
-| residual stream after each of the 40 layers | under 1e-6 each | | |
+| residual stream after each of the 40 layers, and each of the 13 tower layers, at the first step | under 2e-6 each | | |
 
-For scale, the released bf16 numerics differ from the float32 oracle by a
-relative L2 of 5.2e-2 on the hidden state with a top-1 agreement of 0.846. The
-Metal engine sits at float32 precision.
+For scale, the same oracle run in bfloat16 on the CPU differs from its float32
+run by a relative L2 of 5.2e-2 on the hidden state with a top-1 agreement of
+0.846. The Metal engine sits at float32 precision; it keeps the FP8 expert
+weights exact and widens everything else, so it does not reproduce the
+CUDA release's W8A8 activation quantization, and no claim is made about that.
 
 The sampler is checked separately: over 1174 sampled picks, none falls outside
 the reference's top-k / top-p set, and the count of rank-0 picks matches the
 expected value within noise.
 
-End-to-end, generations that finish transcribe word-perfectly under Whisper.
-The reference implementation and the engine share the model's habit of
-stopping early or trailing into silence on multi-sentence prompts without a
-reference voice; the sentence-per-turn chunking mode exists for that reason.
+End-to-end, the sentences the model does speak transcribe cleanly under
+Whisper, but with the reference's chunking it often stops after the first
+sentence of a two-sentence prompt or trails into silence, and the reference
+PyTorch implementation does the same on the same text and seeds. The
+sentence-per-turn mode and the retry rule below exist for that reason.
 See `eval/README.md` for how to reproduce every number.
 
 ## The Neural Engine, honestly
@@ -130,7 +134,7 @@ Neural Engine. On this machine (macOS 26.5, M3 Max) that route did not pay off:
   export rewrites transposed convolutions as polyphase convolutions.
 - The GPU path returns wrong audio for the chained residual units of the last
   decoder block (about 5 dB SNR); each unit alone is correct, which points at
-  an op-fusion bug.
+  op fusion, though the cause was not isolated.
 - Core ML's enumerated shapes crash the CPU backend (SIGTRAP) on multi-channel
   convolutions here, so the models use one static shape.
 
@@ -163,11 +167,11 @@ mid-sentence, and Whisper rendering "the 21st of March" as "21 March".
 
 | step | time |
 | --- | --- |
-| weights mapped and kernels compiled | 0.4 s |
+| weights mapped and kernels compiled | 0.4 to 0.7 s |
 | first touch of the 41.5 GB (parallel pre-read) | 4 s |
 | backbone decode, one frame | 25 ms GPU |
 | tower decode, one frame | 9 ms GPU |
-| end-to-end decode | about 32 frames/s (1.5x real time) |
+| end-to-end decode, idle machine | 31 to 33 frames/s measured over 40 to 600 frame runs (1.5x real time); 7 to 28 frames/s during the evaluation while other jobs ran |
 | prefill, 128 rows | 1.1 s backbone, 0.3 s tower |
 
 ## Licenses

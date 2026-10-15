@@ -2,8 +2,9 @@
 
 A native macOS app that runs Fish Audio Drama 3 locally. The 35B hybrid MoE
 backbone and the codebook tower run on hand-written Metal compute kernels. The
-DAC audio codec runs through Core ML so the Neural Engine can take it. No MLX,
-no PyTorch at runtime.
+DAC audio codec runs through Core ML, the only route to the Neural Engine; in
+practice it runs on the CPU there (see the README). No MLX, no PyTorch at
+runtime.
 
 ## Model facts (from `config.json` and fish-speech v3.0.0-beta)
 
@@ -137,6 +138,12 @@ CPU (oracle). Levels:
 
 - No MLX (user instruction). Own Metal kernels for the transformer stacks.
 - Core ML for the codec because the Neural Engine has no public kernel API.
+  Measured outcome: the ANE compile did not finish for the shipped shape and
+  most of the decoder is CPU-only in the compute plan, so the codec ships on
+  the CPU.
+- The engine runs in fp32 after widening bf16 weights; the `mimicBF16` knob
+  exists but was not evaluated, because the fp32 path already matches the fp32
+  oracle at 1e-6 and sits far below the bf16 noise floor.
 - Weights read in place from the Hugging Face cache; disk is nearly full.
 - Experts stay FP8 in memory; exact to the release and half the bytes.
 - Only candidate logits are computed; the reference discards the rest.
