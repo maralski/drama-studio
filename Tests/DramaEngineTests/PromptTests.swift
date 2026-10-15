@@ -36,6 +36,20 @@ final class PromptTests: XCTestCase {
         }
     }
 
+    func testSentenceChunking() {
+        XCTAssertEqual(Drama3Chunking.splitSentences("The quick brown fox jumps over the lazy dog. She sells sea shells by the sea shore."),
+                       ["The quick brown fox jumps over the lazy dog.", "She sells sea shells by the sea shore."])
+        // Short sentences fold together until a chunk reaches the minimum, and a short tail folds back.
+        XCTAssertEqual(Drama3Chunking.splitSentences("Pi is 3.14159! Really? Yes."), ["Pi is 3.14159! Really? Yes."])
+        XCTAssertEqual(Drama3Chunking.splitSentences("She paused [sighs. no] and <whisper>left. quietly</whisper>. Then ran."),
+                       ["She paused [sighs. no] and <whisper>left. quietly</whisper>. Then ran."])
+        XCTAssertEqual(Drama3Chunking.splitSentences("She paused [sighs. no] and <whisper>left. quietly</whisper>. Then she ran all the way home."),
+                       ["She paused [sighs. no] and <whisper>left. quietly</whisper>.", "Then she ran all the way home."])
+        XCTAssertEqual(Drama3Chunking.splitSentencesTagged("<|speaker:0|> Hi there, friend. How are you? <|speaker:1|> Fine thanks, and you?"),
+                       ["<|speaker:0|> Hi there, friend. How are you?", "<|speaker:1|> Fine thanks, and you?"])
+        XCTAssertEqual(Drama3Chunking.splitSentences("   "), [])
+    }
+
     func testHistoryCandidates() {
         var h = Drama3History()
         XCTAssertEqual(h.candidates.map { $0.count }, [0])

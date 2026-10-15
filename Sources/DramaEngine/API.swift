@@ -29,7 +29,19 @@ public struct GenerationConfig: Sendable, Codable, Equatable {
     /// Cut long text into chunks of about this many UTF-8 bytes (the hosted
     /// server uses 300). Earlier chunks feed back as history.
     public var chunkBytes: Int = 300
+    /// How text is cut into generation turns.
+    public var chunking: Chunking = .sentences
+    /// Stop a chunk once its decoded audio has been silent for this long; nil
+    /// keeps generating until eos or the frame cap, like the reference.
+    public var stopAfterSilenceSeconds: Double? = 2.0
     public init() {}
+
+    public enum Chunking: String, Sendable, Codable, CaseIterable {
+        /// The reference's policy: about `chunkBytes` per turn, at most three speakers.
+        case reference
+        /// One sentence per turn, with the previous turns as history.
+        case sentences
+    }
 }
 
 /// A reference voice: transcript plus the codec codes of the clip.

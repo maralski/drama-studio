@@ -91,6 +91,37 @@ public enum Drama3Chunking {
         return chunks.map { UnicodeWhitespace.strip(string($0)) }.filter { !$0.isEmpty }
     }
 
+    /// One chunk per sentence: cut at sentence ends only, keep protected spans
+    /// whole, and fold fragments shorter than `minBytes` into their neighbour.
+    public static func splitSentences(_ text: String, minBytes: Int = 24) -> [String] {
+        if UnicodeWhitespace.strip(text).isEmpty { return [] }
+        let pieces = breakAtMarks(protectedPieces(text), 0, sentenceEnds)
+        var chunks: [[Unicode.Scalar]] = []
+        var current: [Unicode.Scalar] = []
+        for (piece, _) in pieces {
+            current += piece
+            let stripped = Array(UnicodeWhitespace.strip(string(current)).unicodeScalars)
+            if utf8Len(stripped) >= minBytes && sentenceEnds.contains(current.last ?? " ") { chunks.append(current); current = [] }
+        }
+        if !current.isEmpty {
+            if let last = chunks.last, utf8Len(Array(UnicodeWhitespace.strip(string(current)).unicodeScalars)) < minBytes { chunks[chunks.count - 1] = last + current }
+            else { chunks.append(current) }
+        }
+        return chunks.map { UnicodeWhitespace.strip(string($0)) }.filter { !$0.isEmpty }
+    }
+
+    /// Sentence mode with speaker tags: each tagged segment is split into
+    /// sentences and every chunk keeps its tag.
+    public static func splitSentencesTagged(_ text: String) -> [String] {
+        let ns = text as NSString
+        if Drama3Prompt.speakerTag.firstMatch(in: text, range: NSRange(location: 0, length: ns.length)) == nil { return splitSentences(text) }
+        var out: [String] = []
+        for (speaker, body) in parseSpeakerSegments(text) {
+            for piece in splitSentences(body) { out.append("<|speaker:\(speaker)|> \(piece)") }
+        }
+        return out
+    }
+
     /// (speaker id, text) per tagged segment; text before the first tag is speaker 0.
     public static func parseSpeakerSegments(_ text: String) -> [(String, String)] {
         let ns = text as NSString

@@ -46,7 +46,11 @@ public final class FrameGenerator {
     /// false from `shouldContinue` to stop early.
     public func generate(text: String, references: [Drama3Prompt.Reference], config: GenerationConfig,
                          shouldContinue: () -> Bool = { true }, onEvent: (Event) -> Void) throws -> [ChunkResult] {
-        var chunks = Drama3Chunking.split(text, maxBytes: config.chunkBytes)
+        var chunks: [String]
+        switch config.chunking {
+        case .reference: chunks = Drama3Chunking.split(text, maxBytes: config.chunkBytes)
+        case .sentences: chunks = Drama3Chunking.splitSentencesTagged(text)
+        }
         if chunks.isEmpty { chunks = [text] }
         for chunk in chunks {
             let rows = try Drama3Prompt.build(text: chunk, tokenizer: tokenizer, references: references).count

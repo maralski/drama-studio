@@ -130,6 +130,7 @@ func generate(_ args: Args) throws {
     var config = GenerationConfig()
     config.temperature = args.double("temperature", 0.7); config.topK = args.int("top-k", 30); config.topP = args.double("top-p", 0.7)
     config.maxNewFrames = args.int("max-frames", 600)
+    config.chunking = args["chunking"].flatMap(GenerationConfig.Chunking.init(rawValue:)) ?? .reference
     if let s = args["seed"].flatMap(UInt64.init) { config.seed = s }
     if args.flags.contains("warm") { model.warmUp() }
     let gen = FrameGenerator(model: model, tokenizer: tokenizer)
