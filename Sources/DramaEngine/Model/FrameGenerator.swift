@@ -35,6 +35,33 @@ public final class FrameGenerator {
     /// stop and the spoken-duration check falls back to the frame count.
     public var silenceProbe: ((_ frames: [Frame]) throws -> Double)?
     static let silenceProbeEveryFrames = 16
+
+    /// Runs the probe off the generation thread so the CPU codec overlaps the GPU.
+    final class ProbeRunner {
+        private let probe: ([Frame]) throws -> Double
+        private let lock = NSLock()
+        private var inFlight = false
+        private var latest: Double = 0
+        private let group = DispatchGroup()
+        init(_ probe: @escaping ([Frame]) throws -> Double) { self.probe = probe }
+
+        /// Starts a probe on a snapshot unless one is already running.
+        func offer(_ frames: [Frame]) {
+            lock.lock()
+            if inFlight { lock.unlock(); return }
+            inFlight = true
+            lock.unlock()
+            group.enter()
+            DispatchQueue.global(qos: .userInitiated).async { [self] in
+                let r = (try? probe(frames)) ?? 0
+                lock.lock(); latest = r; inFlight = false; lock.unlock()
+                group.leave()
+            }
+        }
+
+        var latestSilence: Double { lock.lock(); defer { lock.unlock() }; return latest }
+        func drain() { group.wait() }
+    }
     static let charactersPerSecond = 16.0
 
     public static func expectedSeconds(for text: String) -> Double {
@@ -94,18 +121,19 @@ public final class FrameGenerator {
                 var trailingSilence = 0.0
                 let t1 = Date()
                 let silenceFrames = config.stopAfterSilenceSeconds.map { Int(($0 * Double(ModelConstants.sampleRate) / Double(ModelConstants.samplesPerFrame)).rounded(.up)) }
+                let runner = silenceProbe.map(ProbeRunner.init)
                 for step in 0..<budget {
                     guard shouldContinue() else { break }
                     let r = try session.step(temperature: config.temperature, topK: config.topK, topP: config.topP, sampler: &sampler)
                     guard let frame = r.frame else { eos = true; break }
                     frames.append(frame)
                     onEvent(.frame(index: step, maxFrames: budget))
-                    if let probe = silenceProbe, let silenceFrames, let limit = config.stopAfterSilenceSeconds,
-                       frames.count > silenceFrames, frames.count % Self.silenceProbeEveryFrames == 0 {
-                        trailingSilence = try probe(frames)
-                        if trailingSilence >= limit { break }
+                    if let runner, let silenceFrames, let limit = config.stopAfterSilenceSeconds, frames.count > silenceFrames {
+                        if frames.count % Self.silenceProbeEveryFrames == 0 { runner.offer(frames) }
+                        if runner.latestSilence >= limit { break }
                     }
                 }
+                runner?.drain()
                 if let probe = silenceProbe, !frames.isEmpty { trailingSilence = try probe(frames) }
                 let total = Double(frames.count) * Double(ModelConstants.samplesPerFrame) / Double(ModelConstants.sampleRate)
                 let spoken = max(0, total - trailingSilence)
