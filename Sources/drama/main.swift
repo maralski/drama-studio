@@ -110,9 +110,44 @@ func bench(_ args: Args) throws {
     }
 }
 
+/// drama generate --text "..." [--ref clip_codes.npy --ref-text "..."] --out frames.npy
+func generate(_ args: Args) throws {
+    guard let text = args["text"], let outPath = args["out"] else { fail("usage: drama generate --text <text> [--ref codes.npy --ref-text <transcript>] --out frames.npy") }
+    let model = try loadModel(args)
+    let tokenizer = try Tokenizer(url: model.location.directory.appendingPathComponent("tokenizer.json"))
+    var refs: [Drama3Prompt.Reference] = []
+    if let refPath = args["ref"] {
+        let a = try NPY.read(url: URL(fileURLWithPath: refPath))
+        guard a.shape.count == 2, a.shape[0] == 10 else { fail("\(refPath): expected [10, T]") }
+        let v = a.int64Values.map(Int32.init)
+        let codes = (0..<10).map { c in Array(v[(c * a.shape[1])..<((c + 1) * a.shape[1])]) }
+        refs.append(Drama3Prompt.Reference(transcript: args["ref-text"] ?? "", codes: codes))
+    }
+    var config = GenerationConfig()
+    config.temperature = args.double("temperature", 0.7); config.topK = args.int("top-k", 30); config.topP = args.double("top-p", 0.7)
+    config.maxNewFrames = args.int("max-frames", 600)
+    if let s = args["seed"].flatMap(UInt64.init) { config.seed = s }
+    if args.flags.contains("warm") { model.warmUp() }
+    let gen = FrameGenerator(model: model, tokenizer: tokenizer)
+    var all: [Frame] = []
+    let results = try gen.generate(text: text, references: refs, config: config) { event in
+        switch event {
+        case .chunkStarted(let i, let n, let t): FileHandle.standardError.write("chunk \(i + 1)/\(n): \(t.prefix(60))\n".data(using: .utf8)!)
+        case .chunkFinished(let r):
+            all += r.frames
+            FileHandle.standardError.write(String(format: "  %d rows prefilled in %.2fs; %d frames in %.2fs (%.1f frames/s) eos=%@\n", r.promptRows, r.prefillSeconds, r.frames.count, r.decodeSeconds, Double(r.frames.count) / max(r.decodeSeconds, 1e-9), r.finishedByEOS ? "yes" : "no").data(using: .utf8)!)
+        default: break
+        }
+    }
+    _ = results
+    try NPY.write(.int64(all.flatMap { $0.map(Int64.init) }, shape: [all.count, 11]), to: URL(fileURLWithPath: outPath))
+    print("wrote \(all.count) frames (\(String(format: "%.1f", Double(all.count) * 2048 / 44100))s of audio) to \(outPath)")
+}
+
 let args = Args(Array(CommandLine.arguments.dropFirst()))
 switch args.positional.first {
 case "dump": try dump(args)
 case "bench": try bench(args)
+case "generate": try generate(args)
 default: fail("usage: drama <dump> [options]")
 }
