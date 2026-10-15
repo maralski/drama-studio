@@ -8,8 +8,10 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section("Model") {
-                LabeledContent("Location") {
+                LabeledContent {
                     Text(location).textSelection(.enabled).lineLimit(2).truncationMode(.middle)
+                } label: {
+                    HelpLabel("Location", help: .modelLocation)
                 }
                 LabeledContent("Status") { statusLabel }
                 HStack {

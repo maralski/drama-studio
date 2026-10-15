@@ -12,6 +12,8 @@ struct AddVoiceSheet: View {
     @State private var isEncoding = false
     @State private var error: String?
     @State private var choosingClip = false
+    @State private var isShowingRecorder = false
+    @State private var recorder = VoiceRecorder()
 
     private var canAdd: Bool {
         clipSeconds != nil && hasConsent && !isEncoding
@@ -24,17 +26,30 @@ struct AddVoiceSheet: View {
             Form {
                 Section {
                     clipRow
+                    if let clipSeconds, let warning = RecordingLength.warning(for: clipSeconds) {
+                        Label(warning, systemImage: "exclamationmark.triangle.fill").font(.caption).foregroundStyle(.orange)
+                    }
+                    if isShowingRecorder {
+                        RecorderPanel(recorder: recorder) { url in
+                            clip = url
+                            isShowingRecorder = false
+                        }
+                    }
                     TextField("Name", text: $name, prompt: Text("Narrator, Alice, \u{2026}"))
-                    LabeledContent("Transcript") {
+                    LabeledContent {
                         TextEditor(text: $transcript)
                             .font(.body)
                             .frame(minHeight: 72)
+                    } label: {
+                        HelpLabel("Transcript", help: .voiceTranscript)
                     }
                 } footer: {
-                    Text("Type exactly what is said in the clip. 10 to 30 seconds of clean speech works best.")
+                    Text("Type exactly what is said in the clip. 5 to 20 seconds of clean speech works best.")
                 }
                 Section {
-                    Toggle("I own this voice or have the speaker's consent to clone it", isOn: $hasConsent)
+                    Toggle(isOn: $hasConsent) {
+                        HelpLabel("I own this voice or have the speaker's consent to clone it", help: .voiceConsent)
+                    }
                     Text("The Fish Audio Community License forbids generating speech that imitates an identifiable person without their consent.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -55,10 +70,11 @@ struct AddVoiceSheet: View {
             return clip != nil
         }
         .task(id: clip) { inspectClip() }
+        .onDisappear { recorder.discard() }
     }
 
     private var clipRow: some View {
-        LabeledContent("Reference clip") {
+        LabeledContent {
             HStack {
                 if let clip {
                     VStack(alignment: .trailing) {
@@ -68,10 +84,14 @@ struct AddVoiceSheet: View {
                         }
                     }
                 } else {
-                    Text("Drop an audio file or choose one").foregroundStyle(.secondary)
+                    Text("Drop an audio file, choose one, or record").foregroundStyle(.secondary)
                 }
                 Button("Choose\u{2026}") { choosingClip = true }
+                Button("Record\u{2026}", systemImage: "mic") { isShowingRecorder.toggle() }
+                    .disabled(recorder.isRecording)
             }
+        } label: {
+            HelpLabel("Reference clip", help: .referenceClip)
         }
     }
 

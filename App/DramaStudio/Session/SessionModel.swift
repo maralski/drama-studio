@@ -15,6 +15,8 @@ final class SessionModel {
     private(set) var audio: [Float] = []
     private(set) var result: SpeechResult?
     private(set) var playhead = 0
+    /// Wall time of the current or last generation, from Generate to the end of the run.
+    private(set) var generationClock: GenerationClock?
     private(set) var previewingVoice: ReferenceVoice.ID?
     @ObservationIgnored var playsWhileGenerating = true
 
@@ -55,6 +57,7 @@ final class SessionModel {
         audio = []
         result = nil
         telemetry = GenerationTelemetry()
+        generationClock = GenerationClock(start: .now)
         state = .loading(progress: 0, detail: "Starting engine")
         run += 1
         let current = run
@@ -129,6 +132,7 @@ final class SessionModel {
 
     private func settleAfterGeneration(_ next: PlaybackState) {
         state = next
+        if generationClock?.end == nil { generationClock?.end = .now }
         if player.isStarved { stopPlayback(resetTo: 0) }
     }
 
@@ -264,6 +268,18 @@ final class SessionModel {
     static func describe(_ error: Error) -> String {
         (error as? LocalizedError)?.errorDescription ?? String(describing: error)
     }
+}
+
+struct GenerationClock: Equatable {
+    let start: Date
+    var end: Date?
+
+    func elapsed(at now: Date) -> TimeInterval {
+        (end ?? now).timeIntervalSince(start)
+    }
+
+    /// Nil while the run is still going.
+    var duration: TimeInterval? { end.map { $0.timeIntervalSince(start) } }
 }
 
 /// Which references a request carries. The engine contract has no explicit

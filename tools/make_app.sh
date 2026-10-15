@@ -49,6 +49,7 @@ cat > "$app/Contents/Info.plist" <<PLIST
     <key>LSApplicationCategoryType</key><string>public.app-category.music</string>
     <key>NSHighResolutionCapable</key><true/>
     <key>NSSupportsAutomaticTermination</key><false/>
+    <key>NSMicrophoneUsageDescription</key><string>Drama Studio records reference clips for voice cloning.</string>
     <key>NSHumanReadableCopyright</key><string>Built with Fish Audio. Fish Audio Drama 3 is licensed under the Fish Audio Community License.</string>
     <key>CFBundleURLTypes</key>
     <array>

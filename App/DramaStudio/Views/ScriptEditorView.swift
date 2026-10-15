@@ -32,12 +32,15 @@ struct ScriptEditorView: View {
             .background(Color(nsColor: .textBackgroundColor))
             .overlay(alignment: .topLeading) {
                 if model.script.isEmpty {
-                    Text("Type or paste a script, or drop a text, Word, or subtitle file here.\nUse \u{201C}Name: line\u{201D} dialogue with Screenplay Mode for several voices.")
-                        .font(.system(size: 15))
-                        .foregroundStyle(.tertiary)
-                        .padding(.horizontal, 19)
-                        .padding(.vertical, 12)
-                        .allowsHitTesting(false)
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("Type or paste a script, or drop a text, Word, or subtitle file here.\nUse \u{201C}Name: line\u{201D} dialogue with Screenplay Mode for several voices.")
+                            .font(.system(size: 15))
+                            .foregroundStyle(.tertiary)
+                            .allowsHitTesting(false)
+                        Button("Import Script\u{2026}", systemImage: "square.and.arrow.down") { FilePanels.importScript(into: model) }
+                    }
+                    .padding(.horizontal, 19)
+                    .padding(.vertical, 12)
                 }
             }
             .overlay {

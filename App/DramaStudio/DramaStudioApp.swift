@@ -17,6 +17,11 @@ struct DramaStudioApp: App {
         .defaultSize(width: 1240, height: 780)
         .commands { StudioCommands(model: model) }
 
+        Window("Drama Studio Help", id: HelpWindowView.id) {
+            HelpWindowView()
+        }
+        .defaultSize(width: 760, height: 500)
+
         Settings {
             SettingsView()
         }
@@ -38,6 +43,7 @@ struct DramaStudioApp: App {
 
 struct StudioCommands: Commands {
     @Bindable var model: SessionModel
+    @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
         CommandGroup(replacing: .appInfo) {
@@ -62,6 +68,10 @@ struct StudioCommands: Commands {
             Divider()
             Button(model.state.isPlaying ? "Pause" : "Play") { model.togglePlayback() }
                 .disabled(!model.canPlay)
+        }
+        CommandGroup(replacing: .help) {
+            Button("Drama Studio Help") { openWindow(id: HelpWindowView.id) }
+                .keyboardShortcut("?", modifiers: .command)
         }
         CommandMenu("Script") {
             Menu("Insert Cue") { CueMenuItems(model: model) }

@@ -61,6 +61,22 @@ struct TransportBar: View {
         .help("Export audio (⌘E)")
     }
 
+    static func seconds(_ value: TimeInterval) -> String {
+        "\(value.formatted(.number.precision(.fractionLength(1)))) s"
+    }
+
+    /// The status line after a run. `frames` and `framesPerSecond` are nil when generation stopped early.
+    static func summary(audioSeconds: TimeInterval, frames: Int?, framesPerSecond: Double?, generationSeconds: TimeInterval?) -> String {
+        var parts = ["\(seconds(audioSeconds)) of audio"]
+        if let frames, let framesPerSecond {
+            parts += ["\(frames) frames", "\(Int(framesPerSecond.rounded())) frames/s"]
+        } else {
+            parts[0] += " (stopped early)"
+        }
+        if let generationSeconds { parts.append("generated in \(seconds(generationSeconds))") }
+        return parts.joined(separator: " \u{00B7} ")
+    }
+
     static func clock(_ samples: Int) -> String {
         let seconds = Int(Double(samples) / Double(ModelConstants.sampleRate))
         return String(format: "%d:%02d", seconds / 60, seconds % 60)
@@ -80,8 +96,11 @@ private struct StatusLine: View {
                 Text("Loading model \u{2014} \(detail)")
             case .generating(let chunk, let count, _):
                 ProgressView(value: chunkProgress(chunk: chunk, of: count)).frame(width: 120)
-                Text("Chunk \(chunk) of \(count) \u{00B7} frame \(model.telemetry.frame) of \(model.telemetry.maxFrames) \u{00B7} \(model.telemetry.framesPerSecond, format: .number.precision(.fractionLength(1))) frames/s")
-                    .monospacedDigit()
+                TimelineView(.periodic(from: .now, by: 0.1)) { context in
+                    let elapsed = model.generationClock.map { " \u{00B7} \(TransportBar.seconds($0.elapsed(at: context.date)))" } ?? ""
+                    Text("Chunk \(chunk) of \(count) \u{00B7} frame \(model.telemetry.frame) of \(model.telemetry.maxFrames) \u{00B7} \(model.telemetry.framesPerSecond, format: .number.precision(.fractionLength(1))) frames/s\(elapsed)")
+                        .monospacedDigit()
+                }
             case .ready, .playing:
                 Text(summary)
             case .failed(let message):
@@ -103,9 +122,11 @@ private struct StatusLine: View {
     }
 
     private var summary: String {
-        let seconds = model.duration.formatted(.number.precision(.fractionLength(1)))
-        guard let result = model.result else { return "\(seconds) s of audio (stopped early)" }
-        let fps = result.timings.framesPerSecond.formatted(.number.precision(.fractionLength(1)))
-        return "\(seconds) s of audio \u{00B7} \(result.frames.count) frames \u{00B7} \(fps) frames/s"
+        TransportBar.summary(
+            audioSeconds: model.duration,
+            frames: model.result?.frames.count,
+            framesPerSecond: model.result?.timings.framesPerSecond,
+            generationSeconds: model.generationClock?.duration
+        )
     }
 }

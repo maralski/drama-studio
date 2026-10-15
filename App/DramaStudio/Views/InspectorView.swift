@@ -8,7 +8,10 @@ struct InspectorView: View {
         Form {
             CastSection(model: model)
             Section("Performance") {
-                Menu("Insert Cue", systemImage: "theatermasks") { CueMenuItems(model: model) }
+                HStack {
+                    Menu("Insert Cue", systemImage: "theatermasks") { CueMenuItems(model: model) }
+                    HelpButton(.performanceCues)
+                }
                 Text("Cues go at the cursor. A passage cue wraps the selected text.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -32,7 +35,7 @@ private struct CastSection: View {
 
     var body: some View {
         Section {
-            Toggle("Screenplay mode", isOn: $model.screenplayMode)
+            Toggle(isOn: $model.screenplayMode) { HelpLabel("Screenplay mode", help: .screenplayMode) }
                 .help("Treat \u{201C}Name: line\u{201D} dialogue as separate speakers")
             switch model.prepared {
             case .success(let script):
@@ -41,9 +44,12 @@ private struct CastSection: View {
                         Text("Model default").tag(ReferenceVoice.ID?.none)
                         ForEach(model.library.voices) { Text($0.name).tag(Optional($0.id)) }
                     } label: {
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(speaker.name)
-                            Text(speaker.tag).font(.caption.monospaced()).foregroundStyle(.secondary)
+                        HStack(spacing: 4) {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(speaker.name)
+                                Text(speaker.tag).font(.caption.monospaced()).foregroundStyle(.secondary)
+                            }
+                            HelpButton(.speakerVoice)
                         }
                     }
                 }
@@ -74,24 +80,44 @@ private struct TuningSection: View {
 
     var body: some View {
         Section("Sampling") {
-            SliderRow(title: "Temperature", value: $config.temperature, range: 0.1...1.5, step: 0.05)
-            SliderRow(title: "Top-p", value: $config.topP, range: 0.05...1, step: 0.05)
+            SliderRow(title: "Temperature", help: .temperature, value: $config.temperature, range: 0.1...1.5, step: 0.05)
+            SliderRow(title: "Top-p", help: .topP, value: $config.topP, range: 0.05...1, step: 0.05)
             Stepper(value: $config.topK, in: 1...200) {
-                LabeledContent("Top-k", value: config.topK.formatted())
+                LabeledContent { Text(config.topK.formatted()) } label: { HelpLabel("Top-k", help: .topK) }
             }
         }
         Section("Chunking") {
-            Stepper(value: $config.maxNewFrames, in: 64...2048, step: 32) {
-                LabeledContent("Max frames per chunk") {
-                    Text("\(config.maxNewFrames) \u{00B7} \(seconds(frames: config.maxNewFrames)) s")
-                }
+            Picker(selection: $config.chunking) {
+                Text("Per sentence").tag(GenerationConfig.Chunking.sentences)
+                Text("Reference").tag(GenerationConfig.Chunking.reference)
+            } label: {
+                HelpLabel("Chunking", help: .chunking)
             }
             Stepper(value: $config.chunkBytes, in: 100...1000, step: 50) {
-                LabeledContent("Chunk size", value: "\(config.chunkBytes) bytes")
+                LabeledContent { Text("\(config.chunkBytes) bytes") } label: { HelpLabel("Chunk size", help: .chunkBytes) }
             }
+            .disabled(config.chunking != .reference)
+            Stepper(value: $config.maxNewFrames, in: 64...2048, step: 32) {
+                LabeledContent {
+                    Text("\(config.maxNewFrames) \u{00B7} \(seconds(frames: config.maxNewFrames)) s")
+                } label: {
+                    HelpLabel("Max frames", help: .maxFrames)
+                }
+            }
+            Toggle(isOn: Binding(get: { config.stopAfterSilenceSeconds != nil }, set: { config.stopAfterSilenceSeconds = $0 ? GenerationConfig().stopAfterSilenceSeconds : nil })) {
+                HelpLabel("Stop after silence", help: .stopAfterSilence)
+            }
+            if let silence = config.stopAfterSilenceSeconds {
+                Stepper(value: Binding(get: { silence }, set: { config.stopAfterSilenceSeconds = $0 }), in: 0.5...10, step: 0.5) {
+                    LabeledContent("Silence", value: "\(silence.formatted(.number.precision(.fractionLength(1)))) s")
+                }
+            }
+            SliderRow(title: "Retry below", help: .retryThreshold, value: $config.minSpokenRatio, range: 0...0.9, step: 0.05)
         }
-        Section("Seed") {
-            Toggle("Fixed seed", isOn: Binding(get: { config.seed != nil }, set: { config.seed = $0 ? UInt64.random(in: 0...999_999) : nil }))
+        Section {
+            Toggle(isOn: Binding(get: { config.seed != nil }, set: { config.seed = $0 ? UInt64.random(in: 0...999_999) : nil })) {
+                HelpLabel("Fixed seed", help: .seed)
+            }
             if config.seed != nil {
                 HStack {
                     TextField("Seed", value: Binding(get: { config.seed ?? 0 }, set: { config.seed = $0 }), format: .number.grouping(.never))
@@ -105,6 +131,8 @@ private struct TuningSection: View {
             }
             Button("Restore Defaults") { config = GenerationConfig() }
                 .disabled(config == GenerationConfig())
+        } header: {
+            Text("Seed")
         }
     }
 
@@ -115,6 +143,7 @@ private struct TuningSection: View {
 
 private struct SliderRow: View {
     let title: String
+    let help: SettingHelp
     @Binding var value: Double
     let range: ClosedRange<Double>
     let step: Double
@@ -128,7 +157,7 @@ private struct SliderRow: View {
                     .frame(width: 34, alignment: .trailing)
             }
         } label: {
-            Text(title)
+            HelpLabel(title, help: help)
         }
     }
 }
