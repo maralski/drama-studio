@@ -96,6 +96,12 @@ public enum Drama3Prompt {
     }
 
     public static func build(text: String, tokenizer: Tokenizer, references: [Reference] = [], history: [HistoryTurn] = []) throws -> [Frame] {
+        try buildWithPrefix(text: text, tokenizer: tokenizer, references: references, history: history).rows
+    }
+
+    /// Rows plus the number of leading rows that make up the system message
+    /// (instruction and references), which every chunk of a request shares.
+    public static func buildWithPrefix(text: String, tokenizer: Tokenizer, references: [Reference] = [], history: [HistoryTurn] = []) throws -> (rows: [Frame], prefixRows: Int) {
         try validate(text, "text")
         enum Segment { case text(String), codes([[Int32]]) }
         var segments: [Segment] = [.text("<|im_start|>system\n"), .text(references.isEmpty ? ttsInstruction : referenceInstruction)]
@@ -114,6 +120,7 @@ public enum Drama3Prompt {
             segments.append(.codes(ref.codes))
         }
         segments.append(.text(messageEnd))
+        let systemSegments = segments.count
         for (index, turn) in history.enumerated() {
             let location = "history \(index + 1)"
             try validate(turn.text, location)
@@ -122,7 +129,9 @@ public enum Drama3Prompt {
         }
         segments += [.text("<|im_start|>user\n"), .text(withSpeakerTag(text)), .text(messageEnd), .text(generationStart)]
         var rows: [Frame] = []
-        for segment in segments {
+        var prefixRows = 0
+        for (i, segment) in segments.enumerated() {
+            if i == systemSegments { prefixRows = rows.count }
             switch segment {
             case .text(let s):
                 // Every literal is tokenized on its own: joining changes ids at the seams.
@@ -132,6 +141,6 @@ public enum Drama3Prompt {
             }
         }
         guard rows.count <= maxRows else { throw PromptError.tooLong(rows.count) }
-        return rows
+        return (rows, prefixRows)
     }
 }

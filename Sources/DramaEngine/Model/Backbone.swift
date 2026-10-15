@@ -80,6 +80,20 @@ final class Backbone {
         for s in recState.values { s.zero() }
     }
 
+    struct StateSnapshot {
+        var conv: [Int: [Float]]
+        var rec: [Int: [Float]]
+    }
+
+    func snapshot() -> StateSnapshot {
+        StateSnapshot(conv: convState.mapValues { $0.read($0.count) }, rec: recState.mapValues { $0.read($0.count) })
+    }
+
+    func restore(_ snap: StateSnapshot) {
+        for (i, v) in snap.conv { v.withUnsafeBufferPointer { memcpy(convState[i]!.floats, $0.baseAddress!, v.count * 4) } }
+        for (i, v) in snap.rec { v.withUnsafeBufferPointer { memcpy(recState[i]!.floats, $0.baseAddress!, v.count * 4) } }
+    }
+
     func useWeights(_ enc: MTLComputeCommandEncoder, shards: [MTLBuffer]) {
         enc.useResources(shards, usage: .read)
     }

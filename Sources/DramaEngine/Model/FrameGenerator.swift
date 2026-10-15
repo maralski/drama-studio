@@ -33,10 +33,10 @@ public final class FrameGenerator {
     }
 
     /// The prompt for one chunk with as much history as fits.
-    func chunkPrompt(text: String, references: [Drama3Prompt.Reference], history: Drama3History) throws -> [Frame] {
+    func chunkPrompt(text: String, references: [Drama3Prompt.Reference], history: Drama3History) throws -> (rows: [Frame], prefixRows: Int) {
         var lastError: Error = PromptError.tooLong(0)
         for turns in history.candidates {
-            do { return try Drama3Prompt.build(text: text, tokenizer: tokenizer, references: references, history: turns) }
+            do { return try Drama3Prompt.buildWithPrefix(text: text, tokenizer: tokenizer, references: references, history: turns) }
             catch PromptError.tooLong(let rows) { lastError = PromptError.tooLong(rows) }
         }
         throw lastError
@@ -62,11 +62,11 @@ public final class FrameGenerator {
         for (index, chunk) in chunks.enumerated() {
             guard shouldContinue() else { break }
             onEvent(.chunkStarted(index: index, count: chunks.count, text: chunk))
-            let prompt = try chunkPrompt(text: chunk, references: references, history: history)
+            let (prompt, prefixRows) = try chunkPrompt(text: chunk, references: references, history: history)
             let budget = min(config.maxNewFrames, model.capacity - prompt.count - 1)
             guard budget >= 1 else { throw PromptError.tooLong(prompt.count) }
             let t0 = Date()
-            let session = try GenerationSession(model: model, prompt: prompt)
+            let session = try GenerationSession(model: model, prompt: prompt, prefixRows: prefixRows)
             let prefillSeconds = Date().timeIntervalSince(t0)
             onEvent(.prefilled(rows: prompt.count))
             var frames: [Frame] = []

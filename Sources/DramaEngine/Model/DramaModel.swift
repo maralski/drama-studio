@@ -15,6 +15,16 @@ public final class DramaModel: @unchecked Sendable {
 
     public static let defaultCapacity = 8192 + 2048
 
+    /// States after the shared system prefix of the last request, so the next
+    /// chunk with the same prefix skips that part of the prefill. The KV caches
+    /// for those positions are still in place; only the GDN states move.
+    struct PrefixCache {
+        var rows: [Frame]
+        var states: Backbone.StateSnapshot
+    }
+    var prefixCache: PrefixCache?
+    public func clearPrefixCache() { prefixCache = nil }
+
     public init(location: ModelLocation, precision: Precision = .exact, capacity: Int = DramaModel.defaultCapacity) throws {
         ctx = try MetalContext()
         self.location = location
@@ -113,14 +123,22 @@ public final class GenerationSession {
     var config: ModelConfig { model.config }
     var position: Int { frames.count - 1 }
 
-    public init(model: DramaModel, prompt: [Frame], trace: Bool = false) throws {
+    /// `prefixRows` leading rows are the shared system prefix: their states are
+    /// reused when the previous session had the same prefix, and saved otherwise.
+    public init(model: DramaModel, prompt: [Frame], prefixRows: Int = 0, trace: Bool = false) throws {
         self.model = model
         self.promptRows = prompt.count
         self.trace = trace
         mainSampler = MainTokenSampler(config: model.config)
         guard prompt.count >= 1, prompt.count + 1 < model.capacity else { throw EngineError.badModel("prompt of \(prompt.count) rows does not fit") }
-        model.backbone.reset()
-        try prefill(prompt)
+        let usable = prefixRows > 0 && prefixRows < prompt.count ? prefixRows : 0
+        if usable > 0, let cache = model.prefixCache, cache.rows.count == usable, cache.rows.elementsEqual(prompt.prefix(usable), by: ==) {
+            model.backbone.restore(cache.states)
+            try prefill(prompt, from: usable, snapshotAt: nil)
+        } else {
+            model.backbone.reset()
+            try prefill(prompt, from: 0, snapshotAt: usable > 0 ? usable : nil)
+        }
     }
 
     private func writeFrame(_ f: Frame, at row: Int) {
@@ -129,14 +147,16 @@ public final class GenerationSession {
         for i in 0..<11 { p[i] = f[i] }
     }
 
-    private func prefill(_ prompt: [Frame]) throws {
+    private func prefill(_ prompt: [Frame], from: Int, snapshotAt: Int?) throws {
         frames = prompt
         for (i, f) in prompt.enumerated() { writeFrame(f, at: i) }
         let R = prompt.count
         let chunk = model.backbone.maxRows
-        var start = 0
+        var start = from
         while start < R {
-            let end = min(start + chunk, R)
+            var end = min(start + chunk, R)
+            // A chunk ends exactly at the prefix boundary so the states can be saved there.
+            if let s = snapshotAt, start < s, end > s { end = s }
             let M = end - start
             let pairedEnd = min(end, R - 1)
             let (cb, enc) = model.commandBuffer()
@@ -154,6 +174,7 @@ public final class GenerationSession {
             cb.waitUntilCompleted()
             if let e = cb.error { throw EngineError.badModel("GPU error during prefill: \(e)") }
             lastHiddenRow = M - 1
+            if end == snapshotAt { model.prefixCache = DramaModel.PrefixCache(rows: Array(prompt.prefix(end)), states: model.backbone.snapshot()) }
             start = end
         }
         if trace { layerOutStep0 = model.backbone.layerCapture.map { $0.read(config.hiddenSize) } }
