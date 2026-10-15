@@ -2,8 +2,10 @@
 
     tools/.venv/bin/python -I tools/convert_codec.py [--out DIR] [--only encoder|decoder]
 
-Writes DramaCodecEncoder.mlpackage and DramaCodecDecoder.mlpackage (fp16, mlprogram,
-macOS 15) with enumerated frame counts FRAME_SIZES.
+Writes DramaCodecEncoder.mlpackage (fp32) and DramaCodecDecoder.mlpackage (fp16), both
+mlprogram for macOS 15 with one static shape of WINDOW_FRAMES frames. Callers pad
+shorter inputs on the right and run longer ones in windows of CONTEXT_FRAMES of left
+context plus WINDOW_FRAMES - CONTEXT_FRAMES new frames (see DramaCodec in Swift).
 """
 
 import argparse
@@ -19,12 +21,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from dac_reference import CODEC_PATH, load_dac  # noqa: E402
 from dac_reference.exportable import SAMPLES_PER_FRAME, CodecDecoder, CodecEncoder, make_exportable  # noqa: E402
 
-FRAME_SIZES = (16, 32, 64, 128, 256, 512, 768)
+WINDOW_FRAMES = 512
+CONTEXT_FRAMES = 256
 DEFAULT_OUT = Path.home() / "Library/Application Support/DramaStudio/Codec"
-TRACE_FRAMES = 32
 
 
-def _convert(module: torch.nn.Module, example: torch.Tensor, inp: ct.TensorType, out: ct.TensorType, name: str):
+def _convert(module, example, inp, out, precision, name):
     with torch.no_grad():
         traced = torch.jit.trace(module, example, check_trace=False)
     mlmodel = ct.convert(
@@ -32,36 +34,39 @@ def _convert(module: torch.nn.Module, example: torch.Tensor, inp: ct.TensorType,
         inputs=[inp],
         outputs=[out],
         convert_to="mlprogram",
-        compute_precision=ct.precision.FLOAT16,
+        compute_precision=precision,
         minimum_deployment_target=ct.target.macOS15,
-        compute_units=ct.ComputeUnit.ALL,
         skip_model_load=True,
     )
-    mlmodel.short_description = f"Drama 3 DAC codec {name}, 44.1 kHz, 2048 samples per frame"
-    mlmodel.user_defined_metadata["frame_sizes"] = ",".join(map(str, FRAME_SIZES))
+    mlmodel.short_description = f"Drama 3 DAC codec {name}, 44.1 kHz, {SAMPLES_PER_FRAME} samples per frame"
+    mlmodel.user_defined_metadata["window_frames"] = str(WINDOW_FRAMES)
+    mlmodel.user_defined_metadata["context_frames"] = str(CONTEXT_FRAMES)
     mlmodel.user_defined_metadata["samples_per_frame"] = str(SAMPLES_PER_FRAME)
-    mlmodel.user_defined_metadata["source"] = str(CODEC_PATH.name)
+    mlmodel.user_defined_metadata["source"] = CODEC_PATH.name
     return mlmodel
 
 
 def convert_encoder(model) -> ct.models.MLModel:
-    shapes = [(1, 1, t * SAMPLES_PER_FRAME) for t in FRAME_SIZES]
+    # fp32: in fp16 a third of the residual codes flip, and encoding a voice is a one-off cost
+    shape = (1, 1, WINDOW_FRAMES * SAMPLES_PER_FRAME)
     return _convert(
         CodecEncoder(model).eval(),
-        torch.zeros(1, 1, TRACE_FRAMES * SAMPLES_PER_FRAME),
-        ct.TensorType(name="audio", shape=ct.EnumeratedShapes(shapes=shapes, default=shapes[0]), dtype=np.float32),
+        torch.zeros(shape),
+        ct.TensorType(name="audio", shape=shape, dtype=np.float32),
         ct.TensorType(name="codes", dtype=np.int32),
+        ct.precision.FLOAT32,
         "encoder",
     )
 
 
 def convert_decoder(model) -> ct.models.MLModel:
-    shapes = [(1, 10, t) for t in FRAME_SIZES]
+    shape = (1, 10, WINDOW_FRAMES)
     return _convert(
         CodecDecoder(model).eval(),
-        torch.zeros(1, 10, TRACE_FRAMES, dtype=torch.int32),
-        ct.TensorType(name="codes", shape=ct.EnumeratedShapes(shapes=shapes, default=shapes[0]), dtype=np.int32),
+        torch.zeros(shape, dtype=torch.int32),
+        ct.TensorType(name="codes", shape=shape, dtype=np.int32),
         ct.TensorType(name="audio", dtype=np.float32),
+        ct.precision.FLOAT16,
         "decoder",
     )
 
@@ -73,7 +78,7 @@ def main():
     args = ap.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
 
-    model = make_exportable(load_dac(), max_frames=max(FRAME_SIZES))
+    model = make_exportable(load_dac(), max_frames=WINDOW_FRAMES)
     jobs = {"encoder": (convert_encoder, "DramaCodecEncoder"), "decoder": (convert_decoder, "DramaCodecDecoder")}
     for key, (fn, name) in jobs.items():
         if args.only and args.only != key:

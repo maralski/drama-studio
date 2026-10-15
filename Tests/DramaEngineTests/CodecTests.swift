@@ -7,6 +7,7 @@ final class CodecTests: XCTestCase {
     private struct CodesFixture: Decodable {
         let codes: [[Int32]]
         let reencoded_codebook0: [Int32]
+        let tone_codes: [[Int32]]
     }
 
     private struct AudioFixture: Decodable {
@@ -50,7 +51,44 @@ final class CodecTests: XCTestCase {
         XCTAssertEqual(codes[0].count, frames)
         let matches = zip(codes[0], fixture.reencoded_codebook0).filter { $0 == $1 }.count
         let rate = Double(matches) / Double(frames)
-        XCTAssertGreaterThanOrEqual(rate, 0.9, "codebook 0 re-encode agreement with PyTorch \(rate)")
+        // Codebook 0 flips easily: PyTorch's own decode-then-encode keeps only 86% of the
+        // fixture codes, and the fp16 decoder's 35 dB error moves the re-encode further
+        // (72% measured). Exact-input encoder parity is checked on the tone at 90%.
+        XCTAssertGreaterThanOrEqual(rate, 0.6, "codebook 0 re-encode agreement with PyTorch \(rate)")
+    }
+
+    func testWindowsCoverEveryFrameOnce() {
+        typealias W = DramaCodec.Window
+        XCTAssertEqual(DramaCodec.windows(frames: 0), [])
+        XCTAssertEqual(DramaCodec.windows(frames: 300), [W(start: 0, keep: 0, end: 300)])
+        XCTAssertEqual(DramaCodec.windows(frames: 512), [W(start: 0, keep: 0, end: 512)])
+        XCTAssertEqual(DramaCodec.windows(frames: 1000), [
+            W(start: 0, keep: 0, end: 512),
+            W(start: 256, keep: 512, end: 768),
+            W(start: 512, keep: 768, end: 1000),
+        ])
+    }
+
+    func testEncoderMatchesReferenceOnTone() async throws {
+        let codec = try await makeCodec()
+        let fixture: CodesFixture = try load("codec_codes.json")
+        let frames = fixture.tone_codes[0].count
+        let rate = Double(DramaCodec.sampleRate)
+        let tone = (0 ..< frames * DramaCodec.samplesPerFrame).map { i -> Float in
+            let t = Double(i) / rate
+            let twoPi = 2 * Double.pi
+            let phase: Double = 220 * t + 3 * sin(twoPi * 5 * t)
+            let envelope: Double = 0.6 + 0.4 * sin(twoPi * 2 * t)
+            let vibrato: Double = 0.3 * sin(twoPi * phase) * envelope
+            let overtone: Double = 0.15 * sin(twoPi * 660 * t)
+            return Float(vibrato + overtone)
+        }
+        let codes = try await codec.encode(samples: tone)
+        for book in 0 ..< DramaCodec.numCodebooks {
+            let matches = zip(codes[book], fixture.tone_codes[book]).filter { $0 == $1 }.count
+            let floor = book == 0 ? 0.9 : 0.5
+            XCTAssertGreaterThanOrEqual(Double(matches) / Double(frames), floor, "codebook \(book) against the PyTorch encoder")
+        }
     }
 
     func testPaddingKeepsPrefixAndLengths() async throws {
@@ -62,7 +100,13 @@ final class CodecTests: XCTestCase {
         let short = try await codec.decode(codes: prefix)
         XCTAssertEqual(short.count, 20 * DramaCodec.samplesPerFrame)
         let maxDiff = zip(short, full).map { abs($0 - $1) }.max() ?? 0
-        XCTAssertLessThan(maxDiff, 1e-2, "a 20-frame decode padded to 32 should match the first 20 frames of the 64-frame decode")
+        XCTAssertLessThan(maxDiff, 1e-3, "right padding must not change earlier frames")
+
+        let long = fixture.codes.map { row in (0 ..< 10).flatMap { _ in row } }
+        let longAudio = try await codec.decode(codes: long)
+        XCTAssertEqual(longAudio.count, 640 * DramaCodec.samplesPerFrame)
+        let headDiff = zip(longAudio, full).map { abs($0 - $1) }.max() ?? 0
+        XCTAssertLessThan(headDiff, 1e-3, "the first window of a long decode is a plain padded decode")
 
         let encoded = try await codec.encode(samples: Array(full.prefix(5000)))
         XCTAssertEqual(encoded.map(\.count), Array(repeating: 3, count: DramaCodec.numCodebooks))
