@@ -1,8 +1,99 @@
+import DramaEngine
 import SwiftUI
 
 @main
 struct DramaStudioApp: App {
+    @State private var model = SessionModel(synthesizer: ModelSetup.makeSynthesizer(), library: VoiceLibrary())
+
+    init() {
+        if CommandLine.arguments.contains("--check-resources") { exit(Self.checkResources()) }
+    }
+
     var body: some Scene {
-        WindowGroup { Text("Drama Studio") }
+        Window("Drama Studio", id: "main") {
+            ContentView(model: model)
+                .onOpenURL { model.open($0) }
+        }
+        .defaultSize(width: 1240, height: 780)
+        .commands { StudioCommands(model: model) }
+
+        Settings {
+            SettingsView()
+        }
+    }
+
+    /// Proves the engine's resource bundle resolves from inside the app bundle
+    /// by compiling the Metal kernels it ships.
+    private static func checkResources() -> Int32 {
+        do {
+            let context = try MetalContext()
+            print("DramaEngine resources OK; kernels compiled for \(context.device.name)")
+            return 0
+        } catch {
+            print("DramaEngine resources failed: \(error)")
+            return 1
+        }
+    }
+}
+
+struct StudioCommands: Commands {
+    @Bindable var model: SessionModel
+
+    var body: some Commands {
+        CommandGroup(replacing: .appInfo) {
+            Button("About Drama Studio") { AboutPanel.show() }
+        }
+        CommandGroup(replacing: .newItem) {
+            Button("Import Script…") { FilePanels.importScript(into: model) }
+                .keyboardShortcut("o")
+        }
+        CommandGroup(replacing: .importExport) {
+            Button("Export Audio…") { FilePanels.export(model) }
+                .keyboardShortcut("e")
+                .disabled(!model.canExport)
+        }
+        CommandMenu("Speech") {
+            Button("Generate") { model.generate() }
+                .keyboardShortcut(.return)
+                .disabled(!model.canGenerate)
+            Button("Stop Generating") { model.stopGeneration() }
+                .keyboardShortcut(".")
+                .disabled(!model.state.isGenerating)
+            Divider()
+            Button(model.state.isPlaying ? "Pause" : "Play") { model.togglePlayback() }
+                .disabled(!model.canPlay)
+        }
+        CommandMenu("Script") {
+            Menu("Insert Cue") { CueMenuItems(model: model) }
+            Toggle("Screenplay Mode", isOn: $model.screenplayMode)
+                .keyboardShortcut("p", modifiers: [.command, .shift])
+        }
+    }
+}
+
+struct CueMenuItems: View {
+    let model: SessionModel
+
+    var body: some View {
+        ForEach(PerformanceCue.all) { cue in
+            Button("\(cue.title)  \(cue.opening)") { model.insert(cue) }
+        }
+    }
+}
+
+enum AboutPanel {
+    @MainActor
+    static func show() {
+        let centered = NSMutableParagraphStyle()
+        centered.alignment = .center
+        let font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
+        let credits = NSMutableAttributedString(
+            string: "Built with Fish Audio\n",
+            attributes: [.font: NSFont.boldSystemFont(ofSize: NSFont.smallSystemFontSize), .paragraphStyle: centered, .foregroundColor: NSColor.labelColor]
+        )
+        credits.append(NSAttributedString(string: "Runs Fish Audio Drama 3 locally under the ", attributes: [.font: font, .paragraphStyle: centered, .foregroundColor: NSColor.secondaryLabelColor]))
+        credits.append(NSAttributedString(string: "Fish Audio Community License", attributes: [.font: font, .paragraphStyle: centered, .link: ModelSetup.licenseURL]))
+        NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
+        NSApp.activate()
     }
 }

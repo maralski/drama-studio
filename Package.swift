@@ -18,6 +18,7 @@ let package = Package(
         .executableTarget(name: "drama", dependencies: ["DramaEngine"], path: "Sources/drama"),
         .executableTarget(name: "DramaStudio", dependencies: ["DramaEngine"], path: "App/DramaStudio"),
         .testTarget(name: "DramaEngineTests", dependencies: ["DramaEngine"], path: "Tests/DramaEngineTests"),
+        .testTarget(name: "DramaStudioTests", dependencies: ["DramaStudio", "DramaEngine"], path: "Tests/DramaStudioTests"),
     ],
     swiftLanguageVersions: [.v5]
 )
