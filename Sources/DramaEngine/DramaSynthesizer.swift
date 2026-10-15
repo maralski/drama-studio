@@ -51,8 +51,23 @@ public actor DramaSynthesizer: SpeechSynthesizer {
         return try await codec!.decode(codes: codes)
     }
 
+    /// Seconds of trailing audio whose 2048-sample frames all stay under an RMS of 0.01.
+    public nonisolated static func trailingSilenceSeconds(_ samples: [Float]) -> Double {
+        let n = ModelConstants.samplesPerFrame
+        var silentFrames = 0
+        var end = samples.count / n * n
+        while end >= n {
+            var energy: Float = 0
+            for i in (end - n)..<end { energy += samples[i] * samples[i] }
+            if (energy / Float(n)).squareRoot() >= 0.01 { break }
+            silentFrames += 1
+            end -= n
+        }
+        return Double(silentFrames * n) / Double(ModelConstants.sampleRate)
+    }
+
     /// Runs a codec decode from synchronous generator code.
-    nonisolated static func decodeBlocking(_ codec: DramaCodec, codes: [[Int32]]) throws -> [Float] {
+    public nonisolated static func decodeBlocking(_ codec: DramaCodec, codes: [[Int32]]) throws -> [Float] {
         let group = DispatchGroup()
         group.enter()
         var result: Result<[Float], Error> = .failure(EngineError.badModel("codec did not answer"))
@@ -84,15 +99,10 @@ public actor DramaSynthesizer: SpeechSynthesizer {
         continuation.yield(.loadingModel(progress: 1, detail: "Ready"))
         let generator = FrameGenerator(model: model!, tokenizer: tokenizer!)
         let codec = self.codec!
-        generator.silenceProbe = { frames, tailSeconds in
+        generator.silenceProbe = { frames in
             // The codec is causal, so decoding the whole chunk so far gives the true tail.
             let codes = (0..<ModelConstants.numCodebooks).map { c in frames.map { $0[1 + c] } }
-            let samples = try Self.decodeBlocking(codec, codes: codes)
-            let tail = Int(tailSeconds * Double(ModelConstants.sampleRate))
-            guard samples.count >= tail else { return false }
-            var energy: Float = 0
-            for v in samples.suffix(tail) { energy += v * v }
-            return (energy / Float(tail)).squareRoot() < 0.005
+            return Self.trailingSilenceSeconds(try Self.decodeBlocking(codec, codes: codes))
         }
         let references = request.references.map { Drama3Prompt.Reference(transcript: $0.transcript, codes: $0.codes) }
         var allFrames: [Frame] = []
@@ -106,6 +116,7 @@ public actor DramaSynthesizer: SpeechSynthesizer {
             case .chunkStarted(let i, let n, let text): continuation.yield(.chunkStarted(index: i, count: n, text: text))
             case .prefilled(let rows): continuation.yield(.prefill(rows: rows))
             case .frame(let i, let max): continuation.yield(.frame(index: i, maxFrames: max))
+            case .retry(let i, let attempt, _, _): continuation.yield(.retry(chunkIndex: i, attempt: attempt))
             case .chunkFinished(let r): pendingChunks.append(r)
             }
         }

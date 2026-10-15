@@ -106,6 +106,9 @@ final class SessionModel {
             } else if chunkIndex == 0, playsWhileGenerating {
                 startPlayback(from: 0)
             }
+        case .retry:
+            telemetry.retries += 1
+            telemetry.frame = 0
         case .finished(let result):
             self.result = result
             if result.timings.framesPerSecond > 0 { telemetry.framesPerSecond = result.timings.framesPerSecond }

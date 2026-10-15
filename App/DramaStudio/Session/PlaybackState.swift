@@ -40,4 +40,5 @@ struct GenerationTelemetry: Equatable {
     var maxFrames = 0
     var framesPerSecond: Double = 0
     var chunkStart: ContinuousClock.Instant?
+    var retries = 0
 }

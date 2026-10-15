@@ -21,6 +21,15 @@ struct Args {
     func double(_ k: String, _ d: Double) -> Double { values[k].flatMap(Double.init) ?? d }
 }
 
+func awaitBlocking<T: Sendable>(_ body: @escaping @Sendable () async throws -> T) throws -> T {
+    let group = DispatchGroup()
+    group.enter()
+    nonisolated(unsafe) var result: Result<T, Error>?
+    Task.detached { defer { group.leave() }; do { result = .success(try await body()) } catch { result = .failure(error) } }
+    group.wait()
+    return try result!.get()
+}
+
 func fail(_ m: String) -> Never { FileHandle.standardError.write((m + "\n").data(using: .utf8)!); exit(1) }
 
 func loadModel(_ args: Args) throws -> DramaModel {
@@ -134,13 +143,26 @@ func generate(_ args: Args) throws {
     if let s = args["seed"].flatMap(UInt64.init) { config.seed = s }
     if args.flags.contains("warm") { model.warmUp() }
     let gen = FrameGenerator(model: model, tokenizer: tokenizer)
+    if args.flags.contains("no-retry") { config.minSpokenRatio = 0 }
+    if DramaCodec.modelsExist(), !args.flags.contains("no-codec") {
+        let codec = try awaitBlocking { try await DramaCodec(directory: DramaCodec.defaultDirectory) }
+        gen.silenceProbe = { frames in
+            let codes = (0..<ModelConstants.numCodebooks).map { c in frames.map { $0[1 + c] } }
+            return DramaSynthesizer.trailingSilenceSeconds(try DramaSynthesizer.decodeBlocking(codec, codes: codes))
+        }
+        FileHandle.standardError.write("codec probe: Core ML\n".data(using: .utf8)!)
+    } else {
+        config.stopAfterSilenceSeconds = nil
+    }
     var all: [Frame] = []
     let results = try gen.generate(text: text, references: refs, config: config) { event in
         switch event {
         case .chunkStarted(let i, let n, let t): FileHandle.standardError.write("chunk \(i + 1)/\(n): \(t.prefix(60))\n".data(using: .utf8)!)
+        case .retry(_, let attempt, let spoken, let expected):
+            FileHandle.standardError.write(String(format: "  retry %d: spoke %.1fs of an expected %.1fs\n", attempt, spoken, expected).data(using: .utf8)!)
         case .chunkFinished(let r):
             all += r.frames
-            FileHandle.standardError.write(String(format: "  %d rows prefilled in %.2fs; %d frames in %.2fs (%.1f frames/s) eos=%@\n", r.promptRows, r.prefillSeconds, r.frames.count, r.decodeSeconds, Double(r.frames.count) / max(r.decodeSeconds, 1e-9), r.finishedByEOS ? "yes" : "no").data(using: .utf8)!)
+            FileHandle.standardError.write(String(format: "  %d rows prefilled in %.2fs; %d frames in %.2fs (%.1f frames/s) eos=%@ attempts=%d\n", r.promptRows, r.prefillSeconds, r.frames.count, r.decodeSeconds, Double(r.frames.count) / max(r.decodeSeconds, 1e-9), r.finishedByEOS ? "yes" : "no", r.attempts).data(using: .utf8)!)
         default: break
         }
     }

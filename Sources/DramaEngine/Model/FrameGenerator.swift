@@ -16,6 +16,8 @@ public final class FrameGenerator {
         public var finishedByEOS: Bool
         public var prefillSeconds: Double
         public var decodeSeconds: Double
+        public var spokenSeconds: Double
+        public var attempts: Int
         /// `[10][T]` codes, the shape the codec and history take.
         public var codes: [[Int32]] { (0..<ModelConstants.numCodebooks).map { c in frames.map { $0[1 + c] } } }
     }
@@ -24,14 +26,22 @@ public final class FrameGenerator {
         case chunkStarted(index: Int, count: Int, text: String)
         case prefilled(rows: Int)
         case frame(index: Int, maxFrames: Int)
+        case retry(index: Int, attempt: Int, spokenSeconds: Double, expectedSeconds: Double)
         case chunkFinished(ChunkResult)
     }
 
-    /// Decides whether the tail of a chunk is silence. The synthesizer decodes
-    /// the frames with the codec and measures the last seconds; nil disables
-    /// the early stop.
-    public var silenceProbe: ((_ frames: [Frame], _ tailSeconds: Double) throws -> Bool)?
+    /// Seconds of silence at the end of the chunk so far. The synthesizer
+    /// decodes the frames with the codec and measures; nil disables the early
+    /// stop and the spoken-duration check falls back to the frame count.
+    public var silenceProbe: ((_ frames: [Frame]) throws -> Double)?
     static let silenceProbeEveryFrames = 16
+    static let charactersPerSecond = 16.0
+
+    public static func expectedSeconds(for text: String) -> Double {
+        let plain = text.replacingOccurrences(of: #"<\|[^|]*\|>|\[[^\]]*\]"#, with: "", options: .regularExpression)
+        let chars = plain.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ").count
+        return Double(chars) / charactersPerSecond
+    }
 
     public init(model: DramaModel, tokenizer: Tokenizer) {
         self.model = model
@@ -71,27 +81,43 @@ public final class FrameGenerator {
             let (prompt, prefixRows) = try chunkPrompt(text: chunk, references: references, history: history)
             let budget = min(config.maxNewFrames, model.capacity - prompt.count - 1)
             guard budget >= 1 else { throw PromptError.tooLong(prompt.count) }
-            let t0 = Date()
-            let session = try GenerationSession(model: model, prompt: prompt, prefixRows: prefixRows)
-            let prefillSeconds = Date().timeIntervalSince(t0)
-            onEvent(.prefilled(rows: prompt.count))
-            var frames: [Frame] = []
-            var eos = false
-            let t1 = Date()
-            let silenceFrames = config.stopAfterSilenceSeconds.map { Int(($0 * Double(ModelConstants.sampleRate) / Double(ModelConstants.samplesPerFrame)).rounded(.up)) }
-            for step in 0..<budget {
+            let expected = Self.expectedSeconds(for: chunk)
+            var best: ChunkResult?
+            for attempt in 0...max(0, config.maxRetries) {
                 guard shouldContinue() else { break }
-                let r = try session.step(temperature: config.temperature, topK: config.topK, topP: config.topP, sampler: &sampler)
-                guard let frame = r.frame else { eos = true; break }
-                frames.append(frame)
-                onEvent(.frame(index: step, maxFrames: budget))
-                if let probe = silenceProbe, let silenceFrames, frames.count > silenceFrames, frames.count % Self.silenceProbeEveryFrames == 0,
-                   try probe(frames, config.stopAfterSilenceSeconds!) {
-                    break
+                let t0 = Date()
+                let session = try GenerationSession(model: model, prompt: prompt, prefixRows: prefixRows)
+                let prefillSeconds = Date().timeIntervalSince(t0)
+                if attempt == 0 { onEvent(.prefilled(rows: prompt.count)) }
+                var frames: [Frame] = []
+                var eos = false
+                var trailingSilence = 0.0
+                let t1 = Date()
+                let silenceFrames = config.stopAfterSilenceSeconds.map { Int(($0 * Double(ModelConstants.sampleRate) / Double(ModelConstants.samplesPerFrame)).rounded(.up)) }
+                for step in 0..<budget {
+                    guard shouldContinue() else { break }
+                    let r = try session.step(temperature: config.temperature, topK: config.topK, topP: config.topP, sampler: &sampler)
+                    guard let frame = r.frame else { eos = true; break }
+                    frames.append(frame)
+                    onEvent(.frame(index: step, maxFrames: budget))
+                    if let probe = silenceProbe, let silenceFrames, let limit = config.stopAfterSilenceSeconds,
+                       frames.count > silenceFrames, frames.count % Self.silenceProbeEveryFrames == 0 {
+                        trailingSilence = try probe(frames)
+                        if trailingSilence >= limit { break }
+                    }
                 }
+                if let probe = silenceProbe, !frames.isEmpty { trailingSilence = try probe(frames) }
+                let total = Double(frames.count) * Double(ModelConstants.samplesPerFrame) / Double(ModelConstants.sampleRate)
+                let spoken = max(0, total - trailingSilence)
+                let result = ChunkResult(index: index, count: chunks.count, text: chunk, frames: frames, promptRows: prompt.count,
+                                         finishedByEOS: eos, prefillSeconds: prefillSeconds, decodeSeconds: Date().timeIntervalSince(t1),
+                                         spokenSeconds: spoken, attempts: attempt + 1)
+                if best == nil || spoken > best!.spokenSeconds { best = result }
+                if config.minSpokenRatio <= 0 || spoken >= config.minSpokenRatio * expected || attempt == config.maxRetries { break }
+                onEvent(.retry(index: index, attempt: attempt + 1, spokenSeconds: spoken, expectedSeconds: expected))
             }
-            let result = ChunkResult(index: index, count: chunks.count, text: chunk, frames: frames, promptRows: prompt.count,
-                                     finishedByEOS: eos, prefillSeconds: prefillSeconds, decodeSeconds: Date().timeIntervalSince(t1))
+            guard let result = best else { break }
+            let frames = result.frames
             if !frames.isEmpty { history.push(text: chunk, codes: result.codes) }
             results.append(result)
             onEvent(.chunkFinished(result))
