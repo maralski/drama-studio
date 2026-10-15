@@ -155,7 +155,7 @@ func generate(_ args: Args) throws {
         config.stopAfterSilenceSeconds = nil
     }
     var all: [Frame] = []
-    let results = try gen.generate(text: text, references: refs, config: config) { event in
+    _ = try gen.generate(text: text, references: refs, config: config) { event in
         switch event {
         case .chunkStarted(let i, let n, let t): FileHandle.standardError.write("chunk \(i + 1)/\(n): \(t.prefix(60))\n".data(using: .utf8)!)
         case .retry(_, let attempt, let spoken, let expected):
@@ -166,7 +166,6 @@ func generate(_ args: Args) throws {
         default: break
         }
     }
-    _ = results
     try NPY.write(.int64(all.flatMap { $0.map(Int64.init) }, shape: [all.count, 11]), to: URL(fileURLWithPath: outPath))
     print("wrote \(all.count) frames (\(String(format: "%.1f", Double(all.count) * 2048 / 44100))s of audio) to \(outPath)")
 }

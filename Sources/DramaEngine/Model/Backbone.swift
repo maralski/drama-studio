@@ -11,13 +11,11 @@ final class Backbone {
     let maxRows: Int
     let capacity: Int
 
-    // State
     private(set) var kcache: [Int: Buf] = [:]
     private(set) var vcache: [Int: Buf] = [:]
     private(set) var convState: [Int: Buf] = [:]
     private(set) var recState: [Int: Buf] = [:]
 
-    // Work buffers, sized for maxRows
     let frames: Buf          // [capacity, 11] int32, the whole sequence
     let x: Buf, h: Buf, big: Buf, z: Buf, a: Buf, b: Buf, convOut: Buf, core: Buf, normed: Buf
     let qn: Buf, kbuf: Buf, vbuf: Buf, kn: Buf, attnOut: Buf, mixOut: Buf

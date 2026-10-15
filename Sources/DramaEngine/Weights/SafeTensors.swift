@@ -86,7 +86,6 @@ public final class SafeTensorsStore: @unchecked Sendable {
             throw EngineError.badModel("Metal refused the mapping of \(url.lastPathComponent)")
         }
         buffer.label = url.lastPathComponent
-        let shardIndex = shards.count
         shards.append(buffer)
 
         let headerLength = Int(base.load(as: UInt64.self).littleEndian)
@@ -103,7 +102,6 @@ public final class SafeTensorsStore: @unchecked Sendable {
                   let offsets = entry["data_offsets"] as? [Int], offsets.count == 2 else {
                 throw EngineError.badModel("unsupported tensor entry \(name) in \(url.lastPathComponent)")
             }
-            _ = shardIndex
             tensors[name] = TensorRef(name: name, dtype: dtype, shape: shape, buffer: buffer, offset: dataBase + offsets[0])
         }
     }

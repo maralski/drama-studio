@@ -23,7 +23,6 @@ public enum Drama3Chunking {
         let ns = text as NSString
         var pieces: [Piece] = []
         var last = 0
-        // Convert UTF-16 match ranges to scalar offsets.
         var utf16ToScalar: [Int: Int] = [:]
         var u = 0
         for (i, sc) in scalars.enumerated() { utf16ToScalar[u] = i; u += sc.utf16.count }

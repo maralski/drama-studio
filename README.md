@@ -4,7 +4,7 @@ A native macOS app that runs Fish Audio's [Drama 3](https://huggingface.co/fisha
 text-to-speech model locally on Apple silicon. The 35B mixture-of-experts
 backbone and the codebook tower run on hand-written Metal compute kernels that
 read the released safetensors weights in place. The DAC audio codec runs
-through Core ML so the Neural Engine can take it. No MLX, no PyTorch at runtime.
+through Core ML. No MLX, no PyTorch at runtime.
 
 Built with Fish Audio. The model weights are under the
 [Fish Audio Community License](https://huggingface.co/fishaudio/drama-3/blob/main/LICENSE);
@@ -34,9 +34,15 @@ cloning a real person's voice without their consent is not permitted.
 uvx --from huggingface_hub hf download fishaudio/drama-3
 ```
 
-- The Core ML codec models, built once from `codec.pth` with
-  `tools/convert_codec.py` (see `tools/README` in that script's header). They
-  land in `~/Library/Application Support/DramaStudio/Codec/`.
+- The Core ML codec models, built once from `codec.pth`:
+
+```bash
+cd tools && uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python "torch==2.7.1" coremltools numpy einops soundfile
+.venv/bin/python convert_codec.py
+```
+
+  They land in `~/Library/Application Support/DramaStudio/Codec/` (encoder
+  809 MB in fp32, decoder 353 MB in fp16).
 
 ## Build and run
 
@@ -74,7 +80,8 @@ Command line:
 - `Sources/DramaEngine/Tokenizer`: a byte-level BPE tokenizer that matches
   Hugging Face `tokenizers` on a 661-case corpus.
 - `Sources/DramaEngine/Codec`: Core ML wrappers for the DAC encoder (reference
-  clips to codes) and decoder (codes to 44.1 kHz audio).
+  clips to codes) and decoder (codes to 44.1 kHz audio), both exported at one
+  static 512-frame shape and run in windows with 256 frames of left context.
 - `App/DramaStudio`: the SwiftUI app.
 - `eval/`: the faithfulness suite (see `docs/EVAL.md`).
 
@@ -107,6 +114,50 @@ The reference implementation and the engine share the model's habit of
 stopping early or trailing into silence on multi-sentence prompts without a
 reference voice; the sentence-per-turn chunking mode exists for that reason.
 See `eval/README.md` for how to reproduce every number.
+
+## The Neural Engine, honestly
+
+The codec goes through Core ML because Core ML is the only route to the
+Neural Engine. On this machine (macOS 26.5, M3 Max) that route did not pay off:
+
+- The decoder's Neural Engine compile for the 512-frame shape ran for more than
+  35 minutes without finishing; the 64-frame shape compiled in about 7 minutes
+  and then ran three times slower on the ANE than on the CPU, because the
+  compute plan puts 72 percent of the decoder's cost (long-sequence
+  convolutions and the Snake activation's `sin` after upsampling) on the CPU
+  anyway.
+- The ANE's native transposed convolution lost about 15 dB of accuracy, so the
+  export rewrites transposed convolutions as polyphase convolutions.
+- The GPU path returns wrong audio for the chained residual units of the last
+  decoder block (about 5 dB SNR); each unit alone is correct, which points at
+  an op-fusion bug.
+- Core ML's enumerated shapes crash the CPU backend (SIGTRAP) on multi-channel
+  convolutions here, so the models use one static shape.
+
+So the shipped configuration runs the encoder in fp32 and the decoder in fp16
+on the CPU through Core ML: 1.5 s per 512-frame window (23.8 s of audio) for
+the decoder and 2.1 s for a 10 s reference clip in the encoder. The encoder
+matches PyTorch's codes exactly; the decoder is 35 to 39 dB from the fp32
+reference. `DramaCodec.init(computeUnits:)` still accepts `.cpuAndNeuralEngine`
+for anyone who wants to retry on a different machine or OS.
+
+## Speech quality hill-climb
+
+Measured with `eval/e2e.py` on six texts, plain and cloned, three seeds each
+(36 runs per row), scored by Whisper small.en word error rate, whether the model
+reached eos, trailing silent frames, and resemblyzer speaker similarity to the
+reference clip for the cloned runs.
+
+| configuration | mean WER | runs at or under 0.1 WER | eos reached | mean quiet tail | speaker similarity |
+| --- | --- | --- | --- | --- | --- |
+| reference chunking (300 bytes), no probe | 0.141 | 69% | 89% | 103 frames | 0.867 |
+| one sentence per turn | 0.063 | 86% | 100% | 30 frames | 0.867 |
+| sentence per turn, silence stop, short-chunk retry | FINAL_WER | FINAL_LE | FINAL_EOS | FINAL_TAIL | FINAL_SPK |
+
+Uncloned outputs score 0.54 to 0.56 against the reference clip, so the cloned
+0.87 is the voice carrying over, not the metric's floor. The remaining errors
+in the second row were two single-sentence prompts whose random voice gave up
+mid-sentence, and Whisper rendering "the 21st of March" as "21 March".
 
 ## Performance (M3 Max, 128 GB)
 

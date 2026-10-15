@@ -79,7 +79,6 @@ final class Tower {
         try k.rmsnorm(enc, out: cat, outOffset: H, outStride: 2 * H, x: hidden, xOffset: hiddenOffset * H, view: .contiguous(H), rows: M, dim: H, w: w.hnorm, eps: config.towerNormEps)
         try k.roundIfMimic(enc, x: cat, count: M * 2 * H)
         try k.gemv(enc, w.ehProj, x: cat, y: mixed, n: H, k: 2 * H, m: M)
-        // transformer block on the residual stream `mixed`
         try k.rmsnorm(enc, out: th, outStride: H, x: mixed, view: .contiguous(H), rows: M, dim: H, w: w.attentionNorm, eps: config.towerNormEps)
         try k.roundIfMimic(enc, x: th, count: M * H)
         try k.gemv(enc, w.wqkv, x: th, y: tqkv, n: 9216, k: H, m: M)

@@ -109,7 +109,6 @@ public actor DramaSynthesizer: SpeechSynthesizer {
         var allSamples: [Float] = []
         var timings = SpeechTimings()
         var eos = true
-        var pendingChunks: [FrameGenerator.ChunkResult] = []
         // Generation is synchronous GPU work; decode each finished chunk right after it lands.
         let results = try generator.generate(text: request.text, references: references, config: request.config, shouldContinue: { !Task.isCancelled }) { event in
             switch event {
@@ -117,7 +116,7 @@ public actor DramaSynthesizer: SpeechSynthesizer {
             case .prefilled(let rows): continuation.yield(.prefill(rows: rows))
             case .frame(let i, let max): continuation.yield(.frame(index: i, maxFrames: max))
             case .retry(let i, let attempt, _, _): continuation.yield(.retry(chunkIndex: i, attempt: attempt))
-            case .chunkFinished(let r): pendingChunks.append(r)
+            case .chunkFinished: break
             }
         }
         try Task.checkCancellation()
@@ -135,7 +134,6 @@ public actor DramaSynthesizer: SpeechSynthesizer {
             allSamples += samples
             continuation.yield(.audio(samples: samples, chunkIndex: r.index))
         }
-        _ = pendingChunks
         continuation.yield(.finished(SpeechResult(frames: allFrames, samples: allSamples, timings: timings, finishedByEOS: eos)))
     }
 }
