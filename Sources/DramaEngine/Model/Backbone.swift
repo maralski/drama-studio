@@ -22,11 +22,13 @@ final class Backbone {
     let routerLogits: Buf, ids: Buf, rw: Buf, counts: Buf, lists: Buf, active: Buf, act: Buf, slotOut: Buf
     let sharedG: Buf, sharedU: Buf, sharedAct: Buf, sharedOut: Buf, sharedGate: Buf
     let hiddenOut: Buf       // [maxRows, 2048] final-norm output
-    let candEos: Buf, candBand: Buf
+    let cand: Buf            // [codebookSize + 1] candidate logits: eos, then the semantic band
     /// Residual stream after each layer for the first row (dump support).
     var captureLayers: Bool = false
     var captureRow: Int = 0
-    /// Benchmark aid: stages named here are not encoded ("linear", "full", "moe").
+    /// Benchmark aid: stages named here are not encoded: "linear", "full", "moe",
+    /// or within them "gdn" (conv and recurrence), "attn" (the attention core),
+    /// "experts" (the routed FP8 experts), "shared" (the shared expert).
     var skipStages: Set<String> = []
     private(set) var layerCapture: [Buf] = []
 
@@ -58,7 +60,7 @@ final class Backbone {
         sharedAct = Buf(d, floats: R * 512, label: "sharedAct"); sharedOut = Buf(d, floats: R * H, label: "sharedOut")
         sharedGate = Buf(d, floats: R, label: "sharedGate")
         hiddenOut = Buf(d, floats: R * H, label: "hiddenOut")
-        candEos = Buf(d, floats: R, label: "candEos"); candBand = Buf(d, floats: R * config.codebookSize, label: "candBand")
+        cand = Buf(d, floats: config.codebookSize + 1, label: "cand")
         for (i, type) in config.layerTypes.enumerated() {
             switch type {
             case .full:
@@ -125,21 +127,107 @@ final class Backbone {
         try k.roundIfMimic(enc, x: hiddenOut, count: M * H)
     }
 
-    /// Logits of the 4097 candidate ids (eos, then the semantic band) for
-    /// `hiddenOut` rows [row0, row0 + rows).
-    func candidateLogits(_ enc: MTLComputeCommandEncoder, row0: Int, rows M: Int) throws {
+    /// GPU milliseconds per forward of `rows` rows for each kernel group, each
+    /// timed on its own after a real forward left its inputs in place, so the
+    /// numbers are not confounded by the routing changing. A group's time is
+    /// its per-layer time times the number of layers of that type.
+    func profile(rows M: Int, makeCommandBuffer: () -> (MTLCommandBuffer, MTLComputeCommandEncoder)) throws -> [(String, Double)] {
         let H = config.hiddenSize
-        try k.gemv(enc, weights.lmHead, x: hiddenOut, xOffset: row0 * H, y: candEos, n: 1, k: H, m: M, rowStart: Int(config.eos))
-        try k.gemv(enc, weights.lmHead, x: hiddenOut, xOffset: row0 * H, y: candBand, n: config.codebookSize, k: H, m: M, rowStart: Int(config.semanticStart))
-    }
-
-    func readCandidateLogits(row: Int) -> [Float] {
-        var out = [Float](repeating: 0, count: config.codebookSize + 1)
-        out[0] = candEos.floats[row]
-        let band = candBand.floats + row * config.codebookSize
-        for i in 0..<config.codebookSize { out[i + 1] = band[i] }
+        let c = config
+        let iterations = 5
+        func time(_ body: (MTLComputeCommandEncoder) throws -> Void) throws -> Double {
+            let (cb, enc) = makeCommandBuffer()
+            for _ in 0..<iterations { try body(enc) }
+            enc.endEncoding()
+            cb.commit(); cb.waitUntilCompleted()
+            if let e = cb.error { throw EngineError.badModel("\(e)") }
+            return (cb.gpuEndTime - cb.gpuStartTime) / Double(iterations) * 1000
+        }
+        var out: [(String, Double)] = []
+        func group(_ name: String, layers: Int, _ body: (MTLComputeCommandEncoder) throws -> Void) throws {
+            out.append((name, try time(body) * Double(layers)))
+        }
+        guard let li = c.layerTypes.firstIndex(of: .linear), let fi = c.layerTypes.firstIndex(of: .full),
+              case .linear(let lw) = weights.layers[li].mixer, case .full(let fw) = weights.layers[fi].mixer else { return out }
+        let linearCount = c.layerTypes.filter { $0 == .linear }.count, fullCount = c.layerTypes.count - linearCount
+        let layer = weights.layers[li]
+        let mw = layer.moe
+        let capacityPairs = maxRows * c.topK
+        let maxActive = min(M * c.topK, c.numExperts)
+        let heads = c.numHeads, kvHeads = c.numKVHeads
+        let kvView = HeadView(heads: UInt32(kvHeads), groupStride: UInt32(kvHeads * 256), headStride: 256)
+        try group("norms+residual", layers: c.numLayers) { enc in
+            try k.rmsnorm(enc, out: h, outStride: H, x: x, view: .contiguous(H), rows: M, dim: H, w: layer.inputNorm, eps: c.rmsNormEps)
+            try k.residualAdd(enc, x: x, y: mixOut, count: M * H)
+            try k.rmsnorm(enc, out: h, outStride: H, x: x, view: .contiguous(H), rows: M, dim: H, w: layer.postNorm, eps: c.rmsNormEps)
+        }
+        try group("linear.gemm.qkv", layers: linearCount) { enc in try k.gemv(enc, lw.inProjQKV, x: h, y: big, n: 8192, k: H, m: M) }
+        try group("linear.gemm.z", layers: linearCount) { enc in try k.gemv(enc, lw.inProjZ, x: h, y: z, n: 4096, k: H, m: M) }
+        try group("linear.gemm.ab", layers: linearCount) { enc in
+            try k.gemv(enc, lw.inProjA, x: h, y: a, n: 32, k: H, m: M)
+            try k.gemv(enc, lw.inProjB, x: h, y: b, n: 32, k: H, m: M)
+        }
+        try group("linear.conv", layers: linearCount) { enc in try k.gdnConv(enc, out: convOut, mixed: big, state: convState[li]!, w: lw.conv, channels: 8192, rows: M) }
+        try group("linear.recurrent", layers: linearCount) { enc in
+            try k.gdnRecurrent(enc, core: core, convOut: convOut, a: a, b: b, state: recState[li]!, aLog: lw.aLog, dtBias: lw.dtBias, rows: M, config: c)
+        }
+        try group("linear.gatednorm", layers: linearCount) { enc in try k.gatedRMSNorm(enc, out: normed, x: core, z: z, w: lw.norm, rows: M * c.linearValueHeads, eps: c.rmsNormEps) }
+        try group("linear.gemm.out", layers: linearCount) { enc in try k.gemv(enc, lw.outProj, x: normed, y: mixOut, n: H, k: 4096, m: M) }
+        try group("full.gemm.qkv", layers: fullCount) { enc in
+            try k.gemv(enc, fw.qProj, x: h, y: big, n: heads * 512, k: H, m: M)
+            try k.gemv(enc, fw.kProj, x: h, y: kbuf, n: kvHeads * 256, k: H, m: M)
+            try k.gemv(enc, fw.vProj, x: h, y: vbuf, n: kvHeads * 256, k: H, m: M)
+        }
+        try group("full.norm.rope.kv", layers: fullCount) { enc in
+            try k.rmsnorm(enc, out: qn, outStride: 256, x: big, view: HeadView(heads: UInt32(heads), groupStride: UInt32(heads * 512), headStride: 512), rows: M * heads, dim: 256, w: fw.qNorm, eps: c.rmsNormEps)
+            try k.rmsnorm(enc, out: kn, outStride: 256, x: kbuf, view: kvView, rows: M * kvHeads, dim: 256, w: fw.kNorm, eps: c.rmsNormEps)
+            try k.rope(enc, interleaved: false, x: qn, heads: heads, rows: M * heads, pos0: 0, rotaryDim: c.rotaryDim, theta: c.ropeTheta)
+            try k.rope(enc, interleaved: false, x: kn, heads: kvHeads, rows: M * kvHeads, pos0: 0, rotaryDim: c.rotaryDim, theta: c.ropeTheta)
+            try k.kvWrite(enc, cache: kcache[fi]!, src: kn, srcOffset: 0, view: kvView, kvHeads: kvHeads, rows: M, pos0: 0)
+            try k.kvWrite(enc, cache: vcache[fi]!, src: vbuf, srcOffset: 0, view: kvView, kvHeads: kvHeads, rows: M, pos0: 0)
+        }
+        try group("full.attention", layers: fullCount) { enc in
+            try k.attention(enc, out: attnOut, q: qn, kcache: kcache[fi]!, vcache: vcache[fi]!, heads: heads, kvHeads: kvHeads, rows: M, pos0: 0)
+        }
+        try group("full.gate+gemm.out", layers: fullCount) { enc in
+            try k.sigmoidGateMul(enc, out: normed, attn: attnOut, gate: big, gateOffset: 256, view: HeadView(heads: UInt32(heads), groupStride: UInt32(heads * 512), headStride: 512), rows: M * heads)
+            try k.gemv(enc, fw.oProj, x: normed, y: mixOut, n: H, k: heads * 256, m: M)
+        }
+        try group("moe.router+bucket", layers: c.numLayers) { enc in
+            try k.gemv(enc, mw.router, x: h, y: routerLogits, n: c.numExperts, k: H, m: M)
+            try k.moeRouter(enc, ids: ids, weights: rw, logits: routerLogits, rows: M, config: c)
+            try k.zero(enc, counts)
+            try k.moeBucket(enc, counts: counts, lists: lists, ids: ids, active: active, pairs: M * c.topK, capacity: capacityPairs)
+        }
+        try group("moe.gateup", layers: c.numLayers) { enc in
+            try k.moeGateUp(enc, act: act, x: h, table: mw.table, counts: counts, lists: lists, active: active, maxActive: maxActive, capacity: capacityPairs, rows: M, config: c)
+        }
+        try group("moe.down", layers: c.numLayers) { enc in
+            try k.moeDown(enc, slotOut: slotOut, act: act, weights: rw, table: mw.table, counts: counts, lists: lists, active: active, maxActive: maxActive, capacity: capacityPairs, rows: M, config: c)
+        }
+        try group("moe.shared", layers: c.numLayers) { enc in
+            try k.gemv(enc, mw.sharedGate, x: h, y: sharedG, n: 512, k: H, m: M)
+            try k.gemv(enc, mw.sharedUp, x: h, y: sharedU, n: 512, k: H, m: M)
+            try k.siluMul(enc, out: sharedAct, a: sharedG, b: sharedU, count: M * 512)
+            try k.gemv(enc, mw.sharedDown, x: sharedAct, y: sharedOut, n: H, k: 512, m: M)
+            try k.gemv(enc, mw.sharedExpertGate, x: h, y: sharedGate, n: 1, k: H, m: M)
+        }
+        try group("moe.combine", layers: c.numLayers) { enc in
+            try k.moeCombine(enc, x: x, slotOut: slotOut, sharedOut: sharedOut, sharedGate: sharedGate, rows: M, config: c)
+        }
         return out
     }
+
+    /// Logits of the 4097 candidate ids (eos, then the semantic band) for
+    /// `hiddenOut` row `row0`, into `cand`.
+    func candidateLogits(_ enc: MTLComputeCommandEncoder, row0: Int, rows M: Int) throws {
+        precondition(M == 1)
+        let H = config.hiddenSize
+        try k.gemv(enc, weights.lmHead, x: hiddenOut, xOffset: row0 * H, y: cand, n: 1, k: H, m: 1, rowStart: Int(config.eos))
+        try k.gemv(enc, weights.lmHead, x: hiddenOut, xOffset: row0 * H, y: cand, yOffset: 1, n: config.codebookSize, k: H, m: 1, rowStart: Int(config.semanticStart))
+    }
+
+    func readCandidateLogits() -> [Float] { cand.read(config.codebookSize + 1) }
 
     func framesView(_ pos0: Int) -> Buf { Buf(view: frames, byteOffset: pos0 * 11 * 4) }
 
@@ -149,10 +237,12 @@ final class Backbone {
         try k.gemv(enc, w.inProjZ, x: h, y: z, n: 4096, k: H, m: M)
         try k.gemv(enc, w.inProjA, x: h, y: a, n: 32, k: H, m: M)
         try k.gemv(enc, w.inProjB, x: h, y: b, n: 32, k: H, m: M)
-        try k.gdnConv(enc, out: convOut, mixed: big, state: convState[layer]!, w: w.conv, channels: 8192, rows: M)
-        try k.roundIfMimic(enc, x: convOut, count: M * 8192)
-        try k.gdnRecurrent(enc, core: core, convOut: convOut, a: a, b: b, state: recState[layer]!, aLog: w.aLog, dtBias: w.dtBias, rows: M, config: config)
-        try k.roundIfMimic(enc, x: core, count: M * 4096)
+        if !skipStages.contains("gdn") {
+            try k.gdnConv(enc, out: convOut, mixed: big, state: convState[layer]!, w: w.conv, channels: 8192, rows: M)
+            try k.roundIfMimic(enc, x: convOut, count: M * 8192)
+            try k.gdnRecurrent(enc, core: core, convOut: convOut, a: a, b: b, state: recState[layer]!, aLog: w.aLog, dtBias: w.dtBias, rows: M, config: config)
+            try k.roundIfMimic(enc, x: core, count: M * 4096)
+        }
         try k.gatedRMSNorm(enc, out: normed, x: core, z: z, w: w.norm, rows: M * config.linearValueHeads, eps: config.rmsNormEps)
         try k.roundIfMimic(enc, x: normed, count: M * 4096)
         try k.gemv(enc, w.outProj, x: normed, y: mixOut, n: H, k: 4096, m: M)
@@ -177,7 +267,9 @@ final class Backbone {
         let kvView = HeadView(heads: UInt32(kvHeads), groupStride: UInt32(kvHeads * 256), headStride: 256)
         try k.kvWrite(enc, cache: kcache[layer]!, src: kn, srcOffset: 0, view: kvView, kvHeads: kvHeads, rows: M, pos0: pos0)
         try k.kvWrite(enc, cache: vcache[layer]!, src: vbuf, srcOffset: 0, view: kvView, kvHeads: kvHeads, rows: M, pos0: pos0)
-        try k.attention(enc, out: attnOut, q: qn, kcache: kcache[layer]!, vcache: vcache[layer]!, heads: heads, kvHeads: kvHeads, rows: M, pos0: pos0)
+        if !skipStages.contains("attn") {
+            try k.attention(enc, out: attnOut, q: qn, kcache: kcache[layer]!, vcache: vcache[layer]!, heads: heads, kvHeads: kvHeads, rows: M, pos0: pos0)
+        }
         try k.roundIfMimic(enc, x: attnOut, count: M * heads * 256)
         try k.sigmoidGateMul(enc, out: normed, attn: attnOut, gate: big, gateOffset: 256,
                              view: HeadView(heads: UInt32(heads), groupStride: UInt32(heads * 512), headStride: 512), rows: M * heads)
@@ -193,14 +285,18 @@ final class Backbone {
         try k.zero(enc, counts)
         let maxActive = min(M * config.topK, config.numExperts)
         try k.moeBucket(enc, counts: counts, lists: lists, ids: ids, active: active, pairs: M * config.topK, capacity: capacityPairs)
-        try k.moeGateUp(enc, act: act, x: h, table: w.table, counts: counts, lists: lists, active: active, maxActive: maxActive, capacity: capacityPairs, config: config)
-        try k.moeDown(enc, slotOut: slotOut, act: act, weights: rw, table: w.table, counts: counts, lists: lists, active: active, maxActive: maxActive, capacity: capacityPairs, config: config)
-        try k.gemv(enc, w.sharedGate, x: h, y: sharedG, n: 512, k: H, m: M)
-        try k.gemv(enc, w.sharedUp, x: h, y: sharedU, n: 512, k: H, m: M)
-        try k.siluMul(enc, out: sharedAct, a: sharedG, b: sharedU, count: M * 512)
-        try k.roundIfMimic(enc, x: sharedAct, count: M * 512)
-        try k.gemv(enc, w.sharedDown, x: sharedAct, y: sharedOut, n: H, k: 512, m: M)
-        try k.gemv(enc, w.sharedExpertGate, x: h, y: sharedGate, n: 1, k: H, m: M)
+        if !skipStages.contains("experts") {
+            try k.moeGateUp(enc, act: act, x: h, table: w.table, counts: counts, lists: lists, active: active, maxActive: maxActive, capacity: capacityPairs, rows: M, config: config)
+            try k.moeDown(enc, slotOut: slotOut, act: act, weights: rw, table: w.table, counts: counts, lists: lists, active: active, maxActive: maxActive, capacity: capacityPairs, rows: M, config: config)
+        }
+        if !skipStages.contains("shared") {
+            try k.gemv(enc, w.sharedGate, x: h, y: sharedG, n: 512, k: H, m: M)
+            try k.gemv(enc, w.sharedUp, x: h, y: sharedU, n: 512, k: H, m: M)
+            try k.siluMul(enc, out: sharedAct, a: sharedG, b: sharedU, count: M * 512)
+            try k.roundIfMimic(enc, x: sharedAct, count: M * 512)
+            try k.gemv(enc, w.sharedDown, x: sharedAct, y: sharedOut, n: H, k: 512, m: M)
+            try k.gemv(enc, w.sharedExpertGate, x: h, y: sharedGate, n: 1, k: H, m: M)
+        }
         try k.moeCombine(enc, x: x, slotOut: slotOut, sharedOut: sharedOut, sharedGate: sharedGate, rows: M, config: config)
     }
 }

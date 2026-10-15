@@ -19,6 +19,7 @@ final class Tower {
     /// codes[i] holds code i of the frame being predicted for each row.
     let codes: [Buf]
     let semantic: Buf
+    /// [numCodebooks - 1][codebookSize]: head i's logits for the decode row.
     let headLogits: Buf
     var captureLayers: Bool = false
     private(set) var layerCapture: [Buf] = []
@@ -39,7 +40,7 @@ final class Tower {
         hiddenA = Buf(d, floats: R * H, label: "t.hiddenA"); hiddenB = Buf(d, floats: R * H, label: "t.hiddenB")
         codes = (0..<config.numCodebooks).map { Buf(d, floats: R, label: "t.codes.\($0)") }
         semantic = Buf(d, floats: R, label: "t.semantic")
-        headLogits = Buf(d, floats: R * config.codebookSize, label: "t.headLogits")
+        headLogits = Buf(d, floats: (config.numCodebooks - 1) * config.codebookSize, label: "t.headLogits")
         let layerCount = config.towerLayers + config.numCodebooks - 1
         kcache = (0..<layerCount).map { Buf(d, floats: capacity * config.towerKVHeads * 256, label: "t.kcache.\($0)") }
         vcache = (0..<layerCount).map { Buf(d, floats: capacity * config.towerKVHeads * 256, label: "t.vcache.\($0)") }
@@ -149,8 +150,8 @@ final class Tower {
         let index = config.towerLayers + i
         let input = (index - 1) % 2 == 0 ? hiddenA : hiddenB
         let out = try layer(enc, index, hidden: input, hiddenOffset: 0, codes: codes[i], frames: frames, rows: 1, pos0: pos, codebooks: codebooks, addUnseen: false)
-        try k.gemv(enc, weights.heads[i], x: out, y: headLogits, n: config.codebookSize, k: config.hiddenSize, m: 1)
+        try k.gemv(enc, weights.heads[i], x: out, y: headLogits, yOffset: i * config.codebookSize, n: config.codebookSize, k: config.hiddenSize, m: 1)
     }
 
-    func readHeadLogits() -> [Float] { headLogits.read(config.codebookSize) }
+    func readHeadLogits(head: Int) -> [Float] { headLogits.read(config.codebookSize, offset: head * config.codebookSize) }
 }

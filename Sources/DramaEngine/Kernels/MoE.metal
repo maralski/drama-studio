@@ -187,6 +187,182 @@ kernel void moe_down_fp8(device float* slotOut [[buffer(0)]],
     }
 }
 
+// Prefill variants of the two expert kernels. One threadgroup per (active
+// expert, 32 output columns); four simdgroups own 8 columns each and the
+// expert's routed rows go through simdgroup matrices in blocks of 8, up to
+// 32 rows per pass. A weight tile is dequantized once per pass into threadgroup
+// memory (the same fp32 value the one-row kernels form), so the products match
+// those kernels and only the summation order differs.
+#define MOE_BN 32
+#define MOE_ROWS 32
+
+// Gathers up to 32 routed activation rows [rows, K] at columns k0..k0+BK.
+template <uint BK>
+inline void moe_stage_rows(threadgroup float* xs, device const float* src, device const uint* list, uint rows, uint K, uint k0, uint topK, uint tid) {
+    constexpr uint LD = BK + 4;
+    for (uint idx = tid * 4; idx < MOE_ROWS * BK; idx += 128 * 4) {
+        uint r = idx / BK, c = idx % BK;
+        float4 v = float4(0.0f);
+        if (r < rows) {
+            uint pair = list[r];
+            uint m = topK == 0 ? pair : pair / topK;
+            v = *(device const float4*)(src + m * K + k0 + c);
+        }
+        *(threadgroup float4*)(xs + r * LD + c) = v;
+    }
+}
+
+// Dequantizes a [32 rows, BK] fp8 tile of W (row stride K) with one block scale.
+template <uint BK>
+inline void moe_stage_weights(threadgroup float* ws, device const uchar* W, uint K, uint k0, float scale, uint roundW, uint tid) {
+    constexpr uint LD = BK + 4;
+    for (uint idx = tid * 4; idx < MOE_BN * BK; idx += 128 * 4) {
+        uint r = idx / BK, c = idx % BK;
+        uint wv = *(device const uint*)(W + r * K + k0 + c);
+        *(threadgroup float4*)(ws + r * LD + c) =
+            float4(fp8_weight(uchar(wv), scale, roundW), fp8_weight(uchar(wv >> 8), scale, roundW),
+                   fp8_weight(uchar(wv >> 16), scale, roundW), fp8_weight(uchar(wv >> 24), scale, roundW));
+    }
+}
+
+template <uint BK>
+kernel void moe_gate_up_fp8_tiled_t(device float* act [[buffer(0)]],
+                                    device const float* x [[buffer(1)]],
+                                    device const ulong* table [[buffer(2)]],
+                                    device const uint* counts [[buffer(3)]],
+                                    device const uint* lists [[buffer(4)]],
+                                    constant MoEParams& p [[buffer(5)]],
+                                    device const uint* active [[buffer(6)]],
+                                    uint2 tg [[threadgroup_position_in_grid]],
+                                    uint tid [[thread_index_in_threadgroup]],
+                                    uint sg [[simdgroup_index_in_threadgroup]]) {
+    constexpr uint LD = BK + 4;
+    if (tg.x >= counts[256]) return;
+    threadgroup float smem[3 * MOE_ROWS * LD > 2 * MOE_ROWS * MOE_BN ? 3 * MOE_ROWS * LD : 2 * MOE_ROWS * MOE_BN];
+    threadgroup float* xs = smem;
+    threadgroup float* wg = smem + MOE_ROWS * LD;
+    threadgroup float* wu = smem + 2 * MOE_ROWS * LD;
+    uint e = active[tg.x];
+    uint count = counts[e];
+    uint n0 = tg.y * MOE_BN;
+    device const uint* list = lists + e * p.capacity;
+    device const uchar* gateW = (device const uchar*)table[e * 6 + 0] + n0 * p.hidden;
+    device const float* gateS = (device const float*)table[e * 6 + 1] + (n0 / 128) * (p.hidden / 128);
+    device const uchar* upW = (device const uchar*)table[e * 6 + 2] + n0 * p.hidden;
+    device const float* upS = (device const float*)table[e * 6 + 3] + (n0 / 128) * (p.hidden / 128);
+    for (uint c0 = 0; c0 < count; c0 += MOE_ROWS) {
+        uint rows = min(uint(MOE_ROWS), count - c0);
+        uint mtiles = (rows + 7) / 8;
+        simdgroup_float8x8 ag[4], au[4];
+        for (uint t = 0; t < 4; t++) { ag[t] = simdgroup_float8x8(0.0f); au[t] = simdgroup_float8x8(0.0f); }
+        for (uint k0 = 0; k0 < p.hidden; k0 += BK) {
+            moe_stage_rows<BK>(xs, x, list + c0, rows, p.hidden, k0, p.topK, tid);
+            moe_stage_weights<BK>(wg, gateW, p.hidden, k0, gateS[k0 / 128], p.roundWeights, tid);
+            moe_stage_weights<BK>(wu, upW, p.hidden, k0, upS[k0 / 128], p.roundWeights, tid);
+            threadgroup_barrier(mem_flags::mem_threadgroup);
+            for (uint kk = 0; kk < BK; kk += 8) {
+                simdgroup_float8x8 bg, bu;
+                simdgroup_load(bg, wg + sg * 8 * LD + kk, LD, ulong2(0, 0), true);
+                simdgroup_load(bu, wu + sg * 8 * LD + kk, LD, ulong2(0, 0), true);
+                for (uint t = 0; t < 4; t++) {
+                    if (t < mtiles) {
+                        simdgroup_float8x8 a;
+                        simdgroup_load(a, xs + t * 8 * LD + kk, LD);
+                        simdgroup_multiply_accumulate(ag[t], a, bg, ag[t]);
+                        simdgroup_multiply_accumulate(au[t], a, bu, au[t]);
+                    }
+                }
+            }
+            threadgroup_barrier(mem_flags::mem_threadgroup);
+        }
+        threadgroup float* og = smem;
+        threadgroup float* ou = smem + MOE_ROWS * MOE_BN;
+        for (uint t = 0; t < 4; t++) {
+            if (t < mtiles) {
+                simdgroup_store(ag[t], og + t * 8 * MOE_BN + sg * 8, MOE_BN);
+                simdgroup_store(au[t], ou + t * 8 * MOE_BN + sg * 8, MOE_BN);
+            }
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        for (uint idx = tid; idx < rows * MOE_BN; idx += 128) {
+            uint r = idx / MOE_BN, c = idx % MOE_BN;
+            float g = og[r * MOE_BN + c], u = ou[r * MOE_BN + c];
+            if (p.roundOutput) { g = round_to_bf16(g); u = round_to_bf16(u); }
+            float h = silu_f(g) * u;
+            act[list[c0 + r] * p.intermediate + n0 + c] = p.roundOutput ? round_to_bf16(h) : h;
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+    }
+}
+
+template <uint BK>
+kernel void moe_down_fp8_tiled_t(device float* slotOut [[buffer(0)]],
+                                 device const float* act [[buffer(1)]],
+                                 device const float* weights [[buffer(2)]],
+                                 device const ulong* table [[buffer(3)]],
+                                 device const uint* counts [[buffer(4)]],
+                                 device const uint* lists [[buffer(5)]],
+                                 constant MoEParams& p [[buffer(6)]],
+                                 device const uint* active [[buffer(7)]],
+                                 uint2 tg [[threadgroup_position_in_grid]],
+                                 uint tid [[thread_index_in_threadgroup]],
+                                 uint sg [[simdgroup_index_in_threadgroup]]) {
+    constexpr uint LD = BK + 4;
+    if (tg.x >= counts[256]) return;
+    threadgroup float smem[2 * MOE_ROWS * LD > MOE_ROWS * MOE_BN ? 2 * MOE_ROWS * LD : MOE_ROWS * MOE_BN];
+    threadgroup float* xs = smem;
+    threadgroup float* wd = smem + MOE_ROWS * LD;
+    uint e = active[tg.x];
+    uint count = counts[e];
+    uint n0 = tg.y * MOE_BN;
+    device const uint* list = lists + e * p.capacity;
+    device const uchar* W = (device const uchar*)table[e * 6 + 4] + n0 * p.intermediate;
+    device const float* S = (device const float*)table[e * 6 + 5] + (n0 / 128) * (p.intermediate / 128);
+    for (uint c0 = 0; c0 < count; c0 += MOE_ROWS) {
+        uint rows = min(uint(MOE_ROWS), count - c0);
+        uint mtiles = (rows + 7) / 8;
+        simdgroup_float8x8 acc[4];
+        for (uint t = 0; t < 4; t++) acc[t] = simdgroup_float8x8(0.0f);
+        for (uint k0 = 0; k0 < p.intermediate; k0 += BK) {
+            moe_stage_rows<BK>(xs, act, list + c0, rows, p.intermediate, k0, 0, tid);
+            moe_stage_weights<BK>(wd, W, p.intermediate, k0, S[k0 / 128], p.roundWeights, tid);
+            threadgroup_barrier(mem_flags::mem_threadgroup);
+            for (uint kk = 0; kk < BK; kk += 8) {
+                simdgroup_float8x8 b;
+                simdgroup_load(b, wd + sg * 8 * LD + kk, LD, ulong2(0, 0), true);
+                for (uint t = 0; t < 4; t++) {
+                    if (t < mtiles) {
+                        simdgroup_float8x8 a;
+                        simdgroup_load(a, xs + t * 8 * LD + kk, LD);
+                        simdgroup_multiply_accumulate(acc[t], a, b, acc[t]);
+                    }
+                }
+            }
+            threadgroup_barrier(mem_flags::mem_threadgroup);
+        }
+        for (uint t = 0; t < 4; t++) {
+            if (t < mtiles) simdgroup_store(acc[t], smem + t * 8 * MOE_BN + sg * 8, MOE_BN);
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        for (uint idx = tid; idx < rows * MOE_BN; idx += 128) {
+            uint r = idx / MOE_BN, c = idx % MOE_BN;
+            uint pair = list[c0 + r];
+            float y = smem[r * MOE_BN + c];
+            if (p.roundOutput) y = round_to_bf16(y);
+            slotOut[pair * p.hidden + n0 + c] = y * weights[pair];
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+    }
+}
+
+#define MOE_VARIANTS(SUFFIX, BK) \
+    template [[host_name("moe_gate_up_fp8_tiled" SUFFIX)]] kernel void moe_gate_up_fp8_tiled_t<BK>( \
+        device float*, device const float*, device const ulong*, device const uint*, device const uint*, constant MoEParams&, device const uint*, uint2, uint, uint); \
+    template [[host_name("moe_down_fp8_tiled" SUFFIX)]] kernel void moe_down_fp8_tiled_t<BK>( \
+        device float*, device const float*, device const float*, device const ulong*, device const uint*, device const uint*, constant MoEParams&, device const uint*, uint2, uint, uint);
+MOE_VARIANTS("_k32", 32)
+MOE_VARIANTS("_k16", 16)
+
 // x[m] += sum_slots slotOut[m][slot] + sigmoid(sharedGate[m]) * sharedOut[m]
 struct CombineParams {
     uint hidden;

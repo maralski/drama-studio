@@ -67,15 +67,19 @@ Command line:
   FP8 E4M3 with their 128x128 block scales and are decoded inside the kernel
   through a 256-entry table; every other weight is bf16 widened to fp32 in the
   kernel.
-- `Sources/DramaEngine/Kernels`: zero-centered RMSNorm, bf16 GEMV with a
-  register-resident token tile, the Gated DeltaNet depthwise conv and
+- `Sources/DramaEngine/Kernels`: zero-centered RMSNorm, a bf16 GEMV for decode
+  and a simdgroup-matrix GEMM for prefill, the Gated DeltaNet depthwise conv and
   recurrence, GQA attention with an online softmax over an fp32 KV cache,
   partial RoPE (NeoX for the backbone, interleaved for the tower), the MoE
-  router and expert-major FP8 kernels that dispatch only over active experts,
-  and the codebook tower's embedding mixing.
+  router and expert-major FP8 kernels that dispatch only over active experts
+  (one-row kernels for decode, tiled simdgroup-matrix kernels for prefill),
+  the GPU sampler, and the codebook tower's embedding mixing.
 - `Sources/DramaEngine/Model`: the backbone and tower runners, the reference's
   sampler (top-k, top-p, exponential-noise argmax, repetition-aware retry of the
-  main token), prefill and decode sessions, and the chunked frame generator.
+  main token) on the CPU and as Metal kernels that reproduce its picks and
+  generator stream bit for bit, prefill and decode sessions, and the chunked
+  frame generator. A decode frame is one command buffer, with the next frame's
+  buffer committed before the current one is waited for.
 - `Sources/DramaEngine/Prompt`: the `reference-bracket-v1` prompt builder, the
   reference's chunker and history policy, plus a sentence-per-turn mode.
 - `Sources/DramaEngine/Tokenizer`: a byte-level BPE tokenizer that matches
@@ -97,9 +101,9 @@ prompt and frames. Numbers from `eval/compare.py`:
 
 | quantity | relative L2 vs float32 oracle | top-1 agreement | mean KL |
 | --- | --- | --- | --- |
-| backbone hidden state, 121 positions (worst position 1.7e-6) | 6.5e-7 | | |
-| main-token candidate logits | 3.3e-7 | 1.000 | 1.5e-12 |
-| nine tower head logits | 5.0e-7 | 1.000 | 4.9e-12 |
+| backbone hidden state, 121 positions (worst position 1.3e-6) | 5.7e-7 | | |
+| main-token candidate logits | 3.0e-7 | 1.000 | 1.3e-12 |
+| nine tower head logits | 4.4e-7 | 1.000 | 4.2e-12 |
 | residual stream after each of the 40 layers, and each of the 13 tower layers, at the first step | under 2e-6 each | | |
 
 For scale, the same oracle run in bfloat16 on the CPU differs from its float32
@@ -170,14 +174,63 @@ word error rate, 0.063 against 0.063, with no run scoring worse.
 
 ## Performance (M3 Max, 128 GB)
 
-| step | time |
-| --- | --- |
-| weights mapped and kernels compiled | 0.4 to 0.7 s |
-| first touch of the 41.5 GB (parallel pre-read) | 4 s |
-| backbone decode, one frame | 25 ms GPU |
-| tower decode, one frame | 9 ms GPU |
-| end-to-end decode, idle machine | 31 to 33 frames/s measured over 40 to 600 frame runs (1.5x real time); 7 to 28 frames/s during the evaluation while other jobs ran |
-| prefill, 128 rows | 1.1 s backbone, 0.3 s tower |
+Medians of five interleaved runs against the previous engine on an idle
+machine (`eval/perf_ab.sh`, raw runs under `eval/out/perf/ab_final/`). GPU
+times come from `drama bench`; the end-to-end rows are wall time from
+`drama generate --warm` on a 324-row prompt (a 10 s reference clip plus text)
+and 600 frames.
+
+| step | before | now |
+| --- | --- | --- |
+| weights mapped and kernels compiled | 0.4 to 0.7 s | 0.4 to 0.7 s |
+| warm-up (page walk, pipelines, first command buffer) | 4 s cold, then a 0.37 s first forward | 4 s cold; the first forward then costs 0.05 s |
+| backbone prefill, 128 rows | 647 ms GPU | 213 ms GPU |
+| tower prefill, 128 rows | 171 ms GPU | 38 ms GPU |
+| backbone plus tower prefill, 300 rows in one chunk | three 128-row chunks | 382 plus 93 ms GPU |
+| end-to-end prefill of a 324-row prompt | 2.44 s | 0.72 s |
+| backbone decode, one frame | 17 to 18 ms GPU | 17 to 18 ms GPU |
+| tower decode, one frame | 6.7 ms GPU | 6.7 ms GPU |
+| decode, one frame | ten command buffers, sampling on the CPU between tower layers | one command buffer, 25.6 to 27.0 ms GPU, the next frame's buffer committed before the current one is waited for |
+| end-to-end decode | 31.5 frames/s (range 28.7 to 31.6) | 38.5 frames/s (range 37.0 to 39.1), 1.8x real time |
+
+Prefill runs dense projections through a simdgroup-matrix GEMM and the FP8
+experts through tiled kernels that dequantize each weight tile once; at 128
+rows nearly every expert is active, so a chunk reads all 30 GB of expert
+weights once and the chunk is 512 rows so a 10 s reference clip is one pass.
+Small chunks pay for that choice: an 8-row chunk takes 66 ms instead of 42,
+because one tile shape serves every row count so that a row's result is the
+same in any chunk (the prefix cache depends on it). Decode is bound by weight
+bandwidth: the one-row backbone forward reads about 3.4 GB of weights in 17
+to 18 ms, about 200 GB/s averaged over its 600 small dispatches, and the
+`no-experts` bench delta puts the eight active experts at about 250 GB/s.
+`drama profile --rows N` prints the GPU time of each kernel group on the real
+weights (one layer repeated, so its numbers can be cache-warm), and
+`drama kbench` times the GEMM tile shapes and the expert kernels on synthetic
+data. The before column comes from the same session as the now column; the
+same baseline binary measured 583 to 586 ms for the 128-row prefill in two
+earlier series that day, so day-to-day drift of about 10 percent is normal.
+
+The kernel changes keep every fp32 product and change only summation orders;
+the faithfulness table above is from the new engine (hidden 5.7e-7, candidate
+logits 3.0e-7, tower logits 4.4e-7 relative L2, top-1 1.0; it was 6.5e-7,
+3.3e-7 and 5.0e-7 before). The GPU sampler reproduces the CPU sampler's picks
+and generator stream: 160,000 chained picks identical in the long parity run
+on the pre-merge code (`DRAMA_SAMPLER_PARITY_SAMPLES=20000`), 16,000 in the
+default run on the merged code, and every generation compared between the
+CPU and GPU samplers on the previous kernels produced the same frames.
+Reordered sums do change the result on some prompts: in the end-to-end suite
+28 of 36 runs produced the same frames as before, one differed only in where
+the codec silence probe stopped it, and 7 differed deterministically, with
+the summary metrics unchanged (mean word error rate 0.016 in both, eos
+reached in all runs, speaker similarity 0.870 against 0.867). On the one such
+prompt examined (`eval/specs/qshort.json`), the two engines agree to 2e-7
+through layer 29 and part at layer 35, the shape of a discrete routing change
+on a near-tie (the router ids themselves were not dumped). A fresh float32
+oracle dump of that prompt takes the new engine's side: 9.5e-7 on the hidden
+state, where the previous engine was off by 3.9e-3 and failed the suite's
+thresholds. That holds for this one prompt only; the faithfulness gate above
+runs on a single prompt and would not catch the same kind of divergence on
+another.
 
 ## Licenses
 

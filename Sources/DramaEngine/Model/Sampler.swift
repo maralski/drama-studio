@@ -16,6 +16,14 @@ struct SeededGenerator: RandomNumberGenerator {
         s = (splitmix(), splitmix(), splitmix(), splitmix())
     }
 
+    init(state: SIMD4<UInt64>) { s = (state[0], state[1], state[2], state[3]) }
+
+    /// The xoshiro state, so the GPU sampler can continue the same stream.
+    var state: SIMD4<UInt64> {
+        get { SIMD4(s.0, s.1, s.2, s.3) }
+        set { s = (newValue[0], newValue[1], newValue[2], newValue[3]) }
+    }
+
     mutating func next() -> UInt64 {
         let result = rotl(s.1 &* 5, 7) &* 9
         let t = s.1 << 17
@@ -41,6 +49,12 @@ public struct Sampler {
     var rng: SeededGenerator
 
     public init(seed: UInt64) { rng = SeededGenerator(seed: seed) }
+    init(state: SIMD4<UInt64>) { rng = SeededGenerator(state: state) }
+
+    var state: SIMD4<UInt64> {
+        get { rng.state }
+        set { rng.state = newValue }
+    }
 
     /// Returns the index into `logits`.
     public mutating func sample(_ logits: [Float], temperature: Double, topK: Int, topP: Double) -> Int {

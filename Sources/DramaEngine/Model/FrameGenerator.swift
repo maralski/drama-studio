@@ -16,6 +16,8 @@ public final class FrameGenerator {
         public var finishedByEOS: Bool
         public var prefillSeconds: Double
         public var decodeSeconds: Double
+        /// GPU time of the decode command buffers.
+        public var gpuSeconds: Double
         public var spokenSeconds: Double
         public var attempts: Int
         /// `[10][T]` codes, the shape the codec and history take.
@@ -139,7 +141,7 @@ public final class FrameGenerator {
                 let spoken = max(0, total - trailingSilence)
                 let result = ChunkResult(index: index, count: chunks.count, text: chunk, frames: frames, promptRows: prompt.count,
                                          finishedByEOS: eos, prefillSeconds: prefillSeconds, decodeSeconds: Date().timeIntervalSince(t1),
-                                         spokenSeconds: spoken, attempts: attempt + 1)
+                                         gpuSeconds: session.gpuSeconds, spokenSeconds: spoken, attempts: attempt + 1)
                 if best == nil || spoken > best!.spokenSeconds { best = result }
                 if config.minSpokenRatio <= 0 || spoken >= config.minSpokenRatio * expected || attempt == config.maxRetries { break }
                 onEvent(.retry(index: index, attempt: attempt + 1, spokenSeconds: spoken, expectedSeconds: expected))

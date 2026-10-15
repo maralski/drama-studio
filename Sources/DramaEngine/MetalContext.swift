@@ -62,6 +62,16 @@ public final class MetalContext {
         return try device.makeLibrary(source: try kernelSources(), options: options)
     }
 
+    /// Builds every kernel's pipeline state up front, in parallel, so the first
+    /// request does not pay for them one dispatch at a time.
+    public func warmPipelines() {
+        let names = library.functionNames
+        DispatchQueue.concurrentPerform(iterations: names.count) { i in
+            guard let fn = library.makeFunction(name: names[i]), let p = try? device.makeComputePipelineState(function: fn) else { return }
+            lock.lock(); pipelines[names[i]] = p; lock.unlock()
+        }
+    }
+
     public func pipeline(_ name: String) throws -> MTLComputePipelineState {
         lock.lock(); defer { lock.unlock() }
         if let p = pipelines[name] { return p }

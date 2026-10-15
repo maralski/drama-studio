@@ -112,9 +112,9 @@ func bench(_ args: Args) throws {
     let model = try loadModel(args)
     if args.flags.contains("warm") { print(String(format: "warm-up walk: %.2fs", model.benchWarmUp())) }
     let t0 = Date(); _ = try model.benchBackbone(rows: 1, skip: []); print(String(format: "first forward (page faults): %.2fs", Date().timeIntervalSince(t0)))
-    for rows in [1, 8, 32, 128] {
+    for rows in [1, 8, 32, 128, 300] {
         var line = "rows \(rows):"
-        for skip in [Set<String>(), ["moe"], ["linear"], ["full"], ["moe", "linear", "full"]] {
+        for skip in [Set<String>(), ["moe"], ["experts"], ["shared"], ["linear"], ["gdn"], ["full"], ["attn"], ["moe", "linear", "full"]] {
             let t = try model.benchBackbone(rows: rows, skip: skip)
             line += String(format: "  %@=%.1fms", skip.isEmpty ? "all" : "no-" + skip.sorted().joined(separator: "-"), t * 1000)
         }
@@ -185,7 +185,7 @@ func generate(_ args: Args) throws {
             FileHandle.standardError.write(String(format: "  retry %d: spoke %.1fs of an expected %.1fs\n", attempt, spoken, expected).data(using: .utf8)!)
         case .chunkFinished(let r):
             all += r.frames
-            FileHandle.standardError.write(String(format: "  %d rows prefilled in %.2fs; %d frames in %.2fs (%.1f frames/s) eos=%@ attempts=%d\n", r.promptRows, r.prefillSeconds, r.frames.count, r.decodeSeconds, Double(r.frames.count) / max(r.decodeSeconds, 1e-9), r.finishedByEOS ? "yes" : "no", r.attempts).data(using: .utf8)!)
+            FileHandle.standardError.write(String(format: "  %d rows prefilled in %.2fs; %d frames in %.2fs (%.1f frames/s, GPU %.1f ms/frame) eos=%@ attempts=%d\n", r.promptRows, r.prefillSeconds, r.frames.count, r.decodeSeconds, Double(r.frames.count) / max(r.decodeSeconds, 1e-9), r.gpuSeconds * 1000 / Double(max(r.frames.count, 1)), r.finishedByEOS ? "yes" : "no", r.attempts).data(using: .utf8)!)
         default: break
         }
     }
@@ -194,10 +194,32 @@ func generate(_ args: Args) throws {
     if let wavPath = args["wav"], !all.isEmpty { try writeWav(frames: all, to: wavPath) }
 }
 
+/// drama profile [--rows 128]: GPU ms per kernel group for one backbone forward.
+func profile(_ args: Args) throws {
+    let model = try loadModel(args)
+    let rows = args.int("rows", 128)
+    if let parts = args["gdn-parts"].flatMap(Int.init) { KernelBench.setGdnParts(parts) }
+    let groups = try model.profileBackbone(rows: rows)
+    let total = groups.reduce(0) { $0 + $1.1 }
+    print("backbone forward, \(rows) rows: \(String(format: "%.1f", total)) ms summed over groups")
+    for (name, ms) in groups.sorted(by: { $0.1 > $1.1 }) {
+        print("  " + name.padding(toLength: 22, withPad: " ", startingAt: 0) + String(format: " %7.2f ms  %4.1f%%", ms, ms / total * 100))
+    }
+}
+
+/// drama kbench --n 8192 --k 2048 [--ms 2,8,32,128]
+func kbench(_ args: Args) throws {
+    let ms = (args["ms"] ?? "2,4,8,16,32,64,128").split(separator: ",").compactMap { Int($0) }
+    if args.flags.contains("moe") { try KernelBench.moe(rowCounts: ms, iterations: args.int("iterations", 5)); return }
+    try KernelBench.denseMatmul(n: args.int("n", 8192), k: args.int("k", 2048), ms: ms, iterations: args.int("iterations", 5))
+}
+
 let args = Args(Array(CommandLine.arguments.dropFirst()))
 switch args.positional.first {
 case "dump": try dump(args)
 case "bench": try bench(args)
+case "kbench": try kbench(args)
+case "profile": try profile(args)
 case "generate": try generate(args)
 case "decode": try decodeCommand(args)
 default: fail("usage: drama <dump> [options]")

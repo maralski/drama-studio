@@ -12,8 +12,15 @@ public final class DramaModel: @unchecked Sendable {
     let weights: ModelWeights
     let backbone: Backbone
     let tower: Tower
+    let sampler: SamplerState
+    /// The frame command buffer a pipelined session committed last. A new
+    /// session waits for it before it touches the shared buffers.
+    private(set) var inFlight: MTLCommandBuffer?
 
     public static let defaultCapacity = 8192 + 2048
+    /// Rows per prefill command buffer. Every chunk walks all 30 GB of expert
+    /// weights once, so a 10 s reference clip (about 300 rows) should fit in one.
+    public static let prefillChunkRows = 512
 
     /// States after the shared system prefix of the last request, so the next
     /// chunk with the same prefix skips that part of the prefill. The KV caches
@@ -33,8 +40,18 @@ public final class DramaModel: @unchecked Sendable {
         config = try ModelConfig(url: location.directory.appendingPathComponent("config.json"))
         store = try SafeTensorsStore(directory: location.directory, device: ctx.device)
         weights = try ModelWeights(store: store, config: config, device: ctx.device)
-        backbone = Backbone(ctx: ctx, config: config, weights: weights.backbone, codebooks: weights.tower.codebookEmbeddings, precision: precision, capacity: capacity)
-        tower = Tower(ctx: ctx, config: config, weights: weights.tower, precision: precision, capacity: capacity)
+        backbone = Backbone(ctx: ctx, config: config, weights: weights.backbone, codebooks: weights.tower.codebookEmbeddings, precision: precision, capacity: capacity, maxRows: DramaModel.prefillChunkRows)
+        tower = Tower(ctx: ctx, config: config, weights: weights.tower, precision: precision, capacity: capacity, maxRows: DramaModel.prefillChunkRows)
+        sampler = SamplerState(device: ctx.device)
+    }
+
+    deinit { drain() }
+
+    func track(_ cb: MTLCommandBuffer) { inFlight = cb }
+
+    func drain() {
+        inFlight?.waitUntilCompleted()
+        inFlight = nil
     }
 
     /// GPU seconds for one backbone forward of `rows` rows at position 0.
@@ -67,6 +84,12 @@ public final class DramaModel: @unchecked Sendable {
         return cb.gpuEndTime - cb.gpuStartTime
     }
 
+    /// Per-kernel-group GPU milliseconds for one backbone forward of `rows` rows.
+    public func profileBackbone(rows: Int) throws -> [(String, Double)] {
+        _ = try benchBackbone(rows: rows, skip: [])
+        return try backbone.profile(rows: rows, makeCommandBuffer: commandBuffer)
+    }
+
     public func benchWarmUp() -> Double {
         let t0 = Date(); warmUp(); return Date().timeIntervalSince(t0)
     }
@@ -78,11 +101,20 @@ public final class DramaModel: @unchecked Sendable {
         return (cb, enc)
     }
 
-    /// Touches every weight page once so the first request does not pay for
-    /// page faults. Shards are walked on parallel threads. Returns bytes walked.
+    /// Touches every weight page once, builds every pipeline state, and runs
+    /// one command buffer that declares the shards, so the first request pays
+    /// for none of them (the GPU wires the 41 GB on its first use). Shards are
+    /// walked on parallel threads. Returns bytes walked.
     @discardableResult
     public func warmUp() -> Int {
+        ctx.warmPipelines()
         let shards = store.shards
+        defer {
+            let (cb, enc) = commandBuffer()
+            try? backbone.k.zero(enc, backbone.counts)
+            enc.endEncoding()
+            cb.commit(); cb.waitUntilCompleted()
+        }
         var total = 0
         DispatchQueue.concurrentPerform(iterations: shards.count) { i in
             let shard = shards[i]
@@ -102,7 +134,8 @@ public final class DramaModel: @unchecked Sendable {
 
 }
 
-/// Per-step logits the evaluation suite compares.
+/// Per-step logits the evaluation suite compares. Both arrays are empty in the
+/// pipelined path (`trace == false`), where the logits never leave the GPU.
 public struct StepTrace {
     public var candidateLogits: [Float]
     public var towerLogits: [[Float]]   // 9 x 4096
@@ -110,15 +143,38 @@ public struct StepTrace {
 
 /// One sequence: a prompt, then frames appended one at a time. Owns the
 /// position counter; the caches live in the model and are rewritten per session.
+///
+/// A frame is one command buffer: the main-token sampler, the tower with a
+/// sampler after each head, then the backbone step for the new row. With
+/// `trace == false` the next frame's command buffer is committed before the
+/// current one is waited for, so consecutive `step` calls must pass the same
+/// settings and the sampler the previous call returned.
 public final class GenerationSession {
     public let model: DramaModel
     public private(set) var frames: [Frame] = []
     public let promptRows: Int
     private var lastHiddenRow = 0
-    private var mainSampler: MainTokenSampler
     public var trace = false
     public private(set) var layerOutStep0: [[Float]] = []
     public private(set) var towerHiddenStep0: [[Float]] = []
+    /// GPU time of the completed frame command buffers.
+    public private(set) var gpuSeconds: Double = 0
+
+    /// A committed frame command buffer. It samples the frame for `position`,
+    /// writes it to frame row `position + 1`, and leaves the sampler's
+    /// post-state in RNG slot `rngSlot`.
+    private struct FrameJob {
+        var commandBuffer: MTLCommandBuffer
+        var position: Int
+        var rngSlot: Int
+        var params: SamplingParams
+        /// The sampler state the next `step` must pass; nil until the previous
+        /// frame's post-state is known.
+        var startState: SIMD4<UInt64>?
+    }
+    private var inFlight: FrameJob?
+    private var encodedFrames = 0
+    private var finished = false
 
     var config: ModelConfig { model.config }
     var position: Int { frames.count - 1 }
@@ -129,8 +185,8 @@ public final class GenerationSession {
         self.model = model
         self.promptRows = prompt.count
         self.trace = trace
-        mainSampler = MainTokenSampler(config: model.config)
         guard prompt.count >= 1, prompt.count + 1 < model.capacity else { throw EngineError.badModel("prompt of \(prompt.count) rows does not fit") }
+        model.drain()
         let usable = prefixRows > 0 && prefixRows < prompt.count ? prefixRows : 0
         if usable > 0, let cache = model.prefixCache, cache.rows.count == usable, cache.rows.elementsEqual(prompt.prefix(usable), by: ==) {
             model.backbone.restore(cache.states)
@@ -181,68 +237,130 @@ public final class GenerationSession {
         model.backbone.captureLayers = false
     }
 
-    /// Samples the next frame. The frame is nil when the model emits eos; the
-    /// trace always holds the candidate logits, and the head logits when a
-    /// frame was produced.
+    /// Samples the next frame. The frame is nil when the model emits eos, after
+    /// which every call returns nil without touching the GPU. In trace mode the
+    /// trace holds the candidate logits, and the head logits when a frame was
+    /// produced.
     public func step(temperature: Double, topK: Int, topP: Double, sampler: inout Sampler) throws -> (frame: Frame?, trace: StepTrace) {
-        let p = position
-        let cand = model.backbone.readCandidateLogits(row: 0)
-        guard cand.allSatisfy({ $0.isFinite }) else { throw EngineError.badModel("non-finite logits at position \(p)") }
-        let history = frames[...p].map { $0[0] }
-        let main = mainSampler.sample(candidateLogits: cand, history: history[...], temperature: temperature, topK: topK, topP: topP, sampler: &sampler)
-        if main == config.eos { return (nil, StepTrace(candidateLogits: cand, towerLogits: [])) }
-        var s = sampler
-        let (frame, tower) = try runTower(main: main) { _, logits in Int32(s.sample(logits, temperature: temperature, topK: topK, topP: topP)) }
-        sampler = s
-        try advance(frame)
+        guard !finished else { return (nil, StepTrace(candidateLogits: [], towerLogits: [])) }
+        let params = SamplingParams(temperature: temperature, topK: topK, topP: topP)
+        var cand: [Float] = []
+        let job: FrameJob
+        if let pending = inFlight {
+            guard pending.params == params, pending.startState == sampler.state else {
+                throw EngineError.badModel("sampling settings or sampler state changed while a frame was in flight")
+            }
+            job = pending
+        } else {
+            if trace { cand = model.backbone.readCandidateLogits() }
+            guard let encoded = try encodeFrame(params: params, state: sampler.state) else { throw EngineError.badModel("sequence capacity exceeded") }
+            job = encoded
+        }
+        inFlight = trace ? nil : try encodeFrame(params: params, state: nil)
+        job.commandBuffer.waitUntilCompleted()
+        if let e = job.commandBuffer.error { throw EngineError.badModel("GPU error in decode: \(e)") }
+        gpuSeconds += job.commandBuffer.gpuEndTime - job.commandBuffer.gpuStartTime
+        sampler.state = model.sampler.state(slot: job.rngSlot)
+        inFlight?.startState = sampler.state
+        guard model.sampler.statusWord(slot: job.rngSlot) == 0 else { throw EngineError.badModel("non-finite logits at position \(job.position)") }
+        let frame = model.backbone.frames.readInts(11, offset: (job.position + 1) * 11)
+        if frame[0] == config.eos {
+            finished = true
+            return (nil, StepTrace(candidateLogits: cand, towerLogits: []))
+        }
+        frames.append(frame)
+        lastHiddenRow = 0
+        var tower: [[Float]] = []
+        if trace {
+            tower = (0..<(config.numCodebooks - 1)).map { model.tower.readHeadLogits(head: $0) }
+            if job.position == promptRows - 1 { towerHiddenStep0 = model.tower.layerCapture.map { $0.read(config.hiddenSize) } }
+        }
         return (frame, StepTrace(candidateLogits: cand, towerLogits: tower))
     }
 
-    /// Teacher forcing: feeds `frame` as the next frame and returns the logits
-    /// the model produced for it.
-    public func force(_ frame: Frame) throws -> StepTrace {
-        let cand = model.backbone.readCandidateLogits(row: 0)
-        let (_, tower) = try runTower(main: frame[0]) { i, _ in frame[2 + i] }
-        try advance(frame)
-        return StepTrace(candidateLogits: cand, towerLogits: tower)
-    }
-
-    /// Runs the tower for the current position with `main` fixed; `choose`
-    /// picks code i + 1 from head i's logits.
-    private func runTower(main: Int32, choose: (Int, [Float]) throws -> Int32) throws -> (Frame, [[Float]]) {
-        let p = position
-        var frame: Frame = [main, max(0, min(Int32(config.codebookSize - 1), main - config.semanticStart))]
-        model.tower.setMain(row: 0, main: main)
-        model.tower.captureLayers = trace && p == promptRows - 1
-        var tower: [[Float]] = []
-        for i in 0..<(config.numCodebooks - 1) {
-            let logits = try towerLogits(i, pos: p)
-            tower.append(logits)
-            let code = try choose(i, logits)
-            frame.append(code)
-            if i + 1 < config.numCodebooks - 1 { model.tower.setCode(row: 0, index: i + 1, value: code) }
-        }
-        if model.tower.captureLayers { towerHiddenStep0 = model.tower.layerCapture.map { $0.read(config.hiddenSize) } }
-        model.tower.captureLayers = false
-        return (frame, tower)
-    }
-
-    public var lastHidden: [Float] { model.backbone.hiddenOut.read(config.hiddenSize, offset: lastHiddenRow * config.hiddenSize) }
-
-    public var currentCandidateLogits: [Float] { model.backbone.readCandidateLogits(row: 0) }
-
-    private func towerLogits(_ i: Int, pos p: Int) throws -> [Float] {
+    /// Encodes and commits the command buffer for the next frame the GPU has
+    /// not started: samplers, tower and backbone step. `state` seeds the RNG
+    /// slot it starts from; nil continues the chain left by the previous job.
+    /// Returns nil when the frame would not fit the capacity.
+    private func encodeFrame(params: SamplingParams, state: SIMD4<UInt64>?) throws -> FrameJob? {
+        let k = encodedFrames
+        let p = promptRows - 1 + k
+        guard p + 2 < model.capacity else { return nil }
+        let slotIn = k % 2, slotOut = (k + 1) % 2
+        if let state { model.sampler.setState(state, slot: slotIn) }
+        let n = config.codebookSize + 1
+        let kernels = model.tower.k
         let (cb, enc) = model.commandBuffer()
-        if i == 0 {
-            try model.tower.decodeShared(enc, hidden: model.backbone.hiddenOut, hiddenRow: lastHiddenRow, frames: model.backbone.framesView(p), pos: p, codebooks: model.weights.tower.codebookEmbeddings)
-        } else {
-            try model.tower.residualStep(enc, i, frames: model.backbone.framesView(p), pos: p, codebooks: model.weights.tower.codebookEmbeddings)
+        try kernels.sampleMain(enc, logits: model.backbone.cand, rng: model.sampler.rng, frames: model.backbone.frames,
+                               code0: model.tower.codes[0], semantic: model.tower.semantic, status: model.sampler.status,
+                               params: kernelParams(params, n: n, rngIn: slotIn, rngOut: slotOut, position: p, head: 0))
+        try encodeTower(enc, position: p, hiddenRow: k == 0 ? lastHiddenRow : 0) { head in
+            try kernels.sampleTower(enc, logits: model.tower.headLogits, logitsOffset: head * config.codebookSize, rng: model.sampler.rng,
+                                    frames: model.backbone.frames, codeOut: model.tower.codes[head + 1], status: model.sampler.status,
+                                    params: kernelParams(params, n: config.codebookSize, rngIn: slotOut, rngOut: slotOut, position: p, head: head))
         }
+        try model.backbone.forward(enc, rows: 1, pos0: p + 1)
+        try model.backbone.candidateLogits(enc, row0: 0, rows: 1)
+        enc.endEncoding()
+        cb.commit()
+        model.track(cb)
+        encodedFrames += 1
+        return FrameJob(commandBuffer: cb, position: p, rngSlot: slotOut, params: params, startState: state)
+    }
+
+    private func kernelParams(_ params: SamplingParams, n: Int, rngIn: Int, rngOut: Int, position: Int, head: Int) -> SamplerKernelParams {
+        SamplerKernelParams(params, n: n, rngIn: rngIn, rngOut: rngOut, position: position, head: head,
+                            eos: config.eos, semanticStart: config.semanticStart, codebookSize: config.codebookSize)
+    }
+
+    /// The tower for position `p`: the shared layers, then residual layer i and
+    /// head i for each of the nine heads, with `afterHead(i)` encoded between heads.
+    private func encodeTower(_ enc: MTLComputeCommandEncoder, position p: Int, hiddenRow: Int, afterHead: (Int) throws -> Void) throws {
+        model.tower.captureLayers = trace && p == promptRows - 1
+        defer { model.tower.captureLayers = false }
+        let frames = model.backbone.framesView(p)
+        let codebooks = model.weights.tower.codebookEmbeddings
+        for i in 0..<(config.numCodebooks - 1) {
+            if i == 0 {
+                try model.tower.decodeShared(enc, hidden: model.backbone.hiddenOut, hiddenRow: hiddenRow, frames: frames, pos: p, codebooks: codebooks)
+            } else {
+                try model.tower.residualStep(enc, i, frames: frames, pos: p, codebooks: codebooks)
+            }
+            try afterHead(i)
+        }
+    }
+
+    /// Teacher forcing: feeds `frame` as the next frame and returns the logits
+    /// the model produced for it. Not available while a pipelined frame is in flight.
+    public func force(_ frame: Frame) throws -> StepTrace {
+        guard inFlight == nil else { throw EngineError.badModel("force after a pipelined step") }
+        let p = position
+        let cand = model.backbone.readCandidateLogits()
+        model.tower.setMain(row: 0, main: frame[0])
+        for i in 1..<(config.numCodebooks - 1) { model.tower.setCode(row: 0, index: i, value: frame[1 + i]) }
+        let (cb, enc) = model.commandBuffer()
+        try encodeTower(enc, position: p, hiddenRow: lastHiddenRow) { _ in }
         enc.endEncoding()
         cb.commit()
         cb.waitUntilCompleted()
         if let e = cb.error { throw EngineError.badModel("GPU error in tower: \(e)") }
-        return model.tower.readHeadLogits()
+        let tower = (0..<(config.numCodebooks - 1)).map { model.tower.readHeadLogits(head: $0) }
+        if trace && p == promptRows - 1 { towerHiddenStep0 = model.tower.layerCapture.map { $0.read(config.hiddenSize) } }
+        try advance(frame)
+        return StepTrace(candidateLogits: cand, towerLogits: tower)
+    }
+
+    /// The backbone's final-norm output and the candidate logits for the GPU's
+    /// current position: the CPU's position, or one frame ahead while a
+    /// pipelined frame is in flight.
+    public var lastHidden: [Float] {
+        model.drain()
+        return model.backbone.hiddenOut.read(config.hiddenSize, offset: lastHiddenRow * config.hiddenSize)
+    }
+
+    public var currentCandidateLogits: [Float] {
+        model.drain()
+        return model.backbone.readCandidateLogits()
     }
 
     /// Appends the frame and runs the backbone on it, leaving the next

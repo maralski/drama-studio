@@ -101,20 +101,45 @@ tools/convert_codec.py     coremltools export of the DAC encoder and decoder
 
 Elementwise and norms: `rmsnorm_zc` (also per-head for q/k), `gated_rmsnorm`,
 `silu_mul`, `sigmoid_gate_mul`, `residual_add`, `embed_mix`.
-Projections: `gemv_bf16` (decode), `gemm_bf16` (prefill, M <= 128), both read
-bf16 as `ushort` and widen to fp32 exactly.
-Attention: `rope_neox_partial`, `rope_interleaved_partial`, `attn_decode`
-(GQA over the KV cache), `attn_prefill` (causal).
+Projections: `gemv_bf16` for one row (and for outputs of 64 columns or fewer at
+any row count), `gemm_bf16_32x32x16` for two rows or more: a simdgroup-matrix
+GEMM with a 32 x 32 output tile per threadgroup of four simdgroups, stepping K
+by 16, the bf16 weights widened to fp32 in threadgroup memory. Both form the
+same fp32 products; only the summation order differs, and a row's result never
+depends on which chunk it is in (one tile shape for every M keeps it so).
+Attention: `rope_neox`, `rope_interleaved`, `attention` (GQA over the KV cache,
+online softmax, one threadgroup per query row and head).
 Gated DeltaNet: `gdn_conv_silu` (kernel 4 with carried state),
-`gdn_recurrent` (one thread per head x value column, loops over the chunk's
-tokens; the recurrent and chunked rules are the same math).
-MoE: `moe_router` (softmax, top-8, renormalize), `moe_gate_up_fp8`,
-`moe_down_fp8` (expert-major: one threadgroup per expert x row tile, it scans
-the routing table for its tokens and exits if it has none; the FP8 byte is
-widened through a 256-entry constant table and multiplied by its block scale).
-Head: `logits_candidates` (lm_head rows for the 4097 candidates only).
-Sampling runs on the CPU with a seeded generator, mirroring the reference's
-sort / mask / exponential-noise argmax.
+`gdn_recurrent_p4` (512 threads per head: four threads per state column, each
+owning 32 rows, the two per-token dot products combined from four partial sums
+in a fixed order; the recurrence runs token by token and is chunk-invariant).
+MoE: `moe_router` (softmax, top-8, renormalize), `moe_bucket` (per-expert row
+lists and the active-expert list), `moe_gate_up_fp8` and `moe_down_fp8` for one
+row (expert-major, one simdgroup per output row, the FP8 byte widened through a
+256-entry constant table and multiplied by its block scale), and for two rows
+or more `moe_gate_up_fp8_tiled_k16` and `moe_down_fp8_tiled_k16`: one
+threadgroup per (active expert, 32 output columns), the expert's rows gathered
+in blocks of 8 through simdgroup matrices, each weight tile dequantized once
+per pass of up to 32 rows. At 128 rows nearly every expert is active, so a
+prefill chunk reads all 30 GB of expert weights once; the prefill chunk is 512
+rows so a 10 s reference clip is one chunk.
+Head: the candidate logits are two `gemv_bf16` calls over the lm_head rows of
+eos and the semantic band, into one 4097-float buffer.
+Sampling: `sample_main` and `sample_tower` (one threadgroup per draw) run the
+reference's sort / mask / exponential-noise argmax on the GPU with the same
+xoshiro256** stream as the CPU `Sampler`, which stays as the reference the
+parity test checks against. The CPU works in double; the kernels work in
+double-float (hi + lo fp32 pairs, exp by range reduction and a degree-13
+series, log by Newton steps on that exp) so every top-p cutoff and argmax
+decision matches. The top of the distribution is extracted one element at a
+time with simdgroup reductions, since at most top-k elements are kept.
+A decode frame is one command buffer: main sampler, tower with a sampler after
+each head, backbone step for the new row. The samplers write the frame row and
+the tower's code inputs on the GPU, and the next frame's command buffer is
+committed before the current one is waited for. The generator state chains
+through two GPU slots so the CPU copies back the state of each finished frame
+without a race; the draws of a frame still in flight when a session ends are
+never observed, as on the CPU.
 
 ## Verification
 

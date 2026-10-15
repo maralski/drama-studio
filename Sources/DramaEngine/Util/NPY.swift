@@ -65,6 +65,25 @@ public enum NPY {
         return Array(dtype: dtype, shape: shape, data: Data(body))
     }
 
+    /// Reads an uncompressed `.npz` (NumPy's default `savez`, and `writeNPZ`),
+    /// keyed by member name without the `.npy` suffix.
+    public static func readNPZ(url: URL) throws -> [String: Array] {
+        let d = try Data(contentsOf: url)
+        func u16(_ at: Int) -> Int { Int(d[at]) | Int(d[at + 1]) << 8 }
+        func u32(_ at: Int) -> Int { u16(at) | u16(at + 2) << 16 }
+        var out: [String: Array] = [:]
+        var i = 0
+        while i + 30 <= d.count, u32(i) == 0x0403_4b50 {
+            let method = u16(i + 8), size = u32(i + 22), nameLen = u16(i + 26), extraLen = u16(i + 28)
+            guard method == 0 else { throw EngineError.badModel("npz member is compressed") }
+            let name = String(data: d[(i + 30)..<(i + 30 + nameLen)], encoding: .utf8) ?? ""
+            let start = i + 30 + nameLen + extraLen
+            out[name.hasSuffix(".npy") ? String(name.dropLast(4)) : name] = try parse(Data(d[start..<(start + size)]))
+            i = start + size
+        }
+        return out
+    }
+
     static func serialize(_ a: Array) -> Data {
         let shapeText = a.shape.count == 1 ? "(\(a.shape[0]),)" : "(" + a.shape.map(String.init).joined(separator: ", ") + ")"
         var header = "{'descr': '\(a.dtype.rawValue)', 'fortran_order': False, 'shape': \(shapeText), }"

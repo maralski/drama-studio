@@ -17,7 +17,9 @@ final class PrefixCacheTests: XCTestCase {
         XCTAssertEqual(a.prefixRows, b.prefixRows)
         XCTAssertGreaterThan(a.prefixRows, 150)
         _ = try GenerationSession(model: model, prompt: a.rows, prefixRows: a.prefixRows)
-        XCTAssertNotNil(model.prefixCache)
+        // Asserting on the whole cache boxes its 63 MB of states into Any, which
+        // takes seconds and lets the GPU clock down before the timed prefill.
+        XCTAssertEqual(model.prefixCache?.rows.count, a.prefixRows)
         let t0 = Date()
         let cached = try GenerationSession(model: model, prompt: b.rows, prefixRows: b.prefixRows)
         let cachedSeconds = Date().timeIntervalSince(t0)
