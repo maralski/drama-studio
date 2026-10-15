@@ -1,0 +1,7 @@
+{
+  "hidden": {"rel_l2_max": 1e-3, "cosine_min": 0.99999},
+  "cand_logits": {"rel_l2_max": 1e-3, "top1_min": 1.0, "kl_max": 1e-4},
+  "tower_logits": {"rel_l2_max": 1e-3, "top1_min": 1.0, "kl_max": 1e-4},
+  "layer_out_step0": {"rel_l2_max": 1e-3},
+  "tower_hidden_step0": {"rel_l2_max": 1e-3}
+}
