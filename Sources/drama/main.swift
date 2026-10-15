@@ -44,13 +44,17 @@ func readFrames(_ path: String) throws -> [Frame] {
 
 /// drama dump --rows prompt_rows.npy [--frames frames.npy | --steps N] --out out.npz
 func dump(_ args: Args) throws {
-    guard let rowsPath = args["rows"], let outPath = args["out"] else { fail("usage: drama dump --rows prompt_rows.npy [--frames frames.npy | --steps N] --out out.npz") }
-    let prompt = try readFrames(rowsPath)
+    guard let outPath = args["out"], args["rows"] != nil || args["text"] != nil else { fail("usage: drama dump (--rows prompt_rows.npy | --text <text>) [--frames frames.npy | --steps N] --out out.npz") }
     let forced = try args["frames"].map(readFrames)
     let steps = forced?.count ?? args.int("steps", 8)
     let temperature = args.double("temperature", 0.7), topK = args.int("top-k", 30), topP = args.double("top-p", 0.7)
     let seed = UInt64(args.int("seed", 0))
     let model = try loadModel(args)
+    let prompt: [Frame]
+    if let rowsPath = args["rows"] { prompt = try readFrames(rowsPath) } else {
+        let tokenizer = try Tokenizer(url: model.location.directory.appendingPathComponent("tokenizer.json"))
+        prompt = try Drama3Prompt.build(text: args["text"]!, tokenizer: tokenizer)
+    }
     let t0 = Date()
     let session = try GenerationSession(model: model, prompt: prompt, trace: true)
     let prefillSeconds = Date().timeIntervalSince(t0)

@@ -373,7 +373,13 @@ class GatedDeltaNet(nn.Module):
         if context.use_cache:
             assert self.conv_state is not None
             self.conv_state[:batch].copy_(padded[..., -history:])
-        mixed = F.silu(F.conv1d(padded, self.conv1d.weight, groups=self.conv_dim))
+        # Same depthwise conv as F.conv1d(padded, weight, groups=conv_dim), written as
+        # four shifted products: PyTorch's CPU build falls back to a per-group slow
+        # path that costs 0.4 s per layer per token otherwise (agreement 5e-7 in fp32).
+        taps = self.conv1d.weight[:, 0, :]
+        out_len = padded.shape[-1] - (self.conv_kernel_size - 1)
+        conv = sum(padded[..., j : j + out_len] * taps[:, j, None] for j in range(self.conv_kernel_size))
+        mixed = F.silu(conv)
         query, key, value = mixed.transpose(1, 2).split(
             [self.key_dim, self.key_dim, self.value_dim], dim=-1
         )

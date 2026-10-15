@@ -20,8 +20,16 @@ public final class MetalContext {
         self.library = try Self.compileKernels(device: device)
     }
 
+    /// The resource bundle: inside a packaged .app it sits in Contents/Resources,
+    /// where SwiftPM's generated accessor does not look.
+    static func resourceBundle() -> Bundle {
+        let name = "DramaStudio_DramaEngine.bundle"
+        if let url = Bundle.main.resourceURL?.appendingPathComponent(name), let b = Bundle(url: url) { return b }
+        return Bundle.module
+    }
+
     static func kernelSources() throws -> String {
-        guard let dir = Bundle.module.url(forResource: "Kernels", withExtension: nil) else {
+        guard let dir = resourceBundle().url(forResource: "Kernels", withExtension: nil) else {
             throw EngineError.missingKernel("Kernels directory")
         }
         let files = try FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
