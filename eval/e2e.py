@@ -40,9 +40,10 @@ def main():
     ap.add_argument("--ref-codes", type=Path, default=HERE / "data/clip_codes.npy")
     ap.add_argument("--ref-wav", type=Path, default=HERE / "data/clip.wav")
     ap.add_argument("--ref-text", default="<|speaker:0|> Every morning I walk to the little bakery at the end of our street.")
-    ap.add_argument("--extra", nargs="*", default=[], help="extra drama generate flags")
+    ap.add_argument("--extra", nargs="*", default=[], help="extra drama generate flags as name=value, e.g. chunking=sentences")
     ap.add_argument("--whisper", default="small.en")
     a = ap.parse_args()
+    a.extra = [part for item in a.extra for part in ("--" + item.split("=", 1)[0], *item.split("=", 1)[1:])]
     out = HERE / "out/e2e" / a.tag
     out.mkdir(parents=True, exist_ok=True)
     sentences = json.loads(a.sentences.read_text())

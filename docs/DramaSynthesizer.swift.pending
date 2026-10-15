@@ -51,6 +51,19 @@ public actor DramaSynthesizer: SpeechSynthesizer {
         return try await codec!.decode(codes: codes)
     }
 
+    /// Runs a codec decode from synchronous generator code.
+    nonisolated static func decodeBlocking(_ codec: DramaCodec, codes: [[Int32]]) throws -> [Float] {
+        let group = DispatchGroup()
+        group.enter()
+        var result: Result<[Float], Error> = .failure(EngineError.badModel("codec did not answer"))
+        Task.detached {
+            do { result = .success(try await codec.decode(codes: codes)) } catch { result = .failure(error) }
+            group.leave()
+        }
+        group.wait()
+        return try result.get()
+    }
+
     public nonisolated func synthesize(_ request: SpeechRequest) -> AsyncThrowingStream<SpeechEvent, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
@@ -70,6 +83,17 @@ public actor DramaSynthesizer: SpeechSynthesizer {
         try await load()
         continuation.yield(.loadingModel(progress: 1, detail: "Ready"))
         let generator = FrameGenerator(model: model!, tokenizer: tokenizer!)
+        let codec = self.codec!
+        generator.silenceProbe = { frames, tailSeconds in
+            // The codec is causal, so decoding the whole chunk so far gives the true tail.
+            let codes = (0..<ModelConstants.numCodebooks).map { c in frames.map { $0[1 + c] } }
+            let samples = try Self.decodeBlocking(codec, codes: codes)
+            let tail = Int(tailSeconds * Double(ModelConstants.sampleRate))
+            guard samples.count >= tail else { return false }
+            var energy: Float = 0
+            for v in samples.suffix(tail) { energy += v * v }
+            return (energy / Float(tail)).squareRoot() < 0.005
+        }
         let references = request.references.map { Drama3Prompt.Reference(transcript: $0.transcript, codes: $0.codes) }
         var allFrames: [Frame] = []
         var allSamples: [Float] = []

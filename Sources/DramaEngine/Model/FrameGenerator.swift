@@ -27,6 +27,12 @@ public final class FrameGenerator {
         case chunkFinished(ChunkResult)
     }
 
+    /// Decides whether the tail of a chunk is silence. The synthesizer decodes
+    /// the frames with the codec and measures the last seconds; nil disables
+    /// the early stop.
+    public var silenceProbe: ((_ frames: [Frame], _ tailSeconds: Double) throws -> Bool)?
+    static let silenceProbeEveryFrames = 16
+
     public init(model: DramaModel, tokenizer: Tokenizer) {
         self.model = model
         self.tokenizer = tokenizer
@@ -72,12 +78,17 @@ public final class FrameGenerator {
             var frames: [Frame] = []
             var eos = false
             let t1 = Date()
+            let silenceFrames = config.stopAfterSilenceSeconds.map { Int(($0 * Double(ModelConstants.sampleRate) / Double(ModelConstants.samplesPerFrame)).rounded(.up)) }
             for step in 0..<budget {
                 guard shouldContinue() else { break }
                 let r = try session.step(temperature: config.temperature, topK: config.topK, topP: config.topP, sampler: &sampler)
                 guard let frame = r.frame else { eos = true; break }
                 frames.append(frame)
                 onEvent(.frame(index: step, maxFrames: budget))
+                if let probe = silenceProbe, let silenceFrames, frames.count > silenceFrames, frames.count % Self.silenceProbeEveryFrames == 0,
+                   try probe(frames, config.stopAfterSilenceSeconds!) {
+                    break
+                }
             }
             let result = ChunkResult(index: index, count: chunks.count, text: chunk, frames: frames, promptRows: prompt.count,
                                      finishedByEOS: eos, prefillSeconds: prefillSeconds, decodeSeconds: Date().timeIntervalSince(t1))
