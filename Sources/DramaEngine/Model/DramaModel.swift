@@ -10,6 +10,16 @@ public final class DramaModel: @unchecked Sendable {
     public let capacity: Int
     /// The kernel schedule both stacks run with; `apply` replaces it.
     public private(set) var schedule: KernelSchedule
+    public enum ScheduleSource: Equatable, Sendable {
+        /// Loaded from, or saved to, this tuning cache file.
+        case cache(URL)
+        /// No cache for this key; `Autotune.tune` would fill it.
+        case `default`
+        /// Passed in by the caller.
+        case given
+    }
+    public internal(set) var scheduleSource: ScheduleSource
+    public let tuningKey: TuningKey
     let store: SafeTensorsStore
     let weights: ModelWeights
     let backbone: Backbone
@@ -34,20 +44,33 @@ public final class DramaModel: @unchecked Sendable {
     var prefixCache: PrefixCache?
     public func clearPrefixCache() { prefixCache = nil }
 
-    /// `schedule` nil means the default schedule; a value is used as given.
-    public init(location: ModelLocation, precision: Precision = .exact, capacity: Int = DramaModel.defaultCapacity, schedule: KernelSchedule? = nil) throws {
+    /// `schedule` nil means the tuning cache's schedule for this device and
+    /// model when there is one, else the default; a value is used as given.
+    public init(location: ModelLocation, precision: Precision = .exact, capacity: Int = DramaModel.defaultCapacity,
+                schedule: KernelSchedule? = nil, tuningDirectory: URL = TuningCache.defaultDirectory) throws {
         ctx = try MetalContext()
         self.location = location
         self.precision = precision
         self.capacity = capacity
         config = try ModelConfig(url: location.directory.appendingPathComponent("config.json"))
+        tuningKey = try TuningKey(ctx: ctx, location: location)
         store = try SafeTensorsStore(directory: location.directory, device: ctx.device)
         weights = try ModelWeights(store: store, config: config, device: ctx.device)
-        let schedule = schedule ?? .default
-        try schedule.validate()
-        self.schedule = schedule
-        backbone = Backbone(ctx: ctx, config: config, weights: weights.backbone, codebooks: weights.tower.codebookEmbeddings, precision: precision, schedule: schedule, capacity: capacity, maxRows: DramaModel.prefillChunkRows)
-        tower = Tower(ctx: ctx, config: config, weights: weights.tower, precision: precision, schedule: schedule, capacity: capacity, maxRows: DramaModel.prefillChunkRows)
+        let chosen: KernelSchedule
+        if let schedule {
+            try schedule.validate()
+            chosen = schedule
+            scheduleSource = .given
+        } else if let hit = TuningCache.load(key: tuningKey, directory: tuningDirectory) {
+            chosen = hit.report.schedule
+            scheduleSource = .cache(hit.url)
+        } else {
+            chosen = .default
+            scheduleSource = .default
+        }
+        self.schedule = chosen
+        backbone = Backbone(ctx: ctx, config: config, weights: weights.backbone, codebooks: weights.tower.codebookEmbeddings, precision: precision, schedule: chosen, capacity: capacity, maxRows: DramaModel.prefillChunkRows)
+        tower = Tower(ctx: ctx, config: config, weights: weights.tower, precision: precision, schedule: chosen, capacity: capacity, maxRows: DramaModel.prefillChunkRows)
         sampler = SamplerState(device: ctx.device)
     }
 
@@ -56,6 +79,7 @@ public final class DramaModel: @unchecked Sendable {
         try schedule.validate()
         drain()
         self.schedule = schedule
+        scheduleSource = .given
         backbone.k = Kernels(ctx: ctx, precision: precision, schedule: schedule)
         tower.k = Kernels(ctx: ctx, precision: precision, schedule: schedule)
     }
