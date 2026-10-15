@@ -5,7 +5,6 @@ import Foundation
 public enum CodecError: Error, CustomStringConvertible {
     case missingModel(URL)
     case badCodes(String)
-    case tooLong(frames: Int, limit: Int)
     case unexpectedOutput(String)
     case audio(String)
 
@@ -13,7 +12,6 @@ public enum CodecError: Error, CustomStringConvertible {
         switch self {
         case .missingModel(let url): return "codec model not found at \(url.path); run tools/convert_codec.py"
         case .badCodes(let m): return "bad codec codes: \(m)"
-        case .tooLong(let frames, let limit): return "\(frames) frames exceeds the codec limit of \(limit) (\(limit * DramaCodec.samplesPerFrame / DramaCodec.sampleRate) s)"
         case .unexpectedOutput(let m): return "unexpected codec output: \(m)"
         case .audio(let m): return "audio: \(m)"
         }
@@ -22,14 +20,20 @@ public enum CodecError: Error, CustomStringConvertible {
 
 /// The Drama 3 DAC codec on Core ML: 10 codebooks per 2048-sample frame at 44.1 kHz.
 ///
-/// The models take a fixed set of frame counts (`frameSizes`) so the Neural Engine
-/// sees static shapes. Inputs are right-padded to the next size and outputs trimmed;
-/// the codec is causal, so padding never changes the frames that are kept.
+/// Both models take one static window of `windowFrames` frames so the Neural Engine
+/// sees a fixed shape. Shorter inputs are right-padded and trimmed; the codec is
+/// causal, so padding never changes the frames that are kept. Longer inputs run in
+/// windows that carry `contextFrames` of left context and keep only the new frames.
+/// With 256 frames of context the windowed decode stays within 0.006 of a full
+/// decode (53 dB) and the windowed encode keeps 99.8% of codebook 0.
 public actor DramaCodec {
     public static let sampleRate = 44_100
     public static let samplesPerFrame = 2048
     public static let numCodebooks = 10
-    public static let frameSizes = [16, 32, 64, 128, 256, 512, 768]
+    public static let windowFrames = 512
+    public static let contextFrames = 256
+    /// The frame counts the models accept.
+    public static let frameSizes = [windowFrames]
     public static let encoderName = "DramaCodecEncoder"
     public static let decoderName = "DramaCodecDecoder"
 
@@ -43,11 +47,16 @@ public actor DramaCodec {
 
     /// Loads both models from `directory`, compiling each `.mlpackage` to a cached
     /// `.mlmodelc` beside it the first time (and again whenever the package is newer).
-    public init(directory: URL = DramaCodec.defaultDirectory, computeUnits: MLComputeUnits = .all) async throws {
-        let config = MLModelConfiguration()
-        config.computeUnits = computeUnits
-        encoder = try await MLModel.load(contentsOf: Self.compiledModel(named: Self.encoderName, in: directory), configuration: config)
-        decoder = try await MLModel.load(contentsOf: Self.compiledModel(named: Self.decoderName, in: directory), configuration: config)
+    /// `computeUnits` applies to the decoder; the GPU returns wrong audio for it, so
+    /// keep it to `.cpuOnly` or `.cpuAndNeuralEngine`. The fp32 encoder always runs on
+    /// the CPU.
+    public init(directory: URL = DramaCodec.defaultDirectory, computeUnits: MLComputeUnits = .cpuOnly) async throws {
+        let encoderConfig = MLModelConfiguration()
+        encoderConfig.computeUnits = .cpuOnly
+        let decoderConfig = MLModelConfiguration()
+        decoderConfig.computeUnits = computeUnits
+        encoder = try await MLModel.load(contentsOf: Self.compiledModel(named: Self.encoderName, in: directory), configuration: encoderConfig)
+        decoder = try await MLModel.load(contentsOf: Self.compiledModel(named: Self.decoderName, in: directory), configuration: decoderConfig)
     }
 
     public static func modelsExist(in directory: URL = DramaCodec.defaultDirectory) -> Bool {
@@ -58,6 +67,25 @@ public actor DramaCodec {
         }
     }
 
+    /// A model call over frames `start ..< end` whose output is kept from `keep` on.
+    struct Window: Equatable {
+        let start: Int
+        let keep: Int
+        let end: Int
+    }
+
+    static func windows(frames: Int) -> [Window] {
+        var out: [Window] = []
+        var keep = 0
+        while keep < frames {
+            let start = keep == 0 ? 0 : keep - contextFrames
+            let end = min(frames, start + windowFrames)
+            out.append(Window(start: start, keep: keep, end: end))
+            keep = end
+        }
+        return out
+    }
+
     /// `[10][T]` codes to `T * 2048` mono samples at 44.1 kHz.
     public func decode(codes: [[Int32]]) async throws -> [Float] {
         guard codes.count == Self.numCodebooks else {
@@ -65,47 +93,56 @@ public actor DramaCodec {
         }
         let frames = codes[0].count
         guard codes.allSatisfy({ $0.count == frames }) else { throw CodecError.badCodes("codebooks differ in length") }
-        if frames == 0 { return [] }
-        let padded = try Self.paddedFrames(frames)
 
-        var flat = [Int32](repeating: 0, count: Self.numCodebooks * padded)
-        for (book, row) in codes.enumerated() {
-            flat.replaceSubrange(book * padded ..< book * padded + frames, with: row)
+        let width = Self.windowFrames
+        var audio: [Float] = []
+        audio.reserveCapacity(frames * Self.samplesPerFrame)
+        for w in Self.windows(frames: frames) {
+            var flat = [Int32](repeating: 0, count: Self.numCodebooks * width)
+            for (book, row) in codes.enumerated() {
+                flat.replaceSubrange(book * width ..< book * width + (w.end - w.start), with: row[w.start ..< w.end])
+            }
+            let input = MLMultiArray(MLShapedArray<Int32>(scalars: flat, shape: [1, Self.numCodebooks, width]))
+            let output = try await decoder.prediction(from: MLDictionaryFeatureProvider(dictionary: ["codes": input]))
+            guard let samples = output.featureValue(for: "audio")?.multiArrayValue else {
+                throw CodecError.unexpectedOutput("decoder returned no `audio`")
+            }
+            let scalars = MLShapedArray<Float>(converting: samples).scalars
+            guard scalars.count == width * Self.samplesPerFrame else {
+                throw CodecError.unexpectedOutput("decoder returned \(scalars.count) samples for \(width) frames")
+            }
+            audio.append(contentsOf: scalars[(w.keep - w.start) * Self.samplesPerFrame ..< (w.end - w.start) * Self.samplesPerFrame])
         }
-        let input = MLMultiArray(MLShapedArray<Int32>(scalars: flat, shape: [1, Self.numCodebooks, padded]))
-        let output = try await decoder.prediction(from: MLDictionaryFeatureProvider(dictionary: ["codes": input]))
-        guard let audio = output.featureValue(for: "audio")?.multiArrayValue else {
-            throw CodecError.unexpectedOutput("decoder returned no `audio`")
-        }
-        let samples = MLShapedArray<Float>(converting: audio).scalars
-        guard samples.count == padded * Self.samplesPerFrame else {
-            throw CodecError.unexpectedOutput("decoder returned \(samples.count) samples for \(padded) frames")
-        }
-        return Array(samples.prefix(frames * Self.samplesPerFrame))
+        return audio
     }
 
     /// 44.1 kHz mono samples to `[10][ceil(n / 2048)]` codes.
     public func encode(samples: [Float]) async throws -> [[Int32]] {
         let frames = (samples.count + Self.samplesPerFrame - 1) / Self.samplesPerFrame
-        if frames == 0 { return Array(repeating: [], count: Self.numCodebooks) }
-        let padded = try Self.paddedFrames(frames)
-
-        var audio = samples
-        audio.append(contentsOf: repeatElement(0, count: padded * Self.samplesPerFrame - samples.count))
-        let input = MLMultiArray(MLShapedArray<Float>(scalars: audio, shape: [1, 1, audio.count]))
-        let output = try await encoder.prediction(from: MLDictionaryFeatureProvider(dictionary: ["audio": input]))
-        guard let codes = output.featureValue(for: "codes")?.multiArrayValue else {
-            throw CodecError.unexpectedOutput("encoder returned no `codes`")
+        let width = Self.windowFrames
+        var codes = [[Int32]](repeating: [], count: Self.numCodebooks)
+        for w in Self.windows(frames: frames) {
+            let lo = w.start * Self.samplesPerFrame
+            let hi = min(samples.count, w.end * Self.samplesPerFrame)
+            var audio = [Float](repeating: 0, count: width * Self.samplesPerFrame)
+            audio.replaceSubrange(0 ..< hi - lo, with: samples[lo ..< hi])
+            let input = MLMultiArray(MLShapedArray<Float>(scalars: audio, shape: [1, 1, audio.count]))
+            let output = try await encoder.prediction(from: MLDictionaryFeatureProvider(dictionary: ["audio": input]))
+            guard let result = output.featureValue(for: "codes")?.multiArrayValue else {
+                throw CodecError.unexpectedOutput("encoder returned no `codes`")
+            }
+            let shaped = MLShapedArray<Int32>(converting: result)
+            guard shaped.shape == [1, Self.numCodebooks, width] else {
+                throw CodecError.unexpectedOutput("encoder returned shape \(shaped.shape)")
+            }
+            let scalars = shaped.scalars
+            for book in 0 ..< Self.numCodebooks {
+                codes[book].append(contentsOf: scalars[book * width + (w.keep - w.start) ..< book * width + (w.end - w.start)])
+            }
         }
-        let shaped = MLShapedArray<Int32>(converting: codes)
-        guard shaped.shape == [1, Self.numCodebooks, padded] else {
-            throw CodecError.unexpectedOutput("encoder returned shape \(shaped.shape)")
-        }
-        let scalars = shaped.scalars
-        return (0 ..< Self.numCodebooks).map { book in
-            Array(scalars[book * padded ..< book * padded + frames])
-        }
+        return codes
     }
+
 
     /// Reads any format AVFoundation can open, averages the channels to mono, and
     /// resamples to 44.1 kHz.
@@ -167,13 +204,6 @@ public actor DramaCodec {
             if status == .endOfStream || status == .error || (status == .inputRanDry && buffer.frameLength == 0) { break }
         }
         return out
-    }
-
-    static func paddedFrames(_ frames: Int) throws -> Int {
-        guard let size = frameSizes.first(where: { $0 >= frames }) else {
-            throw CodecError.tooLong(frames: frames, limit: frameSizes.last!)
-        }
-        return size
     }
 
     private static func compiledModel(named name: String, in directory: URL) async throws -> URL {

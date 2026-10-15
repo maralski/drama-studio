@@ -1,12 +1,13 @@
 """Check the Core ML codec against the PyTorch reference.
 
     tools/.venv/bin/python -I tools/verify_codec.py [--models DIR] [--work DIR] [--fixtures DIR]
+                                                   [--decoder-units CPU_ONLY] [--timing-units ...]
 
 Reports, per clip: encoder code agreement per codebook, decoder error against the fp32
-reference for the same codes, round-trip SNR, the same numbers for the rewritten PyTorch
-model (proving the rewrites), compute-unit placement from MLComputePlan, and timings
-per compute-unit setting on a 10 s clip. With --fixtures it also writes the Swift test
-fixtures.
+reference for the same codes, and round-trip SNR, for both the Core ML models and the
+rewritten PyTorch model (which proves the rewrites). Then the windowed long-input error,
+compute-unit placement from MLComputePlan, and per-model timings on a 10 s clip for each
+compute-unit setting. With --fixtures it also writes the Swift test fixtures.
 """
 
 import argparse
@@ -25,11 +26,12 @@ import soundfile as sf
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from convert_codec import DEFAULT_OUT, FRAME_SIZES  # noqa: E402
+from convert_codec import CONTEXT_FRAMES, DEFAULT_OUT, WINDOW_FRAMES  # noqa: E402
 from dac_reference import load_dac  # noqa: E402
 from dac_reference.exportable import SAMPLES_PER_FRAME, CodecDecoder, CodecEncoder, make_exportable  # noqa: E402
 
 SR = 44100
+F = SAMPLES_PER_FRAME
 SPEECH = {
     "daniel_en_gb": ("Daniel", "The quick brown fox jumps over the lazy dog. Meanwhile, the orchestra tuned "
                      "their instruments, and the audience slowly settled into their seats for the evening."),
@@ -37,7 +39,7 @@ SPEECH = {
                        "because the meeting starts early on Monday morning."),
     "anna_de_de": ("Anna", "Guten Morgen! Heute scheint die Sonne, und wir gehen spazieren."),
 }
-COMPUTE_UNITS = ["CPU_ONLY", "CPU_AND_GPU", "CPU_AND_NE", "ALL"]
+ALL_UNITS = ["CPU_ONLY", "CPU_AND_GPU", "CPU_AND_NE", "ALL"]
 TIMING_SECONDS = 10.0
 
 
@@ -58,8 +60,15 @@ def make_clips(work: Path) -> dict[str, np.ndarray]:
     return clips
 
 
-def padded_frames(frames: int) -> int:
-    return next(s for s in FRAME_SIZES if s >= frames)
+def windows(frames: int) -> list[tuple[int, int, int]]:
+    """(start, keep, end) per model call; mirrors DramaCodec.windows in Swift."""
+    out, keep = [], 0
+    while keep < frames:
+        start = 0 if keep == 0 else keep - CONTEXT_FRAMES
+        end = min(frames, start + WINDOW_FRAMES)
+        out.append((start, keep, end))
+        keep = end
+    return out
 
 
 def snr_db(ref: np.ndarray, test: np.ndarray) -> float:
@@ -67,23 +76,48 @@ def snr_db(ref: np.ndarray, test: np.ndarray) -> float:
     return float("inf") if err == 0 else float(10 * np.log10(np.sum(ref.astype(np.float64) ** 2) / err))
 
 
+# coremltools frees a predict() input when Core ML resets its execution stream, which can
+# happen after Python has dropped the array; holding every input avoids a use-after-free.
+_INPUTS: list[np.ndarray] = []
+
+
+def predict(model: ct.models.MLModel, name: str, value: np.ndarray, key: str) -> np.ndarray:
+    _INPUTS.append(value)
+    return model.predict({name: value})[key]
+
+
+def load_mlmodel(path: Path, units: str) -> tuple[ct.models.MLModel, float]:
+    start = time.perf_counter()
+    model = ct.models.MLModel(str(path), compute_units=getattr(ct.ComputeUnit, units))
+    return model, time.perf_counter() - start
+
+
 class CoreMLCodec:
-    def __init__(self, models: Path, units: str):
-        cu = getattr(ct.ComputeUnit, units)
-        self.encoder = ct.models.MLModel(str(models / "DramaCodecEncoder.mlpackage"), compute_units=cu)
-        self.decoder = ct.models.MLModel(str(models / "DramaCodecDecoder.mlpackage"), compute_units=cu)
+    """Pads and windows exactly as the Swift DramaCodec does."""
+
+    def __init__(self, encoder: ct.models.MLModel, decoder: ct.models.MLModel):
+        self.encoder, self.decoder = encoder, decoder
 
     def encode(self, audio: np.ndarray) -> np.ndarray:
-        frames = -(-len(audio) // SAMPLES_PER_FRAME)
-        x = np.zeros((1, 1, padded_frames(frames) * SAMPLES_PER_FRAME), np.float32)
-        x[0, 0, : len(audio)] = audio
-        return self.encoder.predict({"audio": x})["codes"][0, :, :frames]
+        frames = -(-len(audio) // F)
+        codes = np.zeros((10, frames), np.int32)
+        for start, keep, end in windows(frames):
+            x = np.zeros((1, 1, WINDOW_FRAMES * F), np.float32)
+            chunk = audio[start * F : end * F]
+            x[0, 0, : len(chunk)] = chunk
+            out = predict(self.encoder, "audio", x, "codes")[0]
+            codes[:, keep:end] = out[:, keep - start : end - start]
+        return codes
 
     def decode(self, codes: np.ndarray) -> np.ndarray:
         frames = codes.shape[1]
-        x = np.zeros((1, 10, padded_frames(frames)), np.int32)
-        x[0, :, :frames] = codes
-        return self.decoder.predict({"codes": x})["audio"][0, : frames * SAMPLES_PER_FRAME]
+        audio = np.zeros(frames * F, np.float32)
+        for start, keep, end in windows(frames):
+            x = np.zeros((1, 10, WINDOW_FRAMES), np.int32)
+            x[0, :, : end - start] = codes[:, start:end]
+            out = predict(self.decoder, "codes", x, "audio")[0]
+            audio[keep * F : end * F] = out[(keep - start) * F : (end - start) * F]
+        return audio
 
 
 class TorchCodec:
@@ -96,8 +130,7 @@ class TorchCodec:
     def encode(self, audio: np.ndarray) -> np.ndarray:
         x = torch.from_numpy(audio)[None, None]
         if self.rewritten:
-            frames = -(-len(audio) // SAMPLES_PER_FRAME)
-            x = torch.nn.functional.pad(x, (0, frames * SAMPLES_PER_FRAME - len(audio)))
+            x = torch.nn.functional.pad(x, (0, -(-len(audio) // F) * F - len(audio)))
             return self.enc(x)[0].numpy()
         return self.model.encode(x)[0][0].numpy().astype(np.int32)
 
@@ -108,95 +141,101 @@ class TorchCodec:
         return self.model.from_indices(torch.from_numpy(codes.astype(np.int64))[None])[0, 0].numpy()
 
 
-def compare(name, audio, oracle: TorchCodec, test, label: str) -> dict:
+def compare(name, audio, oracle: TorchCodec, test, label: str) -> None:
     ref_codes = oracle.encode(audio)
     codes = test.encode(audio)
     ref_audio = oracle.decode(ref_codes)
     out = test.decode(ref_codes)
     roundtrip = test.decode(codes)[: len(audio)]
-    row = {
+    print(json.dumps({
         "clip": name,
         "impl": label,
         "frames": int(ref_codes.shape[1]),
         "code_match": [round(float(v), 4) for v in (codes == ref_codes).mean(axis=1)],
-        "decode_max_abs": float(np.abs(out - ref_audio).max()),
+        "decode_max_abs": round(float(np.abs(out - ref_audio).max()), 5),
         "decode_snr_db": round(snr_db(ref_audio, out), 2),
         "roundtrip_snr_db": round(snr_db(audio, roundtrip), 2),
         "reference_roundtrip_snr_db": round(snr_db(audio, ref_audio[: len(audio)]), 2),
-    }
-    print(json.dumps(row))
-    return row
+    }), flush=True)
 
 
-def check_shapes(oracle: TorchCodec, coreml: CoreMLCodec, codes: np.ndarray) -> None:
-    """Decode every enumerated size (codes tiled to fill it) and compare with the reference."""
-    for t in FRAME_SIZES:
-        tiled = np.tile(codes, (1, -(-t // codes.shape[1])))[:, :t]
-        ref = oracle.decode(tiled)
-        out = coreml.decode(tiled)
-        enc_ref = oracle.encode(ref)
-        enc = coreml.encode(ref)
-        print(json.dumps({"shape_frames": t, "decode_snr_db": round(snr_db(ref, out), 2),
-                          "decode_max_abs": float(np.abs(out - ref).max()),
-                          "encode_code_match": [round(float(v), 4) for v in (enc == enc_ref).mean(axis=1)]}))
+def check_long(oracle: TorchCodec, coreml: CoreMLCodec, audio: np.ndarray) -> None:
+    """A clip longer than one window: windowed Core ML against a single full reference pass."""
+    ref_codes = oracle.encode(audio)
+    ref = oracle.decode(ref_codes)
+    out = coreml.decode(ref_codes)
+    codes = coreml.encode(audio)
+    print(json.dumps({"long_frames": int(ref_codes.shape[1]), "windows": len(windows(ref_codes.shape[1])),
+                      "decode_max_abs": round(float(np.abs(out - ref).max()), 5),
+                      "decode_snr_db": round(snr_db(ref, out), 2),
+                      "code_match": [round(float(v), 4) for v in (codes == ref_codes).mean(axis=1)]}), flush=True)
 
 
-def compute_plan(package: Path) -> None:
+def compute_plan(package: Path, units_list: list[str]) -> None:
     compiled = Path(ct.models.utils.compile_model(str(package)))
     try:
-        for units in ["CPU_AND_NE", "ALL"]:
+        for units in units_list:
             plan = ct.models.compute_plan.MLComputePlan.load_from_path(
                 path=str(compiled), compute_units=getattr(ct.ComputeUnit, units))
-            program = plan.model_structure.program
-            by_device = collections.Counter()
-            cost_by_device = collections.Counter()
-            off_ane = collections.Counter()
-            for fn_name, fn in program.functions.items():
+            by_device, cost_by_device, off_ane = collections.Counter(), collections.Counter(), collections.Counter()
+            for fn in plan.model_structure.program.functions.values():
                 for op in fn.block.operations:
                     usage = plan.get_compute_device_usage_for_mlprogram_operation(op)
                     if usage is None:
                         continue
-                    device = type(usage.preferred_compute_device).__name__.replace("ML", "").replace("ComputeDevice", "")
+                    name = lambda d: type(d).__name__.replace("ML", "").replace("ComputeDevice", "")  # noqa: E731
+                    device = name(usage.preferred_compute_device)
                     cost = plan.get_estimated_cost_for_mlprogram_operation(op)
                     by_device[device] += 1
                     cost_by_device[device] += cost.weight if cost else 0.0
                     if device != "NeuralEngine":
-                        supported = sorted(type(d).__name__.replace("ML", "").replace("ComputeDevice", "")
-                                           for d in usage.supported_compute_devices)
-                        off_ane[(op.operator_name, device, ",".join(supported))] += 1
+                        supported = ",".join(sorted(name(d) for d in usage.supported_compute_devices))
+                        off_ane[(op.operator_name, device, supported)] += 1
             total = sum(cost_by_device.values()) or 1.0
-            print(f"{package.name} [{units}] ops per device: {dict(by_device)}; "
-                  f"estimated cost share: { {k: round(v / total, 4) for k, v in cost_by_device.items()} }")
+            print(f"{package.name} [{units}] ops per device {dict(by_device)}; estimated cost share "
+                  f"{ {k: round(v / total, 4) for k, v in cost_by_device.items()} }", flush=True)
             for (op_name, device, supported), n in sorted(off_ane.items(), key=lambda kv: -kv[1]):
                 print(f"    off ANE: {n:4d} x {op_name} on {device} (supported: {supported})")
     finally:
         shutil.rmtree(compiled, ignore_errors=True)
 
 
-def timings(models: Path, audio: np.ndarray) -> None:
-    for units in COMPUTE_UNITS:
-        start = time.perf_counter()
-        codec = CoreMLCodec(models, units)
-        load = time.perf_counter() - start
-        codes = codec.encode(audio)
-        codec.decode(codes)
-        enc, dec = [], []
-        for _ in range(5):
-            t0 = time.perf_counter()
-            codes = codec.encode(audio)
-            t1 = time.perf_counter()
-            codec.decode(codes)
-            enc.append(t1 - t0)
-            dec.append(time.perf_counter() - t1)
-        print(json.dumps({"compute_units": units, "audio_s": round(len(audio) / SR, 2),
-                          "padded_frames": padded_frames(-(-len(audio) // SAMPLES_PER_FRAME)),
-                          "load_s": round(load, 2), "encode_median_ms": round(1000 * float(np.median(enc)), 1),
-                          "decode_median_ms": round(1000 * float(np.median(dec)), 1)}))
-        del codec
+def timings(models: Path, oracle: TorchCodec, audio: np.ndarray, units_list: list[str]) -> None:
+    ref_codes = oracle.encode(audio)
+    ref_audio = oracle.decode(ref_codes)
+    x = np.zeros((1, 1, WINDOW_FRAMES * F), np.float32)
+    x[0, 0, : len(audio)] = audio
+    c = np.zeros((1, 10, WINDOW_FRAMES), np.int32)
+    c[0, :, : ref_codes.shape[1]] = ref_codes
+    for units in units_list:
+        for name, inp, value, key in [("DramaCodecEncoder", "audio", x, "codes"), ("DramaCodecDecoder", "codes", c, "audio")]:
+            model, load = load_mlmodel(models / f"{name}.mlpackage", units)
+            out = predict(model, inp, value, key)
+            runs = []
+            for _ in range(5):
+                t0 = time.perf_counter()
+                predict(model, inp, value, key)
+                runs.append(time.perf_counter() - t0)
+            row = {"model": name, "compute_units": units, "audio_s": round(len(audio) / SR, 2),
+                   "window_frames": WINDOW_FRAMES, "load_s": round(load, 2),
+                   "predict_median_ms": round(1000 * float(np.median(runs)), 1)}
+            if key == "codes":
+                row["code_match"] = [round(float(v), 4) for v in (out[0, :, : ref_codes.shape[1]] == ref_codes).mean(axis=1)]
+            else:
+                row["decode_snr_db"] = round(snr_db(ref_audio, out[0, : len(ref_audio)]), 2)
+            print(json.dumps(row), flush=True)
+            del model
+
+
+def test_tone(frames: int = 64) -> np.ndarray:
+    """A vibrato tone the Swift test regenerates sample for sample (float64 math, then float32)."""
+    t = np.arange(frames * F, dtype=np.float64) / SR
+    x = 0.3 * np.sin(2 * np.pi * (220 * t + 3 * np.sin(2 * np.pi * 5 * t))) * (0.6 + 0.4 * np.sin(2 * np.pi * 2 * t))
+    return (x + 0.15 * np.sin(2 * np.pi * 660 * t)).astype(np.float32)
 
 
 def write_fixtures(out: Path, oracle: TorchCodec, audio: np.ndarray, frames: int = 64) -> None:
-    clip = audio[: frames * SAMPLES_PER_FRAME]
+    clip = audio[: frames * F]
     codes = oracle.encode(clip)
     decoded = oracle.decode(codes)
     reencoded = oracle.encode(decoded)
@@ -204,9 +243,10 @@ def write_fixtures(out: Path, oracle: TorchCodec, audio: np.ndarray, frames: int
     (out / "codec_codes.json").write_text(json.dumps({
         "codes": codes.astype(int).tolist(),
         "reencoded_codebook0": reencoded[0].astype(int).tolist(),
+        "tone_codes": oracle.encode(test_tone(frames)).astype(int).tolist(),
     }) + "\n")
     (out / "codec_audio_ref.json").write_text(json.dumps({
-        "samples": [float(f"{v:.8g}") for v in decoded[:SAMPLES_PER_FRAME]],
+        "samples": [float(f"{v:.8g}") for v in decoded[:F]],
     }) + "\n")
     print(f"wrote fixtures to {out}: {codes.shape[1]} frames; reference re-encode keeps "
           f"{(reencoded[0] == codes[0]).mean():.3f} of codebook 0")
@@ -217,7 +257,8 @@ def main():
     ap.add_argument("--models", type=Path, default=DEFAULT_OUT)
     ap.add_argument("--work", type=Path)
     ap.add_argument("--fixtures", type=Path)
-    ap.add_argument("--skip-timing", action="store_true")
+    ap.add_argument("--decoder-units", default="CPU_ONLY", choices=ALL_UNITS)
+    ap.add_argument("--timing-units", nargs="*", default=ALL_UNITS, choices=ALL_UNITS)
     args = ap.parse_args()
     work = args.work or Path(tempfile.mkdtemp(prefix="drama_codec_"))
     work.mkdir(parents=True, exist_ok=True)
@@ -227,19 +268,20 @@ def main():
     if args.fixtures:
         write_fixtures(args.fixtures, oracle, clips["daniel_en_gb"])
 
-    print(f"torch {torch.__version__}, coremltools {ct.__version__}, models in {args.models}")
-    rewritten = TorchCodec(make_exportable(load_dac(), max_frames=max(FRAME_SIZES)), rewritten=True)
-    coreml = CoreMLCodec(args.models, "ALL")
+    print(f"torch {torch.__version__}, coremltools {ct.__version__}, models in {args.models}", flush=True)
+    rewritten = TorchCodec(make_exportable(load_dac(), max_frames=2048), rewritten=True)
+    coreml = CoreMLCodec(load_mlmodel(args.models / "DramaCodecEncoder.mlpackage", "CPU_ONLY")[0],
+                         load_mlmodel(args.models / "DramaCodecDecoder.mlpackage", args.decoder_units)[0])
     for name, audio in clips.items():
         compare(name, audio, oracle, rewritten, "torch-rewritten-fp32")
-        compare(name, audio, oracle, coreml, "coreml-ALL")
-    check_shapes(oracle, coreml, oracle.encode(clips["daniel_en_gb"]))
+        compare(name, audio, oracle, coreml, f"coreml enc CPU_ONLY fp32, dec {args.decoder_units} fp16")
+    speech = np.concatenate([clips[k] for k in SPEECH] * 2)
+    check_long(oracle, coreml, speech)
 
     for package in ["DramaCodecEncoder.mlpackage", "DramaCodecDecoder.mlpackage"]:
-        compute_plan(args.models / package)
-    if not args.skip_timing:
-        speech = np.concatenate([clips[k] for k in SPEECH])
-        timings(args.models, np.resize(speech, int(TIMING_SECONDS * SR)).astype(np.float32))
+        compute_plan(args.models / package, ["CPU_AND_NE", "ALL"])
+    if args.timing_units:
+        timings(args.models, oracle, np.resize(speech, int(TIMING_SECONDS * SR)).astype(np.float32), args.timing_units)
 
 
 if __name__ == "__main__":
