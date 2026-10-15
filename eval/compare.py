@@ -59,7 +59,8 @@ def main() -> None:
     a, b = np.load(args.a), np.load(args.b)
     thresholds = json.loads(args.thresholds.read_text())
     for name, dump in (("a", a), ("b", b)):
-        meta = json.loads(str(dump["meta"]))
+        raw = dump["meta"]
+        meta = json.loads(raw.tobytes().decode() if raw.dtype == np.uint8 else str(raw))
         print(f"{name}: {meta.get('producer')} {meta.get('dtype')} {meta.get('mode')} ({getattr(args, name)})")
 
     failed = False
