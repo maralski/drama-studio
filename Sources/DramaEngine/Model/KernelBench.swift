@@ -4,9 +4,6 @@ import Metal
 /// GPU time of single kernels on synthetic data, for choosing tile shapes.
 /// No model needed.
 public enum KernelBench {
-    /// Tuning knob for `drama profile`: threads per GDN state column.
-    public static func setGdnParts(_ parts: Int) { Kernels.gdnParts = parts }
-
     static func gpuSeconds(_ ctx: MetalContext, iterations: Int, _ body: (MTLComputeCommandEncoder) throws -> Void) throws -> Double {
         let cb = ctx.queue.makeCommandBuffer()!
         let enc = cb.makeComputeCommandEncoder()!
@@ -122,27 +119,30 @@ public enum KernelBench {
         }
     }
 
-    /// Prints GPU ms per call of the row kernels and the tiled kernels over all
-    /// 256 synthetic experts (768 MB of FP8 weights, as in one real layer).
+    /// Prints GPU ms per call of the row kernels and every tiled kernel over
+    /// all 256 synthetic experts (768 MB of FP8 weights, as in one real layer).
     public static func moe(rowCounts: [Int], iterations: Int = 5) throws {
         let ctx = try MetalContext()
-        let kernels = Kernels(ctx: ctx, precision: .exact)
         guard let loc = ModelLocation.huggingFaceCache() else { throw EngineError.badModel("config.json needed for the MoE shapes") }
         let config = try ModelConfig(url: loc.directory.appendingPathComponent("config.json"))
+        var rowKernels = Kernels(ctx: ctx, precision: .exact)
+        rowKernels.forceMoeRows = true
+        var variants: [(String, Kernels)] = [("rows", rowKernels)]
+        for tile in KernelSchedule.moeTiles {
+            var s = KernelSchedule.default
+            s.moeTile = tile
+            variants.append((tile.label, Kernels(ctx: ctx, precision: .exact, schedule: s)))
+        }
         for rows in rowCounts {
             let moe = SyntheticMoE(device: ctx.device, config: config, rows: rows, experts: config.numExperts, maxRows: max(rows, 32))
-            _ = try gpuSeconds(ctx, iterations: 1) { enc in try moe.bucket(enc, kernels) }
+            _ = try gpuSeconds(ctx, iterations: 1) { enc in try moe.bucket(enc, rowKernels) }
             let activeCount = Int(moe.counts.ints[config.numExperts])
             var line = String(format: "rows %4d (%3d experts active):", rows, activeCount)
-            for variant in ["rows", "_k32", "_k16"] {
-                Kernels.moeTiledOverride = variant != "rows"
-                if variant != "rows" { Kernels.moeTiledVariant = variant }
+            for (label, kernels) in variants {
                 let g = try gpuSeconds(ctx, iterations: iterations) { enc in try moe.gateUp(enc, kernels) }
                 let dn = try gpuSeconds(ctx, iterations: iterations) { enc in try moe.down(enc, kernels) }
-                line += String(format: "  %@ %.2f+%.2f", variant, g * 1000, dn * 1000)
+                line += String(format: "  %@ %.2f+%.2f", label, g * 1000, dn * 1000)
             }
-            Kernels.moeTiledOverride = nil
-            Kernels.moeTiledVariant = "_k16"
             print(line + "  (gateup+down ms per layer)")
         }
     }
@@ -150,23 +150,25 @@ public enum KernelBench {
     /// Prints GPU ms per call of the GEMV and every GEMM tile for y = x W^T.
     public static func denseMatmul(n: Int, k: Int, ms: [Int], iterations: Int = 5) throws {
         let ctx = try MetalContext()
-        let kernels = Kernels(ctx: ctx, precision: .exact)
         let w = bf16Weights(ctx.device, rows: n, cols: k)
-        let tiles: [Kernels.GemmTile?] = [nil, .init(bm: 32, bn: 32, bk: 16), .init(bm: 32, bn: 32, bk: 32), .init(bm: 64, bn: 32, bk: 16), .init(bm: 32, bn: 64, bk: 16),
-                                          .init(bm: 64, bn: 64, bk: 16), .init(bm: 64, bn: 64, bk: 32), .init(bm: 16, bn: 64, bk: 16), .init(bm: 16, bn: 32, bk: 16)]
+        var gemv = Kernels(ctx: ctx, precision: .exact)
+        gemv.forceGemv = true
+        var variants: [(String, Kernels)] = [("gemv", gemv)]
+        for tile in KernelSchedule.gemmTiles {
+            var s = KernelSchedule.default
+            s.gemmTile = tile
+            variants.append((tile.label, Kernels(ctx: ctx, precision: .exact, schedule: s)))
+        }
         print("N=\(n) K=\(k): ms per call; GFLOP/s in brackets")
         for m in ms {
             let x = Buf(ctx.device, floats: m * k, label: "x")
             for i in 0..<(m * k) { x.floats[i] = Float(i % 97) / 97 - 0.5 }
             let y = Buf(ctx.device, floats: m * n, label: "y")
             var line = String(format: "M=%4d", m)
-            for tile in tiles {
-                Kernels.gemmOverride = .some(tile)
+            for (name, kernels) in variants {
                 let t = try gpuSeconds(ctx, iterations: iterations) { enc in try kernels.gemv(enc, w, x: x, y: y, n: n, k: k, m: m) }
-                let name = tile.map { "\($0.bm)x\($0.bn)x\($0.bk)" } ?? "gemv"
                 line += String(format: "  %@=%.3f[%.0f]", name, t * 1000, 2.0 * Double(m * n * k) / t / 1e9)
             }
-            Kernels.gemmOverride = nil
             print(line)
         }
     }

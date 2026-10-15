@@ -59,8 +59,14 @@ kernel void kv_write(device float* cache [[buffer(0)]],
 }
 
 // Causal GQA attention over an fp32 KV cache, head dim 256, flash-decoding
-// style: one threadgroup per (query row, head); 8 simdgroups split the keys
-// and keep an online softmax; lanes own 8 dims each.
+// style: one threadgroup per (query row, head); the S simdgroups split the
+// keys round-robin and keep an online softmax each; lanes own 8 dims each.
+// S = simdgroups_per_threadgroup, so the host picks it by the thread count
+// and sizes the accumulator staging (S x 256 floats) as threadgroup buffer 0.
+// S domain: 4, 8, 16 (128 to 512 threads); the per-simdgroup maxima and sums
+// are static arrays of 16, and the combine loop strides by the thread count
+// so S = 4 still covers the 256 dims. Results across S differ by the
+// summation order of the partial softmaxes only.
 struct AttnParams {
     uint heads;
     uint kvHeads;
@@ -73,14 +79,16 @@ kernel void attention(device float* out [[buffer(0)]],
                       device const float* kcache [[buffer(2)]],
                       device const float* vcache [[buffer(3)]],
                       constant AttnParams& p [[buffer(4)]],
+                      threadgroup float* tgAcc [[threadgroup(0)]],
                       uint2 tg [[threadgroup_position_in_grid]],
                       uint lane [[thread_index_in_simdgroup]],
                       uint sg [[simdgroup_index_in_threadgroup]],
+                      uint S [[simdgroups_per_threadgroup]],
                       uint2 tid2 [[thread_position_in_threadgroup]]) {
     uint tid = tid2.x;
-    threadgroup float tgMax[8];
-    threadgroup float tgSum[8];
-    threadgroup float tgAcc[8][256];
+    uint threads = S * 32;
+    threadgroup float tgMax[16];
+    threadgroup float tgSum[16];
     uint h = tg.x;
     uint m = tg.y;
     uint kvh = h / (p.heads / p.kvHeads);
@@ -91,7 +99,7 @@ kernel void attention(device float* out [[buffer(0)]],
     float runMax = -INFINITY;
     float runSum = 0.0f;
     float4 acc0 = 0.0f, acc1 = 0.0f;
-    for (uint key = sg; key <= pos; key += 8) {
+    for (uint key = sg; key <= pos; key += S) {
         device const float* kr = kcache + (key * p.kvHeads + kvh) * 256 + lane * 8;
         float4 k0 = *(device const float4*)kr;
         float4 k1 = *(device const float4*)(kr + 4);
@@ -106,16 +114,18 @@ kernel void attention(device float* out [[buffer(0)]],
         runMax = newMax;
     }
     if (lane == 0) { tgMax[sg] = runMax; tgSum[sg] = runSum; }
-    for (uint i = 0; i < 4; i++) { tgAcc[sg][lane * 8 + i] = acc0[i]; tgAcc[sg][lane * 8 + 4 + i] = acc1[i]; }
+    for (uint i = 0; i < 4; i++) { tgAcc[sg * 256 + lane * 8 + i] = acc0[i]; tgAcc[sg * 256 + lane * 8 + 4 + i] = acc1[i]; }
     threadgroup_barrier(mem_flags::mem_threadgroup);
     float gmax = -INFINITY;
-    for (uint s = 0; s < 8; s++) gmax = max(gmax, tgMax[s]);
+    for (uint s = 0; s < S; s++) gmax = max(gmax, tgMax[s]);
     float total = 0.0f;
-    float o = 0.0f;
-    for (uint s = 0; s < 8; s++) {
-        float w = tgMax[s] == -INFINITY ? 0.0f : exp(tgMax[s] - gmax);
-        total += w * tgSum[s];
-        o += w * tgAcc[s][tid];
+    for (uint s = 0; s < S; s++) total += (tgMax[s] == -INFINITY ? 0.0f : exp(tgMax[s] - gmax)) * tgSum[s];
+    for (uint d = tid; d < 256; d += threads) {
+        float o = 0.0f;
+        for (uint s = 0; s < S; s++) {
+            float w = tgMax[s] == -INFINITY ? 0.0f : exp(tgMax[s] - gmax);
+            o += w * tgAcc[s * 256 + d];
+        }
+        out[(m * p.heads + h) * 256 + d] = o / total;
     }
-    out[(m * p.heads + h) * 256 + tid] = o / total;
 }

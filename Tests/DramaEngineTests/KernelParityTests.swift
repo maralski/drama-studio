@@ -97,47 +97,51 @@ extension KernelParityTests {
         let config = try ModelConfig(url: loc.directory.appendingPathComponent("config.json"))
         let rows = 50
         let moe = KernelBench.SyntheticMoE(device: f.ctx.device, config: config, rows: rows, experts: 16, maxRows: 64)
-        let k = f.k
-        var results: [([Float], [Float])] = []
-        for tiled in [false, true] {
-            Kernels.moeTiledOverride = tiled
+        func run(_ k: Kernels, _ m: KernelBench.SyntheticMoE) throws -> ([Float], [Float]) {
             try f.run { enc in
-                try moe.bucket(enc, k)
-                try moe.gateUp(enc, k)
-                try moe.down(enc, k)
+                try m.bucket(enc, k)
+                try m.gateUp(enc, k)
+                try m.down(enc, k)
             }
-            results.append((moe.act.read(moe.act.count), moe.slotOut.read(moe.slotOut.count)))
+            return (m.act.read(m.act.count), m.slotOut.read(m.slotOut.count))
         }
-        Kernels.moeTiledOverride = nil
-        let actErr = Self.relL2(results[0].0, results[1].0)
-        let outErr = Self.relL2(results[0].1, results[1].1)
+        var rowKernels = f.k
+        rowKernels.forceMoeRows = true
+        let byRows = try run(rowKernels, moe)
+        let tiled = try run(f.k, moe)
+        let actErr = Self.relL2(byRows.0, tiled.0)
+        let outErr = Self.relL2(byRows.1, tiled.1)
         XCTAssertLessThan(actErr, 2e-6)
         XCTAssertLessThan(outErr, 2e-6)
-        XCTAssertTrue(results[1].1.allSatisfy { $0.isFinite })
+        XCTAssertTrue(tiled.1.allSatisfy { $0.isFinite })
         print("moe tiled parity: act \(actErr) slotOut \(outErr)")
 
-        // The two K steps accumulate in the same 8-wide order, so they must agree exactly.
-        Kernels.moeTiledOverride = true
-        Kernels.moeTiledVariant = "_k32"
-        try f.run { enc in
-            try moe.bucket(enc, k)
-            try moe.gateUp(enc, k)
-            try moe.down(enc, k)
+        // Every tile accumulates each output in the same 8-wide order over K,
+        // so the whole domain must agree exactly.
+        for tile in KernelSchedule.moeTiles {
+            var s = KernelSchedule.default
+            s.moeTile = tile
+            let got = try run(Kernels(ctx: f.ctx, precision: .exact, schedule: s), moe)
+            XCTAssertEqual(got.0, tiled.0, "tile \(tile.label)")
+            XCTAssertEqual(got.1, tiled.1, "tile \(tile.label)")
         }
-        Kernels.moeTiledVariant = "_k16"
-        Kernels.moeTiledOverride = nil
-        XCTAssertEqual(moe.act.read(moe.act.count), results[1].0)
-        XCTAssertEqual(moe.slotOut.read(moe.slotOut.count), results[1].1)
+
+        // The one-row kernels only change which rows share a threadgroup.
+        for sg in KernelSchedule.moeRowSimdgroups {
+            var s = KernelSchedule.default
+            s.moeRowSimdgroups = sg
+            var k = Kernels(ctx: f.ctx, precision: .exact, schedule: s)
+            k.forceMoeRows = true
+            let got = try run(k, moe)
+            XCTAssertEqual(got.0, byRows.0, "simdgroups \(sg)")
+            XCTAssertEqual(got.1, byRows.1, "simdgroups \(sg)")
+        }
 
         // A routed row's result must not depend on which other rows share its chunk.
         let part = KernelBench.SyntheticMoE(prefixOf: moe, rows: 11, device: f.ctx.device)
-        try f.run { enc in
-            try part.bucket(enc, k)
-            try part.gateUp(enc, k)
-            try part.down(enc, k)
-        }
-        XCTAssertEqual(part.act.read(part.act.count), Array(results[1].0.prefix(part.act.count)))
-        XCTAssertEqual(part.slotOut.read(part.slotOut.count), Array(results[1].1.prefix(part.slotOut.count)))
+        let partial = try run(f.k, part)
+        XCTAssertEqual(partial.0, Array(tiled.0.prefix(part.act.count)))
+        XCTAssertEqual(partial.1, Array(tiled.1.prefix(part.slotOut.count)))
     }
 }
 
@@ -155,9 +159,10 @@ extension KernelParityTests {
         let state0 = f.floats(heads * 128 * 128, label: "state0")
         for i in 0..<state0.count { state0.floats[i] *= 0.1 }
         var reference: ([Float], [Float])?
-        let k = f.k
-        for parts in [1, 2, 4, 8] {
-            Kernels.gdnParts = parts
+        for parts in KernelSchedule.gdnParts {
+            var s = KernelSchedule.default
+            s.gdnPartsPrefill = parts
+            let k = Kernels(ctx: f.ctx, precision: .exact, schedule: s)
             let core = Buf(f.ctx.device, floats: rows * heads * 128, label: "core")
             let state = Buf(f.ctx.device, floats: state0.count, label: "state")
             memcpy(state.floats, state0.floats, state0.count * 4)
@@ -173,6 +178,5 @@ extension KernelParityTests {
                 print("gdn parts \(parts): core \(coreErr) state \(stateErr)")
             } else { reference = got }
         }
-        Kernels.gdnParts = 4
     }
 }

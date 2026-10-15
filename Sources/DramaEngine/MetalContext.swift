@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import Metal
 
@@ -9,6 +10,8 @@ public final class MetalContext {
     public let device: MTLDevice
     public let queue: MTLCommandQueue
     public let library: MTLLibrary
+    /// SHA-256 hex of the exact source string the library was compiled from.
+    public let kernelDigest: String
     private var pipelines: [String: MTLComputePipelineState] = [:]
     private let lock = NSLock()
 
@@ -17,7 +20,9 @@ public final class MetalContext {
         self.device = device
         guard let queue = device.makeCommandQueue() else { throw EngineError.noMetalDevice }
         self.queue = queue
-        self.library = try Self.compileKernels(device: device)
+        let source = try Self.kernelSources()
+        kernelDigest = SHA256.hash(data: Data(source.utf8)).map { String(format: "%02x", $0) }.joined()
+        self.library = try Self.compileKernels(source: source, device: device)
     }
 
     /// The resource bundle: inside a packaged .app it sits in Contents/Resources,
@@ -55,11 +60,11 @@ public final class MetalContext {
         return "constant float FP8_LUT[256] = {" + body + "};"
     }
 
-    static func compileKernels(device: MTLDevice) throws -> MTLLibrary {
+    static func compileKernels(source: String, device: MTLDevice) throws -> MTLLibrary {
         let options = MTLCompileOptions()
         options.mathMode = .safe
         options.languageVersion = .version3_1
-        return try device.makeLibrary(source: try kernelSources(), options: options)
+        return try device.makeLibrary(source: source, options: options)
     }
 
     /// Builds every kernel's pipeline state up front, in parallel, so the first
@@ -86,12 +91,14 @@ public enum EngineError: Error, CustomStringConvertible {
     case noMetalDevice
     case missingKernel(String)
     case badModel(String)
+    case badSchedule(String)
 
     public var description: String {
         switch self {
         case .noMetalDevice: return "no Metal device"
         case .missingKernel(let n): return "kernel \(n) missing from the Metal library"
         case .badModel(let m): return "bad model: \(m)"
+        case .badSchedule(let m): return "bad kernel schedule: \(m)"
         }
     }
 }

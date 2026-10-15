@@ -198,7 +198,6 @@ func generate(_ args: Args) throws {
 func profile(_ args: Args) throws {
     let model = try loadModel(args)
     let rows = args.int("rows", 128)
-    if let parts = args["gdn-parts"].flatMap(Int.init) { KernelBench.setGdnParts(parts) }
     let groups = try model.profileBackbone(rows: rows)
     let total = groups.reduce(0) { $0 + $1.1 }
     print("backbone forward, \(rows) rows: \(String(format: "%.1f", total)) ms summed over groups")

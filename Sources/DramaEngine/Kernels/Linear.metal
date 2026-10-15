@@ -1,8 +1,13 @@
 // y[m*N + n] = sum_k W[rowStart + n][k] * x[m*K + k] for bf16 W [*, K], fp32 x.
-// One simdgroup per output row and 32-token tile (the grid's second
-// dimension), each lane reads 8 consecutive bf16 per K tile and keeps them in
-// registers across the tokens. K must be a multiple of 256. A token's sum
-// never depends on the other tokens in its tile.
+// One simdgroup per output row and MTILE-token tile (the grid's second
+// dimension); a threadgroup holds simdgroups_per_threadgroup rows, so the host
+// chooses the rows per threadgroup by the thread count alone. Each lane reads
+// 8 consecutive bf16 per K tile and keeps them in registers across the tokens.
+// K must be a multiple of 256. A token's sum never depends on the tile, the
+// other tokens in it, or the simdgroup count, so every variant is bit-identical.
+// Token tile domain: 1, 8, 16, 32, 64. The accumulators live in registers, one
+// per token, and 64 is where the unrolled loop stops fitting; 1 is the plain
+// GEMV. Simdgroups per threadgroup: 1, 2, 4, 8 (32 to 256 threads).
 struct GemvParams {
     uint N;
     uint K;
@@ -11,26 +16,26 @@ struct GemvParams {
     uint roundOutput;
 };
 
-#define GEMV_MTILE 32
-
-kernel void gemv_bf16(device const ushort* W [[buffer(0)]],
-                      device const float* x [[buffer(1)]],
-                      device float* y [[buffer(2)]],
-                      constant GemvParams& p [[buffer(3)]],
-                      uint2 tg [[threadgroup_position_in_grid]],
-                      uint lane [[thread_index_in_simdgroup]],
-                      uint sg [[simdgroup_index_in_threadgroup]]) {
-    uint n = tg.x * 4 + sg;
+template <uint MTILE>
+kernel void gemv_bf16_t(device const ushort* W [[buffer(0)]],
+                        device const float* x [[buffer(1)]],
+                        device float* y [[buffer(2)]],
+                        constant GemvParams& p [[buffer(3)]],
+                        uint2 tg [[threadgroup_position_in_grid]],
+                        uint lane [[thread_index_in_simdgroup]],
+                        uint sg [[simdgroup_index_in_threadgroup]],
+                        uint simdgroups [[simdgroups_per_threadgroup]]) {
+    uint n = tg.x * simdgroups + sg;
     if (n >= p.N) return;
     // Tensor data in the shards is 8-byte aligned, not 16, so load two uint2.
     device const uint2* wrow = (device const uint2*)(W + (p.rowStart + n) * p.K);
     uint tiles = p.K / 256;
-    uint m0 = tg.y * GEMV_MTILE;
+    uint m0 = tg.y * MTILE;
     if (m0 < p.M) {
-        uint mcount = min(uint(GEMV_MTILE), p.M - m0);
-        float acc[GEMV_MTILE];
+        uint mcount = min(uint(MTILE), p.M - m0);
+        float acc[MTILE];
 #pragma unroll
-        for (uint t = 0; t < GEMV_MTILE; t++) acc[t] = 0.0f;
+        for (uint t = 0; t < MTILE; t++) acc[t] = 0.0f;
         for (uint tile = 0; tile < tiles; tile++) {
             uint2 lo = wrow[(tile * 32 + lane) * 2];
             uint2 hi = wrow[(tile * 32 + lane) * 2 + 1];
@@ -42,7 +47,7 @@ kernel void gemv_bf16(device const ushort* W [[buffer(0)]],
             uint k0 = tile * 256 + lane * 8;
             // Constant trip count keeps acc in registers; the guard predicates.
 #pragma unroll
-            for (uint t = 0; t < GEMV_MTILE; t++) {
+            for (uint t = 0; t < MTILE; t++) {
                 if (t < mcount) {
                     device const float4* xp = (device const float4*)(x + (m0 + t) * p.K + k0);
                     float4 a = xp[0];
@@ -53,7 +58,7 @@ kernel void gemv_bf16(device const ushort* W [[buffer(0)]],
             }
         }
 #pragma unroll
-        for (uint t = 0; t < GEMV_MTILE; t++) {
+        for (uint t = 0; t < MTILE; t++) {
             if (t < mcount) {
                 float s = simd_sum(acc[t]);
                 if (lane == 0) y[(m0 + t) * p.N + n] = p.roundOutput ? round_to_bf16(s) : s;
@@ -62,13 +67,25 @@ kernel void gemv_bf16(device const ushort* W [[buffer(0)]],
     }
 }
 
+#define GEMV_VARIANT(NAME, MTILE) \
+    template [[host_name(NAME)]] kernel void gemv_bf16_t<MTILE>( \
+        device const ushort*, device const float*, device float*, constant GemvParams&, uint2, uint, uint, uint);
+GEMV_VARIANT("gemv_bf16_t1", 1)
+GEMV_VARIANT("gemv_bf16_t8", 8)
+GEMV_VARIANT("gemv_bf16_t16", 16)
+GEMV_VARIANT("gemv_bf16_t32", 32)
+GEMV_VARIANT("gemv_bf16_t64", 64)
+
 // y[m*N + n] = sum_k W[rowStart + n][k] * x[m*K + k] for M > 1 rows, as a
 // BM x BN output tile per threadgroup of WM x WN simdgroups, stepping K by BK.
 // The bf16 weights are widened to fp32 in threadgroup memory, so each product
 // is the same fp32 product the GEMV forms; only the summation order differs.
 // Every output element depends on its own row of x alone, so a row's result
 // does not depend on which chunk it is in. K must be a multiple of BK; rows
-// past M and columns past N are masked.
+// past M and columns past N are masked. Tile domain: the eight shapes
+// instantiated below, 16 to 64 rows by 32 or 64 columns by a K step of 16 or
+// 32; 64x64x32 is the largest whose staging (two 64 x 36 tiles) fits the
+// 32 KB threadgroup budget with a 64 x 64 output tile.
 template <uint BM, uint BN, uint BK, uint WM, uint WN>
 kernel void gemm_bf16_t(device const ushort* W [[buffer(0)]],
                         device const float* x [[buffer(1)]],
@@ -186,7 +203,8 @@ kernel void gdn_conv_state_update(device float* state [[buffer(0)]],
 // Gated delta rule, token by token, in fp32. One threadgroup of 128 * P
 // threads per value head; thread (part, j) owns rows [part * 128 / P, +128 / P)
 // of state column j, so the per-token dot products over the 128 rows are P
-// partial sums combined in a fixed order. conv_out rows hold [q | k | v] with
+// partial sums combined in a fixed order. P domain: 1, 2, 4, 8 (128 to 1024
+// threads, the Apple threadgroup limit). conv_out rows hold [q | k | v] with
 // q, k over 16 heads of 128 and v over 32 heads of 128; value head h uses key
 // head h / 2. a and b are [M, 32] each.
 struct GDNParams {

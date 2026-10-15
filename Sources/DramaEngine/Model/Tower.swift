@@ -6,7 +6,7 @@ import Metal
 final class Tower {
     let config: ModelConfig
     let weights: TowerWeights
-    let k: Kernels
+    var k: Kernels
     let maxRows: Int
     let capacity: Int
 
@@ -24,10 +24,10 @@ final class Tower {
     var captureLayers: Bool = false
     private(set) var layerCapture: [Buf] = []
 
-    init(ctx: MetalContext, config: ModelConfig, weights: TowerWeights, precision: Precision, capacity: Int, maxRows: Int = 128) {
+    init(ctx: MetalContext, config: ModelConfig, weights: TowerWeights, precision: Precision, schedule: KernelSchedule = .default, capacity: Int, maxRows: Int = 128) {
         self.config = config
         self.weights = weights
-        self.k = Kernels(ctx: ctx, precision: precision)
+        self.k = Kernels(ctx: ctx, precision: precision, schedule: schedule)
         self.maxRows = maxRows
         self.capacity = capacity
         let d = ctx.device

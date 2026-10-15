@@ -44,10 +44,23 @@ final class Buf {
     func readInts(_ n: Int, offset: Int = 0) -> [Int32] { Array(UnsafeBufferPointer(start: ints + offset, count: n)) }
 }
 
-/// Thin encoders around each kernel. Every call appends one dispatch.
+/// Thin encoders around each kernel. Every call appends one dispatch. The
+/// schedule chooses each family's instantiation and dispatch shape; path
+/// choice between families depends on M == 1 against M > 1 and on N only.
 struct Kernels {
     let ctx: MetalContext
     let precision: Precision
+    let schedule: KernelSchedule
+    /// Dev benches only: run the GEMV for every M, with the narrow shape.
+    var forceGemv = false
+    /// Dev benches only: run the one-row expert kernels for every M.
+    var forceMoeRows = false
+
+    init(ctx: MetalContext, precision: Precision, schedule: KernelSchedule = .default) {
+        self.ctx = ctx
+        self.precision = precision
+        self.schedule = schedule
+    }
 
     func set<T>(_ enc: MTLComputeCommandEncoder, _ value: T, index: Int) {
         var v = value
@@ -64,24 +77,15 @@ struct Kernels {
         enc.dispatchThreadgroups(groups, threadsPerThreadgroup: group)
     }
 
-    struct GemmTile: Equatable { var bm: Int; var bn: Int; var bk: Int }
-    /// Benchmark knob: nil picks by M, `.some(nil)` forces the GEMV for every M.
-    nonisolated(unsafe) static var gemmOverride: GemmTile?? = nil
-    /// One tile for every M above 1 so a row's result is the same whichever
-    /// chunk it lands in (the prefix cache relies on that). In
-    /// eval/out/perf/kbench_shapes.txt 32x32x16 is the best or within 20
-    /// percent of the best kernel from 32 rows up (8.4 TFLOPS at M=128,
-    /// N=8192 against 1.5 for the GEMV); below 16 rows the GEMV or a 16-row
-    /// tile is 1.5x to 4x faster on narrow shapes, a cost accepted for the
-    /// chunk invariance. Narrow outputs (N up to 64) keep the GEMV at every
-    /// M: a GEMM would have one or two column tiles walking K alone, while
-    /// the GEMV spreads the rows over threadgroups.
-    static func gemmTile(m: Int, n: Int) -> GemmTile? {
-        if let o = gemmOverride { return o }
-        return m > 1 && n > 64 ? GemmTile(bm: 32, bn: 32, bk: 16) : nil
-    }
-
     // y[m*N + n] = W[rowStart + n] . x[m]
+    //
+    // One GEMM tile for every M above 1 so a row's result is the same
+    // whichever chunk it lands in (the prefix cache relies on that); below 16
+    // rows the GEMV or a 16-row tile is 1.5x to 4x faster on narrow shapes
+    // (eval/out/perf/kbench_shapes.txt), a cost accepted for the chunk
+    // invariance. Narrow outputs (N up to 64) keep the GEMV at every M: a
+    // GEMM would have one or two column tiles walking K alone, while the
+    // GEMV spreads the rows over threadgroups.
     func gemv(_ enc: MTLComputeCommandEncoder, _ w: TensorRef, x: Buf, xOffset: Int = 0, y: Buf, yOffset: Int = 0,
               n: Int, k: Int, m: Int, rowStart: Int = 0, round: Bool? = nil) throws {
         struct P { var N: UInt32; var K: UInt32; var M: UInt32; var rowStart: UInt32; var round: UInt32 }
@@ -90,12 +94,16 @@ struct Kernels {
         enc.setBuffer(x.buffer, offset: x.byteOffset + (xOffset * 4), index: 1)
         enc.setBuffer(y.buffer, offset: y.byteOffset + (yOffset * 4), index: 2)
         set(enc, P(N: UInt32(n), K: UInt32(k), M: UInt32(m), rowStart: UInt32(rowStart), round: (round ?? precision.mimicBF16) ? 1 : 0), index: 3)
-        if let tile = Kernels.gemmTile(m: m, n: n) {
-            try dispatchGroups(enc, "gemm_bf16_\(tile.bm)x\(tile.bn)x\(tile.bk)",
+        if m > 1 && n > 64 && !forceGemv {
+            let tile = schedule.gemmTile
+            try dispatchGroups(enc, "gemm_bf16_\(tile.label)",
                                groups: MTLSize(width: (n + tile.bn - 1) / tile.bn, height: (m + tile.bm - 1) / tile.bm, depth: 1),
                                group: MTLSize(width: 128, height: 1, depth: 1))
         } else {
-            try dispatchGroups(enc, "gemv_bf16", groups: MTLSize(width: (n + 3) / 4, height: (m + 31) / 32, depth: 1), group: MTLSize(width: 128, height: 1, depth: 1))
+            let shape = m == 1 ? schedule.gemvDecode : schedule.gemvNarrow
+            try dispatchGroups(enc, "gemv_bf16_t\(shape.tokenTile)",
+                               groups: MTLSize(width: (n + shape.simdgroups - 1) / shape.simdgroups, height: (m + shape.tokenTile - 1) / shape.tokenTile, depth: 1),
+                               group: MTLSize(width: 32 * shape.simdgroups, height: 1, depth: 1))
         }
     }
 
@@ -196,7 +204,9 @@ struct Kernels {
         enc.setBuffer(kcache.buffer, offset: kcache.byteOffset + (0), index: 2)
         enc.setBuffer(vcache.buffer, offset: vcache.byteOffset + (0), index: 3)
         set(enc, P(heads: UInt32(heads), kvHeads: UInt32(kvHeads), pos0: UInt32(pos0), scale: 1.0 / 16.0), index: 4)
-        try dispatchGroups(enc, "attention", groups: MTLSize(width: heads, height: rows, depth: 1), group: MTLSize(width: 256, height: 1, depth: 1))
+        let split = rows == 1 ? schedule.attentionSplitDecode : schedule.attentionSplitPrefill
+        enc.setThreadgroupMemoryLength(split * 256 * 4, index: 0)
+        try dispatchGroups(enc, "attention", groups: MTLSize(width: heads, height: rows, depth: 1), group: MTLSize(width: 32 * split, height: 1, depth: 1))
     }
 
     func gdnConv(_ enc: MTLComputeCommandEncoder, out: Buf, mixed: Buf, state: Buf, w: TensorRef, channels: Int, rows: Int) throws {
@@ -213,9 +223,6 @@ struct Kernels {
         try dispatch(enc, "gdn_conv_state_update", grid: MTLSize(width: channels, height: 1, depth: 1), group: MTLSize(width: 256, height: 1, depth: 1))
     }
 
-    /// Threads per state column in the GDN recurrence (1, 2, 4 or 8).
-    nonisolated(unsafe) static var gdnParts = 4
-
     func gdnRecurrent(_ enc: MTLComputeCommandEncoder, core: Buf, convOut: Buf, a: Buf, b: Buf, state: Buf, aLog: TensorRef, dtBias: TensorRef, rows: Int, config: ModelConfig) throws {
         struct P { var M: UInt32; var rowStride: UInt32; var numVHeads: UInt32; var numKHeads: UInt32; var eps: Float }
         enc.setBuffer(core.buffer, offset: core.byteOffset + (0), index: 0)
@@ -226,7 +233,7 @@ struct Kernels {
         enc.setBuffer(aLog.buffer, offset: aLog.offset, index: 5)
         enc.setBuffer(dtBias.buffer, offset: dtBias.offset, index: 6)
         set(enc, P(M: UInt32(rows), rowStride: 8192, numVHeads: UInt32(config.linearValueHeads), numKHeads: UInt32(config.linearKeyHeads), eps: 1e-6), index: 7)
-        let parts = Kernels.gdnParts
+        let parts = rows == 1 ? schedule.gdnPartsDecode : schedule.gdnPartsPrefill
         try dispatchGroups(enc, "gdn_recurrent_p\(parts)", groups: MTLSize(width: config.linearValueHeads, height: 1, depth: 1), group: MTLSize(width: 128 * parts, height: 1, depth: 1))
     }
 
@@ -248,14 +255,9 @@ struct Kernels {
         try dispatch(enc, "moe_bucket", grid: MTLSize(width: pairs, height: 1, depth: 1), group: MTLSize(width: 256, height: 1, depth: 1))
     }
 
-    /// Benchmark knobs: nil picks the tiled kernels by row count; the suffix
-    /// names the K step of the tiled kernels. A K step of 16 keeps more
-    /// threadgroups resident and ran 10 to 15 percent faster than 32 in
-    /// eval/out/perf/kbench_moe_4.txt (a bit-arithmetic FP8 decode tied with
-    /// the table and was dropped).
-    nonisolated(unsafe) static var moeTiledOverride: Bool? = nil
-    nonisolated(unsafe) static var moeTiledVariant = "_k16"
-    static func moeTiled(rows: Int) -> Bool { moeTiledOverride ?? (rows > 1) }
+    /// The tiled expert kernels serve every M above 1 (one tile, so a routed
+    /// row's result is the same in any chunk); one row runs the row kernels.
+    private func moeTiled(rows: Int) -> Bool { rows > 1 && !forceMoeRows }
 
     private func moeParams(capacity: Int, config: ModelConfig) -> (UInt32, UInt32, UInt32, UInt32, UInt32, UInt32) {
         (UInt32(config.hiddenSize), UInt32(config.moeIntermediate), UInt32(config.topK), UInt32(capacity),
@@ -272,10 +274,12 @@ struct Kernels {
         enc.setBuffer(lists.buffer, offset: lists.byteOffset + (0), index: 4)
         set(enc, P(hidden: p.0, intermediate: p.1, topK: p.2, capacity: p.3, roundWeights: p.4, roundOutput: p.5), index: 5)
         enc.setBuffer(active.buffer, offset: active.byteOffset, index: 6)
-        if Kernels.moeTiled(rows: rows) {
-            try dispatchGroups(enc, "moe_gate_up_fp8_tiled" + Kernels.moeTiledVariant, groups: MTLSize(width: maxActive, height: config.moeIntermediate / 32, depth: 1), group: MTLSize(width: 128, height: 1, depth: 1))
+        if moeTiled(rows: rows) {
+            let t = schedule.moeTile
+            try dispatchGroups(enc, "moe_gate_up_fp8_tiled_\(t.label)", groups: MTLSize(width: maxActive, height: config.moeIntermediate / t.bn, depth: 1), group: MTLSize(width: 4 * t.bn, height: 1, depth: 1))
         } else {
-            try dispatchGroups(enc, "moe_gate_up_fp8", groups: MTLSize(width: maxActive, height: config.moeIntermediate / 8, depth: 1), group: MTLSize(width: 256, height: 1, depth: 1))
+            let sg = schedule.moeRowSimdgroups
+            try dispatchGroups(enc, "moe_gate_up_fp8", groups: MTLSize(width: maxActive, height: config.moeIntermediate / sg, depth: 1), group: MTLSize(width: 32 * sg, height: 1, depth: 1))
         }
     }
 
@@ -290,10 +294,12 @@ struct Kernels {
         enc.setBuffer(lists.buffer, offset: lists.byteOffset + (0), index: 5)
         set(enc, P(hidden: p.0, intermediate: p.1, topK: p.2, capacity: p.3, roundWeights: p.4, roundOutput: p.5), index: 6)
         enc.setBuffer(active.buffer, offset: active.byteOffset, index: 7)
-        if Kernels.moeTiled(rows: rows) {
-            try dispatchGroups(enc, "moe_down_fp8_tiled" + Kernels.moeTiledVariant, groups: MTLSize(width: maxActive, height: config.hiddenSize / 32, depth: 1), group: MTLSize(width: 128, height: 1, depth: 1))
+        if moeTiled(rows: rows) {
+            let t = schedule.moeTile
+            try dispatchGroups(enc, "moe_down_fp8_tiled_\(t.label)", groups: MTLSize(width: maxActive, height: config.hiddenSize / t.bn, depth: 1), group: MTLSize(width: 4 * t.bn, height: 1, depth: 1))
         } else {
-            try dispatchGroups(enc, "moe_down_fp8", groups: MTLSize(width: maxActive, height: config.hiddenSize / 8, depth: 1), group: MTLSize(width: 256, height: 1, depth: 1))
+            let sg = schedule.moeRowSimdgroups
+            try dispatchGroups(enc, "moe_down_fp8", groups: MTLSize(width: maxActive, height: config.hiddenSize / sg, depth: 1), group: MTLSize(width: 32 * sg, height: 1, depth: 1))
         }
     }
 

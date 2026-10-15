@@ -8,6 +8,8 @@ public final class DramaModel: @unchecked Sendable {
     public let location: ModelLocation
     public let precision: Precision
     public let capacity: Int
+    /// The kernel schedule both stacks run with; `apply` replaces it.
+    public private(set) var schedule: KernelSchedule
     let store: SafeTensorsStore
     let weights: ModelWeights
     let backbone: Backbone
@@ -32,7 +34,8 @@ public final class DramaModel: @unchecked Sendable {
     var prefixCache: PrefixCache?
     public func clearPrefixCache() { prefixCache = nil }
 
-    public init(location: ModelLocation, precision: Precision = .exact, capacity: Int = DramaModel.defaultCapacity) throws {
+    /// `schedule` nil means the default schedule; a value is used as given.
+    public init(location: ModelLocation, precision: Precision = .exact, capacity: Int = DramaModel.defaultCapacity, schedule: KernelSchedule? = nil) throws {
         ctx = try MetalContext()
         self.location = location
         self.precision = precision
@@ -40,9 +43,21 @@ public final class DramaModel: @unchecked Sendable {
         config = try ModelConfig(url: location.directory.appendingPathComponent("config.json"))
         store = try SafeTensorsStore(directory: location.directory, device: ctx.device)
         weights = try ModelWeights(store: store, config: config, device: ctx.device)
-        backbone = Backbone(ctx: ctx, config: config, weights: weights.backbone, codebooks: weights.tower.codebookEmbeddings, precision: precision, capacity: capacity, maxRows: DramaModel.prefillChunkRows)
-        tower = Tower(ctx: ctx, config: config, weights: weights.tower, precision: precision, capacity: capacity, maxRows: DramaModel.prefillChunkRows)
+        let schedule = schedule ?? .default
+        try schedule.validate()
+        self.schedule = schedule
+        backbone = Backbone(ctx: ctx, config: config, weights: weights.backbone, codebooks: weights.tower.codebookEmbeddings, precision: precision, schedule: schedule, capacity: capacity, maxRows: DramaModel.prefillChunkRows)
+        tower = Tower(ctx: ctx, config: config, weights: weights.tower, precision: precision, schedule: schedule, capacity: capacity, maxRows: DramaModel.prefillChunkRows)
         sampler = SamplerState(device: ctx.device)
+    }
+
+    /// Switches both stacks to `schedule` once the GPU is idle.
+    public func apply(_ schedule: KernelSchedule) throws {
+        try schedule.validate()
+        drain()
+        self.schedule = schedule
+        backbone.k = Kernels(ctx: ctx, precision: precision, schedule: schedule)
+        tower.k = Kernels(ctx: ctx, precision: precision, schedule: schedule)
     }
 
     deinit { drain() }
