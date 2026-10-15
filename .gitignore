@@ -1,0 +1,13 @@
+.build/
+.swiftpm/
+eval/.venv/
+eval/out/
+eval/data/
+*.mlpackage
+*.mlmodelc
+*.npy
+*.npz
+*.wav
+DerivedData/
+dist/
+.DS_Store
