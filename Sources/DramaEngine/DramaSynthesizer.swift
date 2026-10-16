@@ -20,6 +20,13 @@ public actor DramaSynthesizer: SpeechSynthesizer {
 
     public var isLoaded: Bool { model != nil && codec != nil }
 
+    /// Nil until the model loads, then whether its kernel schedule came from the tuning cache.
+    public var isTuned: Bool? {
+        guard let model else { return nil }
+        if case .cache = model.scheduleSource { return true }
+        return false
+    }
+
     /// The first load on a Mac also tunes the kernel schedule and caches it,
     /// so later loads find the cache and skip the step. A tuning failure
     /// leaves the default schedule in place; it never fails the load.
