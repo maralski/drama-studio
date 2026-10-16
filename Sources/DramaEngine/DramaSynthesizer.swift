@@ -1,9 +1,10 @@
 import Foundation
+import Synchronization
 
 /// The real engine behind the app: Metal backbone and tower, Core ML codec,
 /// Swift tokenizer. Requests run one at a time on a serial queue.
 public actor DramaSynthesizer: SpeechSynthesizer {
-    public let location: ModelLocation
+    public nonisolated let location: ModelLocation
     public let codecDirectory: URL
     /// Where the kernel tuning cache lives; tests point it at a temp directory.
     public let tuningDirectory: URL
@@ -18,7 +19,13 @@ public actor DramaSynthesizer: SpeechSynthesizer {
         self.tuningDirectory = tuningDirectory
     }
 
-    public var isLoaded: Bool { model != nil && codec != nil }
+    /// Generation runs synchronously on this actor, so status reads go
+    /// through a lock instead of waiting for the run to end. Nil until the
+    /// model loads, then whether its schedule came from the tuning cache.
+    private nonisolated let tuned = Mutex<Bool?>(nil)
+
+    public nonisolated var isLoaded: Bool { tuned.withLock { $0 != nil } }
+    public nonisolated var isTuned: Bool? { tuned.withLock { $0 } }
 
     /// The first load on a Mac also tunes the kernel schedule and caches it,
     /// so later loads find the cache and skip the step. A tuning failure
@@ -50,6 +57,8 @@ public actor DramaSynthesizer: SpeechSynthesizer {
         self.model = model
         self.tokenizer = tokenizer
         self.codec = codec
+        let fromCache = if case .cache = model.scheduleSource { true } else { false }
+        tuned.withLock { $0 = fromCache }
     }
 
     public func encodeReference(audioURL: URL, transcript: String, name: String) async throws -> ReferenceVoice {

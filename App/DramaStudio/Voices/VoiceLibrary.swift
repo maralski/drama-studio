@@ -1,53 +1,38 @@
 import DramaEngine
+import DramaServer
 import Foundation
 
+/// The HTTP API writes through this object, not the directory, so its
+/// changes show up in the window at once.
 @MainActor @Observable
-final class VoiceLibrary {
+final class VoiceLibrary: VoiceStore {
     private(set) var voices: [ReferenceVoice] = []
     private(set) var unreadableFiles: [String] = []
-    let directory: URL
+    @ObservationIgnored private let files: VoiceDirectory
 
-    nonisolated static var defaultDirectory: URL {
-        URL.applicationSupportDirectory.appending(path: "DramaStudio/Voices", directoryHint: .isDirectory)
-    }
-
-    init(directory: URL = VoiceLibrary.defaultDirectory) {
-        self.directory = directory
+    init(directory: URL = VoiceDirectory.defaultURL) {
+        files = VoiceDirectory(url: directory)
         reload()
     }
 
     func reload() {
-        let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
-        var loaded: [ReferenceVoice] = []
-        var failed: [String] = []
-        for file in files where file.pathExtension == "json" {
-            do {
-                loaded.append(try JSONDecoder().decode(ReferenceVoice.self, from: Data(contentsOf: file)))
-            } catch {
-                failed.append(file.lastPathComponent)
-            }
-        }
-        voices = loaded.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-        unreadableFiles = failed.sorted()
+        (voices, unreadableFiles) = files.load()
     }
 
+    func allVoices() -> [ReferenceVoice] { voices }
+
     func add(_ voice: ReferenceVoice) throws {
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try JSONEncoder().encode(voice).write(to: file(for: voice.id), options: .atomic)
+        try files.add(voice)
         reload()
     }
 
     func remove(_ id: ReferenceVoice.ID) throws {
-        try FileManager.default.removeItem(at: file(for: id))
+        try files.remove(id)
         reload()
     }
 
     func voice(_ id: ReferenceVoice.ID?) -> ReferenceVoice? {
         voices.first { $0.id == id }
-    }
-
-    private func file(for id: ReferenceVoice.ID) -> URL {
-        directory.appending(path: "\(id.uuidString).json")
     }
 }
 

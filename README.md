@@ -24,6 +24,12 @@ cloning a real person's voice without their consent is not permitted.
 - **Voice cloning** from one or more reference clips (any format AVFoundation
   reads) plus their transcripts, kept in a local voice library.
 - **Streaming playback** as chunks finish, scrubbing, and export to WAV or M4A.
+- **A local HTTP API and an MCP server**, so scripts and agents can speak
+  through the same engine and voice library (see
+  [Agents and programs](#agents-and-programs)).
+- **Menu bar residency**: closing the window leaves Drama Studio in the menu
+  bar (the waveform-and-microphone icon) with the API still serving. The menu
+  shows the model state, the API address, and the current job. ⌘Q quits.
 
 ## Requirements
 
@@ -51,7 +57,7 @@ cd tools && uv venv --python 3.12 .venv && uv pip install --python .venv/bin/pyt
 
 ```bash
 swift build -c release
-tools/make_app.sh            # assembles dist/DramaStudio.app
+tools/make_app.sh            # assembles dist/DramaStudio.app, with drama-mcp in Contents/MacOS
 open dist/DramaStudio.app
 ```
 
@@ -61,6 +67,133 @@ Command line:
 .build/release/drama tune                      # once per Mac, about 30 s; the app does it on first load
 .build/release/drama generate --text "Hello there." --out frames.npy
 .build/release/drama bench                     # add --untuned to compare against the hand-written schedule
+.build/release/drama serve                     # the HTTP API without the app; --port 8780, --no-token
+```
+
+`DRAMA_PREVIEW_ENGINE=1` runs the app or `drama serve` on a mock engine that
+produces placeholder tones, for working on everything but the model.
+
+## Agents and programs
+
+While Drama Studio is open, including when only its menu bar icon is left, it
+serves an HTTP API on `http://127.0.0.1:8780`. `drama serve` serves the same
+API without the app. The API listens on the loopback interface only. Settings
+holds the port, a switch for starting the server with the app, and the token.
+The menu bar has Start and Stop. When the port is taken, the menu shows
+"API: Port 8765 is already in use."
+
+![The menu bar extra while an API request generates](docs/screenshots/menu-bar-extra-job.png)
+
+Every route except `/v1/health` needs the bearer token from
+`~/Library/Application Support/DramaStudio/api-token`, created the first time
+the server starts. The token keeps web pages, which can reach localhost, from
+driving the engine. `drama serve --no-token` turns it off.
+
+```bash
+TOKEN=$(cat ~/Library/Application\ Support/DramaStudio/api-token)
+AUTH="Authorization: Bearer $TOKEN"
+```
+
+The speech request follows the
+[SGLang Drama 3 cookbook](https://sgl-project.github.io/sglang-omni/cookbook/fishaudio_drama3.html):
+
+| Route | Does |
+| --- | --- |
+| `GET /v1/health` | `{status, model_loaded, engine: "metal" or "mock", busy, tuned, version}`. `tuned` is `null` until the model loads. |
+| `GET /v1/models` | The one model, `fishaudio/drama-3`, with its snapshot id. |
+| `POST /v1/audio/speech` | Speaks `input`. Returns the audio file, or a PCM stream. |
+| `POST /v1/tts` | The same, with the text in `text`. |
+| `GET /v1/voices` | The voice library: id, name, transcript, seconds, source file. |
+| `POST /v1/voices` | Clones a voice: JSON `{name, transcript, audio_base64 or audio_path}`, or multipart with a `file` part plus `name` and `transcript` fields. |
+| `DELETE /v1/voices/{id}` | Deletes a voice. |
+
+The speech body takes these fields:
+
+| Field | Meaning |
+| --- | --- |
+| `input` | The text. Performance cues such as `[laughs]` and `<\|speaker:1\|>` tags work as in the app. |
+| `voice` | A library voice, by id or name. |
+| `references` | Clips to clone on the fly: `[{audio_path or audio_base64, text}]`. |
+| `speaker_voices` | Library voices per speaker for a multi-speaker script: `{"0": "Narrator", "1": "<id>"}`, with no gaps from speaker 0. |
+| `response_format` | `wav` (default, 16-bit), `pcm` (raw 16-bit little-endian), or `m4a`. |
+| `stream` | `true` streams PCM as each chunk finishes. |
+| `expressiveness` | 0 to 1, default 0.5: the app's Expressiveness slider. |
+| `quick_preview` | `true` skips retries and tightens the length cap. |
+| `seed` | A fixed sampler seed, for repeatable takes. |
+
+A request takes at most one of `voice`, `references`, and `speaker_voices`.
+A file response carries `X-Drama-Frames`, `X-Drama-Seconds`, and
+`X-Drama-Generation-Seconds`. The engine runs one generation at a time. A
+request that arrives while another runs, through the API or in the window, gets
+`429` with `Retry-After`. A bad request gets `400` with a plain-text message
+that names the field.
+
+```bash
+curl -sS localhost:8765/v1/health
+curl -sS -H "$AUTH" localhost:8765/v1/audio/speech \
+  -d '{"input": "Hello there. [laughs] Good to see you.", "voice": "Narrator"}' -o hello.wav
+curl -sS -H "$AUTH" localhost:8765/v1/tts -d '{"text": "The alias route."}' -o alias.wav
+curl -sS -H "$AUTH" localhost:8765/v1/audio/speech \
+  -d '{"input": "Cloned on the fly.", "references": [{"audio_path": "/path/to/clip.wav", "text": "What the clip says."}]}' -o clone.wav
+```
+
+Streaming sends `Transfer-Encoding: chunked` with one HTTP chunk per generated
+chunk. The audio is 16-bit little-endian mono at 44.1 kHz, as the
+`X-Drama-Format: pcm_s16le_mono` and `X-Drama-Sample-Rate: 44100` headers say.
+Pipe it into a player to hear the first sentence while the rest generates:
+
+```bash
+curl -sSN -H "$AUTH" localhost:8765/v1/audio/speech \
+  -d '{"input": "A long script, read as it is generated.", "stream": true, "response_format": "pcm"}' |
+  ffplay -f s16le -ar 44100 -ch_layout mono -nodisp -autoexit -
+```
+
+Manage voices:
+
+```bash
+curl -sS -H "$AUTH" localhost:8765/v1/voices
+curl -sS -H "$AUTH" localhost:8765/v1/voices -F file=@clip.wav -F name=Narrator -F "transcript=What the clip says."
+curl -sS -H "$AUTH" -X DELETE localhost:8765/v1/voices/<id>
+```
+
+`tools/api_smoke.sh [base-url]` runs all of the above against a running server
+and checks each answer.
+
+### MCP
+
+`drama-mcp` is an MCP server over stdio (protocol 2025-06-18) that calls the
+HTTP API. `tools/make_app.sh` puts it at
+`DramaStudio.app/Contents/MacOS/drama-mcp`; `swift build` puts it at
+`.build/debug/drama-mcp`. When nothing answers, it opens Drama Studio and waits
+up to 90 seconds for `/v1/health`. It looks for the app in `DRAMA_APP_PATH`,
+then the app that contains it, then `/Applications/DramaStudio.app`, then the
+repository's `dist/DramaStudio.app`. `DRAMA_API_URL` overrides
+`http://127.0.0.1:8780`. It reads the token from the same file.
+
+| Tool | Does |
+| --- | --- |
+| `synthesize_speech` | `text`, with optional `voice`, `output_path`, `expressiveness`, `quick_preview`, and `play`. Writes a WAV, by default to `~/Library/Application Support/DramaStudio/Output/<timestamp>.wav`. Returns the path, seconds, frames, and generation seconds. `play` plays it with `afplay`. |
+| `list_voices` | The voice library. |
+| `add_voice` | Clones `audio_path` with its `transcript` under `name`. |
+| `delete_voice` | Deletes a voice by `id`. |
+| `studio_status` | Health, the model snapshot, and the API address. |
+
+Register it with Claude Code:
+
+```bash
+claude mcp add drama-studio -- /Applications/DramaStudio.app/Contents/MacOS/drama-mcp
+```
+
+Or with Claude Desktop, in `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "drama-studio": {
+      "command": "/Applications/DramaStudio.app/Contents/MacOS/drama-mcp"
+    }
+  }
+}
 ```
 
 ## How it is built
@@ -92,7 +225,14 @@ Command line:
 - `Sources/DramaEngine/Codec`: Core ML wrappers for the DAC encoder (reference
   clips to codes) and decoder (codes to 44.1 kHz audio), both exported at one
   static 512-frame shape and run in windows with 256 frames of left context.
-- `App/DramaStudio`: the SwiftUI app.
+- `Sources/DramaServer`: the HTTP API on `Network.framework`. Request parsing
+  and routing are pure functions from an `HTTPRequest` to an `APIRequest`;
+  `APIService` answers them against any `SpeechSynthesizer` and `VoiceStore`,
+  so the app, `drama serve`, and the tests share it.
+- `Sources/DramaMCP` and `Sources/drama-mcp`: the MCP server, JSON-RPC 2.0
+  over stdio, proxying the HTTP API.
+- `App/DramaStudio`: the SwiftUI app, with the API server and the menu bar
+  extra in `App/DramaStudio/Server`.
 - `eval/`: the faithfulness suite (see `docs/EVAL.md`).
 
 Design notes and decisions are in `docs/DESIGN.md`; the decision trail of the

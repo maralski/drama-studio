@@ -19,6 +19,7 @@ final class SessionModel {
     /// Wall time of the current or last generation, from Generate to the end of the run.
     private(set) var generationClock: GenerationClock?
     private(set) var previewingVoice: ReferenceVoice.ID?
+    private(set) var modelLoaded = false
     @ObservationIgnored var playsWhileGenerating = true
 
     let library: VoiceLibrary
@@ -127,12 +128,18 @@ final class SessionModel {
     private func generationEnded(run ended: Int, error: Error?) {
         guard ended == run else { return }
         generation = nil
+        refreshEngineState()
         if let error {
             stopPlayback(resetTo: nil)
             settleAfterGeneration(.failed(Self.describe(error)))
         } else if state.isGenerating {
             settleAfterGeneration(audio.isEmpty ? .failed("The engine stopped without producing audio.") : state.afterGeneration)
         }
+    }
+
+    /// The engine also loads for API requests, so ask it rather than infer from this session's runs.
+    func refreshEngineState() {
+        Task { modelLoaded = await synthesizer.isLoaded }
     }
 
     private func settleAfterGeneration(_ next: PlaybackState) {

@@ -3,19 +3,36 @@ import SwiftUI
 
 @main
 struct DramaStudioApp: App {
-    @State private var model = SessionModel(synthesizer: ModelSetup.makeSynthesizer(), library: VoiceLibrary())
+    static let mainWindowID = "main"
+
+    @State private var model: SessionModel
+    @State private var server: APIServerController
+    @State private var presence: AppPresence
 
     init() {
         if CommandLine.arguments.contains("--check-resources") { exit(Self.checkResources()) }
+        let model = SessionModel(synthesizer: ModelSetup.makeSynthesizer(), library: VoiceLibrary())
+        let server = APIServerController(session: model)
+        let presence = AppPresence()
+        _model = State(initialValue: model)
+        _server = State(initialValue: server)
+        _presence = State(initialValue: presence)
+        server.startIfEnabled()
+        presence.start()
     }
 
     var body: some Scene {
-        Window("Drama Studio", id: "main") {
+        Window("Drama Studio", id: Self.mainWindowID) {
             ContentView(model: model)
+                .environment(server)
                 .onOpenURL { model.open($0) }
         }
         .defaultSize(width: 1240, height: 780)
         .commands { StudioCommands(model: model) }
+
+        MenuBarExtra("Drama Studio", systemImage: "waveform.badge.mic") {
+            MenuBarContent(model: model, server: server, presence: presence)
+        }
 
         Window("Drama Studio Help", id: HelpWindowView.id) {
             HelpWindowView()
@@ -23,7 +40,7 @@ struct DramaStudioApp: App {
         .defaultSize(width: 760, height: 500)
 
         Settings {
-            SettingsView()
+            SettingsView(server: server)
         }
     }
 

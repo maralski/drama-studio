@@ -1,5 +1,6 @@
 import AVFoundation
 import DramaEngine
+import DramaServer
 import Foundation
 
 struct Args {
@@ -308,6 +309,46 @@ func kbench(_ args: Args) throws {
     try KernelBench.denseMatmul(n: args.int("n", 8192), k: args.int("k", 2048), ms: ms, iterations: args.int("iterations", 5))
 }
 
+/// drama serve [--port 8780] [--no-token]: the app's HTTP API, headless.
+/// DRAMA_PREVIEW_ENGINE=1 serves the mock engine, as in the app.
+func serve(_ args: Args) throws -> Never {
+    guard let port = UInt16(exactly: args.int("port", Int(APIService.defaultPort))) else { fail("--port must be between 0 and 65535") }
+    let synthesizer: any SpeechSynthesizer
+    if ProcessInfo.processInfo.environment["DRAMA_PREVIEW_ENGINE"] == "1" {
+        synthesizer = MockSynthesizer()
+    } else {
+        guard let location = args["model"].map({ ModelLocation(directory: URL(fileURLWithPath: $0)) }) ?? ModelLocation.huggingFaceCache(), location.isComplete else {
+            fail("no complete model found; pass --model <dir> or run: hf download fishaudio/drama-3")
+        }
+        guard DramaCodec.modelsExist() else { fail("the Core ML codec models are missing; run tools/convert_codec.py") }
+        synthesizer = DramaSynthesizer(location: location, codecDirectory: DramaCodec.defaultDirectory)
+    }
+    let token = args.flags.contains("no-token") ? nil : try APIToken.loadOrCreate()
+    let service = APIService(synthesizer: synthesizer, voices: VoiceDirectory(), token: token, version: "cli")
+    let server = APIServer(service: service, port: port) { state in
+        switch state {
+        case .listening(let port):
+            print("Drama API on http://127.0.0.1:\(port) (\(service.info.kind.rawValue) engine)")
+            print(token == nil ? "no bearer token (--no-token)" : "bearer token in \(APIToken.defaultURL.path)")
+            fflush(stdout)
+        case .failed(let message):
+            fail("API server failed: \(message)")
+        case .stopped, .starting:
+            break
+        }
+    }
+    server.start()
+    Task.detached {
+        do {
+            try await synthesizer.load { FileHandle.standardError.write("loading: \($0)\n".data(using: .utf8)!) }
+            FileHandle.standardError.write("model loaded\n".data(using: .utf8)!)
+        } catch {
+            fail("model failed to load: \(error)")
+        }
+    }
+    dispatchMain()
+}
+
 let args = Args(Array(CommandLine.arguments.dropFirst()))
 switch args.positional.first {
 case "dump": try dump(args)
@@ -318,5 +359,6 @@ case "tune": try tune(args)
 case "schedule-ab": try scheduleAB(args)
 case "generate": try generate(args)
 case "decode": try decodeCommand(args)
-default: fail("usage: drama <dump|bench|kbench|profile|tune|schedule-ab|generate|decode> [options]")
+case "serve": try serve(args)
+default: fail("usage: drama <dump|bench|kbench|profile|tune|schedule-ab|generate|decode|serve> [options]")
 }
