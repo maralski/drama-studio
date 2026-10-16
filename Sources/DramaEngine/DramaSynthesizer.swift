@@ -3,7 +3,7 @@ import Foundation
 /// The real engine behind the app: Metal backbone and tower, Core ML codec,
 /// Swift tokenizer. Requests run one at a time on a serial queue.
 public actor DramaSynthesizer: SpeechSynthesizer {
-    public let location: ModelLocation
+    public nonisolated let location: ModelLocation
     public let codecDirectory: URL
     /// Where the kernel tuning cache lives; tests point it at a temp directory.
     public let tuningDirectory: URL

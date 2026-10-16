@@ -6,6 +6,7 @@ let package = Package(
     platforms: [.macOS(.v15)],
     products: [
         .library(name: "DramaEngine", targets: ["DramaEngine"]),
+        .library(name: "DramaServer", targets: ["DramaServer"]),
         .executable(name: "drama", targets: ["drama"]),
         .executable(name: "DramaStudio", targets: ["DramaStudio"]),
     ],
@@ -15,9 +16,11 @@ let package = Package(
             path: "Sources/DramaEngine",
             resources: [.copy("Kernels")]
         ),
-        .executableTarget(name: "drama", dependencies: ["DramaEngine"], path: "Sources/drama"),
-        .executableTarget(name: "DramaStudio", dependencies: ["DramaEngine"], path: "App/DramaStudio"),
+        .target(name: "DramaServer", dependencies: ["DramaEngine"], path: "Sources/DramaServer"),
+        .executableTarget(name: "drama", dependencies: ["DramaEngine", "DramaServer"], path: "Sources/drama"),
+        .executableTarget(name: "DramaStudio", dependencies: ["DramaEngine", "DramaServer"], path: "App/DramaStudio"),
         .testTarget(name: "DramaEngineTests", dependencies: ["DramaEngine"], path: "Tests/DramaEngineTests"),
+        .testTarget(name: "DramaServerTests", dependencies: ["DramaServer", "DramaEngine"], path: "Tests/DramaServerTests"),
         .testTarget(name: "DramaStudioTests", dependencies: ["DramaStudio", "DramaEngine"], path: "Tests/DramaStudioTests"),
     ],
     swiftLanguageVersions: [.v5]
