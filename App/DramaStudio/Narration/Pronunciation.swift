@@ -7,7 +7,6 @@ struct PronunciationRule: Codable, Sendable, Equatable, Hashable {
     var caseSensitive: Bool = false
 }
 
-/// Spoken replacements applied to script text before generation.
 struct PronunciationDictionary: Codable, Sendable, Equatable {
     var rules: [PronunciationRule] = []
 
@@ -16,7 +15,6 @@ struct PronunciationDictionary: Codable, Sendable, Equatable {
             .appending(path: "DramaStudio/pronunciation.json")
     }
 
-    /// A missing file is an empty dictionary; an unreadable one is an error.
     static func load(from url: URL = defaultURL) throws -> PronunciationDictionary {
         guard FileManager.default.fileExists(atPath: url.path) else { return PronunciationDictionary() }
         return try JSONDecoder().decode(PronunciationDictionary.self, from: Data(contentsOf: url))
@@ -29,9 +27,7 @@ struct PronunciationDictionary: Codable, Sendable, Equatable {
         try encoder.encode(self).write(to: url, options: .atomic)
     }
 
-    /// Rewrites spoken text only: `<|…|>` control tags, `[…]` cues and
-    /// `<tag>`/`</tag>` markup pass through untouched. One left-to-right pass,
-    /// longest match first, so a replacement is never rewritten by another rule.
+    /// One left-to-right pass, so a replacement is never rewritten by another rule.
     func apply(to text: String) -> String {
         guard let matcher else { return text }
         let ns = text as NSString

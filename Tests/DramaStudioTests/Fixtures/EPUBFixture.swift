@@ -1,8 +1,6 @@
 import Foundation
 @testable import DramaStudio
 
-/// A minimal EPUB: a short cover, a chapter with an `h1`, a chapter titled only
-/// by the table of contents (EPUB 3 nav or EPUB 2 NCX), and a non-linear note.
 enum EPUBFixture {
     enum TableOfContents { case nav, ncx }
 

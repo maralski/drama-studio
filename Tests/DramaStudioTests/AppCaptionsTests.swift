@@ -25,9 +25,9 @@ final class AppCaptionsTests: XCTestCase {
 
     func testOneCuePerSentenceTimedFromFramesWithTakeOffsets() {
         XCTAssertEqual(Captions.cues(for: takes), [
-            .init(start: 0, end: 20_480, text: "Hello there."),
-            .init(start: 20_480, end: 61_440, text: "[laughs] How are you?"),
-            .init(start: 88_200 + 7 * 2048, end: 88_200 + 50 * 2048, text: "Q&A next."),
+            .init(startSample: 0, endSample: 20_480, text: "Hello there."),
+            .init(startSample: 20_480, endSample: 61_440, text: "[laughs] How are you?"),
+            .init(startSample: 88_200 + 7 * 2048, endSample: 88_200 + 50 * 2048, text: "Q&A next."),
         ])
     }
 
@@ -66,7 +66,7 @@ final class AppCaptionsTests: XCTestCase {
 
     func testSentencesNeverRunPastTheirTake() {
         let take = NarrationTake(segmentID: UUID(), sampleRange: 1000..<5000, sentences: [.init(text: "Long.", frames: 3), .init(text: "Lost.", frames: 2)])
-        XCTAssertEqual(Captions.cues(for: [take]), [.init(start: 1000, end: 5000, text: "Long.")])
+        XCTAssertEqual(Captions.cues(for: [take]), [.init(startSample: 1000, endSample: 5000, text: "Long.")])
         XCTAssertEqual(Captions.render(cues: [], as: .webVTT), "WEBVTT\n")
         XCTAssertEqual(Captions.render(cues: [], as: .srt), "")
     }

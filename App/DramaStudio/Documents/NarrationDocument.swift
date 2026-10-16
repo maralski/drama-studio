@@ -44,7 +44,6 @@ struct NarrationDocument: Codable, Sendable, Equatable {
     }
 }
 
-/// One generated segment, placed in the combined audio of the whole document.
 struct NarrationTake: Codable, Sendable, Equatable {
     struct Sentence: Codable, Sendable, Equatable {
         var text: String

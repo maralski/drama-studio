@@ -1,7 +1,5 @@
 import Foundation
 
-/// Speaker notes per slide, in presentation order, with the slide's own text
-/// standing in when a slide has no notes.
 enum PPTXImporter {
     static func importFile(at url: URL) throws -> NarrationDocument {
         let fallbackTitle = url.deletingPathExtension().lastPathComponent
@@ -50,13 +48,12 @@ enum PPTXImporter {
     }
 }
 
-/// The text of a slide or notes slide, split into the title placeholder and everything else.
-struct ShapeText {
+private struct ShapeText {
     private static let ignoredPlaceholders: Set<String> = ["sldNum", "hdr", "ftr", "dt", "sldImg"]
     private static let titlePlaceholders: Set<String> = ["title", "ctrTitle"]
 
-    private(set) var title = ""
-    private(set) var body = ""
+    let title: String
+    let body: String
 
     init(_ root: XMLElement) {
         var titles: [String] = []

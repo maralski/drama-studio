@@ -2,7 +2,6 @@ import Foundation
 import PDFKit
 
 enum PDFImporter {
-    /// Pages with less text than this are cover art, page numbers or blank.
     static let minimumCharacters = 20
 
     static func importFile(at url: URL) throws -> NarrationDocument {
@@ -46,8 +45,6 @@ enum PDFImporter {
         return out
     }
 
-    /// Rejoins words hyphenated across lines and unwraps lines inside a
-    /// paragraph; blank lines stay paragraph breaks.
     static func cleanPageText(_ raw: String) -> String {
         let unix = raw.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
             .replacingOccurrences(of: "\u{00AD}\n", with: "")

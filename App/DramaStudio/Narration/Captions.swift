@@ -1,7 +1,6 @@
 import DramaEngine
 import Foundation
 
-/// One caption cue per spoken sentence, timed from the frames each sentence took.
 enum Captions {
     enum Format: String, CaseIterable, Sendable {
         case srt, webVTT
@@ -10,10 +9,9 @@ enum Captions {
         fileprivate var millisecondSeparator: String { self == .srt ? "," : "." }
     }
 
-    /// Times are sample positions in the combined audio.
     struct Cue: Equatable, Sendable {
-        var start: Int
-        var end: Int
+        var startSample: Int
+        var endSample: Int
         var text: String
     }
 
@@ -24,7 +22,7 @@ enum Captions {
             for sentence in take.sentences {
                 let end = min(cursor + sentence.frames * ModelConstants.samplesPerFrame, take.sampleRange.upperBound)
                 let text = spokenText(sentence.text)
-                if !text.isEmpty, end > cursor { cues.append(Cue(start: cursor, end: end, text: text)) }
+                if !text.isEmpty, end > cursor { cues.append(Cue(startSample: cursor, endSample: end, text: text)) }
                 cursor = end
             }
         }
@@ -40,17 +38,16 @@ enum Captions {
         switch format {
         case .srt:
             return cues.enumerated().map { offset, cue in
-                "\(offset + 1)\n\(timestamp(cue.start, format))\(separator)\(timestamp(cue.end, format))\n\(cue.text)\n"
+                "\(offset + 1)\n\(timestamp(cue.startSample, format))\(separator)\(timestamp(cue.endSample, format))\n\(cue.text)\n"
             }.joined(separator: "\n")
         case .webVTT:
             let body = cues.map { cue in
-                "\(timestamp(cue.start, format))\(separator)\(timestamp(cue.end, format))\n\(escapeVTT(cue.text))\n"
+                "\(timestamp(cue.startSample, format))\(separator)\(timestamp(cue.endSample, format))\n\(escapeVTT(cue.text))\n"
             }
             return (["WEBVTT\n"] + body).joined(separator: "\n")
         }
     }
 
-    /// `HH:MM:SS,mmm` for SRT, `HH:MM:SS.mmm` for WebVTT, rounded to the nearest millisecond.
     static func timestamp(_ samples: Int, _ format: Format) -> String {
         let rate = ModelConstants.sampleRate
         let milliseconds = (samples * 1000 + rate / 2) / rate
@@ -60,8 +57,6 @@ enum Captions {
         return String(format: "%02ld:%02ld:%02ld%@%03ld", hours, minutes, seconds, format.millisecondSeparator, millis)
     }
 
-    /// The sentence as a viewer reads it: speaker tags and paired tag markup
-    /// removed, `[cue]` markers kept, on one line.
     static func spokenText(_ sentence: String) -> String {
         sentence
             .replacingOccurrences(of: #"<\|[^|]*\|>"#, with: "", options: .regularExpression)

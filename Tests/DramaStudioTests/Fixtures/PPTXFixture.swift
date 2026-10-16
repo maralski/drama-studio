@@ -1,7 +1,6 @@
 import Foundation
 @testable import DramaStudio
 
-/// Writes a minimal PresentationML package: just the parts the importer reads.
 enum PPTXFixture {
     struct Slide {
         var file: Int
@@ -14,8 +13,6 @@ enum PPTXFixture {
     static let ns = #"xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main""#
     static let relNS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 
-    /// Three slides in presentation order slide1, slide3, slide2: two with
-    /// notes (one of them two paragraphs plus a slide-number field) and one without.
     static let standard: [Slide] = [
         Slide(file: 1, title: "Welcome", notes: [["Good morning, everyone."], ["Today we cover ", "the numbers."]]),
         Slide(file: 3, title: "Quarterly results", body: ["Revenue up 12%"], notes: [["Revenue grew ", "twelve percent."]]),

@@ -1,6 +1,5 @@
 import Foundation
 
-/// One audio file per narrated segment plus a `manifest.csv`, e.g. `01-slide-3.wav`.
 enum SegmentExport {
     struct Item: Equatable, Sendable {
         var index: Int
@@ -19,7 +18,6 @@ enum SegmentExport {
         }
     }
 
-    /// The label's leading part ("Slide 3" of "Slide 3: Quarterly results (no notes)"), lowercased and hyphenated.
     static func slug(_ label: String) -> String {
         let head = label.split(separator: ":", maxSplits: 1).first.map(String.init) ?? label
         let trimmed = head.components(separatedBy: " (").first ?? head

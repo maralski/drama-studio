@@ -21,7 +21,6 @@ enum ZipError: LocalizedError, Equatable {
     }
 }
 
-/// Reads a ZIP archive held in memory: the central directory once, entries on demand.
 struct ZipArchive: Sendable {
     enum Method: UInt16, Sendable {
         case stored = 0
@@ -69,7 +68,7 @@ struct ZipArchive: Sendable {
             let extraLength = Int(try reader.u16(cursor + 30))
             let commentLength = Int(try reader.u16(cursor + 32))
             let nameBytes = try reader.slice(cursor + 46, nameLength)
-            let path = String(data: nameBytes, encoding: .utf8) ?? String(decoding: nameBytes, as: UTF8.self)
+            let path = String(decoding: nameBytes, as: UTF8.self)
             entries.append(Entry(
                 path: path,
                 method: try reader.u16(cursor + 10),
@@ -108,9 +107,8 @@ struct ZipArchive: Sendable {
         return output
     }
 
-    /// Resolves a relationship or manifest `href` against the entry that names it.
     static func resolve(_ href: String, relativeTo base: String) -> String {
-        let target = (href.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? href)
+        let target = String(href.prefix { $0 != "#" })
         let decoded = target.removingPercentEncoding ?? target
         var parts: [Substring] = decoded.hasPrefix("/") ? [] : base.split(separator: "/").dropLast()
         for component in decoded.split(separator: "/") {
@@ -150,7 +148,6 @@ struct ZipArchive: Sendable {
     }
 }
 
-/// Writes a ZIP archive in memory. Used to build OOXML and EPUB packages for tests.
 struct ZipWriter {
     private var body = Data()
     private var directory = Data()

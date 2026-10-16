@@ -11,7 +11,6 @@ enum ProjectError: LocalizedError, Equatable {
     }
 }
 
-/// A `.dramaproj` bundle: `project.json` plus one `audio/segment-NN.wav` per take.
 struct StudioProject: Codable, Sendable, Equatable {
     static let currentVersion = 1
     static let fileExtension = "dramaproj"
@@ -20,7 +19,6 @@ struct StudioProject: Codable, Sendable, Equatable {
     var title: String
     var script: String
     var document: NarrationDocument?
-    /// Speaker index to voice library id.
     var casting: [Int: UUID] = [:]
     var expressiveness: Double
     var quickPreview: Bool
@@ -61,8 +59,6 @@ struct StudioProject: Codable, Sendable, Equatable {
         return try JSONDecoder().decode(StudioProject.self, from: data)
     }
 
-    /// The combined audio rebuilt from the bundle's segment files, silent where
-    /// no take covers; empty when the bundle holds no audio.
     func audio(in bundle: URL) throws -> [Float] {
         var combined: [Float] = []
         for (offset, take) in takes.enumerated() {

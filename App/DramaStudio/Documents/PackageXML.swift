@@ -18,18 +18,11 @@ enum DocumentImportError: LocalizedError, Equatable {
 /// namespace flavour (transitional or strict OOXML, EPUB 2 or 3) reads the same.
 extension ZipArchive {
     func xml(_ path: String) throws -> XMLElement {
-        do {
-            guard let root = try XMLDocument(data: data(for: path), options: [.nodeLoadExternalEntitiesNever]).rootElement() else {
-                throw DocumentImportError.malformed("\(path) has no root element")
-            }
-            return root
-        } catch let error as ZipError {
-            throw error
-        } catch let error as DocumentImportError {
-            throw error
-        } catch {
+        let data = try data(for: path)
+        guard let root = try? XMLDocument(data: data, options: [.nodeLoadExternalEntitiesNever]).rootElement() else {
             throw DocumentImportError.malformed("\(path) is not valid XML")
         }
+        return root
     }
 
     struct Relationship: Equatable {
@@ -38,7 +31,6 @@ extension ZipArchive {
         var target: String
     }
 
-    /// The part's relationships, keyed by id, with targets resolved to package paths.
     func relationships(of part: String) throws -> [String: Relationship] {
         let name = part.split(separator: "/").last.map(String.init) ?? part
         let folder = part.split(separator: "/").dropLast().joined(separator: "/")

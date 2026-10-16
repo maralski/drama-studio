@@ -1,7 +1,5 @@
 import Foundation
 
-/// One segment per spine item, in reading order. Covers, title pages and other
-/// short or non-linear items are left out.
 enum EPUBImporter {
     static let minimumCharacters = 200
 
@@ -45,7 +43,6 @@ enum EPUBImporter {
         var properties: String
     }
 
-    /// Chapter titles by package path, from the EPUB 3 nav document or the EPUB 2 NCX.
     private static func tableOfContents(items: [String: ManifestItem], ncxID: String?, in archive: ZipArchive) throws -> [String: String] {
         var titles: [String: String] = [:]
         func record(_ title: String?, _ href: String?, base: String) {
@@ -68,9 +65,7 @@ enum EPUBImporter {
     }
 }
 
-/// Plain text of an XHTML document, block elements as paragraphs, with the
-/// first `h1` or `h2` as the heading. XMLParser rather than
-/// NSAttributedString(html:), which needs WebKit on the main thread.
+/// XMLParser rather than NSAttributedString(html:), which needs WebKit on the main thread.
 final class XHTMLText: NSObject, XMLParserDelegate {
     struct Result: Equatable {
         var text: String
