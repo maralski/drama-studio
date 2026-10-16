@@ -30,7 +30,7 @@ struct MenuBarContent: View {
 enum MenuBarStatus {
     static func model(preview: Bool, loaded: Bool, session: PlaybackState, job: SpeechJob?) -> String {
         let engine = preview ? "Preview engine" : "Drama 3 on Metal"
-        if case .loading(_, let detail) = session { return "\(engine): loading, \(detail)" }
+        if case .loading(_, let detail, _) = session { return "\(engine): loading, \(detail)" }
         if case .loadingModel(let detail)? = job?.progress { return "\(engine): loading, \(detail)" }
         return "\(engine): \(loaded ? "loaded" : "not loaded yet")"
     }
@@ -38,7 +38,7 @@ enum MenuBarStatus {
     static func job(session: PlaybackState, job: SpeechJob?) -> String {
         if let job { return "API request: \(job.summary)" }
         switch session {
-        case .loading: return "Starting generation"
+        case .loading(_, let detail, _): return "Loading model: \(detail)"
         case .generating(let chunk, let count, _): return "Generating chunk \(chunk) of \(count)"
         default: return "No generation running"
         }

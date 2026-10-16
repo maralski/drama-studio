@@ -103,7 +103,7 @@ private struct StatusLine: View {
             switch model.state {
             case .idle:
                 Text(ModelSetup.isPreviewEngine ? "Preview engine: generation produces a placeholder tone until the Metal engine ships." : "Ready.")
-            case .loading(let progress, let detail):
+            case .loading(let progress, let detail, _):
                 ProgressView(value: progress).frame(width: 120)
                 Text("Loading model \u{2014} \(detail)")
             case .generating(let chunk, let count, _):

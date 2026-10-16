@@ -1,10 +1,11 @@
 import Foundation
 
 /// The session lifecycle. Playback may run while chunks are still being
-/// generated, so `generating` carries whether audio is playing.
+/// generated, and across the sections of a document while the next one
+/// starts, so `loading` and `generating` carry whether audio is playing.
 enum PlaybackState: Equatable {
     case idle
-    case loading(progress: Double, detail: String)
+    case loading(progress: Double, detail: String, playing: Bool = false)
     case generating(chunk: Int, of: Int, playing: Bool)
     case ready
     case playing
@@ -19,7 +20,7 @@ enum PlaybackState: Equatable {
 
     var isPlaying: Bool {
         switch self {
-        case .playing, .generating(_, _, true): true
+        case .playing, .generating(_, _, true), .loading(_, _, true): true
         default: false
         }
     }
@@ -27,7 +28,7 @@ enum PlaybackState: Equatable {
     func withPlayback(_ playing: Bool) -> PlaybackState {
         switch self {
         case .generating(let chunk, let count, _): .generating(chunk: chunk, of: count, playing: playing)
-        case .loading: self
+        case .loading(let progress, let detail, _): .loading(progress: progress, detail: detail, playing: playing)
         default: playing ? .playing : .ready
         }
     }
