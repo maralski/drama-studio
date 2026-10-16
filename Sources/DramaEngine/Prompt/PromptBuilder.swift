@@ -6,9 +6,11 @@ public enum PromptError: Error, CustomStringConvertible, Equatable {
     case badSpeakerTag(String)
     case badCodes(String)
     case tooLong(Int)
+    case voiceConflict
 
     public var description: String {
         switch self {
+        case .voiceConflict: return "a designed character and reference voices can't be combined"
         case .emptyText(let w): return "\(w): text must not be empty"
         case .structuralToken(let w, let t): return "\(w): \(t) is written by the prompt builder"
         case .badSpeakerTag(let w): return "\(w): speaker tags must be <|speaker:0|> to <|speaker:15|>"
@@ -47,16 +49,24 @@ public enum Drama3Prompt {
     static let structuralTokens = ["<|im_start|>", "<|im_end|>", "<|voice|>", "<|text|>", "<|interleave|>", "<|semantic:"]
     static let speakerTag = try! NSRegularExpression(pattern: "<\\|speaker:([0-9]+)\\|>")
 
-    public struct Reference: Sendable {
+    /// Token 252196; the design instruction names it between consecutive lines.
+    public static let audioSeparator = "<|audio_separator|>"
+
+    public struct Reference: Sendable, Equatable {
         public var transcript: String
         public var codes: [[Int32]]
         public init(transcript: String, codes: [[Int32]]) { self.transcript = transcript; self.codes = codes }
     }
 
-    public struct HistoryTurn: Sendable {
-        public var text: String
-        public var codes: [[Int32]]
-        public init(text: String, codes: [[Int32]]) { self.text = text; self.codes = codes }
+    public typealias HistoryTurn = Take
+    public typealias Character = VoiceDesign
+
+    static func validate(_ character: Character) throws {
+        for (field, value) in [("character name", character.name), ("character description", character.description)] + (character.scene.map { [("scene", $0)] } ?? []) {
+            if field == "scene" && UnicodeWhitespace.strip(value).isEmpty { continue }
+            try validate(value, field)
+            if value.contains(audioSeparator) { throw PromptError.structuralToken(field, audioSeparator) }
+        }
     }
 
     static func validate(_ text: String, _ location: String) throws {
@@ -95,16 +105,54 @@ public enum Drama3Prompt {
         (0..<codes[0].count).map { t in [codes[0][t] + ModelConstants.semanticStart] + codes.map { $0[t] } }
     }
 
-    public static func build(text: String, tokenizer: Tokenizer, references: [Reference] = [], history: [HistoryTurn] = []) throws -> [Frame] {
-        try buildWithPrefix(text: text, tokenizer: tokenizer, references: references, history: history).rows
+    public static func build(text: String, tokenizer: Tokenizer, references: [Reference] = [], character: Character? = nil, history: [HistoryTurn] = []) throws -> [Frame] {
+        try buildWithPrefix(text: text, tokenizer: tokenizer, references: references, character: character, history: history).rows
+    }
+
+    enum Segment: Equatable { case text(String), codes([[Int32]]) }
+
+    /// The prompt as text with each code block shown as `<codes:frames>`.
+    static func render(text: String, references: [Reference] = [], character: Character? = nil, history: [HistoryTurn] = []) throws -> String {
+        try layout(text: text, references: references, character: character, history: history).segments.map { segment in
+            switch segment {
+            case .text(let s): s
+            case .codes(let c): "<codes:\(c.first?.count ?? 0)>"
+            }
+        }.joined()
     }
 
     /// Rows plus the number of leading rows that make up the system message
     /// (instruction and references), which every chunk of a request shares.
-    public static func buildWithPrefix(text: String, tokenizer: Tokenizer, references: [Reference] = [], history: [HistoryTurn] = []) throws -> (rows: [Frame], prefixRows: Int) {
+    /// A `character` replaces the instruction with its design prompt and
+    /// speaks every turn as `Name: text` instead of a speaker tag.
+    public static func buildWithPrefix(text: String, tokenizer: Tokenizer, references: [Reference] = [], character: Character? = nil,
+                                       history: [HistoryTurn] = []) throws -> (rows: [Frame], prefixRows: Int) {
+        let (segments, systemSegments) = try layout(text: text, references: references, character: character, history: history)
+        var rows: [Frame] = []
+        var prefixRows = 0
+        for (i, segment) in segments.enumerated() {
+            if i == systemSegments { prefixRows = rows.count }
+            switch segment {
+            case .text(let s):
+                // Every literal is tokenized on its own: joining changes ids at the seams.
+                for id in tokenizer.encode(s) { rows.append([id] + [Int32](repeating: 0, count: ModelConstants.numCodebooks)) }
+            case .codes(let c):
+                rows += codeRows(c)
+            }
+        }
+        guard rows.count <= maxRows else { throw PromptError.tooLong(rows.count) }
+        return (rows, prefixRows)
+    }
+
+    static func layout(text: String, references: [Reference], character: Character?, history: [HistoryTurn]) throws -> (segments: [Segment], systemSegments: Int) {
         try validate(text, "text")
-        enum Segment { case text(String), codes([[Int32]]) }
-        var segments: [Segment] = [.text("<|im_start|>system\n"), .text(references.isEmpty ? ttsInstruction : referenceInstruction)]
+        if let character {
+            guard references.isEmpty else { throw PromptError.voiceConflict }
+            try validate(character)
+        }
+        let turnText: (String) -> String = { character?.turn($0) ?? withSpeakerTag($0) }
+        let instruction = character?.systemPrompt ?? (references.isEmpty ? ttsInstruction : referenceInstruction)
+        var segments: [Segment] = [.text("<|im_start|>system\n"), .text(instruction)]
         for (index, ref) in references.enumerated() {
             let location = "reference \(index + 1)"
             try validate(ref.transcript, location)
@@ -125,22 +173,9 @@ public enum Drama3Prompt {
             let location = "history \(index + 1)"
             try validate(turn.text, location)
             try checkCodes(turn.codes, location)
-            segments += [.text("<|im_start|>user\n"), .text(withSpeakerTag(turn.text)), .text(messageEnd), .text(generationStart), .codes(turn.codes), .text(messageEnd)]
+            segments += [.text("<|im_start|>user\n"), .text(turnText(turn.text)), .text(messageEnd), .text(generationStart), .codes(turn.codes), .text(messageEnd)]
         }
-        segments += [.text("<|im_start|>user\n"), .text(withSpeakerTag(text)), .text(messageEnd), .text(generationStart)]
-        var rows: [Frame] = []
-        var prefixRows = 0
-        for (i, segment) in segments.enumerated() {
-            if i == systemSegments { prefixRows = rows.count }
-            switch segment {
-            case .text(let s):
-                // Every literal is tokenized on its own: joining changes ids at the seams.
-                for id in tokenizer.encode(s) { rows.append([id] + [Int32](repeating: 0, count: ModelConstants.numCodebooks)) }
-            case .codes(let c):
-                rows += codeRows(c)
-            }
-        }
-        guard rows.count <= maxRows else { throw PromptError.tooLong(rows.count) }
-        return (rows, prefixRows)
+        segments += [.text("<|im_start|>user\n"), .text(turnText(text)), .text(messageEnd), .text(generationStart)]
+        return (segments, systemSegments)
     }
 }

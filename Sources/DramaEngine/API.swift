@@ -118,13 +118,70 @@ public struct ReferenceVoice: Sendable, Codable, Identifiable, Equatable {
     }
 }
 
+/// One read of a line: the user turn text exactly as it went into the prompt,
+/// and the codes the model answered with. Fed back as history or as the voice
+/// reference, a take reproduces that turn.
+public struct Take: Sendable, Codable, Hashable {
+    public var text: String
+    /// `[10][T]` codec codes.
+    public var codes: [[Int32]]
+    public init(text: String, codes: [[Int32]]) {
+        self.text = text
+        self.codes = codes
+    }
+
+    public var frameCount: Int { codes.first?.count ?? 0 }
+    public var durationSeconds: Double { Double(frameCount) * Double(ModelConstants.samplesPerFrame) / Double(ModelConstants.sampleRate) }
+    public var frames: [Frame] {
+        (0..<frameCount).map { t in [codes[0][t] + ModelConstants.semanticStart] + codes.map { $0[t] } }
+    }
+}
+
+/// A character cast from a description instead of a reference clip.
+public struct VoiceDesign: Sendable, Codable, Hashable {
+    public var name: String
+    public var description: String
+    public var scene: String?
+    public init(name: String, description: String, scene: String? = nil) {
+        self.name = name
+        self.description = description
+        self.scene = scene
+    }
+
+    /// The system message text that replaces the usual instruction.
+    public var systemPrompt: String {
+        var lines: [String] = []
+        if let scene = scene.map(UnicodeWhitespace.strip), !scene.isEmpty { lines.append("Scene: \(scene)") }
+        lines.append("Characters:")
+        lines.append("- \(UnicodeWhitespace.strip(name)): \(UnicodeWhitespace.strip(description))")
+        lines.append("Voice every line of the script in order, with \(Drama3Prompt.audioSeparator) between consecutive lines.")
+        return lines.joined(separator: "\n")
+    }
+
+    /// A user turn spoken by this character.
+    public func turn(_ text: String) -> String { "\(UnicodeWhitespace.strip(name)): \(text)" }
+}
+
 public struct SpeechRequest: Sendable {
     public var text: String
     public var references: [ReferenceVoice]
+    /// Mutually exclusive with `references`.
+    public var character: VoiceDesign?
+    /// A director's note: the line is generated again as one turn with the
+    /// note written into it.
+    public var note: String?
+    /// Earlier takes, oldest first; the last two become history. With no
+    /// references the first one is the voice reference, which keeps a
+    /// designed or model-default voice the same across takes.
+    public var previousTakes: [Take]
     public var config: GenerationConfig
-    public init(text: String, references: [ReferenceVoice] = [], config: GenerationConfig = GenerationConfig()) {
+    public init(text: String, references: [ReferenceVoice] = [], character: VoiceDesign? = nil, note: String? = nil,
+                previousTakes: [Take] = [], config: GenerationConfig = GenerationConfig()) {
         self.text = text
         self.references = references
+        self.character = character
+        self.note = note
+        self.previousTakes = previousTakes
         self.config = config
     }
 }
@@ -152,18 +209,20 @@ public enum SpeechEvent: Sendable {
 }
 
 public struct SpeechResult: Sendable {
-    /// All generated frames across chunks, in order.
-    public var frames: [Frame]
+    /// The whole request as one take: its turn text and every chunk's codes in order.
+    public var take: Take
     /// 44.1 kHz mono.
     public var samples: [Float]
     public var timings: SpeechTimings
     public var finishedByEOS: Bool
-    public init(frames: [Frame], samples: [Float], timings: SpeechTimings, finishedByEOS: Bool) {
-        self.frames = frames
+    public init(take: Take, samples: [Float], timings: SpeechTimings, finishedByEOS: Bool) {
+        self.take = take
         self.samples = samples
         self.timings = timings
         self.finishedByEOS = finishedByEOS
     }
+
+    public var frames: [Frame] { take.frames }
 }
 
 /// What the app talks to. `DramaEngine` is the Metal implementation; tests and

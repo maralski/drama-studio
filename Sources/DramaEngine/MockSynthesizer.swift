@@ -76,6 +76,8 @@ public actor MockSynthesizer: SpeechSynthesizer {
         try await load { emit(.loadingModel(progress: $0, detail: $1)) }
         let chunks = Self.chunks(of: request.text, maxBytes: request.config.chunkBytes)
         guard !chunks.isEmpty else { throw MockError.emptyText }
+        let plan = try GenerationPlan(request)
+        let lines = request.note.flatMap(DirectorsNote.clean) == nil ? chunks : [request.text]
 
         var rng = SplitMix64(seed: request.config.seed ?? UInt64.random(in: 0...UInt64.max))
         var frames: [Frame] = []
@@ -83,8 +85,8 @@ public actor MockSynthesizer: SpeechSynthesizer {
         var timings = SpeechTimings()
         let framesPerSecondOfAudio = Double(ModelConstants.sampleRate) / Double(ModelConstants.samplesPerFrame)
 
-        for (index, text) in chunks.enumerated() {
-            emit(.chunkStarted(index: index, count: chunks.count, text: text))
+        for (index, text) in lines.enumerated() {
+            emit(.chunkStarted(index: index, count: lines.count, text: text))
             let promptRows = 24 + text.utf8.count / 3 + request.references.reduce(0) { $0 + ($1.codes.first?.count ?? 0) }
             timings.promptRows += promptRows
             emit(.prefill(rows: promptRows))
@@ -107,7 +109,8 @@ public actor MockSynthesizer: SpeechSynthesizer {
             samples += audio
             emit(.audio(samples: audio, chunkIndex: index))
         }
-        emit(.finished(SpeechResult(frames: frames, samples: samples, timings: timings, finishedByEOS: true)))
+        let take = Take(text: plan.turnText, codes: (0..<ModelConstants.numCodebooks).map { c in frames.map { $0[1 + c] } })
+        emit(.finished(SpeechResult(take: take, samples: samples, timings: timings, finishedByEOS: true)))
     }
 
     private func wait(_ seconds: Double) async throws {

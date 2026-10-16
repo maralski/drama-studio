@@ -127,13 +127,13 @@ public actor DramaSynthesizer: SpeechSynthesizer {
             let codes = (0..<ModelConstants.numCodebooks).map { c in frames.map { $0[1 + c] } }
             return Self.trailingSilenceSeconds(try Self.decodeBlocking(codec, codes: codes))
         }
-        let references = request.references.map { Drama3Prompt.Reference(transcript: $0.transcript, codes: $0.codes) }
+        let plan = try GenerationPlan(request)
         var allFrames: [Frame] = []
         var allSamples: [Float] = []
         var timings = SpeechTimings()
         var eos = true
         // Generation is synchronous GPU work; decode each finished chunk right after it lands.
-        let results = try generator.generate(text: request.text, references: references, config: request.config, shouldContinue: { !Task.isCancelled }) { event in
+        let results = try generator.generate(plan: plan, config: request.config, shouldContinue: { !Task.isCancelled }) { event in
             switch event {
             case .chunkStarted(let i, let n, let text): continuation.yield(.chunkStarted(index: i, count: n, text: text))
             case .prefilled(let rows): continuation.yield(.prefill(rows: rows))
@@ -157,6 +157,7 @@ public actor DramaSynthesizer: SpeechSynthesizer {
             allSamples += samples
             continuation.yield(.audio(samples: samples, chunkIndex: r.index))
         }
-        continuation.yield(.finished(SpeechResult(frames: allFrames, samples: allSamples, timings: timings, finishedByEOS: eos)))
+        let take = Take(text: plan.turnText, codes: (0..<ModelConstants.numCodebooks).map { c in allFrames.map { $0[1 + c] } })
+        continuation.yield(.finished(SpeechResult(take: take, samples: allSamples, timings: timings, finishedByEOS: eos)))
     }
 }

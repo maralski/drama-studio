@@ -77,28 +77,32 @@ public final class FrameGenerator {
         self.tokenizer = tokenizer
     }
 
-    /// The prompt for one chunk with as much history as fits.
-    func chunkPrompt(text: String, references: [Drama3Prompt.Reference], history: Drama3History) throws -> (rows: [Frame], prefixRows: Int) {
+    /// The prompt for one chunk with as much history as fits: the plan's
+    /// earlier takes go first and are the first thing dropped.
+    func chunkPrompt(text: String, plan: GenerationPlan, history: Drama3History) throws -> (rows: [Frame], prefixRows: Int) {
         var lastError: Error = PromptError.tooLong(0)
-        for turns in history.candidates {
-            do { return try Drama3Prompt.buildWithPrefix(text: text, tokenizer: tokenizer, references: references, history: turns) }
+        let candidates = history.candidates.map { plan.history + $0 } + (plan.history.isEmpty ? [] : history.candidates)
+        for turns in candidates {
+            do { return try Drama3Prompt.buildWithPrefix(text: text, tokenizer: tokenizer, references: plan.references, character: plan.character, history: turns) }
             catch PromptError.tooLong(let rows) { lastError = PromptError.tooLong(rows) }
         }
         throw lastError
     }
 
-    /// Generates every chunk. `onEvent` runs on the calling thread; return
-    /// false from `shouldContinue` to stop early.
-    public func generate(text: String, references: [Drama3Prompt.Reference], config: GenerationConfig,
+    /// Generates every chunk of the plan. `onEvent` runs on the calling
+    /// thread; return false from `shouldContinue` to stop early.
+    public func generate(text: String, references: [Drama3Prompt.Reference], character: VoiceDesign? = nil, previousTakes: [Take] = [],
+                         note: String? = nil, config: GenerationConfig,
                          shouldContinue: () -> Bool = { true }, onEvent: (Event) -> Void) throws -> [ChunkResult] {
-        var chunks: [String]
-        switch config.chunking {
-        case .reference: chunks = Drama3Chunking.split(text, maxBytes: config.chunkBytes)
-        case .sentences: chunks = Drama3Chunking.splitSentencesTagged(text)
-        }
-        if chunks.isEmpty { chunks = [text] }
+        try generate(plan: GenerationPlan(text: text, references: references, character: character, previousTakes: previousTakes, note: note, config: config),
+                     config: config, shouldContinue: shouldContinue, onEvent: onEvent)
+    }
+
+    public func generate(plan: GenerationPlan, config: GenerationConfig,
+                         shouldContinue: () -> Bool = { true }, onEvent: (Event) -> Void) throws -> [ChunkResult] {
+        let chunks = plan.chunks
         for chunk in chunks {
-            let rows = try Drama3Prompt.build(text: chunk, tokenizer: tokenizer, references: references).count
+            let rows = try Drama3Prompt.build(text: chunk.turn, tokenizer: tokenizer, references: plan.references, character: plan.character).count
             guard rows < model.capacity else { throw PromptError.tooLong(rows) }
         }
         var sampler = Sampler(seed: config.seed ?? UInt64.random(in: 0...UInt64.max))
@@ -106,9 +110,9 @@ public final class FrameGenerator {
         var results: [ChunkResult] = []
         for (index, chunk) in chunks.enumerated() {
             guard shouldContinue() else { break }
-            onEvent(.chunkStarted(index: index, count: chunks.count, text: chunk))
-            let (prompt, prefixRows) = try chunkPrompt(text: chunk, references: references, history: history)
-            let expected = Self.expectedSeconds(for: chunk)
+            onEvent(.chunkStarted(index: index, count: chunks.count, text: chunk.line))
+            let (prompt, prefixRows) = try chunkPrompt(text: chunk.turn, plan: plan, history: history)
+            let expected = Self.expectedSeconds(for: chunk.line)
             let budget = min(config.frameCap.frames(expectedSeconds: expected), model.capacity - prompt.count - 1)
             guard budget >= 1 else { throw PromptError.tooLong(prompt.count) }
             var best: ChunkResult?
@@ -139,7 +143,7 @@ public final class FrameGenerator {
                 if let probe = silenceProbe, !frames.isEmpty { trailingSilence = try probe(frames) }
                 let total = Double(frames.count) * Double(ModelConstants.samplesPerFrame) / Double(ModelConstants.sampleRate)
                 let spoken = max(0, total - trailingSilence)
-                let result = ChunkResult(index: index, count: chunks.count, text: chunk, frames: frames, promptRows: prompt.count,
+                let result = ChunkResult(index: index, count: chunks.count, text: chunk.turn, frames: frames, promptRows: prompt.count,
                                          finishedByEOS: eos, prefillSeconds: prefillSeconds, decodeSeconds: Date().timeIntervalSince(t1),
                                          gpuSeconds: session.gpuSeconds, spokenSeconds: spoken, attempts: attempt + 1)
                 if best == nil || spoken > best!.spokenSeconds { best = result }
@@ -148,7 +152,7 @@ public final class FrameGenerator {
             }
             guard let result = best else { break }
             let frames = result.frames
-            if !frames.isEmpty { history.push(text: chunk, codes: result.codes) }
+            if !frames.isEmpty { history.push(text: chunk.turn, codes: result.codes) }
             results.append(result)
             onEvent(.chunkFinished(result))
         }
