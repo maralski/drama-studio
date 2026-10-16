@@ -56,6 +56,33 @@ final class AppAudioTests: XCTestCase {
         return samples
     }
 
+    /// Renders the engine offline so the test needs no audio device. At 1.5x
+    /// each rendered output frame consumes 1.5 source samples, and the
+    /// position the scrubber reads must count those source samples.
+    @MainActor
+    func testPositionCountsSourceSamplesAtOneAndAHalfSpeed() throws {
+        let format = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 1)!
+        let audio = (0..<44_100 * 6).map { Float(sin(Double($0) * 0.03) * 0.5) }
+        var measured: [Float: Double] = [:]
+        for rate: Float in [1, 1.5] {
+            let player = StreamingPlayer()
+            try player.engine.enableManualRenderingMode(.offline, format: format, maximumFrameCount: 4096)
+            player.rate = rate
+            try player.play(audio, from: 1000)
+            let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4096)!
+            var rendered = 0
+            while rendered < 44_100 * 2 {
+                XCTAssertEqual(try player.engine.renderOffline(4096, to: buffer), .success)
+                rendered += Int(buffer.frameLength)
+            }
+            let position = try XCTUnwrap(player.position)
+            measured[rate] = Double(position - 1000) / Double(rendered)
+            player.stop()
+        }
+        XCTAssertEqual(try XCTUnwrap(measured[1]), 1, accuracy: 0.05)
+        XCTAssertEqual(try XCTUnwrap(measured[1.5]), 1.5, accuracy: 0.08, "\(measured)")
+    }
+
     func testWaveformPeaksAreNormalisedPerBin() {
         let peaks = WaveformScrubber.peaks(of: [0, 0.5, -1, 0.25, 0.1, 0], bins: 3)
         XCTAssertEqual(peaks, [0.5, 1, 0.1])

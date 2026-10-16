@@ -5,8 +5,10 @@ import DramaEngine
 final class StreamingPlayer {
     var onDrained: (() -> Void)?
 
-    private let engine = AVAudioEngine()
+    /// Internal so a test can put it in manual rendering mode.
+    let engine = AVAudioEngine()
     private let node = AVAudioPlayerNode()
+    private let timePitch = AVAudioUnitTimePitch()
     private let format = AVAudioFormat(standardFormatWithSampleRate: Double(ModelConstants.sampleRate), channels: 1)!
     private var timeline: PlaybackTimeline?
     private var epoch = 0
@@ -14,7 +16,16 @@ final class StreamingPlayer {
 
     init() {
         engine.attach(node)
-        engine.connect(node, to: engine.mainMixerNode, format: format)
+        engine.attach(timePitch)
+        engine.connect(node, to: timePitch, format: format)
+        engine.connect(timePitch, to: engine.mainMixerNode, format: format)
+    }
+
+    /// Playback speed, pitch preserved. The player node's clock counts source
+    /// samples, so `position` stays in script samples at every rate.
+    var rate: Float {
+        get { timePitch.rate }
+        set { timePitch.rate = newValue }
     }
 
     var isPlaying: Bool { timeline != nil }
