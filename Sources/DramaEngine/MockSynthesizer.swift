@@ -82,6 +82,7 @@ public actor MockSynthesizer: SpeechSynthesizer {
         var frames: [Frame] = []
         var samples: [Float] = []
         var timings = SpeechTimings()
+        var sentences: [SpokenSentence] = []
         let framesPerSecondOfAudio = Double(ModelConstants.sampleRate) / Double(ModelConstants.samplesPerFrame)
 
         for (index, text) in lines.enumerated() {
@@ -115,10 +116,11 @@ public actor MockSynthesizer: SpeechSynthesizer {
             timings.framesGenerated += target
 
             samples += audio
+            sentences.append(SpokenSentence(text: text, frames: target))
             emit(.audio(samples: audio, chunkIndex: index))
         }
         let take = Take(text: plan.turnText, codes: (0..<ModelConstants.numCodebooks).map { c in frames.map { $0[1 + c] } })
-        emit(.finished(SpeechResult(take: take, samples: samples, timings: timings, finishedByEOS: true)))
+        emit(.finished(SpeechResult(take: take, samples: samples, timings: timings, finishedByEOS: true, sentences: sentences)))
     }
 
     private func wait(_ seconds: Double) async throws {

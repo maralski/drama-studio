@@ -1,26 +1,37 @@
 import Foundation
 
-struct PronunciationRule: Codable, Sendable, Equatable, Hashable {
-    var match: String
-    var sayAs: String
-    var wholeWord: Bool = true
-    var caseSensitive: Bool = false
+public struct PronunciationRule: Codable, Sendable, Equatable, Hashable {
+    public var match: String
+    public var sayAs: String
+    public var wholeWord: Bool
+    public var caseSensitive: Bool
+
+    public init(match: String, sayAs: String, wholeWord: Bool = true, caseSensitive: Bool = false) {
+        self.match = match
+        self.sayAs = sayAs
+        self.wholeWord = wholeWord
+        self.caseSensitive = caseSensitive
+    }
 }
 
-struct PronunciationDictionary: Codable, Sendable, Equatable {
-    var rules: [PronunciationRule] = []
+public struct PronunciationDictionary: Codable, Sendable, Equatable {
+    public var rules: [PronunciationRule]
 
-    static var defaultURL: URL {
+    public init(rules: [PronunciationRule] = []) {
+        self.rules = rules
+    }
+
+    public static var defaultURL: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appending(path: "DramaStudio/pronunciation.json")
     }
 
-    static func load(from url: URL = defaultURL) throws -> PronunciationDictionary {
+    public static func load(from url: URL = defaultURL) throws -> PronunciationDictionary {
         guard FileManager.default.fileExists(atPath: url.path) else { return PronunciationDictionary() }
         return try JSONDecoder().decode(PronunciationDictionary.self, from: Data(contentsOf: url))
     }
 
-    func save(to url: URL = defaultURL) throws {
+    public func save(to url: URL = defaultURL) throws {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -28,7 +39,7 @@ struct PronunciationDictionary: Codable, Sendable, Equatable {
     }
 
     /// One left-to-right pass, so a replacement is never rewritten by another rule.
-    func apply(to text: String) -> String {
+    public func apply(to text: String) -> String {
         guard let matcher else { return text }
         let ns = text as NSString
         var out = ""

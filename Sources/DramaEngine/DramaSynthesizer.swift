@@ -166,6 +166,7 @@ public actor DramaSynthesizer: SpeechSynthesizer {
         let allSamples = results.flatMap(\.samples)
         let eos = results.allSatisfy(\.finishedByEOS)
         let take = Take(text: plan.turnText, codes: (0..<ModelConstants.numCodebooks).map { c in allFrames.map { $0[1 + c] } })
-        continuation.yield(.finished(SpeechResult(take: take, samples: allSamples, timings: timings, finishedByEOS: eos)))
+        let sentences = results.map { SpokenSentence(text: plan.chunks[$0.index].line, frames: $0.frames.count) }
+        continuation.yield(.finished(SpeechResult(take: take, samples: allSamples, timings: timings, finishedByEOS: eos, sentences: sentences)))
     }
 }

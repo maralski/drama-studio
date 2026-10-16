@@ -30,6 +30,7 @@ final class SynthesizerIntegrationTests: XCTestCase {
         XCTAssertEqual(audioChunks, 1)
         XCTAssertEqual(r.frames.count, frames)
         XCTAssertEqual(r.samples.count, r.frames.count * ModelConstants.samplesPerFrame)
+        XCTAssertEqual(r.sentences, [SpokenSentence(text: request.text, frames: frames)])
         let rms = (r.samples.reduce(0) { $0 + $1 * $1 } / Float(r.samples.count)).squareRoot()
         XCTAssertGreaterThan(rms, 0.02, "decoded audio should contain speech")
         XCTAssertGreaterThan(Double(r.frames.count) * 2048 / 44100, 2.0)

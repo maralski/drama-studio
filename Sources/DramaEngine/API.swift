@@ -230,6 +230,17 @@ public enum SpeechEvent: Sendable {
     case finished(SpeechResult)
 }
 
+/// One chunk of a request: the script text it spoke and its frame count, so
+/// callers can time captions and highlights.
+public struct SpokenSentence: Sendable, Codable, Equatable {
+    public var text: String
+    public var frames: Int
+    public init(text: String, frames: Int) {
+        self.text = text
+        self.frames = frames
+    }
+}
+
 public struct SpeechResult: Sendable {
     /// The whole request as one take: its turn text and every chunk's codes in order.
     public var take: Take
@@ -237,11 +248,14 @@ public struct SpeechResult: Sendable {
     public var samples: [Float]
     public var timings: SpeechTimings
     public var finishedByEOS: Bool
-    public init(take: Take, samples: [Float], timings: SpeechTimings, finishedByEOS: Bool) {
+    /// Every chunk in order; their frames add up to the take's.
+    public var sentences: [SpokenSentence]
+    public init(take: Take, samples: [Float], timings: SpeechTimings, finishedByEOS: Bool, sentences: [SpokenSentence] = []) {
         self.take = take
         self.samples = samples
         self.timings = timings
         self.finishedByEOS = finishedByEOS
+        self.sentences = sentences
     }
 
     public var frames: [Frame] { take.frames }
