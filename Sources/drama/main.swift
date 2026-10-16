@@ -260,6 +260,47 @@ func tune(_ args: Args) throws {
     print("cache: \(TuningCache.url(for: key).path)")
 }
 
+/// drama schedule-ab --schedules a.json,b.json[,...] [--rows 128,300,1] [--rounds 7]:
+/// GPU ms of one backbone forward per schedule and row count, the schedules
+/// applied in turn inside one process and one round, so every side sees the
+/// same machine state. The one instrument that isolates a single schedule
+/// field: write the default schedule with one field changed and compare.
+func scheduleAB(_ args: Args) throws {
+    guard let list = args["schedules"] else { fail("usage: drama schedule-ab --schedules a.json,b.json [--rows 128,300,1] [--rounds 7]") }
+    let paths = list.split(separator: ",").map(String.init)
+    let schedules = try paths.map { try JSONDecoder().decode(KernelSchedule.self, from: Data(contentsOf: URL(fileURLWithPath: $0))) }
+    let rows = (args["rows"] ?? "128,300,1").split(separator: ",").compactMap { Int($0) }
+    let rounds = args.int("rounds", 7)
+    let model = try loadModel(args)
+    model.warmUp()
+    for (p, s) in zip(paths, schedules) { try s.validate(); print("\(p): \(String(data: try JSONEncoder().encode(s), encoding: .utf8)!)") }
+    var ms = [[[Double]]](repeating: [[Double]](repeating: [], count: schedules.count), count: rows.count)
+    for _ in 0..<rounds {
+        for (ri, r) in rows.enumerated() {
+            for (si, s) in schedules.enumerated() {
+                try model.apply(s)
+                ms[ri][si].append(try model.benchBackbone(rows: r, skip: []) * 1000)
+            }
+        }
+    }
+    func median(_ v: [Double]) -> Double { let s = v.sorted(); return s.count % 2 == 1 ? s[s.count / 2] : (s[s.count / 2 - 1] + s[s.count / 2]) / 2 }
+    for (ri, r) in rows.enumerated() {
+        var line = "rows \(r):"
+        for (si, p) in paths.enumerated() {
+            let v = ms[ri][si]
+            line += String(format: "  %@ %.1f [%.1f..%.1f]", (p as NSString).lastPathComponent, median(v), v.min()!, v.max()!)
+        }
+        print(line)
+        let base = ms[ri][0]
+        var wins = ""
+        for si in 1..<paths.count {
+            let w = zip(ms[ri][si], base).filter { $0 < $1 }.count
+            wins += "  \((paths[si] as NSString).lastPathComponent) faster than \((paths[0] as NSString).lastPathComponent) in \(w) of \(rounds) rounds"
+        }
+        print(wins)
+    }
+}
+
 /// drama kbench --n 8192 --k 2048 [--ms 2,8,32,128]
 func kbench(_ args: Args) throws {
     let ms = (args["ms"] ?? "2,4,8,16,32,64,128").split(separator: ",").compactMap { Int($0) }
@@ -274,7 +315,8 @@ case "bench": try bench(args)
 case "kbench": try kbench(args)
 case "profile": try profile(args)
 case "tune": try tune(args)
+case "schedule-ab": try scheduleAB(args)
 case "generate": try generate(args)
 case "decode": try decodeCommand(args)
-default: fail("usage: drama <dump|bench|kbench|profile|tune|generate|decode> [options]")
+default: fail("usage: drama <dump|bench|kbench|profile|tune|schedule-ab|generate|decode> [options]")
 }

@@ -13,7 +13,10 @@ public enum Autotune {
         public var budgetSeconds = 60.0
         /// Largest relative L2 against the default a candidate may show.
         public var tolerance = 1e-5
-        public var minGainPercent = 2.0
+        /// A candidate replaces the default only when it is at least this much
+        /// faster; run-to-run noise on one kernel is a few percent, and a pick
+        /// inside the noise is cached for good.
+        public var minGainPercent = 5.0
         public var progress: (@Sendable (String) -> Void)? = nil
         public init() {}
     }
@@ -195,9 +198,15 @@ public enum Autotune {
     /// forward the decode fields.
     enum Side: CaseIterable {
         case prefill, decode
-        var rows: Int { self == .prefill ? 128 : 1 }
+        /// The forwards that must all win for the side to keep its choices: a
+        /// 128-row chunk and a 300-row one (a 10 s reference clip), or one row.
+        var rows: [Int] { self == .prefill ? [128, 300] : [1] }
         init(rows: Int) { self = rows == 1 ? .decode : .prefill }
     }
+
+    /// A side keeps its choices only when the tuned forward is at least this
+    /// much faster than the default at every row count of the side.
+    static let forwardCheckMarginPercent = 2.0
 
     struct Field {
         let entry: String
@@ -246,10 +255,11 @@ public enum Autotune {
     static let forwardCheckRounds = 5
 
     /// The safety net under the per-entry choices: times whole forwards on
-    /// the default and the tuned schedule, interleaved, once per side, and
-    /// reverts a side whose tuned median is not below the default's. A
-    /// reverted side is measured once more and both rows recorded, the second
-    /// with `kept` false as well. Runs regardless of the budget.
+    /// the default and the tuned schedule, interleaved, at every row count of
+    /// a side, and reverts the side unless the tuned median beats the
+    /// default's by the margin at each of them. A reverted side is measured
+    /// once more and both sets of rows recorded, the second with `kept` false
+    /// as well. Runs regardless of the budget.
     static func forwardCheck(model: DramaModel, report: inout TuningReport, options: Options) throws {
         func measure(rows: Int) throws -> (defaultMs: Double, tunedMs: Double) {
             var d: [Double] = [], t: [Double] = []
@@ -262,12 +272,17 @@ public enum Autotune {
             return (median(d), median(t))
         }
         for side in Side.allCases {
-            let (d, t) = try measure(rows: side.rows)
-            let check = ForwardCheck(rows: side.rows, defaultMs: d, tunedMs: t, kept: t < d)
-            report.forwardChecks.append(check)
-            options.progress?(String(format: "forward %d rows: default %.1f ms, tuned %.1f ms, %@", side.rows, d, t, check.kept ? "kept" : "reverting the \(side) fields"))
-            if check.kept { continue }
-            let (schedule, notes) = applyForwardChecks(schedule: report.schedule, defaults: .default, checks: [check])
+            var checks: [ForwardCheck] = []
+            for rows in side.rows {
+                let (d, t) = try measure(rows: rows)
+                checks.append(ForwardCheck(rows: rows, defaultMs: d, tunedMs: t, kept: t <= d * (1 - forwardCheckMarginPercent / 100)))
+            }
+            let kept = checks.allSatisfy(\.kept)
+            for i in checks.indices { checks[i].kept = kept }
+            report.forwardChecks += checks
+            for c in checks { options.progress?(String(format: "forward %d rows: default %.1f ms, tuned %.1f ms, %@", c.rows, c.defaultMs, c.tunedMs, kept ? "kept" : "reverting the \(side) fields")) }
+            if kept { continue }
+            let (schedule, notes) = applyForwardChecks(schedule: report.schedule, defaults: .default, checks: checks)
             report.schedule = schedule
             for i in report.entries.indices {
                 guard let note = notes[report.entries[i].name] else { continue }
@@ -279,9 +294,11 @@ public enum Autotune {
                 e.relL2 = 0
                 report.entries[i] = e
             }
-            let again = try measure(rows: side.rows)
-            report.forwardChecks.append(ForwardCheck(rows: side.rows, defaultMs: again.defaultMs, tunedMs: again.tunedMs, kept: false))
-            options.progress?(String(format: "forward %d rows after the revert: default %.1f ms, tuned %.1f ms", side.rows, again.defaultMs, again.tunedMs))
+            for rows in side.rows {
+                let again = try measure(rows: rows)
+                report.forwardChecks.append(ForwardCheck(rows: rows, defaultMs: again.defaultMs, tunedMs: again.tunedMs, kept: false))
+                options.progress?(String(format: "forward %d rows after the revert: default %.1f ms, tuned %.1f ms", rows, again.defaultMs, again.tunedMs))
+            }
         }
     }
 }
@@ -330,7 +347,7 @@ extension Autotune {
         let H = c.hiddenSize
         let linearLayers = c.layerTypes.indices.filter { c.layerTypes[$0] == .linear }.prefix(10)
         let fullLayers = c.layerTypes.indices.filter { c.layerTypes[$0] == .full }.prefix(10)
-        guard linearLayers.count == 10, fullLayers.count == 10, bb.maxRows >= 128 else { throw EngineError.badModel("the autotune census expects 10 linear and 10 full layers and 128-row chunks") }
+        guard linearLayers.count == 10, fullLayers.count == 10, bb.maxRows >= 300 else { throw EngineError.badModel("the autotune census expects 10 linear and 10 full layers and chunks of at least 300 rows") }
         func linear(_ i: Int) -> LinearAttentionWeights {
             guard case .linear(let w) = weights.backbone.layers[linearLayers[i]].mixer else { preconditionFailure() }
             return w
@@ -343,8 +360,10 @@ extension Autotune {
         // scratch buffer. Noise routes almost evenly over the experts, a few
         // rows each, which favours small row tiles; real hidden states route
         // unevenly, with some experts taking 30 or more rows, so the MoE tile
-        // is chosen on real activations.
-        let moeInput = try model.probeMoEInput(rows: 128)
+        // is chosen on real activations, and at 300 rows as well as 128,
+        // where a small row tile lost 9 percent in the real forward
+        // (.audit/autotune.tsv).
+        let moeInput = try model.probeMoEInput(rows: 300)
         var noise = Noise(seed: 2026)
         let capacityPairs = bb.maxRows * c.topK
         var entries: [Entry] = []
@@ -380,35 +399,36 @@ extension Autotune {
                 seedInputs: seed))
         }
 
-        // gemv.narrow: the N <= 64 projections at 128 and 32 rows.
+        // gemv.narrow: the N <= 64 projections at 300, 128 and 32 rows (a 10 s
+        // reference clip is one 300-row chunk).
         do {
-            let seed = seeds([noise.fill(bb.h, count: 128 * H)])
+            let seed = seeds([noise.fill(bb.h, count: 300 * H)])
             entries.append(Entry(
                 name: "gemv.narrow",
                 candidates: Candidate.over(\.gemvNarrow, KernelSchedule.gemvShapes, label: \.label),
                 layers: 10,
                 encode: { enc, k, i in
                     let lw = linear(i), mw = weights.backbone.layers[linearLayers[i]].moe
-                    for m in [128, 32] {
+                    for m in [300, 128, 32] {
                         try k.gemv(enc, lw.inProjA, x: bb.h, y: bb.a, n: 32, k: H, m: m)
                         try k.gemv(enc, lw.inProjB, x: bb.h, y: bb.b, n: 32, k: H, m: m)
                         try k.gemv(enc, mw.sharedExpertGate, x: bb.h, y: bb.sharedGate, n: 1, k: H, m: m)
                     }
                 },
-                outputs: { bb.a.read(128 * 32) + bb.b.read(128 * 32) + bb.sharedGate.read(128) },
+                outputs: { bb.a.read(300 * 32) + bb.b.read(300 * 32) + bb.sharedGate.read(300) },
                 seedInputs: seed))
         }
 
-        // gemm.prefill: the wide projections of a linear and a full layer at 128 and 32 rows.
+        // gemm.prefill: the wide projections of a linear and a full layer at 300, 128 and 32 rows.
         do {
-            let seed = seeds([noise.fill(bb.h, count: 128 * H), noise.fill(bb.normed, count: 128 * 4096)])
+            let seed = seeds([noise.fill(bb.h, count: 300 * H), noise.fill(bb.normed, count: 300 * 4096)])
             entries.append(Entry(
                 name: "gemm.prefill",
                 candidates: Candidate.over(\.gemmTile, KernelSchedule.gemmTiles, label: \.label),
                 layers: 10,
                 encode: { enc, k, i in
                     let lw = linear(i), fw = full(i)
-                    for m in [128, 32] {
+                    for m in [300, 128, 32] {
                         try k.gemv(enc, lw.inProjQKV, x: bb.h, y: bb.big, n: 8192, k: H, m: m)
                         try k.gemv(enc, lw.inProjZ, x: bb.h, y: bb.z, n: 4096, k: H, m: m)
                         try k.gemv(enc, lw.outProj, x: bb.normed, y: bb.mixOut, n: H, k: 4096, m: m)
@@ -416,7 +436,7 @@ extension Autotune {
                         try k.gemv(enc, fw.oProj, x: bb.normed, y: bb.x, n: H, k: c.numHeads * 256, m: m)
                     }
                 },
-                outputs: { bb.big.read(128 * 8192) + bb.z.read(128 * 4096) + bb.mixOut.read(128 * H) + bb.convOut.read(128 * 8192) + bb.x.read(128 * H) },
+                outputs: { bb.big.read(300 * 8192) + bb.z.read(300 * 4096) + bb.mixOut.read(300 * H) + bb.convOut.read(300 * 8192) + bb.x.read(300 * H) },
                 seedInputs: seed))
         }
 
@@ -444,7 +464,7 @@ extension Autotune {
                 outputs: { bb.act.read(rows * c.topK * c.moeIntermediate) + bb.slotOut.read(rows * c.topK * H) },
                 seedInputs: seed)
         }
-        entries.append(moeEntry(name: "moe.tiled", rowCounts: [128, 32], candidates: Candidate.over(\.moeTile, KernelSchedule.moeTiles, label: \.label)))
+        entries.append(moeEntry(name: "moe.tiled", rowCounts: [300, 128, 32], candidates: Candidate.over(\.moeTile, KernelSchedule.moeTiles, label: \.label)))
         entries.append(moeEntry(name: "moe.rows", rowCounts: [1], candidates: Candidate.over(\.moeRowSimdgroups, KernelSchedule.moeRowSimdgroups, label: { "\($0)sg" })))
 
         // attention.decode and attention.prefill over the backbone's full

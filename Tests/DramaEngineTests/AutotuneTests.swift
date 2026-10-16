@@ -204,7 +204,7 @@ final class AutotuneTests: XCTestCase {
         XCTAssertEqual(Set(entries.map(\.name)), Set(Autotune.fields.map(\.entry)))
         // The MoE workload routes real hidden states, not the noise pool.
         let H = model.config.hiddenSize
-        let moeInput = try model.probeMoEInput(rows: 128)
+        let moeInput = try model.probeMoEInput(rows: 300)
         let tiled = try XCTUnwrap(entries.first { $0.name == "moe.tiled" })
         tiled.seedInputs()
         XCTAssertEqual(model.backbone.h.read(H), Array(moeInput.prefix(H)))
