@@ -28,7 +28,20 @@ struct NarrationDocument: Codable, Sendable, Equatable {
     var source: Source
     var segments: [Segment]
 
-    var narratedSegments: [Segment] { segments.filter { !$0.skip } }
+    static func importFile(at url: URL) throws -> NarrationDocument {
+        switch url.pathExtension.lowercased() {
+        case "pptx": return try PPTXImporter.importFile(at: url)
+        case "pdf": return try PDFImporter.importFile(at: url)
+        case "epub": return try EPUBImporter.importFile(at: url)
+        case "txt", "text":
+            let text = ScriptImporter.normalize(try String(contentsOf: url, encoding: .utf8))
+            guard !text.isEmpty else { throw DocumentImportError.empty(url.lastPathComponent) }
+            let title = url.deletingPathExtension().lastPathComponent
+            return NarrationDocument(title: title, source: .text, segments: [Segment(index: 1, label: title, text: text)])
+        default:
+            throw DocumentImportError.unsupported(url.lastPathComponent)
+        }
+    }
 }
 
 /// One generated segment, placed in the combined audio of the whole document.
