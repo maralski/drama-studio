@@ -9,6 +9,7 @@ let package = Package(
         .library(name: "DramaServer", targets: ["DramaServer"]),
         .executable(name: "drama", targets: ["drama"]),
         .executable(name: "DramaStudio", targets: ["DramaStudio"]),
+        .executable(name: "drama-mcp", targets: ["drama-mcp"]),
     ],
     targets: [
         .target(
@@ -17,10 +18,13 @@ let package = Package(
             resources: [.copy("Kernels")]
         ),
         .target(name: "DramaServer", dependencies: ["DramaEngine"], path: "Sources/DramaServer"),
+        .target(name: "DramaMCP", path: "Sources/DramaMCP"),
+        .executableTarget(name: "drama-mcp", dependencies: ["DramaMCP"], path: "Sources/drama-mcp"),
         .executableTarget(name: "drama", dependencies: ["DramaEngine", "DramaServer"], path: "Sources/drama"),
         .executableTarget(name: "DramaStudio", dependencies: ["DramaEngine", "DramaServer"], path: "App/DramaStudio"),
         .testTarget(name: "DramaEngineTests", dependencies: ["DramaEngine"], path: "Tests/DramaEngineTests"),
         .testTarget(name: "DramaServerTests", dependencies: ["DramaServer", "DramaEngine"], path: "Tests/DramaServerTests"),
+        .testTarget(name: "DramaMCPTests", dependencies: ["DramaMCP"], path: "Tests/DramaMCPTests"),
         .testTarget(name: "DramaStudioTests", dependencies: ["DramaStudio", "DramaEngine"], path: "Tests/DramaStudioTests"),
     ],
     swiftLanguageVersions: [.v5]
