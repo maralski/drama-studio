@@ -50,7 +50,7 @@ private struct CastSection: View {
                         }
                         Text("Model default").tag(VoicePickerTag.choice(.modelDefault))
                         Text("Surprise me").tag(VoicePickerTag.choice(.surprise))
-                        ForEach(model.castDesigns, id: \.self) { Text("\($0.name) (designed)").tag(VoicePickerTag.choice(.designed($0))) }
+                        ForEach(model.castDesigns, id: \.self) { Label($0.name, systemImage: "wand.and.stars").tag(VoicePickerTag.choice(.designed($0))) }
                         Divider()
                         Text("Design a Voice\u{2026}").tag(VoicePickerTag.designNew)
                     } label: {

@@ -15,10 +15,11 @@ struct TakesStrip: View {
                         }
                     }
                 }
-                .padding(.vertical, 1)
+                .padding(2)
             }
             .scrollIndicators(.never)
-            .defaultScrollAnchor(.trailing)
+            .defaultScrollAnchor(.leading, for: .alignment)
+            .defaultScrollAnchor(.trailing, for: .sizeChanges)
             HStack(spacing: 8) {
                 TextField("Give a note", text: $note, prompt: Text("Give a note, such as softer and warmer"))
                     .textFieldStyle(.roundedBorder)
@@ -78,7 +79,7 @@ private struct TakeChip: View {
         }
         .buttonStyle(.bordered)
         .buttonBorderShape(.capsule)
-        .tint(isSelected ? .accentColor : nil)
+        .overlay { Capsule().strokeBorder(Color.accentColor, lineWidth: isSelected ? 2 : 0) }
         .help(isKept ? "The kept take, which Export writes. Click to play." : "Click to play this take")
     }
 }
