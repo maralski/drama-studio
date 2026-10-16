@@ -17,7 +17,7 @@ struct InspectorView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            AdvancedSection(expressiveness: $model.expressiveness)
+            AdvancedSection(model: model)
             if ModelSetup.isPreviewEngine {
                 Section {
                     Label("Preview engine: audio is a placeholder tone until the Metal engine ships.", systemImage: "info.circle")
@@ -38,11 +38,13 @@ private struct CastSection: View {
 
     var body: some View {
         Section {
-            Toggle(isOn: $model.screenplayMode) { HelpLabel("Screenplay mode", help: .screenplayMode) }
-                .help("Treat \u{201C}Name: line\u{201D} dialogue as separate speakers")
-            switch model.prepared {
-            case .success(let script):
-                ForEach(script.speakers) { speaker in
+            if model.document == nil {
+                Toggle(isOn: $model.screenplayMode) { HelpLabel("Screenplay mode", help: .screenplayMode) }
+                    .help("Treat \u{201C}Name: line\u{201D} dialogue as separate speakers")
+            }
+            switch model.castSpeakers {
+            case .success(let speakers):
+                ForEach(speakers) { speaker in
                     Picker(selection: voiceBinding(for: speaker)) {
                         if !model.library.voices.isEmpty {
                             ForEach(model.library.voices) { Text($0.name).tag(VoicePickerTag.choice(.library($0.id))) }
@@ -73,7 +75,7 @@ private struct CastSection: View {
                         .foregroundStyle(.orange)
                 }
             case .failure(.empty):
-                Text("Speakers appear here once there is a script.").font(.caption).foregroundStyle(.secondary)
+                Text("Speakers appear here once there is text to narrate.").font(.caption).foregroundStyle(.secondary)
             case .failure(let error):
                 Label(error.localizedDescription, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
@@ -95,7 +97,7 @@ private struct CastSection: View {
 }
 
 private struct AdvancedSection: View {
-    @Binding var expressiveness: Double
+    @Bindable var model: SessionModel
     @State private var isExpanded = false
 
     var body: some View {
@@ -105,11 +107,11 @@ private struct AdvancedSection: View {
                     HStack {
                         HelpLabel("Expressiveness", help: .expressiveness)
                         Spacer()
-                        Button("Default") { expressiveness = GenerationConfig.defaultExpressiveness }
+                        Button("Default") { model.expressiveness = GenerationConfig.defaultExpressiveness }
                             .controlSize(.small)
-                            .disabled(expressiveness == GenerationConfig.defaultExpressiveness)
+                            .disabled(model.expressiveness == GenerationConfig.defaultExpressiveness)
                     }
-                    Slider(value: $expressiveness, in: 0...1) {
+                    Slider(value: $model.expressiveness, in: 0...1) {
                         Text("Expressiveness")
                     } minimumValueLabel: {
                         Text("Steady")
@@ -119,6 +121,17 @@ private struct AdvancedSection: View {
                     .labelsHidden()
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    Picker(selection: $model.modelPrecision) {
+                        ForEach(ModelSetup.offeredPrecisions(current: model.modelPrecision), id: \.self) { mode in
+                            Text(mode.studioTitle).tag(mode)
+                        }
+                    } label: {
+                        HelpLabel("Model precision", help: .modelPrecision)
+                    }
+                    .padding(.top, 8)
+                    Text("Takes effect at the next Generate, which reloads the model.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             } label: {
                 Button { withAnimation { isExpanded.toggle() } } label: {

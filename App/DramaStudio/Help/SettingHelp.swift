@@ -8,6 +8,9 @@ enum SettingHelp: String, CaseIterable, Identifiable {
     case speakerVoice
     case performanceCues
     case examples
+    case sections
+    case pronunciation
+    case projects
     case surpriseMe
     case voiceDesign
     case referenceClip
@@ -18,7 +21,9 @@ enum SettingHelp: String, CaseIterable, Identifiable {
     case keepTake
     case quickPreview
     case expressiveness
+    case playbackSpeed
     case streaming
+    case modelPrecision
     case modelLocation
     case license
 
@@ -36,10 +41,10 @@ enum SettingHelp: String, CaseIterable, Identifiable {
     var group: Group {
         switch self {
         case .gettingStarted: .start
-        case .screenplayMode, .speakerVoice, .performanceCues, .examples: .script
+        case .screenplayMode, .speakerVoice, .performanceCues, .examples, .sections, .pronunciation, .projects: .script
         case .surpriseMe, .voiceDesign, .referenceClip, .voiceTranscript, .voiceConsent: .voices
-        case .newTake, .directorsNote, .keepTake, .quickPreview, .expressiveness: .takes
-        case .modelLocation, .streaming: .model
+        case .newTake, .directorsNote, .keepTake, .quickPreview, .expressiveness, .playbackSpeed: .takes
+        case .modelLocation, .streaming, .modelPrecision: .model
         case .license: .about
         }
     }
@@ -61,6 +66,9 @@ enum SettingHelp: String, CaseIterable, Identifiable {
         case .speakerVoice: "Speaker Voice"
         case .performanceCues: "Performance Cues"
         case .examples: "Examples"
+        case .sections: "Sections"
+        case .pronunciation: "Pronunciation"
+        case .projects: "Projects"
         case .surpriseMe: "Surprise Me"
         case .voiceDesign: "Voice Design"
         case .referenceClip: "Reference Clip"
@@ -71,7 +79,9 @@ enum SettingHelp: String, CaseIterable, Identifiable {
         case .keepTake: "Keep Take"
         case .quickPreview: "Quick Preview"
         case .expressiveness: "Expressiveness"
+        case .playbackSpeed: "Playback Speed"
         case .streaming: "Streaming"
+        case .modelPrecision: "Model Precision"
         case .modelLocation: "Model Location"
         case .license: "License and Consent"
         }
@@ -89,6 +99,12 @@ enum SettingHelp: String, CaseIterable, Identifiable {
             "Cues tell the model how to deliver a line, such as [laughs] or [sighs], or wrap a passage in tags such as <whisper>\u{2026}</whisper>. Insert Cue puts the cue at the cursor, or around the selected text for a passage cue. Cues are plain script text, so you can also type them by hand."
         case .examples:
             "The Examples menu has a line for each opening style, which goes in at the cursor, and a cast of ready-made characters. Choosing a character replaces the script with its line and casts its designed voice. Use them to hear what cues and voice design can do before you write your own."
+        case .sections:
+            "A PowerPoint, PDF, or EPUB file opens as sections, one per slide, page, or chapter, listed beside the editor. Generate narrates every section that is not skipped, in order, and keeps each speaker's voice consistent from one section to the next, while Narrate This Section redoes one section and leaves the others alone. Click a section to edit its text or move the playhead to it, and click one of its takes below the transport to choose it. Export writes the whole narration, one file per section, captions, or for a deck a slide narration package."
+        case .pronunciation:
+            "Rules in Settings rewrite words in the script before the model hears them, so a name or an abbreviation is said the way you want, such as Nguyen said as win. Whole word keeps a rule from changing part of a longer word, and Case sensitive makes US and us different rules. Rules never touch speaker tags, cues in brackets, or markup, and they apply to every take and section you generate. Edit the script instead when only one line should change."
+        case .projects:
+            "Save Project writes a .dramaproj bundle with the script or document, the cast's library voices, the settings, and the audio of every chosen take. Open Project brings all of it back, so sections show their durations and playback and export work without generating again. Surprise and designed voices are not saved; click Keep This Voice to add one to the library before you save."
         case .surpriseMe:
             "Lets the model invent a voice for this speaker. The first take you generate sets that voice, and later takes and retakes keep it. Pick Surprise me again for a different voice, or click Keep This Voice to save it to the library."
         case .voiceDesign:
@@ -109,8 +125,12 @@ enum SettingHelp: String, CaseIterable, Identifiable {
             "Makes faster rough takes for checking casting, cues, and pacing. It trades a possible dropped sentence for speed, because a sentence the model cuts short is kept instead of generated again, and each sentence gets less time to run. Turn it off for the take you export."
         case .expressiveness:
             "Sets how much the delivery varies from one take to the next. The default, in the middle, is the model vendor's own sampling, temperature 0.7 and top-p 0.7. Lower is steadier and flatter, and higher is more varied, with more risk of slurred or skipped words. No setting was measured to beat the default on word error rate, so move it for taste rather than accuracy."
+        case .playbackSpeed:
+            "Plays the audio faster or slower without changing its pitch, from 0.75x to 1.5x. It changes playback only: exports, captions, and projects keep the original timing. The scrubber and the sentence highlight follow the audio at every speed, and the setting is remembered."
         case .streaming:
             "Plays a take about three seconds after you click Generate, instead of after its first sentence is generated. The audio is decoded on the CPU every few seconds while the GPU generates, so it keeps several CPU cores busy during generation. A sentence that comes out too short is kept rather than generated again, because you may already be hearing it. Turn it off to hear each sentence once it is finished and let the retry fix short sentences."
+        case .modelPrecision:
+            "Balanced holds the dense and tower matrices as int8 and leaves the experts as released, so a decode frame takes 26 percent less GPU time (17.4 ms against 23.6 ms) and the process uses 9 percent less memory (36.3 GB against 39.7 GB resident). Speech quality stayed within seed-to-seed noise on the 36-run suite: speaker similarity 0.868 against 0.870, word error rate unable to separate the modes, and closeness to the float32 oracle at the bf16 reference's own distance. The first Balanced load writes a 2.5 GB cache file once, and the first load after switching re-tunes the kernels once, about 30 seconds, if no tuning exists for that mode. The change takes effect at the next Generate, which reloads the model."
         case .modelLocation:
             "Where Drama Studio looks for the Drama 3 weights, about 41.5 GB. By default it uses the Hugging Face cache, where \u{201C}hf download fishaudio/drama-3\u{201D} puts them. Choose a folder only if you keep the model somewhere else, such as an external drive. Restart Drama Studio after changing it."
         case .license:

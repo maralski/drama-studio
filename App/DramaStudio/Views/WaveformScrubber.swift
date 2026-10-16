@@ -17,6 +17,10 @@ struct WaveformScrubber: View {
                 context.fill(Path(roundedRect: rect, cornerRadius: 0.75), with: .color(played ? .accentColor : .secondary.opacity(0.45)))
             }
             if !peaks.isEmpty {
+                for boundary in sectionBoundaries {
+                    let x = size.width * boundary
+                    context.fill(Path(CGRect(x: x - 0.5, y: 0, width: 1, height: size.height)), with: .color(.primary.opacity(0.5)))
+                }
                 let x = size.width * progress
                 context.fill(Path(CGRect(x: x - 0.75, y: 0, width: 1.5, height: size.height)), with: .color(.primary))
             }
@@ -29,6 +33,12 @@ struct WaveformScrubber: View {
         .accessibilityElement()
         .accessibilityLabel("Playback position")
         .accessibilityValue("\(Int(progress * 100)) percent")
+    }
+
+    /// Where each section after the first begins, as a fraction of the audio.
+    private var sectionBoundaries: [Double] {
+        guard !model.audio.isEmpty else { return [] }
+        return model.narrationTakes.dropFirst().map { Double($0.sampleRange.lowerBound) / Double(model.audio.count) }
     }
 
     private func scrubArea(width: CGFloat) -> some View {

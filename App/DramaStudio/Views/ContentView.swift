@@ -15,7 +15,7 @@ struct ContentView: View {
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     VStack(spacing: 0) {
                         TransportBar(model: model)
-                        if !model.takes.isEmpty { TakesStrip(model: model) }
+                        if !model.visibleTakes.isEmpty { TakesStrip(model: model) }
                     }
                 }
                 .inspector(isPresented: $showsInspector) {
@@ -26,7 +26,7 @@ struct ContentView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button("Import Script", systemImage: "square.and.arrow.down") { FilePanels.importScript(into: model) }
-                    .help("Import a script (⌘O)")
+                    .help("Import a script, or a PowerPoint, PDF, or EPUB document to narrate by section (⌘O)")
             }
             ToolbarItem(placement: .primaryAction) {
                 Menu("Examples", systemImage: "text.badge.star") { ExampleMenuItems(model: model) }

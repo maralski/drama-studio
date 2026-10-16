@@ -67,18 +67,35 @@ struct StudioCommands: Commands {
             Button("About Drama Studio") { AboutPanel.show() }
         }
         CommandGroup(replacing: .newItem) {
-            Button("Import Script…") { FilePanels.importScript(into: model) }
+            Button("Import Script or Document…") { FilePanels.importScript(into: model) }
                 .keyboardShortcut("o")
+            Button("Open Project…") { FilePanels.openProject(into: model) }
+                .keyboardShortcut("o", modifiers: [.command, .shift])
+            Menu("Open Recent Project") {
+                ForEach(model.recentProjects, id: \.self) { url in
+                    Button(url.deletingPathExtension().lastPathComponent) { model.openProject(from: url) }
+                }
+            }
+            .disabled(model.recentProjects.isEmpty)
+        }
+        CommandGroup(replacing: .saveItem) {
+            Button("Save Project…") { FilePanels.saveProject(model) }
+                .keyboardShortcut("s")
+                .disabled(model.state.isGenerating)
         }
         CommandGroup(replacing: .importExport) {
             Button("Export Audio…") { FilePanels.export(model) }
                 .keyboardShortcut("e")
                 .disabled(!model.canExport)
+            Menu("Export") { ExportMenuItems(model: model) }
         }
         CommandMenu("Speech") {
             Button("Generate") { model.generate() }
                 .keyboardShortcut(.return)
                 .disabled(!model.canGenerate)
+            Button("Narrate This Section") { model.narrateSelectedSection() }
+                .keyboardShortcut(.return, modifiers: [.command, .shift])
+                .disabled(!model.canNarrateSection)
             Button("Stop Generating") { model.stopGeneration() }
                 .keyboardShortcut(".")
                 .disabled(!model.state.isGenerating)
@@ -95,6 +112,9 @@ struct StudioCommands: Commands {
             Menu("Examples") { ExampleMenuItems(model: model) }
             Toggle("Screenplay Mode", isOn: $model.screenplayMode)
                 .keyboardShortcut("p", modifiers: [.command, .shift])
+                .disabled(model.document != nil)
+            Button("Flatten to Script") { model.flattenToScript() }
+                .disabled(model.document == nil || model.state.isGenerating)
         }
     }
 }

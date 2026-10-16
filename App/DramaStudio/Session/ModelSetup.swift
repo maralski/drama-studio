@@ -32,6 +32,17 @@ enum ModelSetup {
         return DramaSynthesizer(location: location, codecDirectory: DramaCodec.defaultDirectory, mode: mode)
     }
 
+    /// The picker rows. The experimental suffix follows the engine's own verdict.
+    static func precisionTitle(_ mode: ModelPrecisionMode) -> String {
+        let base: String
+        switch mode {
+        case .full: base = "Full (default)"
+        case .balanced: base = "Balanced (int8, about 26 percent faster decode)"
+        case .compact: base = "Compact"
+        }
+        return mode.isExperimental ? base + " (Experimental)" : base
+    }
+
     enum Status: Equatable {
         case ready(URL)
         case incomplete(URL)
@@ -54,4 +65,8 @@ enum ModelSetup {
         guard let location = location(customPath: customPath) else { return .missing }
         return location.isComplete ? .ready(location.directory) : .incomplete(location.directory)
     }
+}
+
+extension ModelPrecisionMode {
+    var studioTitle: String { ModelSetup.precisionTitle(self) }
 }

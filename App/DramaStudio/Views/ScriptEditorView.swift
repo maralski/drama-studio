@@ -5,6 +5,7 @@ struct ScriptEditorView: View {
     @State private var isDropTarget = false
     @AppStorage(ModelSetup.customDirectoryKey) private var modelPath = ""
     @State private var modelStatus: ModelSetup.Status?
+    @State private var locator = HighlightLocator()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -14,26 +15,44 @@ struct ScriptEditorView: View {
             if let problem = modelStatus?.problem {
                 InlineBanner(message: problem, systemImage: "arrow.down.circle", tint: .accentColor, onDismiss: nil)
             }
-            editor
+            TimelineView(.animation(minimumInterval: 0.1, paused: !model.state.isPlaying)) { _ in
+                let highlight = model.state.isPlaying ? model.highlight(at: model.position) : nil
+                let playing = model.state.isPlaying ? model.playingSegment(at: model.position) : nil
+                if let document = model.document {
+                    HSplitView {
+                        SectionsView(model: model, document: document, playingID: playing)
+                            .frame(minWidth: 240, idealWidth: 320, maxWidth: 460)
+                        editor(highlight: highlight?.segmentID == model.selectedSegmentID ? highlight : nil)
+                            .frame(minWidth: 320)
+                    }
+                } else {
+                    editor(highlight: highlight)
+                }
+            }
             Divider()
             ScriptFooter(model: model)
         }
         .navigationTitle("Drama Studio")
         .task(id: modelPath) { modelStatus = ModelSetup.status(customPath: modelPath) }
+        .overlay {
+            if isDropTarget {
+                RoundedRectangle(cornerRadius: 8).strokeBorder(Color.accentColor, lineWidth: 3).padding(4)
+            }
+        }
+        .dropDestination(for: URL.self) { urls, _ in
+            guard let url = urls.first else { return false }
+            model.open(url)
+            return true
+        } isTargeted: { isDropTarget = $0 }
     }
 
-    private var editor: some View {
-        TextEditor(text: $model.script, selection: $model.selection)
-            .font(.system(size: 15))
-            .lineSpacing(3)
-            .contentMargins(.horizontal, 14, for: .scrollContent)
-            .contentMargins(.vertical, 12, for: .scrollContent)
-            .scrollContentBackground(.hidden)
+    private func editor(highlight: SpokenHighlight?) -> some View {
+        ScriptTextView(text: $model.editorText, selection: $model.selection, highlight: locator.range(of: highlight, in: model.editorText))
             .background(Color(nsColor: .textBackgroundColor))
             .overlay(alignment: .topLeading) {
-                if model.script.isEmpty {
+                if model.editorText.isEmpty && model.document == nil {
                     VStack(alignment: .leading, spacing: 14) {
-                        Text("Type or paste a script, or drop a text, Word, or subtitle file here.\nUse \u{201C}Name: line\u{201D} dialogue with Screenplay Mode for several voices.")
+                        Text("Type or paste a script, or drop a text, Word, subtitle, PowerPoint, PDF, or EPUB file here.\nUse \u{201C}Name: line\u{201D} dialogue with Screenplay Mode for several voices.")
                             .font(.system(size: 15))
                             .foregroundStyle(.tertiary)
                             .allowsHitTesting(false)
@@ -43,16 +62,24 @@ struct ScriptEditorView: View {
                     .padding(.vertical, 12)
                 }
             }
-            .overlay {
-                if isDropTarget {
-                    RoundedRectangle(cornerRadius: 8).strokeBorder(Color.accentColor, lineWidth: 3).padding(4)
-                }
-            }
-            .dropDestination(for: URL.self) { urls, _ in
-                guard let url = urls.first else { return false }
-                model.importScript(from: url)
-                return true
-            } isTargeted: { isDropTarget = $0 }
+    }
+}
+
+/// Finds the highlighted sentence's range in the editor text, remembering
+/// the last text and sentence list so a 10 Hz tick costs one array lookup.
+final class HighlightLocator {
+    private var texts: [String] = []
+    private var text = ""
+    private var ranges: [NSRange?] = []
+
+    func range(of highlight: SpokenHighlight?, in text: String) -> NSRange? {
+        guard let highlight else { return nil }
+        if highlight.texts != texts || text != self.text {
+            texts = highlight.texts
+            self.text = text
+            ranges = SentenceLocator.ranges(of: texts, in: text)
+        }
+        return ranges.indices.contains(highlight.index) ? ranges[highlight.index] : nil
     }
 }
 
@@ -61,18 +88,23 @@ private struct ScriptFooter: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Text("\(model.script.count.formatted()) characters")
-            switch model.prepared {
-            case .success(let script):
-                Text(script.speakers.count == 1 ? "1 voice" : "\(script.speakers.count) speakers")
-            case .failure(.empty):
-                EmptyView()
-            case .failure(let error):
-                Label(error.localizedDescription, systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red)
+            if let document = model.document {
+                Text("\(document.segments.count) sections, \(SectionRequests.queue(document).count) to narrate, \(model.narrationTakes.count) narrated")
+                Text("\(model.editorText.count.formatted()) characters in this section")
+            } else {
+                Text("\(model.script.count.formatted()) characters")
+                switch model.prepared {
+                case .success(let script):
+                    Text(script.speakers.count == 1 ? "1 voice" : "\(script.speakers.count) speakers")
+                case .failure(.empty):
+                    EmptyView()
+                case .failure(let error):
+                    Label(error.localizedDescription, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                }
             }
             Spacer()
-            if model.screenplayMode {
+            if model.screenplayMode && model.document == nil {
                 Text("Screenplay Mode").foregroundStyle(.secondary)
             }
         }

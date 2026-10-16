@@ -28,6 +28,7 @@ struct TransportBar: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                speedMenu
                 exportMenu
             }
             HStack(spacing: 8) {
@@ -60,17 +61,40 @@ struct TransportBar: View {
         }
     }
 
+    private var speedMenu: some View {
+        Picker(selection: $model.playbackRate) {
+            ForEach(SessionModel.playbackRates, id: \.self) { rate in
+                Text(Self.speed(rate)).tag(rate)
+            }
+        } label: {
+            HelpLabel("Speed", help: .playbackSpeed)
+        }
+        .pickerStyle(.menu)
+        .fixedSize()
+        .help("Playback speed; exports keep the original timing")
+    }
+
     private var exportMenu: some View {
         Menu("Export", systemImage: "square.and.arrow.up") {
-            ForEach(ExportFormat.allCases) { format in
-                Button(format.title) { FilePanels.export(model, as: format) }
-            }
+            ExportMenuItems(model: model)
         } primaryAction: {
             FilePanels.export(model)
         }
         .fixedSize()
         .disabled(!model.canExport)
         .help(model.keptTake == nil ? "Export audio (⌘E)" : "Export the kept take (⌘E)")
+    }
+
+    static func speed(_ rate: Double) -> String {
+        "\(rate.formatted(.number.precision(.fractionLength(0...2))))x"
+    }
+
+    /// The status line after a document run.
+    static func sectionSummary(sections: Int, audioSeconds: TimeInterval, stoppedEarly: Bool, generationSeconds: TimeInterval?) -> String {
+        var parts = ["\(sections) \(sections == 1 ? "section" : "sections") narrated", "\(seconds(audioSeconds)) of audio"]
+        if stoppedEarly { parts[0] += " (stopped early)" }
+        if let generationSeconds { parts.append("generated in \(seconds(generationSeconds))") }
+        return parts.joined(separator: " \u{00B7} ")
     }
 
     static func seconds(_ value: TimeInterval) -> String {
@@ -135,11 +159,37 @@ private struct StatusLine: View {
     }
 
     private var summary: String {
-        TransportBar.summary(
+        if model.document != nil {
+            return TransportBar.sectionSummary(sections: model.narrationTakes.count, audioSeconds: model.duration,
+                                               stoppedEarly: model.result == nil, generationSeconds: model.generationClock?.duration)
+        }
+        return TransportBar.summary(
             audioSeconds: model.duration,
             frames: model.result?.take.frameCount,
             framesPerSecond: model.result?.timings.framesPerSecond,
             generationSeconds: model.generationClock?.duration
         )
+    }
+}
+
+/// The transport's Export menu and the File menu share these items.
+struct ExportMenuItems: View {
+    let model: SessionModel
+
+    var body: some View {
+        ForEach(ExportFormat.allCases) { format in
+            Button(format.title) { FilePanels.export(model, as: format) }
+        }
+        .disabled(!model.canExport)
+        Divider()
+        Button("Per Section\u{2026}") { FilePanels.exportSections(model) }
+            .disabled(!model.canExportSections)
+        Menu("Captions") {
+            Button("SRT\u{2026}") { FilePanels.exportCaptions(model, as: .srt) }
+            Button("WebVTT\u{2026}") { FilePanels.exportCaptions(model, as: .webVTT) }
+        }
+        .disabled(!model.canExportCaptions)
+        Button("Slide Narration Package\u{2026}") { FilePanels.exportSlidePackage(model) }
+            .disabled(!model.canExportSlidePackage)
     }
 }

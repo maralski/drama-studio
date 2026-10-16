@@ -4,6 +4,22 @@ import SwiftUI
 
 struct SettingsView: View {
     let server: APIServerController
+
+    var body: some View {
+        TabView {
+            Tab("General", systemImage: "gearshape") {
+                GeneralSettingsView(server: server)
+            }
+            Tab("Pronunciation", systemImage: "character.book.closed") {
+                PronunciationSettingsView()
+            }
+        }
+        .frame(width: 560)
+    }
+}
+
+private struct GeneralSettingsView: View {
+    let server: APIServerController
     @AppStorage(ModelSetup.customDirectoryKey) private var modelPath = ""
     @AppStorage(APIServerController.startsWithAppKey) private var startsWithApp = true
     @AppStorage(APIServerController.portKey) private var port = Int(APIService.defaultPort)
@@ -49,7 +65,6 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 520)
         .task(id: modelPath) { status = ModelSetup.status(customPath: modelPath) }
     }
 

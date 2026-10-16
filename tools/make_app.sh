@@ -69,6 +69,29 @@ $(doc_type "Rich Text Script" public.rtf com.apple.rtfd)
 $(doc_type "HTML Script" public.html)
 $(doc_type "Word Document" org.openxmlformats.wordprocessingml.document)
 $(doc_type "Subtitles" audio.fish.community.DramaStudio.subrip org.w3.webvtt)
+$(doc_type "PowerPoint Presentation" org.openxmlformats.presentationml.presentation)
+$(doc_type "PDF Document" com.adobe.pdf)
+$(doc_type "EPUB Book" org.idpf.epub-container)
+        <dict>
+            <key>CFBundleTypeName</key><string>Drama Studio Project</string>
+            <key>CFBundleTypeRole</key><string>Editor</string>
+            <key>LSHandlerRank</key><string>Owner</string>
+            <key>LSTypeIsPackage</key><true/>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>audio.fish.community.DramaStudio.project</string>
+            </array>
+        </dict>
+    </array>
+    <key>UTExportedTypeDeclarations</key>
+    <array>
+        <dict>
+            <key>UTTypeIdentifier</key><string>audio.fish.community.DramaStudio.project</string>
+            <key>UTTypeDescription</key><string>Drama Studio Project</string>
+            <key>UTTypeConformsTo</key><array><string>com.apple.package</string></array>
+            <key>UTTypeTagSpecification</key>
+            <dict><key>public.filename-extension</key><array><string>dramaproj</string></array></dict>
+        </dict>
     </array>
     <key>UTImportedTypeDeclarations</key>
     <array>

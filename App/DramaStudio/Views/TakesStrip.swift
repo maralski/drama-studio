@@ -9,8 +9,11 @@ struct TakesStrip: View {
         VStack(alignment: .leading, spacing: 8) {
             ScrollView(.horizontal) {
                 HStack(spacing: 6) {
-                    ForEach(model.takes) { take in
-                        TakeChip(take: take, isSelected: take.id == model.selectedTakeID, isKept: take.id == model.keptTakeID) {
+                    if let section = model.selectedSegment, model.document != nil {
+                        Text(section.label).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    ForEach(model.visibleTakes) { take in
+                        TakeChip(take: take, isSelected: take.id == model.visibleSelectedTakeID, isKept: take.id == model.keptTakeID) {
                             model.selectTake(take.id)
                         }
                     }
@@ -20,6 +23,7 @@ struct TakesStrip: View {
             .scrollIndicators(.never)
             .defaultScrollAnchor(.leading, for: .alignment)
             .defaultScrollAnchor(.trailing, for: .sizeChanges)
+            if model.document == nil {
             HStack(spacing: 8) {
                 TextField("Give a note", text: $note, prompt: Text("Give a note, such as softer and warmer"))
                     .textFieldStyle(.roundedBorder)
@@ -48,6 +52,7 @@ struct TakesStrip: View {
             .scrollIndicators(.never)
             if let blocker = model.retakeBlocker {
                 Text(blocker).font(.caption).foregroundStyle(.secondary)
+            }
             }
         }
         .padding(.horizontal, 14)
