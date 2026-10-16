@@ -1,11 +1,13 @@
 #!/bin/zsh
-# Builds dist/DramaStudio.app from the SwiftPM product and ad-hoc signs it.
+# Builds dist/DramaStudio.app from the SwiftPM products and ad-hoc signs it.
+# The MCP server ships beside the app binary as Contents/MacOS/drama-mcp.
 set -euo pipefail
 
 root=${0:A:h:h}
 cd "$root"
 
 swift build -c release --product DramaStudio
+swift build -c release --product drama-mcp
 bin=$(swift build -c release --show-bin-path)
 resources="DramaStudio_DramaEngine.bundle"
 
@@ -13,6 +15,7 @@ app="$root/dist/DramaStudio.app"
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$bin/DramaStudio" "$app/Contents/MacOS/DramaStudio"
+cp "$bin/drama-mcp" "$app/Contents/MacOS/drama-mcp"
 
 cp -R "$bin/$resources" "$app/Contents/Resources/$resources"
 
