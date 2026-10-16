@@ -55,7 +55,7 @@ public final class DramaModel: @unchecked Sendable {
         config = try ModelConfig(url: location.directory.appendingPathComponent("config.json"))
         tuningKey = try TuningKey(ctx: ctx, location: location)
         store = try SafeTensorsStore(directory: location.directory, device: ctx.device)
-        weights = try ModelWeights(store: store, config: config, device: ctx.device)
+        weights = try ModelWeights(source: InPlaceSource(store: store, config: config, device: ctx.device), config: config)
         let chosen: KernelSchedule
         if let schedule {
             try schedule.validate()
@@ -171,18 +171,18 @@ public final class DramaModel: @unchecked Sendable {
     func commandBuffer() -> (MTLCommandBuffer, MTLComputeCommandEncoder) {
         let cb = ctx.queue.makeCommandBuffer()!
         let enc = cb.makeComputeCommandEncoder()!
-        enc.useResources(store.shards, usage: .read)
+        enc.useResources(weights.declaredBuffers, usage: .read)
         return (cb, enc)
     }
 
     /// Touches every weight page once, builds every pipeline state, and runs
-    /// one command buffer that declares the shards, so the first request pays
-    /// for none of them (the GPU wires the 41 GB on its first use). Shards are
-    /// walked on parallel threads. Returns bytes walked.
+    /// one command buffer that declares the weight buffers, so the first
+    /// request pays for none of them (the GPU wires each buffer on its first
+    /// use). Buffers are walked on parallel threads. Returns bytes walked.
     @discardableResult
     public func warmUp() -> Int {
         ctx.warmPipelines()
-        let shards = store.shards
+        let buffers = weights.declaredBuffers
         defer {
             let (cb, enc) = commandBuffer()
             try? backbone.k.zero(enc, backbone.counts)
@@ -190,16 +190,16 @@ public final class DramaModel: @unchecked Sendable {
             cb.commit(); cb.waitUntilCompleted()
         }
         var total = 0
-        DispatchQueue.concurrentPerform(iterations: shards.count) { i in
-            let shard = shards[i]
-            madvise(shard.contents(), shard.length, MADV_WILLNEED)
-            let p = shard.contents().assumingMemoryBound(to: UInt64.self)
+        DispatchQueue.concurrentPerform(iterations: buffers.count) { i in
+            let buffer = buffers[i]
+            madvise(buffer.contents(), buffer.length, MADV_WILLNEED)
+            let p = buffer.contents().assumingMemoryBound(to: UInt64.self)
             var sink: UInt64 = 0
             var j = 0
             let stride = 16384 / 8
-            while j * 8 < shard.length { sink &+= p[j]; j += stride }
+            while j * 8 < buffer.length { sink &+= p[j]; j += stride }
             withExtendedLifetime(sink) {}
-            Self.sinkLock.lock(); Self.sinkSum &+= sink; total += shard.length; Self.sinkLock.unlock()
+            Self.sinkLock.lock(); Self.sinkSum &+= sink; total += buffer.length; Self.sinkLock.unlock()
         }
         return total
     }

@@ -1,4 +1,4 @@
-// y[m*N + n] = sum_k W[rowStart + n][k] * x[m*K + k] for bf16 W [*, K], fp32 x.
+// y[m*N + n] = sum_k W[n][k] * x[m*K + k] for bf16 W [N, K], fp32 x.
 // One simdgroup per output row and MTILE-token tile (the grid's second
 // dimension); a threadgroup holds simdgroups_per_threadgroup rows, so the host
 // chooses the rows per threadgroup by the thread count alone. Each lane reads
@@ -12,7 +12,6 @@ struct GemvParams {
     uint N;
     uint K;
     uint M;
-    uint rowStart;
     uint roundOutput;
 };
 
@@ -28,7 +27,7 @@ kernel void gemv_bf16_t(device const ushort* W [[buffer(0)]],
     uint n = tg.x * simdgroups + sg;
     if (n >= p.N) return;
     // Tensor data in the shards is 8-byte aligned, not 16, so load two uint2.
-    device const uint2* wrow = (device const uint2*)(W + (p.rowStart + n) * p.K);
+    device const uint2* wrow = (device const uint2*)(W + n * p.K);
     uint tiles = p.K / 256;
     uint m0 = tg.y * MTILE;
     if (m0 < p.M) {
@@ -76,7 +75,7 @@ GEMV_VARIANT("gemv_bf16_t16", 16)
 GEMV_VARIANT("gemv_bf16_t32", 32)
 GEMV_VARIANT("gemv_bf16_t64", 64)
 
-// y[m*N + n] = sum_k W[rowStart + n][k] * x[m*K + k] for M > 1 rows, as a
+// y[m*N + n] = sum_k W[n][k] * x[m*K + k] for M > 1 rows, as a
 // BM x BN output tile per threadgroup of WM x WN simdgroups, stepping K by BK.
 // The bf16 weights are widened to fp32 in threadgroup memory, so each product
 // is the same fp32 product the GEMV forms; only the summation order differs.
@@ -106,7 +105,7 @@ kernel void gemm_bf16_t(device const ushort* W [[buffer(0)]],
     simdgroup_float8x8 acc[TM][TN];
     for (uint i = 0; i < TM; i++)
         for (uint j = 0; j < TN; j++) acc[i][j] = simdgroup_float8x8(0.0f);
-    device const ushort* wbase = W + (p.rowStart + n0) * p.K;
+    device const ushort* wbase = W + n0 * p.K;
     for (uint k0 = 0; k0 < p.K; k0 += BK) {
         for (uint idx = tid * 4; idx < BM * BK; idx += THREADS * 4) {
             uint row = idx / BK, col = idx % BK;

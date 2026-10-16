@@ -94,10 +94,6 @@ final class Backbone {
         for (i, v) in snap.rec { v.withUnsafeBufferPointer { memcpy(recState[i]!.floats, $0.baseAddress!, v.count * 4) } }
     }
 
-    func useWeights(_ enc: MTLComputeCommandEncoder, shards: [MTLBuffer]) {
-        enc.useResources(shards, usage: .read)
-    }
-
     /// Runs rows [pos0, pos0 + rows) whose frames are already in `frames`.
     /// Leaves the final-norm output in `hiddenOut`.
     func forward(_ enc: MTLComputeCommandEncoder, rows M: Int, pos0: Int) throws {
@@ -161,22 +157,22 @@ final class Backbone {
             try k.residualAdd(enc, x: x, y: mixOut, count: M * H)
             try k.rmsnorm(enc, out: h, outStride: H, x: x, view: .contiguous(H), rows: M, dim: H, w: layer.postNorm, eps: c.rmsNormEps)
         }
-        try group("linear.gemm.qkv", layers: linearCount) { enc in try k.gemv(enc, lw.inProjQKV, x: h, y: big, n: 8192, k: H, m: M) }
-        try group("linear.gemm.z", layers: linearCount) { enc in try k.gemv(enc, lw.inProjZ, x: h, y: z, n: 4096, k: H, m: M) }
+        try group("linear.gemm.qkv", layers: linearCount) { enc in try k.gemv(enc, lw.inProjQKV, x: h, y: big, m: M) }
+        try group("linear.gemm.z", layers: linearCount) { enc in try k.gemv(enc, lw.inProjZ, x: h, y: z, m: M) }
         try group("linear.gemm.ab", layers: linearCount) { enc in
-            try k.gemv(enc, lw.inProjA, x: h, y: a, n: 32, k: H, m: M)
-            try k.gemv(enc, lw.inProjB, x: h, y: b, n: 32, k: H, m: M)
+            try k.gemv(enc, lw.inProjA, x: h, y: a, m: M)
+            try k.gemv(enc, lw.inProjB, x: h, y: b, m: M)
         }
         try group("linear.conv", layers: linearCount) { enc in try k.gdnConv(enc, out: convOut, mixed: big, state: convState[li]!, w: lw.conv, channels: 8192, rows: M) }
         try group("linear.recurrent", layers: linearCount) { enc in
             try k.gdnRecurrent(enc, core: core, convOut: convOut, a: a, b: b, state: recState[li]!, aLog: lw.aLog, dtBias: lw.dtBias, rows: M, config: c)
         }
         try group("linear.gatednorm", layers: linearCount) { enc in try k.gatedRMSNorm(enc, out: normed, x: core, z: z, w: lw.norm, rows: M * c.linearValueHeads, eps: c.rmsNormEps) }
-        try group("linear.gemm.out", layers: linearCount) { enc in try k.gemv(enc, lw.outProj, x: normed, y: mixOut, n: H, k: 4096, m: M) }
+        try group("linear.gemm.out", layers: linearCount) { enc in try k.gemv(enc, lw.outProj, x: normed, y: mixOut, m: M) }
         try group("full.gemm.qkv", layers: fullCount) { enc in
-            try k.gemv(enc, fw.qProj, x: h, y: big, n: heads * 512, k: H, m: M)
-            try k.gemv(enc, fw.kProj, x: h, y: kbuf, n: kvHeads * 256, k: H, m: M)
-            try k.gemv(enc, fw.vProj, x: h, y: vbuf, n: kvHeads * 256, k: H, m: M)
+            try k.gemv(enc, fw.qProj, x: h, y: big, m: M)
+            try k.gemv(enc, fw.kProj, x: h, y: kbuf, m: M)
+            try k.gemv(enc, fw.vProj, x: h, y: vbuf, m: M)
         }
         try group("full.norm.rope.kv", layers: fullCount) { enc in
             try k.rmsnorm(enc, out: qn, outStride: 256, x: big, view: HeadView(heads: UInt32(heads), groupStride: UInt32(heads * 512), headStride: 512), rows: M * heads, dim: 256, w: fw.qNorm, eps: c.rmsNormEps)
@@ -191,26 +187,26 @@ final class Backbone {
         }
         try group("full.gate+gemm.out", layers: fullCount) { enc in
             try k.sigmoidGateMul(enc, out: normed, attn: attnOut, gate: big, gateOffset: 256, view: HeadView(heads: UInt32(heads), groupStride: UInt32(heads * 512), headStride: 512), rows: M * heads)
-            try k.gemv(enc, fw.oProj, x: normed, y: mixOut, n: H, k: heads * 256, m: M)
+            try k.gemv(enc, fw.oProj, x: normed, y: mixOut, m: M)
         }
         try group("moe.router+bucket", layers: c.numLayers) { enc in
-            try k.gemv(enc, mw.router, x: h, y: routerLogits, n: c.numExperts, k: H, m: M)
+            try k.gemv(enc, mw.router, x: h, y: routerLogits, m: M)
             try k.moeRouter(enc, ids: ids, weights: rw, logits: routerLogits, rows: M, config: c)
             try k.zero(enc, counts)
             try k.moeBucket(enc, counts: counts, lists: lists, ids: ids, active: active, pairs: M * c.topK, capacity: capacityPairs)
         }
         try group("moe.gateup", layers: c.numLayers) { enc in
-            try k.moeGateUp(enc, act: act, x: h, table: mw.table, counts: counts, lists: lists, active: active, maxActive: maxActive, capacity: capacityPairs, rows: M, config: c)
+            try k.moeGateUp(enc, act: act, x: h, experts: mw.experts, counts: counts, lists: lists, active: active, maxActive: maxActive, capacity: capacityPairs, rows: M, config: c)
         }
         try group("moe.down", layers: c.numLayers) { enc in
-            try k.moeDown(enc, slotOut: slotOut, act: act, weights: rw, table: mw.table, counts: counts, lists: lists, active: active, maxActive: maxActive, capacity: capacityPairs, rows: M, config: c)
+            try k.moeDown(enc, slotOut: slotOut, act: act, weights: rw, experts: mw.experts, counts: counts, lists: lists, active: active, maxActive: maxActive, capacity: capacityPairs, rows: M, config: c)
         }
         try group("moe.shared", layers: c.numLayers) { enc in
-            try k.gemv(enc, mw.sharedGate, x: h, y: sharedG, n: 512, k: H, m: M)
-            try k.gemv(enc, mw.sharedUp, x: h, y: sharedU, n: 512, k: H, m: M)
+            try k.gemv(enc, mw.sharedGate, x: h, y: sharedG, m: M)
+            try k.gemv(enc, mw.sharedUp, x: h, y: sharedU, m: M)
             try k.siluMul(enc, out: sharedAct, a: sharedG, b: sharedU, count: M * 512)
-            try k.gemv(enc, mw.sharedDown, x: sharedAct, y: sharedOut, n: H, k: 512, m: M)
-            try k.gemv(enc, mw.sharedExpertGate, x: h, y: sharedGate, n: 1, k: H, m: M)
+            try k.gemv(enc, mw.sharedDown, x: sharedAct, y: sharedOut, m: M)
+            try k.gemv(enc, mw.sharedExpertGate, x: h, y: sharedGate, m: M)
         }
         try group("moe.combine", layers: c.numLayers) { enc in
             try k.moeCombine(enc, x: x, slotOut: slotOut, sharedOut: sharedOut, sharedGate: sharedGate, rows: M, config: c)
@@ -223,8 +219,8 @@ final class Backbone {
     func candidateLogits(_ enc: MTLComputeCommandEncoder, row0: Int, rows M: Int) throws {
         precondition(M == 1)
         let H = config.hiddenSize
-        try k.gemv(enc, weights.lmHead, x: hiddenOut, xOffset: row0 * H, y: cand, n: 1, k: H, m: 1, rowStart: Int(config.eos))
-        try k.gemv(enc, weights.lmHead, x: hiddenOut, xOffset: row0 * H, y: cand, yOffset: 1, n: config.codebookSize, k: H, m: 1, rowStart: Int(config.semanticStart))
+        try k.gemv(enc, weights.lmHeadEos, x: hiddenOut, xOffset: row0 * H, y: cand, m: 1)
+        try k.gemv(enc, weights.lmHeadSemantic, x: hiddenOut, xOffset: row0 * H, y: cand, yOffset: 1, m: 1)
     }
 
     func readCandidateLogits() -> [Float] { cand.read(config.codebookSize + 1) }
@@ -232,11 +228,10 @@ final class Backbone {
     func framesView(_ pos0: Int) -> Buf { Buf(view: frames, byteOffset: pos0 * 11 * 4) }
 
     private func linearAttention(_ enc: MTLComputeCommandEncoder, _ w: LinearAttentionWeights, layer: Int, rows M: Int) throws {
-        let H = config.hiddenSize
-        try k.gemv(enc, w.inProjQKV, x: h, y: big, n: 8192, k: H, m: M)
-        try k.gemv(enc, w.inProjZ, x: h, y: z, n: 4096, k: H, m: M)
-        try k.gemv(enc, w.inProjA, x: h, y: a, n: 32, k: H, m: M)
-        try k.gemv(enc, w.inProjB, x: h, y: b, n: 32, k: H, m: M)
+        try k.gemv(enc, w.inProjQKV, x: h, y: big, m: M)
+        try k.gemv(enc, w.inProjZ, x: h, y: z, m: M)
+        try k.gemv(enc, w.inProjA, x: h, y: a, m: M)
+        try k.gemv(enc, w.inProjB, x: h, y: b, m: M)
         if !skipStages.contains("gdn") {
             try k.gdnConv(enc, out: convOut, mixed: big, state: convState[layer]!, w: w.conv, channels: 8192, rows: M)
             try k.roundIfMimic(enc, x: convOut, count: M * 8192)
@@ -245,15 +240,14 @@ final class Backbone {
         }
         try k.gatedRMSNorm(enc, out: normed, x: core, z: z, w: w.norm, rows: M * config.linearValueHeads, eps: config.rmsNormEps)
         try k.roundIfMimic(enc, x: normed, count: M * 4096)
-        try k.gemv(enc, w.outProj, x: normed, y: mixOut, n: H, k: 4096, m: M)
+        try k.gemv(enc, w.outProj, x: normed, y: mixOut, m: M)
     }
 
     private func fullAttention(_ enc: MTLComputeCommandEncoder, _ w: FullAttentionWeights, layer: Int, rows M: Int, pos0: Int) throws {
-        let H = config.hiddenSize
         let heads = config.numHeads, kvHeads = config.numKVHeads
-        try k.gemv(enc, w.qProj, x: h, y: big, n: heads * 512, k: H, m: M)
-        try k.gemv(enc, w.kProj, x: h, y: kbuf, n: kvHeads * 256, k: H, m: M)
-        try k.gemv(enc, w.vProj, x: h, y: vbuf, n: kvHeads * 256, k: H, m: M)
+        try k.gemv(enc, w.qProj, x: h, y: big, m: M)
+        try k.gemv(enc, w.kProj, x: h, y: kbuf, m: M)
+        try k.gemv(enc, w.vProj, x: h, y: vbuf, m: M)
         try k.rmsnorm(enc, out: qn, outStride: 256, x: big, view: HeadView(heads: UInt32(heads), groupStride: UInt32(heads * 512), headStride: 512),
                       rows: M * heads, dim: 256, w: w.qNorm, eps: config.rmsNormEps)
         try k.rmsnorm(enc, out: kn, outStride: 256, x: kbuf, view: HeadView(heads: UInt32(kvHeads), groupStride: UInt32(kvHeads * 256), headStride: 256),
@@ -274,28 +268,27 @@ final class Backbone {
         try k.sigmoidGateMul(enc, out: normed, attn: attnOut, gate: big, gateOffset: 256,
                              view: HeadView(heads: UInt32(heads), groupStride: UInt32(heads * 512), headStride: 512), rows: M * heads)
         try k.roundIfMimic(enc, x: normed, count: M * heads * 256)
-        try k.gemv(enc, w.oProj, x: normed, y: mixOut, n: H, k: heads * 256, m: M)
+        try k.gemv(enc, w.oProj, x: normed, y: mixOut, m: M)
     }
 
     private func moe(_ enc: MTLComputeCommandEncoder, _ w: MoEWeights, rows M: Int) throws {
-        let H = config.hiddenSize
         let capacityPairs = maxRows * config.topK
-        try k.gemv(enc, w.router, x: h, y: routerLogits, n: config.numExperts, k: H, m: M)
+        try k.gemv(enc, w.router, x: h, y: routerLogits, m: M)
         try k.moeRouter(enc, ids: ids, weights: rw, logits: routerLogits, rows: M, config: config)
         try k.zero(enc, counts)
         let maxActive = min(M * config.topK, config.numExperts)
         try k.moeBucket(enc, counts: counts, lists: lists, ids: ids, active: active, pairs: M * config.topK, capacity: capacityPairs)
         if !skipStages.contains("experts") {
-            try k.moeGateUp(enc, act: act, x: h, table: w.table, counts: counts, lists: lists, active: active, maxActive: maxActive, capacity: capacityPairs, rows: M, config: config)
-            try k.moeDown(enc, slotOut: slotOut, act: act, weights: rw, table: w.table, counts: counts, lists: lists, active: active, maxActive: maxActive, capacity: capacityPairs, rows: M, config: config)
+            try k.moeGateUp(enc, act: act, x: h, experts: w.experts, counts: counts, lists: lists, active: active, maxActive: maxActive, capacity: capacityPairs, rows: M, config: config)
+            try k.moeDown(enc, slotOut: slotOut, act: act, weights: rw, experts: w.experts, counts: counts, lists: lists, active: active, maxActive: maxActive, capacity: capacityPairs, rows: M, config: config)
         }
         if !skipStages.contains("shared") {
-            try k.gemv(enc, w.sharedGate, x: h, y: sharedG, n: 512, k: H, m: M)
-            try k.gemv(enc, w.sharedUp, x: h, y: sharedU, n: 512, k: H, m: M)
+            try k.gemv(enc, w.sharedGate, x: h, y: sharedG, m: M)
+            try k.gemv(enc, w.sharedUp, x: h, y: sharedU, m: M)
             try k.siluMul(enc, out: sharedAct, a: sharedG, b: sharedU, count: M * 512)
             try k.roundIfMimic(enc, x: sharedAct, count: M * 512)
-            try k.gemv(enc, w.sharedDown, x: sharedAct, y: sharedOut, n: H, k: 512, m: M)
-            try k.gemv(enc, w.sharedExpertGate, x: h, y: sharedGate, n: 1, k: H, m: M)
+            try k.gemv(enc, w.sharedDown, x: sharedAct, y: sharedOut, m: M)
+            try k.gemv(enc, w.sharedExpertGate, x: h, y: sharedGate, m: M)
         }
         try k.moeCombine(enc, x: x, slotOut: slotOut, sharedOut: sharedOut, sharedGate: sharedGate, rows: M, config: config)
     }

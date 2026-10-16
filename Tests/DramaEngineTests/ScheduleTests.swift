@@ -48,7 +48,7 @@ final class ScheduleTests: XCTestCase {
     func testGemvVariantsBitIdentical() throws {
         var f = try KernelParityTests.Fixture()
         for (n, kDim, m) in [(256, 2048, 128), (8192, 2048, 44), (2048, 4096, 5), (32, 2048, 100), (1, 2048, 128), (512, 2048, 1), (1, 2048, 1), (2048, 512, 7)] {
-            let w = f.bf16Tensor("w", rows: n, cols: kDim)
+            let w = f.bf16Matrix(rows: n, cols: kDim)
             let x = f.floats(m * kDim, label: "x")
             let y = Buf(f.ctx.device, floats: m * n, label: "y")
             var reference: [Float]?
@@ -59,7 +59,7 @@ final class ScheduleTests: XCTestCase {
                 var k = Kernels(ctx: f.ctx, precision: .exact, schedule: s)
                 k.forceGemv = true
                 y.zero()
-                try f.run { enc in try k.gemv(enc, w, x: x, y: y, n: n, k: kDim, m: m) }
+                try f.run { enc in try k.gemv(enc, w, x: x, y: y, m: m) }
                 let got = y.read(m * n)
                 if let reference {
                     XCTAssertEqual(got, reference, "n=\(n) k=\(kDim) m=\(m) \(shape.label)")

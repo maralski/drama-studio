@@ -24,6 +24,11 @@ final class KernelParityTests: XCTestCase {
             return TensorRef(name: name, dtype: .bf16, shape: [rows, cols], buffer: buf, offset: 0)
         }
 
+        mutating func bf16Matrix(rows: Int, cols: Int) -> WeightMatrix {
+            let t = bf16Tensor("w", rows: rows, cols: cols)
+            return WeightMatrix(name: t.name, format: .bf16, rows: rows, cols: cols, buffer: t.buffer, offset: 0, paramOffset: 0)
+        }
+
         mutating func floats(_ count: Int, label: String) -> Buf {
             let b = Buf(ctx.device, floats: count, label: label)
             for i in 0..<count { b.floats[i] = uniform() }
@@ -52,16 +57,16 @@ final class KernelParityTests: XCTestCase {
     func testGemmMatchesGemv() throws {
         var f = try Fixture()
         for (n, kDim, m) in [(256, 2048, 128), (8192, 2048, 44), (2048, 4096, 5), (32, 2048, 100), (1, 2048, 128), (512, 2048, 64), (2048, 512, 7)] {
-            let w = f.bf16Tensor("w", rows: n, cols: kDim)
+            let w = f.bf16Matrix(rows: n, cols: kDim)
             let x = f.floats(m * kDim, label: "x")
             let yGemv = Buf(f.ctx.device, floats: m * n, label: "yGemv")
             let yGemm = Buf(f.ctx.device, floats: m * n, label: "yGemm")
             let k = f.k
             try f.run { enc in
                 for row in 0..<m {
-                    try k.gemv(enc, w, x: x, xOffset: row * kDim, y: yGemv, yOffset: row * n, n: n, k: kDim, m: 1)
+                    try k.gemv(enc, w, x: x, xOffset: row * kDim, y: yGemv, yOffset: row * n, m: 1)
                 }
-                try k.gemv(enc, w, x: x, y: yGemm, n: n, k: kDim, m: m)
+                try k.gemv(enc, w, x: x, y: yGemm, m: m)
             }
             let a = yGemv.read(m * n), b = yGemm.read(m * n)
             let err = Self.relL2(a, b)
@@ -74,15 +79,15 @@ final class KernelParityTests: XCTestCase {
     func testGemmRowsIndependentOfChunk() throws {
         var f = try Fixture()
         let n = 512, kDim = 2048, m = 70
-        let w = f.bf16Tensor("w", rows: n, cols: kDim)
+        let w = f.bf16Matrix(rows: n, cols: kDim)
         let x = f.floats(m * kDim, label: "x")
         let whole = Buf(f.ctx.device, floats: m * n, label: "whole")
         let split = Buf(f.ctx.device, floats: m * n, label: "split")
         let k = f.k
         try f.run { enc in
-            try k.gemv(enc, w, x: x, y: whole, n: n, k: kDim, m: m)
-            try k.gemv(enc, w, x: x, y: split, n: n, k: kDim, m: 3)
-            try k.gemv(enc, w, x: x, xOffset: 3 * kDim, y: split, yOffset: 3 * n, n: n, k: kDim, m: m - 3)
+            try k.gemv(enc, w, x: x, y: whole, m: m)
+            try k.gemv(enc, w, x: x, y: split, m: 3)
+            try k.gemv(enc, w, x: x, xOffset: 3 * kDim, y: split, yOffset: 3 * n, m: m - 3)
         }
         XCTAssertEqual(whole.read(m * n), split.read(m * n))
     }

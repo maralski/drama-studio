@@ -15,19 +15,19 @@ public enum KernelBench {
         return (cb.gpuEndTime - cb.gpuStartTime) / Double(iterations)
     }
 
-    static func bf16Weights(_ device: MTLDevice, rows: Int, cols: Int) -> TensorRef {
+    static func bf16Weights(_ device: MTLDevice, rows: Int, cols: Int) -> WeightMatrix {
         let buf = device.makeBuffer(length: rows * cols * 2, options: .storageModeShared)!
         let p = buf.contents().assumingMemoryBound(to: UInt16.self)
         var rng = SeededGenerator(seed: 3)
         for i in 0..<(rows * cols) { p[i] = UInt16(truncatingIfNeeded: Float(rng.uniformOpenZero() * 2 - 1).bitPattern >> 16) }
-        return TensorRef(name: "w", dtype: .bf16, shape: [rows, cols], buffer: buf, offset: 0)
+        return WeightMatrix(name: "w", format: .bf16, rows: rows, cols: cols, buffer: buf, offset: 0, paramOffset: 0)
     }
 
     /// Random FP8 experts with block scales, laid out like the model's, plus a
     /// routing of `rows` tokens over them.
     struct SyntheticMoE {
         let config: ModelConfig
-        let table: MTLBuffer
+        let table: ExpertTable
         let buffers: [MTLBuffer]
         let x: Buf, ids: Buf, rw: Buf, counts: Buf, lists: Buf, active: Buf, act: Buf, slotOut: Buf
         let rows: Int, experts: Int, capacity: Int
@@ -64,13 +64,13 @@ public enum KernelBench {
                 defer { cursor += count * 4 }
                 return cursor
             }
-            var table = [UInt64](repeating: 0, count: config.numExperts * 6)
+            var addresses = [UInt64](repeating: 0, count: config.numExperts * 6)
             for e in 0..<experts {
                 let offsets = [fp8(inter * hidden), scales(rb * cb), fp8(inter * hidden), scales(rb * cb), fp8(hidden * inter), scales(cb * rb)]
-                for (j, o) in offsets.enumerated() { table[e * 6 + j] = pool.gpuAddress + UInt64(o) }
+                for (j, o) in offsets.enumerated() { addresses[e * 6 + j] = pool.gpuAddress + UInt64(o) }
             }
             buffers = [pool]
-            self.table = d.makeBuffer(bytes: table, length: table.count * 8, options: .storageModeShared)!
+            table = ExpertTable(table: d.makeBuffer(bytes: addresses, length: addresses.count * 8, options: .storageModeShared)!, format: .fp8BlockScaled)
             x = Buf(d, floats: rows * hidden, label: "x")
             for i in 0..<(rows * hidden) { x.floats[i] = Float(rng.uniformOpenZero()) * 2 - 1 }
             ids = Buf(d, floats: rows * topK, label: "ids"); rw = Buf(d, floats: rows * topK, label: "rw")
@@ -111,11 +111,11 @@ public enum KernelBench {
         }
         func gateUp(_ enc: MTLComputeCommandEncoder, _ k: Kernels) throws {
             enc.useResources(buffers, usage: .read)
-            try k.moeGateUp(enc, act: act, x: x, table: table, counts: counts, lists: lists, active: active, maxActive: maxActive, capacity: capacity, rows: rows, config: config)
+            try k.moeGateUp(enc, act: act, x: x, experts: table, counts: counts, lists: lists, active: active, maxActive: maxActive, capacity: capacity, rows: rows, config: config)
         }
         func down(_ enc: MTLComputeCommandEncoder, _ k: Kernels) throws {
             enc.useResources(buffers, usage: .read)
-            try k.moeDown(enc, slotOut: slotOut, act: act, weights: rw, table: table, counts: counts, lists: lists, active: active, maxActive: maxActive, capacity: capacity, rows: rows, config: config)
+            try k.moeDown(enc, slotOut: slotOut, act: act, weights: rw, experts: table, counts: counts, lists: lists, active: active, maxActive: maxActive, capacity: capacity, rows: rows, config: config)
         }
     }
 
@@ -166,7 +166,7 @@ public enum KernelBench {
             let y = Buf(ctx.device, floats: m * n, label: "y")
             var line = String(format: "M=%4d", m)
             for (name, kernels) in variants {
-                let t = try gpuSeconds(ctx, iterations: iterations) { enc in try kernels.gemv(enc, w, x: x, y: y, n: n, k: k, m: m) }
+                let t = try gpuSeconds(ctx, iterations: iterations) { enc in try kernels.gemv(enc, w, x: x, y: y, m: m) }
                 line += String(format: "  %@=%.3f[%.0f]", name, t * 1000, 2.0 * Double(m * n * k) / t / 1e9)
             }
             print(line)

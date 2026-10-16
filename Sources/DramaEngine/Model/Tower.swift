@@ -79,10 +79,10 @@ final class Tower {
         try k.rmsnorm(enc, out: cat, outStride: 2 * H, x: e, view: .contiguous(H), rows: M, dim: H, w: w.enorm, eps: config.towerNormEps)
         try k.rmsnorm(enc, out: cat, outOffset: H, outStride: 2 * H, x: hidden, xOffset: hiddenOffset * H, view: .contiguous(H), rows: M, dim: H, w: w.hnorm, eps: config.towerNormEps)
         try k.roundIfMimic(enc, x: cat, count: M * 2 * H)
-        try k.gemv(enc, w.ehProj, x: cat, y: mixed, n: H, k: 2 * H, m: M)
+        try k.gemv(enc, w.ehProj, x: cat, y: mixed, m: M)
         try k.rmsnorm(enc, out: th, outStride: H, x: mixed, view: .contiguous(H), rows: M, dim: H, w: w.attentionNorm, eps: config.towerNormEps)
         try k.roundIfMimic(enc, x: th, count: M * H)
-        try k.gemv(enc, w.wqkv, x: th, y: tqkv, n: 9216, k: H, m: M)
+        try k.gemv(enc, w.wqkv, x: th, y: tqkv, m: M)
         let qView = HeadView(heads: UInt32(heads), groupStride: 9216, headStride: 256)
         let kvView = HeadView(heads: UInt32(kvHeads), groupStride: 9216, headStride: 256)
         try k.rmsnorm(enc, out: tqn, outStride: 256, x: tqkv, view: qView, rows: M * heads, dim: 256, w: w.qNorm, eps: config.towerNormEps)
@@ -99,16 +99,16 @@ final class Tower {
         try k.roundIfMimic(enc, x: attnOut, count: M * heads * 256)
         try k.sigmoidGateMul(enc, out: gated, attn: attnOut, gate: tqkv, gateOffset: heads * 256, view: qView, rows: M * heads)
         try k.roundIfMimic(enc, x: gated, count: M * heads * 256)
-        try k.gemv(enc, w.wo, x: gated, y: proj, n: H, k: heads * 256, m: M)
+        try k.gemv(enc, w.wo, x: gated, y: proj, m: M)
         try k.residualAdd(enc, x: mixed, y: proj, count: M * H)
         try k.roundIfMimic(enc, x: mixed, count: M * H)
         try k.rmsnorm(enc, out: th, outStride: H, x: mixed, view: .contiguous(H), rows: M, dim: H, w: w.ffnNorm, eps: config.towerNormEps)
         try k.roundIfMimic(enc, x: th, count: M * H)
-        try k.gemv(enc, w.w1, x: th, y: w1o, n: I, k: H, m: M)
-        try k.gemv(enc, w.w3, x: th, y: w3o, n: I, k: H, m: M)
+        try k.gemv(enc, w.w1, x: th, y: w1o, m: M)
+        try k.gemv(enc, w.w3, x: th, y: w3o, m: M)
         try k.siluMul(enc, out: ffAct, a: w1o, b: w3o, count: M * I)
         try k.roundIfMimic(enc, x: ffAct, count: M * I)
-        try k.gemv(enc, w.w2, x: ffAct, y: ffOut, n: H, k: I, m: M)
+        try k.gemv(enc, w.w2, x: ffAct, y: ffOut, m: M)
         try k.residualAdd(enc, x: mixed, y: ffOut, count: M * H)
         try k.roundIfMimic(enc, x: mixed, count: M * H)
         try k.rmsnorm(enc, out: out, outStride: H, x: mixed, view: .contiguous(H), rows: M, dim: H, w: w.finalNorm, eps: config.towerNormEps)
@@ -150,7 +150,7 @@ final class Tower {
         let index = config.towerLayers + i
         let input = (index - 1) % 2 == 0 ? hiddenA : hiddenB
         let out = try layer(enc, index, hidden: input, hiddenOffset: 0, codes: codes[i], frames: frames, rows: 1, pos0: pos, codebooks: codebooks, addUnseen: false)
-        try k.gemv(enc, weights.heads[i], x: out, y: headLogits, yOffset: i * config.codebookSize, n: config.codebookSize, k: config.hiddenSize, m: 1)
+        try k.gemv(enc, weights.heads[i], x: out, y: headLogits, yOffset: i * config.codebookSize, m: 1)
     }
 
     func readHeadLogits(head: Int) -> [Float] { headLogits.read(config.codebookSize, offset: head * config.codebookSize) }

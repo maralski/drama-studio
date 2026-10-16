@@ -379,18 +379,18 @@ extension Autotune {
                 layers: 10,
                 encode: { enc, k, i in
                     let lw = linear(i), mw = weights.backbone.layers[linearLayers[i]].moe
-                    try k.gemv(enc, lw.inProjQKV, x: bb.h, y: bb.big, n: 8192, k: H, m: 1)
-                    try k.gemv(enc, lw.inProjZ, x: bb.h, y: bb.z, n: 4096, k: H, m: 1)
-                    try k.gemv(enc, lw.inProjA, x: bb.h, y: bb.a, n: 32, k: H, m: 1)
-                    try k.gemv(enc, lw.inProjB, x: bb.h, y: bb.b, n: 32, k: H, m: 1)
-                    try k.gemv(enc, lw.outProj, x: bb.normed, y: bb.mixOut, n: H, k: 4096, m: 1)
-                    try k.gemv(enc, mw.router, x: bb.h, y: bb.routerLogits, n: c.numExperts, k: H, m: 1)
-                    try k.gemv(enc, mw.sharedGate, x: bb.h, y: bb.sharedG, n: 512, k: H, m: 1)
-                    try k.gemv(enc, mw.sharedUp, x: bb.h, y: bb.sharedU, n: 512, k: H, m: 1)
-                    try k.gemv(enc, mw.sharedDown, x: bb.sharedAct, y: bb.sharedOut, n: H, k: 512, m: 1)
-                    try k.gemv(enc, mw.sharedExpertGate, x: bb.h, y: bb.sharedGate, n: 1, k: H, m: 1)
-                    try k.gemv(enc, weights.backbone.lmHead, x: bb.hiddenOut, y: bb.cand, n: 1, k: H, m: 1, rowStart: Int(c.eos))
-                    try k.gemv(enc, weights.backbone.lmHead, x: bb.hiddenOut, y: bb.cand, yOffset: 1, n: c.codebookSize, k: H, m: 1, rowStart: Int(c.semanticStart))
+                    try k.gemv(enc, lw.inProjQKV, x: bb.h, y: bb.big, m: 1)
+                    try k.gemv(enc, lw.inProjZ, x: bb.h, y: bb.z, m: 1)
+                    try k.gemv(enc, lw.inProjA, x: bb.h, y: bb.a, m: 1)
+                    try k.gemv(enc, lw.inProjB, x: bb.h, y: bb.b, m: 1)
+                    try k.gemv(enc, lw.outProj, x: bb.normed, y: bb.mixOut, m: 1)
+                    try k.gemv(enc, mw.router, x: bb.h, y: bb.routerLogits, m: 1)
+                    try k.gemv(enc, mw.sharedGate, x: bb.h, y: bb.sharedG, m: 1)
+                    try k.gemv(enc, mw.sharedUp, x: bb.h, y: bb.sharedU, m: 1)
+                    try k.gemv(enc, mw.sharedDown, x: bb.sharedAct, y: bb.sharedOut, m: 1)
+                    try k.gemv(enc, mw.sharedExpertGate, x: bb.h, y: bb.sharedGate, m: 1)
+                    try k.gemv(enc, weights.backbone.lmHeadEos, x: bb.hiddenOut, y: bb.cand, m: 1)
+                    try k.gemv(enc, weights.backbone.lmHeadSemantic, x: bb.hiddenOut, y: bb.cand, yOffset: 1, m: 1)
                 },
                 outputs: {
                     bb.big.read(8192) + bb.z.read(4096) + bb.a.read(32) + bb.b.read(32) + bb.mixOut.read(H) + bb.routerLogits.read(c.numExperts)
@@ -410,9 +410,9 @@ extension Autotune {
                 encode: { enc, k, i in
                     let lw = linear(i), mw = weights.backbone.layers[linearLayers[i]].moe
                     for m in [300, 128, 32] {
-                        try k.gemv(enc, lw.inProjA, x: bb.h, y: bb.a, n: 32, k: H, m: m)
-                        try k.gemv(enc, lw.inProjB, x: bb.h, y: bb.b, n: 32, k: H, m: m)
-                        try k.gemv(enc, mw.sharedExpertGate, x: bb.h, y: bb.sharedGate, n: 1, k: H, m: m)
+                        try k.gemv(enc, lw.inProjA, x: bb.h, y: bb.a, m: m)
+                        try k.gemv(enc, lw.inProjB, x: bb.h, y: bb.b, m: m)
+                        try k.gemv(enc, mw.sharedExpertGate, x: bb.h, y: bb.sharedGate, m: m)
                     }
                 },
                 outputs: { bb.a.read(300 * 32) + bb.b.read(300 * 32) + bb.sharedGate.read(300) },
@@ -429,11 +429,11 @@ extension Autotune {
                 encode: { enc, k, i in
                     let lw = linear(i), fw = full(i)
                     for m in [300, 128, 32] {
-                        try k.gemv(enc, lw.inProjQKV, x: bb.h, y: bb.big, n: 8192, k: H, m: m)
-                        try k.gemv(enc, lw.inProjZ, x: bb.h, y: bb.z, n: 4096, k: H, m: m)
-                        try k.gemv(enc, lw.outProj, x: bb.normed, y: bb.mixOut, n: H, k: 4096, m: m)
-                        try k.gemv(enc, fw.qProj, x: bb.h, y: bb.convOut, n: c.numHeads * 512, k: H, m: m)
-                        try k.gemv(enc, fw.oProj, x: bb.normed, y: bb.x, n: H, k: c.numHeads * 256, m: m)
+                        try k.gemv(enc, lw.inProjQKV, x: bb.h, y: bb.big, m: m)
+                        try k.gemv(enc, lw.inProjZ, x: bb.h, y: bb.z, m: m)
+                        try k.gemv(enc, lw.outProj, x: bb.normed, y: bb.mixOut, m: m)
+                        try k.gemv(enc, fw.qProj, x: bb.h, y: bb.convOut, m: m)
+                        try k.gemv(enc, fw.oProj, x: bb.normed, y: bb.x, m: m)
                     }
                 },
                 outputs: { bb.big.read(300 * 8192) + bb.z.read(300 * 4096) + bb.mixOut.read(300 * H) + bb.convOut.read(300 * 8192) + bb.x.read(300 * H) },
@@ -453,12 +453,12 @@ extension Autotune {
                     let mw = weights.backbone.layers[i].moe
                     for m in rowCounts {
                         let maxActive = min(m * c.topK, c.numExperts)
-                        try k.gemv(enc, mw.router, x: bb.h, y: bb.routerLogits, n: c.numExperts, k: H, m: m)
+                        try k.gemv(enc, mw.router, x: bb.h, y: bb.routerLogits, m: m)
                         try k.moeRouter(enc, ids: bb.ids, weights: bb.rw, logits: bb.routerLogits, rows: m, config: c)
                         try k.zero(enc, bb.counts)
                         try k.moeBucket(enc, counts: bb.counts, lists: bb.lists, ids: bb.ids, active: bb.active, pairs: m * c.topK, capacity: capacityPairs)
-                        try k.moeGateUp(enc, act: bb.act, x: bb.h, table: mw.table, counts: bb.counts, lists: bb.lists, active: bb.active, maxActive: maxActive, capacity: capacityPairs, rows: m, config: c)
-                        try k.moeDown(enc, slotOut: bb.slotOut, act: bb.act, weights: bb.rw, table: mw.table, counts: bb.counts, lists: bb.lists, active: bb.active, maxActive: maxActive, capacity: capacityPairs, rows: m, config: c)
+                        try k.moeGateUp(enc, act: bb.act, x: bb.h, experts: mw.experts, counts: bb.counts, lists: bb.lists, active: bb.active, maxActive: maxActive, capacity: capacityPairs, rows: m, config: c)
+                        try k.moeDown(enc, slotOut: bb.slotOut, act: bb.act, weights: bb.rw, experts: mw.experts, counts: bb.counts, lists: bb.lists, active: bb.active, maxActive: maxActive, capacity: capacityPairs, rows: m, config: c)
                     }
                 },
                 outputs: { bb.act.read(rows * c.topK * c.moeIntermediate) + bb.slotOut.read(rows * c.topK * H) },

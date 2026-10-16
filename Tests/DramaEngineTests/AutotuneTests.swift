@@ -91,7 +91,7 @@ final class AutotuneTests: XCTestCase {
                 let shape = k.schedule.gemvDecode
                 if shape.tokenTile == 16 { _ = try k.ctx.pipeline("no_such_kernel") }
                 if shape.tokenTile == 64 { return }
-                try k.gemv(enc, w, x: x, y: y, n: n, k: kDim, m: 1)
+                try k.gemv(enc, w, x: x, y: y, m: 1)
                 if shape.simdgroups == 8 { try k.residualAdd(enc, x: y, y: y, count: n) }
             },
             outputs: { y.read(n) },
