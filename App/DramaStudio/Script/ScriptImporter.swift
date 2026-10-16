@@ -2,8 +2,12 @@ import AppKit
 import DramaEngine
 import UniformTypeIdentifiers
 
+/// Every file the app opens, by extension. The script formats become plain
+/// script text; the document formats open as a `NarrationDocument` read
+/// section by section.
 enum ImportFormat: CaseIterable {
     case plainText, markdown, rtf, rtfd, html, docx, subRip, webVTT
+    case pptx, pdf, epub
 
     static let subRipType = UTType(importedAs: "audio.fish.community.DramaStudio.subrip", conformingTo: .plainText)
 
@@ -23,6 +27,9 @@ enum ImportFormat: CaseIterable {
         case .docx: ["docx"]
         case .subRip: ["srt"]
         case .webVTT: ["vtt"]
+        case .pptx: ["pptx"]
+        case .pdf: ["pdf"]
+        case .epub: ["epub"]
         }
     }
 
@@ -36,6 +43,17 @@ enum ImportFormat: CaseIterable {
         case .docx: UTType("org.openxmlformats.wordprocessingml.document") ?? .data
         case .subRip: Self.subRipType
         case .webVTT: UTType("org.w3.webvtt") ?? .plainText
+        case .pptx: UTType("org.openxmlformats.presentationml.presentation") ?? .presentation
+        case .pdf: .pdf
+        case .epub: .epub
+        }
+    }
+
+    /// Whether the file opens as a document of sections rather than as script text.
+    var opensAsDocument: Bool {
+        switch self {
+        case .pptx, .pdf, .epub: true
+        case .plainText, .markdown, .rtf, .rtfd, .html, .docx, .subRip, .webVTT: false
         }
     }
 
@@ -45,7 +63,7 @@ enum ImportFormat: CaseIterable {
         case .rtfd: .rtfd
         case .html: .html
         case .docx: .officeOpenXML
-        case .plainText, .markdown, .subRip, .webVTT: nil
+        case .plainText, .markdown, .subRip, .webVTT, .pptx, .pdf, .epub: nil
         }
     }
 }
@@ -56,7 +74,7 @@ enum ImportError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .unsupported(let name): "Drama Studio can't import \(name). Try a text, Markdown, RTF, HTML, Word, SRT, or WebVTT file."
+        case .unsupported(let name): "Drama Studio can't import \(name). Try a text, Markdown, RTF, HTML, Word, SRT, or WebVTT script, or a PowerPoint, PDF, or EPUB document."
         case .unreadable(let name, let error): "Couldn't read \(name): \(error.localizedDescription)"
         }
     }
@@ -65,7 +83,7 @@ enum ImportError: LocalizedError {
 enum ScriptImporter {
     @MainActor
     static func importFile(at url: URL) throws -> String {
-        guard let format = ImportFormat(url: url) else { throw ImportError.unsupported(url.lastPathComponent) }
+        guard let format = ImportFormat(url: url), !format.opensAsDocument else { throw ImportError.unsupported(url.lastPathComponent) }
         do {
             return normalize(try text(of: url, as: format))
         } catch {

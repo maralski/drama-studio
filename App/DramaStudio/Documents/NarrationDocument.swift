@@ -28,6 +28,17 @@ struct NarrationDocument: Codable, Sendable, Equatable {
     var source: Source
     var segments: [Segment]
 
+    /// The narrated segments as one plain script, blank lines between them.
+    /// Speaker tags appear only when the narrated segments use more than one speaker.
+    func flattened() -> String {
+        let narrated = segments.filter { !$0.skip && !SectionRequests.spokenText(of: $0).isEmpty }
+        let tagged = Set(narrated.map { $0.speakerTag ?? 0 }).count > 1
+        return narrated.map { segment in
+            let text = SectionRequests.spokenText(of: segment)
+            return tagged ? "<|speaker:\(segment.speakerTag ?? 0)|>\(text)" : text
+        }.joined(separator: "\n\n")
+    }
+
     static func importFile(at url: URL) throws -> NarrationDocument {
         switch url.pathExtension.lowercased() {
         case "pptx": return try PPTXImporter.importFile(at: url)
@@ -53,6 +64,15 @@ struct NarrationTake: Codable, Sendable, Equatable {
     var segmentID: NarrationDocument.Segment.ID
     var sampleRange: Range<Int>
     var sentences: [Sentence]
+    /// The codes and turn text, so a reopened project still has history. Absent in older projects.
+    var take: Take?
+
+    init(segmentID: NarrationDocument.Segment.ID, sampleRange: Range<Int>, sentences: [Sentence], take: Take? = nil) {
+        self.segmentID = segmentID
+        self.sampleRange = sampleRange
+        self.sentences = sentences
+        self.take = take
+    }
 
     var frames: Int { sentences.reduce(0) { $0 + $1.frames } }
     var seconds: Double { Double(sampleRange.count) / Double(ModelConstants.sampleRate) }

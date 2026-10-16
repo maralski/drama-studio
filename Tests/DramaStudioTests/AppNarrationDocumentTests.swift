@@ -1,3 +1,4 @@
+import DramaEngine
 import Foundation
 import XCTest
 @testable import DramaStudio
@@ -31,5 +32,19 @@ final class AppNarrationDocumentTests: XCTestCase {
         let document = NarrationDocument(title: "T", source: .pdf, segments: [.init(index: 1, label: "Page 1", text: "Hi", speakerTag: 2, skip: true)])
         XCTAssertEqual(try JSONDecoder().decode(NarrationTake.self, from: JSONEncoder().encode(take)), take)
         XCTAssertEqual(try JSONDecoder().decode(NarrationDocument.self, from: JSONEncoder().encode(document)), document)
+    }
+
+    func testTakeCarriesItsCodesAndDecodesWithoutThem() throws {
+        let id = UUID()
+        let codes = Take(text: "One. Two.", codes: Array(repeating: [1, 2, 3], count: 10))
+        let take = NarrationTake(segmentID: id, sampleRange: 0..<6144, sentences: [.init(text: "One.", frames: 3)], take: codes)
+        XCTAssertEqual(try JSONDecoder().decode(NarrationTake.self, from: JSONEncoder().encode(take)).take, codes)
+
+        let older = """
+        {"segmentID":"\(id.uuidString)","sampleRange":[0,6144],"sentences":[{"text":"One.","frames":3}]}
+        """
+        let decoded = try JSONDecoder().decode(NarrationTake.self, from: Data(older.utf8))
+        XCTAssertEqual(decoded, NarrationTake(segmentID: id, sampleRange: 0..<6144, sentences: [.init(text: "One.", frames: 3)]))
+        XCTAssertNil(decoded.take)
     }
 }

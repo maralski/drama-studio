@@ -88,6 +88,17 @@ final class AppScriptImporterTests: XCTestCase {
     }
 
     @MainActor
+    func testDocumentFormatsOpenAsDocumentsAndNeverAsScriptText() throws {
+        XCTAssertEqual(ImportFormat.allCases.filter(\.opensAsDocument), [.pptx, .pdf, .epub])
+        XCTAssertEqual(ImportFormat(url: URL(filePath: "/x/Deck.PPTX")), .pptx)
+        XCTAssertEqual(ImportFormat(url: URL(filePath: "/x/notes.txt"))?.opensAsDocument, false, "text stays a plain script")
+        XCTAssertEqual(ImportFormat.pptx.contentType.identifier, "org.openxmlformats.presentationml.presentation")
+        XCTAssertEqual(ImportFormat.epub.contentType.identifier, "org.idpf.epub-container")
+        XCTAssertEqual(ImportFormat.pdf.contentType.identifier, "com.adobe.pdf")
+        XCTAssertThrowsError(try ScriptImporter.importFile(at: URL(filePath: "/tmp/deck.pptx")))
+    }
+
+    @MainActor
     func testUnsupportedFileIsAnInlineError() {
         XCTAssertThrowsError(try ScriptImporter.importFile(at: URL(filePath: "/tmp/clip.mp3"))) { error in
             XCTAssertEqual((error as? LocalizedError)?.errorDescription?.hasPrefix("Drama Studio can't import clip.mp3"), true)
