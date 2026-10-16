@@ -74,7 +74,7 @@ bytes and previous chunks are fed back as history turns.
 ```
 Sources/DramaEngine        Swift library: loader, tokenizer, Metal graph, sampler
 Sources/DramaEngine/Kernels/*.metal
-Sources/drama              CLI: generate, dump (for the eval suite), bench, encode-ref
+Sources/drama              CLI: generate, dump (for the eval suite), bench, tune, profile, kbench, decode
 App/DramaStudio            SwiftUI app target (SwiftPM executable, bundled by tools/make_app.sh)
 eval/                      Python oracle (vendored fish-speech modules) and the faithfulness suite
 tools/convert_codec.py     coremltools export of the DAC encoder and decoder
@@ -101,30 +101,50 @@ tools/convert_codec.py     coremltools export of the DAC encoder and decoder
 
 Elementwise and norms: `rmsnorm_zc` (also per-head for q/k), `gated_rmsnorm`,
 `silu_mul`, `sigmoid_gate_mul`, `residual_add`, `embed_mix`.
-Projections: `gemv_bf16` for one row (and for outputs of 64 columns or fewer at
-any row count), `gemm_bf16_32x32x16` for two rows or more: a simdgroup-matrix
-GEMM with a 32 x 32 output tile per threadgroup of four simdgroups, stepping K
-by 16, the bf16 weights widened to fp32 in threadgroup memory. Both form the
-same fp32 products; only the summation order differs, and a row's result never
-depends on which chunk it is in (one tile shape for every M keeps it so).
+Projections: `gemv_bf16_t<tile>` for one row (and for outputs of 64 columns or
+fewer at any row count), `gemm_bf16_<bm>x<bn>x<bk>` for two rows or more: a
+simdgroup-matrix GEMM with one output tile per threadgroup, the bf16 weights
+widened to fp32 in threadgroup memory. Both form the same fp32 products; only
+the summation order differs, and a row's result never depends on which chunk
+it is in (one tile shape for every M keeps it so). The token tile, the rows
+per threadgroup and the GEMM tile are fields of the `KernelSchedule` below.
 Attention: `rope_neox`, `rope_interleaved`, `attention` (GQA over the KV cache,
-online softmax, one threadgroup per query row and head).
+online softmax, one threadgroup per query row and head, the keys split over 4,
+8 or 16 simdgroups by the schedule).
 Gated DeltaNet: `gdn_conv_silu` (kernel 4 with carried state),
-`gdn_recurrent_p4` (512 threads per head: four threads per state column, each
-owning 32 rows, the two per-token dot products combined from four partial sums
-in a fixed order; the recurrence runs token by token and is chunk-invariant).
+`gdn_recurrent_p<parts>` (128 x parts threads per head: `parts` threads per
+state column, the two per-token dot products combined from `parts` partial
+sums in a fixed order; the recurrence runs token by token and is
+chunk-invariant; parts is 1, 2, 4 or 8 by the schedule).
 MoE: `moe_router` (softmax, top-8, renormalize), `moe_bucket` (per-expert row
 lists and the active-expert list), `moe_gate_up_fp8` and `moe_down_fp8` for one
 row (expert-major, one simdgroup per output row, the FP8 byte widened through a
 256-entry constant table and multiplied by its block scale), and for two rows
-or more `moe_gate_up_fp8_tiled_k16` and `moe_down_fp8_tiled_k16`: one
-threadgroup per (active expert, 32 output columns), the expert's rows gathered
-in blocks of 8 through simdgroup matrices, each weight tile dequantized once
-per pass of up to 32 rows. At 128 rows nearly every expert is active, so a
+or more `moe_gate_up_fp8_tiled_<bn>x<rows>x<bk>` and
+`moe_down_fp8_tiled_<bn>x<rows>x<bk>`: one threadgroup per (active expert, bn
+output columns), the expert's rows gathered in blocks of 8 through simdgroup
+matrices, each weight tile dequantized once per pass of up to `rows` rows.
+Every tile accumulates an output in the same 8-wide order over K, so the
+tiles are bit-identical with each other. At 128 rows nearly every expert is active, so a
 prefill chunk reads all 30 GB of expert weights once; the prefill chunk is 512
 rows so a 10 s reference clip is one chunk.
 Head: the candidate logits are two `gemv_bf16` calls over the lm_head rows of
 eos and the semantic band, into one 4097-float buffer.
+Kernel schedule: `KernelSchedule` (`Model/KernelSchedule.swift`) holds one value
+per process for each of these choices, with the domain of each written next
+to its kernel: the GEMV token tile and simdgroups per threadgroup (one pair
+for decode, one for narrow prefill projections), the GEMM tile, the MoE tile,
+the MoE row-kernel simdgroups, the attention split (decode and prefill) and
+the GDN parts (decode and prefill). Path choice between kernel families
+depends on M == 1 against M > 1 and on N only, so the prefix-cache invariant
+holds whatever the schedule. `Autotune` (`Autotune.swift`) fills it on first
+load for a (chip, macOS version, kernel source digest, model snapshot) key:
+nine entries, each one kernel family's real workload on the resident weights
+rotated over ten layers, every candidate validated against the default at a
+relative L2 of 1e-5 on the same seeded inputs, the valid ones timed in five
+interleaved rounds, the fastest kept when it beats the default by 2 percent.
+`TuningCache` stores the report as JSON under
+`~/Library/Application Support/DramaStudio/Tuning/`; a hit measures nothing.
 Sampling: `sample_main` and `sample_tower` (one threadgroup per draw) run the
 reference's sort / mask / exponential-noise argmax on the GPU with the same
 xoshiro256** stream as the CPU `Sampler`, which stays as the reference the
@@ -172,3 +192,9 @@ CPU (oracle). Levels:
 - Weights read in place from the Hugging Face cache; disk is nearly full.
 - Experts stay FP8 in memory; exact to the release and half the bytes.
 - Only candidate logits are computed; the reference discards the rest.
+- Kernel schedules are tuned per machine, not shipped as constants, after a
+  review of Magnitude's approach: borrow the tune, validate and cache idea
+  without the dependency, on our own kernels. Only dispatch shapes and
+  template instantiations are searched; every fp32 product stays the same and
+  only the summation order may change, so the tuned engine is held to the same
+  faithfulness table as the default one.

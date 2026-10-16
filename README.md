@@ -58,8 +58,9 @@ open dist/DramaStudio.app
 Command line:
 
 ```bash
+.build/release/drama tune                      # once per Mac, about 10 s; the app does it on first load
 .build/release/drama generate --text "Hello there." --out frames.npy
-.build/release/drama bench
+.build/release/drama bench                     # add --untuned to compare against the hand-written schedule
 ```
 
 ## How it is built
@@ -75,7 +76,9 @@ Command line:
   partial RoPE (NeoX for the backbone, interleaved for the tower), the MoE
   router and expert-major FP8 kernels that dispatch only over active experts
   (one-row kernels for decode, tiled simdgroup-matrix kernels for prefill),
-  the GPU sampler, and the codebook tower's embedding mixing.
+  the GPU sampler, and the codebook tower's embedding mixing. Tile shapes,
+  threadgroup sizes and the attention key split are fields of a
+  `KernelSchedule` that `Autotune` fills per machine (see below).
 - `Sources/DramaEngine/Model`: the backbone and tower runners, the reference's
   sampler (top-k, top-p, exponential-noise argmax, repetition-aware retry of the
   main token) on the CPU and as Metal kernels that reproduce its picks and
@@ -237,6 +240,76 @@ state, where the previous engine was off by 3.9e-3 and failed the suite's
 thresholds. That holds for this one prompt only; the faithfulness gate above
 runs on a single prompt and would not catch the same kind of divergence on
 another.
+
+## Kernel autotune
+
+Kernel schedule parameters (the GEMV token tile and rows per threadgroup, the
+GEMM tile, the MoE tile and K step, the one-row expert kernels' rows per
+threadgroup, the attention key split, the GDN threads per state column) are
+not constants any more. On the first load for a given (chip, macOS version,
+kernel source digest, model snapshot) the engine times each kernel family's
+real workload on the resident weights, rotated over ten layers, for every
+value in its declared domain, keeps a candidate only when its output is within
+a relative L2 of 1e-5 of the default's on the same inputs and it is at least 2
+percent faster over five interleaved rounds, then times a whole 128-row and a
+one-row forward on both schedules and drops a side's choices if the tuned one
+is not faster. The result is a JSON report under
+`~/Library/Application Support/DramaStudio/Tuning/`; every later load reads it
+and measures nothing. `drama tune` runs it from the command line and prints
+the table; the app shows "Tuning kernels for this Mac" once. The idea is
+Magnitude's (tune, validate, cache per device); the kernels, the domains and
+the harness are this project's. Nothing in the numerics changes beyond
+summation order: the tuned engine scores hidden 5.9e-7, candidate logits
+3.1e-7 and tower logits 4.5e-7 against the float32 oracle with top-1 1.0, the
+same table as above, and the A/B prompt below produced byte-identical frames
+with and without the tuned schedule.
+
+What it found on this M3 Max (`eval/out/perf/tune_final.txt`): the decode
+GEMVs want a token tile of 1 (25 percent faster per kernel), the narrow
+prefill projections a tile of 1 over 8 simdgroups (80 percent faster, but
+they are 4 percent of the prefill), decode attention a 16-way key split (24
+percent), prefill attention a 4-way split (5 percent). The GEMM tile, the MoE
+row kernels and the GDN split stayed at the hand-picked values, and the MoE
+prefill tile gained 3 percent on real activations. The first version of the
+harness fed the experts random activations, which route evenly over the 256
+experts and favour a small row tile; that pick was 9 percent faster on the
+harness and 5 to 12 percent slower in the real prefill, which is why the
+entries now take a real hidden state and why the whole-forward check exists
+(`.audit/autotune.tsv`).
+
+End to end, five interleaved runs of `drama bench` and `drama generate` with
+and without the tuned schedule (`eval/tune_ab.sh`, raw runs under
+`eval/out/perf/ab_tune*/`), medians and ranges:
+
+| measurement | untuned | tuned |
+| --- | --- | --- |
+| backbone decode, one row, GPU (`drama bench`), run 1 | 18.0 ms [17.2..18.3] | 15.1 ms [14.7..15.8] |
+| same, run 2 | 17.9 ms [17.5..18.2] | 15.4 ms [14.8..16.7] |
+| tower decode, one row, GPU, run 1 / run 2 | 6.9 / 6.8 ms | 6.1 / 6.2 ms |
+| end-to-end decode, 425 frames after a 324-row prompt, GPU per frame, run 1 clean rounds | 26.9, 27.9 ms | 24.6, 23.7 ms |
+| same, frames per second, run 1 clean rounds / run 2 medians | 37.1, 35.8 / 29.7 [21.8..33.1] | 40.6, 42.2 / 35.1 [32.3..36.8] |
+| backbone prefill, 128 rows, GPU, the tuner's own interleaved check (5 rounds, same process) | 193.5 ms | 192.8 ms |
+| same, `drama bench`, run 1 clean rounds / run 2 medians | 187, 206 / 275 [241..364] | 219, 207 / 312 [222..328] |
+| end-to-end prefill of the 324-row prompt, run 2 | 0.94 s [0.88..1.19] | 0.98 s [0.94..1.07] |
+
+Read the two runs with care: the machine was not idle (load average 4.8
+rising to 6.4 during run 1 and 5 to 12 during run 2, with other sessions'
+test jobs and the window server busy), and in run 1 rounds 4 and 5 the GPU
+time per decode frame doubled on both sides, so only rounds 1 and 2 of run 1
+are clean and run 2 has no clean round. Within that, decode is faster with the
+tuned schedule in every clean round and in both one-row bench series, whose
+ranges do not overlap: about 15 percent less GPU time per one-row backbone
+forward and 10 to 18 percent more frames per second end to end, from the
+decode GEMV tile and the 16-way attention split. Prefill shows no measurable
+difference: the gap between the sides is smaller than the run-to-run spread
+in both runs, and the tuner's own back-to-back check puts the two schedules
+within 1 percent at 128 rows. The prefill-side choices (narrow GEMV tile, MoE
+tile, 4-way attention split) are kept because they validated and the
+whole-forward check kept them, not because a gain was measured; expect at
+most a few percent there. Re-run `eval/tune_ab.sh .build/release/drama 5
+eval/out/perf/ab_tune_idle` followed by `eval/perf_ab_summary.py` on an idle
+machine for a cleaner table. The tuner itself takes about 11 s on this
+machine, not the minute the app's status line promises.
 
 ## Licenses
 
