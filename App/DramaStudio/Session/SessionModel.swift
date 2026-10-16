@@ -23,9 +23,11 @@ final class SessionModel {
     private(set) var generationClock: GenerationClock?
     private(set) var previewingVoice: ReferenceVoice.ID?
     private(set) var modelLoaded = false
-    /// Every finished read of `takesText`, oldest first.
+    /// Every finished read of `takesBasis`, oldest first.
     private(set) var takes: [SessionTake] = []
-    private(set) var takesText: String?
+    /// The script and voices the takes were read with. A retake clones the
+    /// first take, so it is only offered while both still hold.
+    private(set) var takesBasis: TakesBasis?
     /// The take Export writes.
     private(set) var keptTakeID: UUID?
     private(set) var selectedTakeID: UUID?
@@ -69,7 +71,9 @@ final class SessionModel {
     var retakeBlocker: String? {
         guard case .success(let script) = prepared else { return nil }
         if script.speakers.count > 1 { return "Retakes work on scripts with one speaker, because the note rewrites the line without speaker tags." }
-        if !takes.isEmpty, script.text != takesText { return "The script changed since these takes. Generate to start a new set." }
+        guard !takes.isEmpty, let takesBasis else { return nil }
+        if script.text != takesBasis.text { return "The script changed since these takes. Generate to start a new set." }
+        if speakerVoices != takesBasis.voices { return "The voice changed since these takes. Generate to start a new set." }
         return nil
     }
 
@@ -83,11 +87,12 @@ final class SessionModel {
 
     func generate() {
         guard !state.isGenerating, case .success(let script) = prepared else { return }
-        if script.text != takesText {
+        let basis = TakesBasis(text: script.text, voices: speakerVoices)
+        if basis != takesBasis {
             takes = []
             keptTakeID = nil
             selectedTakeID = nil
-            takesText = script.text
+            takesBasis = basis
         }
         let casting = casting
         start(SpeechRequest(text: script.text, references: casting.references, character: casting.character,
@@ -451,6 +456,11 @@ final class SessionModel {
 private enum Job {
     case take(note: String?, recordsVoice: VoiceChoice?)
     case audition(VoiceDesign)
+}
+
+struct TakesBasis: Equatable {
+    var text: String
+    var voices: [Int: VoiceChoice]
 }
 
 /// A line spoken in a designed voice before it is cast.

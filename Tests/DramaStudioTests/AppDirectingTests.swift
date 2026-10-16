@@ -152,6 +152,18 @@ final class AppDirectingTests: XCTestCase {
         XCTAssertNil(session.keptTakeID)
     }
 
+    func testChangingTheVoiceEndsTheSetOfTakes() async {
+        let session = makeSession()
+        await finish(session.generate, in: session)
+        XCTAssertTrue(session.canRetake)
+        session.setVoice(.designed(design), forSpeaker: 0)
+        XCTAssertFalse(session.canRetake, "a retake would clone the first take, which is the old voice")
+        XCTAssertTrue(session.retakeBlocker?.contains("voice changed") == true)
+        await finish(session.generate, in: session)
+        XCTAssertEqual(session.takes.map(\.number), [1])
+        XCTAssertTrue(session.canRetake)
+    }
+
     func testRetakeSendsTheNoteAfterEveryTakeSoFar() async throws {
         let session = makeSession()
         XCTAssertFalse(session.canRetake, "a retake needs a take")

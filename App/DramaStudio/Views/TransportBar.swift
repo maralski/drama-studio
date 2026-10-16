@@ -136,7 +136,7 @@ private struct StatusLine: View {
     private var summary: String {
         TransportBar.summary(
             audioSeconds: model.duration,
-            frames: model.result?.frames.count,
+            frames: model.result?.take.frameCount,
             framesPerSecond: model.result?.timings.framesPerSecond,
             generationSeconds: model.generationClock?.duration
         )
