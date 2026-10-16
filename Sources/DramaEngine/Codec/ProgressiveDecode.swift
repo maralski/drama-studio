@@ -87,3 +87,59 @@ final class ChunkDecoder: @unchecked Sendable {
         }
     }
 }
+
+/// Runs codec work off the generation thread, one job at a time and in the
+/// order given, so the CPU codec overlaps the GPU and a chunk's audio never
+/// lands after the next chunk's.
+final class DecodeRunner: @unchecked Sendable {
+    private let queue = DispatchQueue(label: "DramaEngine.decode", qos: .userInitiated)
+    private let lock = NSLock()
+    private var queued = 0
+
+    /// Starts `work` unless earlier work is still queued or running.
+    @discardableResult
+    func offer(_ work: @escaping () -> Void) -> Bool {
+        guard lock.withLock({ queued == 0 }) else { return false }
+        enqueue(work)
+        return true
+    }
+
+    func enqueue(_ work: @escaping () -> Void) {
+        lock.withLock { queued += 1 }
+        queue.async { [self] in
+            work()
+            lock.withLock { queued -= 1 }
+        }
+    }
+
+    func drain() { queue.sync {} }
+}
+
+/// One attempt's readings of the silence that ends its audio.
+final class SilenceProbe: @unchecked Sendable {
+    private let reading: ([Frame]) throws -> Double
+    private let lock = NSLock()
+    private var last = 0.0
+    private var finalReading: Result<Double, Error>?
+
+    init(_ reading: @escaping ([Frame]) throws -> Double) { self.reading = reading }
+
+    var latest: Double { lock.withLock { last } }
+
+    /// A reading taken while frames still land; a failure reads as no silence.
+    func measure(_ frames: [Frame]) {
+        let silence = (try? reading(frames)) ?? 0
+        lock.withLock { last = silence }
+    }
+
+    func measureNow(_ frames: [Frame]) throws -> Double { try reading(frames) }
+
+    /// The reading over every frame of the attempt, kept for `final()`.
+    func measureFinal(_ frames: [Frame]) {
+        let silence = Result { try reading(frames) }
+        lock.withLock { finalReading = silence }
+    }
+
+    /// Nil until `measureFinal` has run.
+    func final() throws -> Double? { try lock.withLock { finalReading }?.get() }
+}
