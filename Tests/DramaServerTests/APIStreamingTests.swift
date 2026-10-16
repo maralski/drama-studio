@@ -51,7 +51,7 @@ final class APIStreamingTests: XCTestCase {
     override func setUp() async throws {
         directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         engine = RecordingSynthesizer()
-        service = APIService(synthesizer: engine, voices: VoiceDirectory(url: directory), token: nil, version: "test")
+        service = APIService(synthesizer: engine, voices: VoiceDirectory(url: directory), token: nil, version: "test", pronunciation: { PronunciationDictionary() })
     }
 
     override func tearDown() async throws {

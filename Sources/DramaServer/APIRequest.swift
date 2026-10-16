@@ -58,6 +58,7 @@ public struct SpeechParameters: Sendable, Equatable {
     public var expressiveness: Double
     public var quickPreview: Bool
     public var seed: UInt64?
+    public var applyPronunciation: Bool
 
     public var config: GenerationConfig {
         var config = GenerationConfig.make(expressiveness: expressiveness, quickPreview: quickPreview)
@@ -236,6 +237,7 @@ extension APIRequest {
         var character: CharacterBody?
         var note: String?
         var previous_takes: [TakeBody]?
+        var apply_pronunciation: Bool?
     }
 
     private struct CharacterBody: Decodable {
@@ -280,6 +282,11 @@ extension APIRequest {
         body.expressiveness = try number("expressiveness")
         body.seed = try number("seed")
         body.quick_preview = query["quick_preview"].map { ["1", "true", "yes"].contains($0.lowercased()) }
+        if let value = query["apply_pronunciation"]?.lowercased() {
+            if ["1", "true", "yes"].contains(value) { body.apply_pronunciation = true }
+            else if ["0", "false", "no"].contains(value) { body.apply_pronunciation = false }
+            else { throw APIError.bad("apply_pronunciation must be true or false.") }
+        }
         if query["character_name"] != nil || query["character_description"] != nil {
             body.character = CharacterBody(name: query["character_name"], description: query["character_description"], scene: query["character_scene"])
         }
@@ -326,7 +333,8 @@ extension APIRequest {
             delivery: delivery,
             expressiveness: expressiveness,
             quickPreview: decoded.quick_preview ?? false,
-            seed: decoded.seed.map(UInt64.init)
+            seed: decoded.seed.map(UInt64.init),
+            applyPronunciation: decoded.apply_pronunciation ?? true
         )
     }
 

@@ -140,6 +140,8 @@ public final class APIService: Sendable {
     public let jobs: SpeechJobSlot
     public let takes = TakeCache()
     private let engineBusyElsewhere: @Sendable () async -> Bool
+    /// Read per request: the app edits the file while the server runs.
+    private let pronunciation: @Sendable () -> PronunciationDictionary
 
     public init(
         synthesizer: any SpeechSynthesizer,
@@ -147,7 +149,8 @@ public final class APIService: Sendable {
         token: String?,
         version: String,
         jobs: SpeechJobSlot = SpeechJobSlot(),
-        engineBusyElsewhere: @escaping @Sendable () async -> Bool = { false }
+        engineBusyElsewhere: @escaping @Sendable () async -> Bool = { false },
+        pronunciation: @escaping @Sendable () -> PronunciationDictionary = { (try? PronunciationDictionary.load()) ?? PronunciationDictionary() }
     ) {
         self.synthesizer = synthesizer
         self.voices = voices
@@ -155,6 +158,7 @@ public final class APIService: Sendable {
         self.info = EngineInfo(describing: synthesizer, version: version)
         self.jobs = jobs
         self.engineBusyElsewhere = engineBusyElsewhere
+        self.pronunciation = pronunciation
     }
 
     /// `body` carries the request body as it arrives, for routes where
@@ -252,9 +256,22 @@ public final class APIService: Sendable {
 
     private static let busy = APIError(.tooManyRequests, "Drama Studio is already generating; one request runs at a time. Retry shortly.", headers: ["Retry-After": String(retryAfterSeconds)])
 
+    private func rules(for parameters: SpeechParameters) -> PronunciationDictionary {
+        parameters.applyPronunciation ? pronunciation() : PronunciationDictionary()
+    }
+
+    /// `line` is the client's text, which the take cache keeps; the engine
+    /// speaks it rewritten by `rules`.
+    private static func speechRequest(speaking line: String, rules: PronunciationDictionary, parameters: SpeechParameters,
+                                      references: [ReferenceVoice], character: VoiceDesign?, previousTakes: [Take]) -> SpeechRequest {
+        SpeechRequest(text: rules.apply(to: line), references: references, character: character, note: parameters.note,
+                      previousTakes: previousTakes, config: parameters.config)
+    }
+
     private func speak(_ parameters: SpeechParameters) async throws -> APIResponse {
         let busy = Self.busy
         let resolved = try await resolve(parameters)
+        let rules = rules(for: parameters)
         let fromLibrary = try await libraryReferences(for: resolved.casting)
         guard await !engineBusyElsewhere(), let job = await jobs.claim() else { throw busy }
         let request: SpeechRequest
@@ -262,8 +279,8 @@ public final class APIService: Sendable {
         do {
             var references = fromLibrary ?? []
             if fromLibrary == nil { references = try await encodedClips(for: resolved.casting) }
-            request = SpeechRequest(text: resolved.line, references: references, character: resolved.character, note: parameters.note,
-                                    previousTakes: resolved.previous, config: parameters.config)
+            request = Self.speechRequest(speaking: resolved.line, rules: rules, parameters: parameters,
+                                         references: references, character: resolved.character, previousTakes: resolved.previous)
             plan = try GenerationPlan(request)
         } catch {
             await jobs.release(job)
@@ -371,6 +388,7 @@ public final class APIService: Sendable {
     /// connection. Each sentence's take is the voice and history of the next.
     private func live(_ parameters: SpeechParameters, body: AsyncThrowingStream<Data, Error>) async throws -> APIResponse {
         let references = try await libraryReferences(for: parameters.casting) ?? []
+        let rules = rules(for: parameters)
         guard await !engineBusyElsewhere(), let job = await jobs.claim() else { throw Self.busy }
         let framing = StreamFraming(parameters.delivery)!
         let (stream, out) = AsyncThrowingStream<Data, Error>.makeStream()
@@ -383,8 +401,8 @@ public final class APIService: Sendable {
             var seconds = 0.0
             func say(_ sentence: String) async throws {
                 let context = spoken.count <= 3 ? spoken : [spoken[0]] + spoken.suffix(2)
-                let request = SpeechRequest(text: sentence, references: references, character: parameters.character,
-                                            previousTakes: context, config: parameters.config)
+                let request = Self.speechRequest(speaking: sentence, rules: rules, parameters: parameters,
+                                                 references: references, character: parameters.character, previousTakes: context)
                 await jobs.begin(job, estimate: GenerationEstimate(plan: try GenerationPlan(request)))
                 guard let result = try await forward(request, framing: framing, job: job, into: out, sentences: &sentences) else { return }
                 spoken.append(result.take)

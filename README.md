@@ -128,6 +128,7 @@ The speech body takes these fields:
 | `character` | A voice designed from a description instead of a clip: `{name, description, scene?}`. |
 | `note` | A director's note, such as `"softer and warmer"`. The line is generated again as one turn, with the note as a direction and as a cue before every sentence. |
 | `previous_takes` | Earlier takes of the line, oldest first: `[{take_id}]` or `[{text, codes_base64}]`. The last two are context. With no `voice` or `references`, the first one is the voice. |
+| `apply_pronunciation` | `true` (default) rewrites `input` with the pronunciation rules in `~/Library/Application Support/DramaStudio/pronunciation.json`, the same rules the app uses, before it is spoken; `false` speaks it as sent. |
 
 A request takes at most one of `voice`, `references`, `speaker_voices`, and
 `character`. Every generation is a take: the response carries its id in
@@ -184,8 +185,9 @@ curl -sSN -H "$AUTH" localhost:8780/v1/audio/speech \
 **Server-Sent Events.** `GET /v1/audio/speech/stream` takes its fields as query
 parameters: `input` (required), `voice`, `expressiveness`, `quick_preview`,
 `seed`, and `character_name`, `character_description` and `character_scene`
-for a designed voice. It answers with `Content-Type: text/event-stream` and
-these events:
+for a designed voice. `apply_pronunciation=false` turns off the pronunciation
+rules, as in the speech body. It answers with `Content-Type: text/event-stream`
+and these events:
 
 | Event | `data` |
 | --- | --- |
@@ -216,6 +218,8 @@ request body:
   sentence end (`.`, `!`, `?`, `;`, `…`, or a CJK one, optionally followed by a
   closing quote or bracket) arrives. Sentences are cut with the same splitter
   as `input`, so `<|speaker:N|>` tags and cues work.
+- The pronunciation rules rewrite each sentence before it is spoken, unless
+  the query has `apply_pronunciation=false`.
 - An empty line speaks the text held back so far, finished or not. The end of
   the body does the same, and a client may half-close its side of the
   connection to end the body.
