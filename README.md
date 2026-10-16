@@ -80,7 +80,7 @@ serves an HTTP API on `http://127.0.0.1:8780`. `drama serve` serves the same
 API without the app. The API listens on the loopback interface only. Settings
 holds the port, a switch for starting the server with the app, and the token.
 The menu bar has Start and Stop. When the port is taken, the menu shows
-"API: Port 8765 is already in use."
+"API: Port 8780 is already in use."
 
 ![The menu bar extra while an API request generates](docs/screenshots/menu-bar-extra-job.png)
 
@@ -129,11 +129,11 @@ request that arrives while another runs, through the API or in the window, gets
 that names the field.
 
 ```bash
-curl -sS localhost:8765/v1/health
-curl -sS -H "$AUTH" localhost:8765/v1/audio/speech \
+curl -sS localhost:8780/v1/health
+curl -sS -H "$AUTH" localhost:8780/v1/audio/speech \
   -d '{"input": "Hello there. [laughs] Good to see you.", "voice": "Narrator"}' -o hello.wav
-curl -sS -H "$AUTH" localhost:8765/v1/tts -d '{"text": "The alias route."}' -o alias.wav
-curl -sS -H "$AUTH" localhost:8765/v1/audio/speech \
+curl -sS -H "$AUTH" localhost:8780/v1/tts -d '{"text": "The alias route."}' -o alias.wav
+curl -sS -H "$AUTH" localhost:8780/v1/audio/speech \
   -d '{"input": "Cloned on the fly.", "references": [{"audio_path": "/path/to/clip.wav", "text": "What the clip says."}]}' -o clone.wav
 ```
 
@@ -143,7 +143,7 @@ chunk. The audio is 16-bit little-endian mono at 44.1 kHz, as the
 Pipe it into a player to hear the first sentence while the rest generates:
 
 ```bash
-curl -sSN -H "$AUTH" localhost:8765/v1/audio/speech \
+curl -sSN -H "$AUTH" localhost:8780/v1/audio/speech \
   -d '{"input": "A long script, read as it is generated.", "stream": true, "response_format": "pcm"}' |
   ffplay -f s16le -ar 44100 -ch_layout mono -nodisp -autoexit -
 ```
@@ -151,9 +151,9 @@ curl -sSN -H "$AUTH" localhost:8765/v1/audio/speech \
 Manage voices:
 
 ```bash
-curl -sS -H "$AUTH" localhost:8765/v1/voices
-curl -sS -H "$AUTH" localhost:8765/v1/voices -F file=@clip.wav -F name=Narrator -F "transcript=What the clip says."
-curl -sS -H "$AUTH" -X DELETE localhost:8765/v1/voices/<id>
+curl -sS -H "$AUTH" localhost:8780/v1/voices
+curl -sS -H "$AUTH" localhost:8780/v1/voices -F file=@clip.wav -F name=Narrator -F "transcript=What the clip says."
+curl -sS -H "$AUTH" -X DELETE localhost:8780/v1/voices/<id>
 ```
 
 `tools/api_smoke.sh [base-url]` runs all of the above against a running server
