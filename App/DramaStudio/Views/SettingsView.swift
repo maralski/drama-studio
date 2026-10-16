@@ -39,8 +39,8 @@ struct SettingsView: View {
             }
             APIServerSection(server: server, startsWithApp: $startsWithApp, port: $port)
             Section("About") {
-                Text("Built with Fish Audio").font(.headline)
-                Text("Drama Studio runs Fish Audio Drama 3 locally on Apple silicon.").foregroundStyle(.secondary)
+                Text("Drama Studio by Peter Marelas").font(.headline)
+                Text("Built with Fish Audio. Drama Studio runs Fish Audio Drama 3 locally on Apple silicon.").foregroundStyle(.secondary)
                 Link("Fish Audio Community License", destination: ModelSetup.licenseURL)
             }
         }

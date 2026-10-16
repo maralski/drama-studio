@@ -1,5 +1,7 @@
 # Drama Studio design
 
+Author: Peter Marelas.
+
 A native macOS app that runs Fish Audio Drama 3 locally. The 35B hybrid MoE
 backbone and the codebook tower run on hand-written Metal compute kernels. The
 DAC audio codec runs through Core ML, the only route to the Neural Engine; in

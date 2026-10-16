@@ -1,6 +1,6 @@
 # Drama Studio
 
-A native macOS app that runs Fish Audio's [Drama 3](https://huggingface.co/fishaudio/drama-3)
+By Peter Marelas. A native macOS app that runs Fish Audio's [Drama 3](https://huggingface.co/fishaudio/drama-3)
 text-to-speech model locally on Apple silicon. The 35B mixture-of-experts
 backbone and the codebook tower run on hand-written Metal compute kernels that
 read the released safetensors weights in place. The DAC audio codec runs
@@ -471,6 +471,6 @@ To redo the end-to-end table on an idle machine: `eval/tune_ab.sh
 
 ## Licenses
 
-The app code is MIT. The vendored reference code under `eval/oracle/` and the
+The app code is MIT, copyright 2026 Peter Marelas (see `LICENSE`). The vendored reference code under `eval/oracle/` and the
 model weights are under the Fish Audio Community License; see
 `eval/oracle/LICENSE_NOTE.md`.
