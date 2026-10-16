@@ -7,9 +7,11 @@ import XCTest
 final class ScheduleTests: XCTestCase {
     func testEveryDomainValueHasAPipeline() throws {
         let ctx = try MetalContext()
-        var names: [String] = ["attention", "moe_gate_up_fp8", "moe_down_fp8"]
-        names += KernelSchedule.gemvTokenTiles.map { "gemv_bf16_t\($0)" }
-        names += KernelSchedule.gemmTiles.map { "gemm_bf16_\($0.label)" }
+        var names: [String] = ["attention", "moe_gate_up_fp8", "moe_down_fp8", "quantize_bf16_i8", "quantize_bf16_i4", "quantize_fp8_i4"]
+        for format in WeightFormat.allCases {
+            names += KernelSchedule.gemvTokenTiles.map { "gemv_\(format.kernelTag)_t\($0)" }
+            names += KernelSchedule.gemmTiles.map { "gemm_\(format.kernelTag)_\($0.label)" }
+        }
         names += KernelSchedule.moeTiles.flatMap { ["moe_gate_up_fp8_tiled_\($0.label)", "moe_down_fp8_tiled_\($0.label)"] }
         names += KernelSchedule.gdnParts.map { "gdn_recurrent_p\($0)" }
         for name in names {
@@ -44,28 +46,31 @@ final class ScheduleTests: XCTestCase {
     }
 
     /// Every GEMV shape forms the same products in the same order per token, so
-    /// the whole domain must match the default bit for bit, at M = 1 and above.
+    /// the whole domain must match the default bit for bit, at M = 1 and above,
+    /// in every weight format.
     func testGemvVariantsBitIdentical() throws {
         var f = try KernelParityTests.Fixture()
-        for (n, kDim, m) in [(256, 2048, 128), (8192, 2048, 44), (2048, 4096, 5), (32, 2048, 100), (1, 2048, 128), (512, 2048, 1), (1, 2048, 1), (2048, 512, 7)] {
-            let w = f.bf16Matrix(rows: n, cols: kDim)
-            let x = f.floats(m * kDim, label: "x")
-            let y = Buf(f.ctx.device, floats: m * n, label: "y")
-            var reference: [Float]?
-            for shape in KernelSchedule.gemvShapes {
-                var s = KernelSchedule.default
-                s.gemvDecode = shape
-                s.gemvNarrow = shape
-                var k = Kernels(ctx: f.ctx, precision: .exact, schedule: s)
-                k.forceGemv = true
-                y.zero()
-                try f.run { enc in try k.gemv(enc, w, x: x, y: y, m: m) }
-                let got = y.read(m * n)
-                if let reference {
-                    XCTAssertEqual(got, reference, "n=\(n) k=\(kDim) m=\(m) \(shape.label)")
-                } else {
-                    XCTAssertTrue(got.allSatisfy { $0.isFinite })
-                    reference = got
+        for format in WeightFormat.allCases {
+            for (n, kDim, m) in [(256, 2048, 128), (8192, 2048, 44), (2048, 4096, 5), (32, 2048, 100), (1, 2048, 128), (512, 2048, 1), (1, 2048, 1), (2048, 512, 7)] {
+                let w = try f.matrix(format, rows: n, cols: kDim)
+                let x = f.floats(m * kDim, label: "x")
+                let y = Buf(f.ctx.device, floats: m * n, label: "y")
+                var reference: [Float]?
+                for shape in KernelSchedule.gemvShapes {
+                    var s = KernelSchedule.default
+                    s.gemvDecode = shape
+                    s.gemvNarrow = shape
+                    var k = Kernels(ctx: f.ctx, precision: .exact, schedule: s)
+                    k.forceGemv = true
+                    y.zero()
+                    try f.run { enc in try k.gemv(enc, w, x: x, y: y, m: m) }
+                    let got = y.read(m * n)
+                    if let reference {
+                        XCTAssertEqual(got, reference, "\(format) n=\(n) k=\(kDim) m=\(m) \(shape.label)")
+                    } else {
+                        XCTAssertTrue(got.allSatisfy { $0.isFinite })
+                        reference = got
+                    }
                 }
             }
         }

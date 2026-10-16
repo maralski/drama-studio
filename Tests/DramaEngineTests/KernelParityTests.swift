@@ -29,6 +29,26 @@ final class KernelParityTests: XCTestCase {
             return WeightMatrix(name: t.name, format: .bf16, rows: rows, cols: cols, buffer: t.buffer, offset: 0, paramOffset: 0)
         }
 
+        /// A random bf16 matrix in `format`, quantized by the engine's own
+        /// kernels into one buffer of weights then params.
+        mutating func matrix(_ format: WeightFormat, rows: Int, cols: Int) throws -> WeightMatrix {
+            let w = bf16Matrix(rows: rows, cols: cols)
+            if format == .bf16 { return w }
+            let src = TensorRef(name: w.name, dtype: .bf16, shape: [rows, cols], buffer: w.buffer, offset: 0)
+            let paramOffset = (format.weightBytes(rows: rows, cols: cols) + 255) / 256 * 256
+            let buf = ctx.device.makeBuffer(length: paramOffset + format.paramBytes(rows: rows, cols: cols), options: .storageModeShared)!
+            let slot = QuantizedSlot(buffer: buf, offset: 0, paramOffset: paramOffset)
+            let k = self.k
+            try run { enc in
+                switch format {
+                case .bf16: break
+                case .int8: try k.quantizeInt8(enc, src: src, rowOffset: 0, rows: rows, cols: cols, into: slot)
+                case .int4: try k.quantizeInt4(enc, src: src, rowOffset: 0, rows: rows, cols: cols, into: slot)
+                }
+            }
+            return WeightMatrix(name: w.name, format: format, rows: rows, cols: cols, buffer: buf, offset: 0, paramOffset: paramOffset)
+        }
+
         mutating func floats(_ count: Int, label: String) -> Buf {
             let b = Buf(ctx.device, floats: count, label: label)
             for i in 0..<count { b.floats[i] = uniform() }
@@ -52,26 +72,52 @@ final class KernelParityTests: XCTestCase {
         return (num / max(den, 1e-30)).squareRoot()
     }
 
+    /// The matrix as fp32, read back from its bytes by the format definition.
+    static func dequantized(_ w: WeightMatrix) -> [Float] {
+        let base = w.buffer.contents()
+        var out = [Float](repeating: 0, count: w.rows * w.cols)
+        switch w.format {
+        case .bf16:
+            let p = (base + w.offset).assumingMemoryBound(to: UInt16.self)
+            for i in out.indices { out[i] = Float(bitPattern: UInt32(p[i]) << 16) }
+        case .int8:
+            let q = (base + w.offset).assumingMemoryBound(to: Int8.self)
+            let s = (base + w.paramOffset).assumingMemoryBound(to: Float16.self)
+            for i in out.indices { out[i] = Float(q[i]) * Float(s[(i / w.cols) * (w.cols / 128) + (i % w.cols) / 128]) }
+        case .int4:
+            let q = (base + w.offset).assumingMemoryBound(to: UInt8.self)
+            let p = (base + w.paramOffset).assumingMemoryBound(to: Float16.self)
+            for i in out.indices {
+                let g = (i / w.cols) * (w.cols / 64) + (i % w.cols) / 64
+                let nibble = i % 2 == 0 ? q[i / 2] & 0xf : q[i / 2] >> 4
+                out[i] = fma(Float(nibble), Float(p[2 * g]), Float(p[2 * g + 1]))
+            }
+        }
+        return out
+    }
+
     /// The GEMM must agree with the GEMV to fp32 reordering noise for every
-    /// shape the model uses, including ragged M and tiny N.
+    /// shape the model uses, including ragged M and tiny N, in every format.
     func testGemmMatchesGemv() throws {
         var f = try Fixture()
-        for (n, kDim, m) in [(256, 2048, 128), (8192, 2048, 44), (2048, 4096, 5), (32, 2048, 100), (1, 2048, 128), (512, 2048, 64), (2048, 512, 7)] {
-            let w = f.bf16Matrix(rows: n, cols: kDim)
-            let x = f.floats(m * kDim, label: "x")
-            let yGemv = Buf(f.ctx.device, floats: m * n, label: "yGemv")
-            let yGemm = Buf(f.ctx.device, floats: m * n, label: "yGemm")
-            let k = f.k
-            try f.run { enc in
-                for row in 0..<m {
-                    try k.gemv(enc, w, x: x, xOffset: row * kDim, y: yGemv, yOffset: row * n, m: 1)
+        for format in WeightFormat.allCases {
+            for (n, kDim, m) in [(256, 2048, 128), (8192, 2048, 44), (2048, 4096, 5), (32, 2048, 100), (1, 2048, 128), (512, 2048, 64), (2048, 512, 7)] {
+                let w = try f.matrix(format, rows: n, cols: kDim)
+                let x = f.floats(m * kDim, label: "x")
+                let yGemv = Buf(f.ctx.device, floats: m * n, label: "yGemv")
+                let yGemm = Buf(f.ctx.device, floats: m * n, label: "yGemm")
+                let k = f.k
+                try f.run { enc in
+                    for row in 0..<m {
+                        try k.gemv(enc, w, x: x, xOffset: row * kDim, y: yGemv, yOffset: row * n, m: 1)
+                    }
+                    try k.gemv(enc, w, x: x, y: yGemm, m: m)
                 }
-                try k.gemv(enc, w, x: x, y: yGemm, m: m)
+                let a = yGemv.read(m * n), b = yGemm.read(m * n)
+                let err = Self.relL2(a, b)
+                XCTAssertLessThan(err, 2e-6, "\(format) n=\(n) k=\(kDim) m=\(m)")
+                XCTAssertTrue(b.allSatisfy { $0.isFinite })
             }
-            let a = yGemv.read(m * n), b = yGemm.read(m * n)
-            let err = Self.relL2(a, b)
-            XCTAssertLessThan(err, 2e-6, "n=\(n) k=\(kDim) m=\(m)")
-            XCTAssertTrue(b.allSatisfy { $0.isFinite })
         }
     }
 
@@ -79,17 +125,49 @@ final class KernelParityTests: XCTestCase {
     func testGemmRowsIndependentOfChunk() throws {
         var f = try Fixture()
         let n = 512, kDim = 2048, m = 70
-        let w = f.bf16Matrix(rows: n, cols: kDim)
-        let x = f.floats(m * kDim, label: "x")
-        let whole = Buf(f.ctx.device, floats: m * n, label: "whole")
-        let split = Buf(f.ctx.device, floats: m * n, label: "split")
-        let k = f.k
-        try f.run { enc in
-            try k.gemv(enc, w, x: x, y: whole, m: m)
-            try k.gemv(enc, w, x: x, y: split, m: 3)
-            try k.gemv(enc, w, x: x, xOffset: 3 * kDim, y: split, yOffset: 3 * n, m: m - 3)
+        for format in WeightFormat.allCases {
+            let w = try f.matrix(format, rows: n, cols: kDim)
+            let x = f.floats(m * kDim, label: "x")
+            let whole = Buf(f.ctx.device, floats: m * n, label: "whole")
+            let split = Buf(f.ctx.device, floats: m * n, label: "split")
+            let k = f.k
+            try f.run { enc in
+                try k.gemv(enc, w, x: x, y: whole, m: m)
+                try k.gemv(enc, w, x: x, y: split, m: 3)
+                try k.gemv(enc, w, x: x, xOffset: 3 * kDim, y: split, yOffset: 3 * n, m: m - 3)
+            }
+            XCTAssertEqual(whole.read(m * n), split.read(m * n), "\(format)")
         }
-        XCTAssertEqual(whole.read(m * n), split.read(m * n))
+    }
+
+    /// The quantized kernels must compute the dot product of the matrix the
+    /// bytes define: the GEMV at one row and the GEMM at five, against a CPU
+    /// dot product over the dequantized weights.
+    func testQuantizedGemvAndGemmMatchCpuDotProduct() throws {
+        var f = try Fixture()
+        for format in [WeightFormat.int8, .int4] {
+            for (n, kDim) in [(512, 2048), (2048, 512), (96, 256)] {
+                let w = try f.matrix(format, rows: n, cols: kDim)
+                let dense = Self.dequantized(w)
+                for m in [1, 5] {
+                    let x = f.floats(m * kDim, label: "x")
+                    let y = Buf(f.ctx.device, floats: m * n, label: "y")
+                    let k = f.k
+                    try f.run { enc in try k.gemv(enc, w, x: x, y: y, m: m) }
+                    var expected = [Float](repeating: 0, count: m * n)
+                    for row in 0..<m {
+                        for i in 0..<n {
+                            var acc = 0.0
+                            for j in 0..<kDim { acc += Double(dense[i * kDim + j]) * Double(x.floats[row * kDim + j]) }
+                            expected[row * n + i] = Float(acc)
+                        }
+                    }
+                    let err = Self.relL2(expected, y.read(m * n))
+                    XCTAssertLessThan(err, 1e-5, "\(format) n=\(n) k=\(kDim) m=\(m)")
+                    XCTAssertGreaterThan(expected.map { abs($0) }.max()!, 0.1, "the inputs must exercise the kernel")
+                }
+            }
+        }
     }
 }
 

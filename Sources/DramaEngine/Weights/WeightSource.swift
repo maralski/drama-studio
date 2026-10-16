@@ -2,14 +2,38 @@ import Foundation
 import Metal
 
 /// How a projection matrix is stored; picks the kernel family that reads it.
-enum WeightFormat: String {
+enum WeightFormat: String, CaseIterable {
     /// [N][K] ushort.
     case bf16
+    /// [N][K] int8, plus [N][K/128] fp16 scales: symmetric, per row per 128 columns.
+    case int8
+    /// [N][K/2] bytes (element k in byte k/2, the even element in the low
+    /// nibble), plus [N][K/64] (fp16 scale, fp16 bias): w = scale * q + bias, q in 0...15.
+    case int4
 
     /// The infix of the GEMV and GEMM kernel names.
     var kernelTag: String {
         switch self {
         case .bf16: return "bf16"
+        case .int8: return "i8"
+        case .int4: return "i4"
+        }
+    }
+
+    /// Bytes of an N x K matrix's weights, then of its scales or (scale, bias) pairs.
+    func weightBytes(rows: Int, cols: Int) -> Int {
+        switch self {
+        case .bf16: return rows * cols * 2
+        case .int8: return rows * cols
+        case .int4: return rows * cols / 2
+        }
+    }
+
+    func paramBytes(rows: Int, cols: Int) -> Int {
+        switch self {
+        case .bf16: return 0
+        case .int8: return rows * (cols / 128) * 2
+        case .int4: return rows * (cols / 64) * 4
         }
     }
 }

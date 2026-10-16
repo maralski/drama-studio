@@ -67,7 +67,7 @@ struct Kernels {
         enc.setBytes(&v, length: MemoryLayout<T>.stride, index: index)
     }
 
-    private func dispatch(_ enc: MTLComputeCommandEncoder, _ name: String, grid: MTLSize, group: MTLSize) throws {
+    func dispatch(_ enc: MTLComputeCommandEncoder, _ name: String, grid: MTLSize, group: MTLSize) throws {
         enc.setComputePipelineState(try ctx.pipeline(name))
         enc.dispatchThreads(grid, threadsPerThreadgroup: group)
     }
@@ -94,6 +94,7 @@ struct Kernels {
         enc.setBuffer(x.buffer, offset: x.byteOffset + (xOffset * 4), index: 1)
         enc.setBuffer(y.buffer, offset: y.byteOffset + (yOffset * 4), index: 2)
         set(enc, P(N: UInt32(n), K: UInt32(k), M: UInt32(m), round: precision.mimicBF16 ? 1 : 0), index: 3)
+        enc.setBuffer(w.buffer, offset: w.paramOffset, index: 4)
         if m > 1 && n > 64 && !forceGemv {
             let tile = schedule.gemmTile
             try dispatchGroups(enc, "gemm_\(w.format.kernelTag)_\(tile.label)",
