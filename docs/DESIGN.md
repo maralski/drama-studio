@@ -141,10 +141,15 @@ holds whatever the schedule. `Autotune` (`Autotune.swift`) fills it on first
 load for a (chip, macOS version, kernel source digest, model snapshot) key:
 nine entries, each one kernel family's real workload on the resident weights
 rotated over ten layers, every candidate validated against the default at a
-relative L2 of 1e-5 on the same seeded inputs, the valid ones timed in five
-interleaved rounds, the fastest kept when it beats the default by 2 percent.
-`TuningCache` stores the report as JSON under
-`~/Library/Application Support/DramaStudio/Tuning/`; a hit measures nothing.
+relative L2 of 1e-5 on the same seeded inputs (the MoE entries on a real
+hidden state, since noise routes evenly and misleads the tile choice), the
+valid ones timed in five interleaved rounds, the fastest kept when it beats
+the default by 5 percent. Then a whole-forward check times 128- and 300-row
+and one-row forwards on both schedules and reverts a side unless the tuned
+schedule wins by 2 percent at every row count. `TuningCache` stores the
+report as JSON under `~/Library/Application Support/DramaStudio/Tuning/`; a
+hit measures nothing. `drama schedule-ab` compares schedule files in one
+process, the instrument for isolating one field.
 Sampling: `sample_main` and `sample_tower` (one threadgroup per draw) run the
 reference's sort / mask / exponential-noise argmax on the GPU with the same
 xoshiro256** stream as the CPU `Sampler`, which stays as the reference the
