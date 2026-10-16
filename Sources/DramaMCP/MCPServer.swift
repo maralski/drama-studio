@@ -13,6 +13,7 @@ public struct MCPServer: Sendable {
 
     public let tools: [MCPTool]
     public let context: ToolContext
+    private let toolQueue = SerialQueue()
 
     public init(context: ToolContext, tools: [MCPTool] = MCPTool.all) {
         self.context = context
@@ -61,18 +62,22 @@ public struct MCPServer: Sendable {
         }
     }
 
+    /// Tool calls take turns because the studio generates one request at a
+    /// time; running them side by side would only earn this client a 429.
     func call(_ tool: MCPTool, arguments: [String: JSON]) async -> ToolResult {
-        do {
-            return .success(try await tool.run(arguments, context))
-        } catch let error as ToolInputError {
-            return .failure(error.message)
-        } catch {
-            return .failure((error as? LocalizedError)?.errorDescription ?? String(describing: error))
+        await toolQueue.run { [context] in
+            do {
+                return .success(try await tool.run(arguments, context))
+            } catch let error as ToolInputError {
+                return .failure(error.message)
+            } catch {
+                return .failure((error as? LocalizedError)?.errorDescription ?? String(describing: error))
+            }
         }
     }
 
-    /// Reads until end of input. Requests run concurrently so a ping is not
-    /// stuck behind a long generation.
+    /// Reads until end of input. Messages are handled concurrently so a ping
+    /// is not stuck behind a long generation.
     public func run(_ transport: some MCPTransport) async {
         await withTaskGroup(of: Void.self) { group in
             while let line = await transport.readLine() {
@@ -90,6 +95,21 @@ public struct MCPServer: Sendable {
 
     static func error(id: JSON, code: Int, message: String) -> String {
         JSON.object(["jsonrpc": "2.0", "id": id, "error": ["code": .int(code), "message": .string(message)]]).serialized
+    }
+}
+
+/// Runs operations one after another in the order they arrive.
+actor SerialQueue {
+    private var tail: Task<Void, Never>?
+
+    func run<T: Sendable>(_ operation: @escaping @Sendable () async -> T) async -> T {
+        let previous = tail
+        let task = Task {
+            await previous?.value
+            return await operation()
+        }
+        tail = Task { _ = await task.value }
+        return await task.value
     }
 }
 

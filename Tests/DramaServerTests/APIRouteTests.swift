@@ -239,6 +239,8 @@ final class APIRouteTests: XCTestCase {
         let second = await slow.respond(to: HTTPRequest(method: "POST", path: "/v1/tts", body: Data("{\"text\":\"Me too.\"}".utf8)))
         XCTAssertEqual(second.status, .tooManyRequests)
         XCTAssertEqual(second.headers["Retry-After"], String(APIService.retryAfterSeconds))
+        let typo = await slow.respond(to: HTTPRequest(method: "POST", path: "/v1/tts", body: Data("{\"text\":\"Hi.\",\"voice\":\"Nobody\"}".utf8)))
+        XCTAssertEqual(typo.status, .badRequest, "a bad voice is rejected before the slot is consulted")
         let health = await slow.respond(to: HTTPRequest(method: "GET", path: "/v1/health"))
         XCTAssertTrue(String(decoding: health.bodyData ?? Data(), as: UTF8.self).contains("\"busy\":true"))
 

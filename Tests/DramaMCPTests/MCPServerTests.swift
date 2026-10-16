@@ -175,6 +175,33 @@ final class MCPServerTests: XCTestCase {
         XCTAssertNil(unknownNotification)
     }
 
+    func testToolCallsTakeTurnsWhilePingAnswersAtOnce() async throws {
+        final class SlowAPI: DramaAPI, @unchecked Sendable {
+            let baseURL = URL(string: "http://127.0.0.1:9")!
+            private let lock = NSLock()
+            private var inFlight = 0
+            private(set) var maxInFlight = 0
+            func send(_ call: APICall) async throws -> APIReply {
+                lock.withLock { inFlight += 1; maxInFlight = max(maxInFlight, inFlight) }
+                try await Task.sleep(for: .milliseconds(200))
+                lock.withLock { inFlight -= 1 }
+                return APIReply(status: 200, body: Data(#"{"voices":[]}"#.utf8))
+            }
+        }
+        let api = SlowAPI()
+        let transport = FakeTransport([
+            #"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_voices","arguments":{}}}"#,
+            #"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list_voices","arguments":{}}}"#,
+            #"{"jsonrpc":"2.0","id":3,"method":"ping"}"#,
+        ])
+        await MCPServer(context: ToolContext(api: api, outputDirectory: output)).run(transport)
+        let ids = try await transport.written.map { try parse($0)["id"] }
+        XCTAssertEqual(api.maxInFlight, 1)
+        XCTAssertEqual(ids.first, 3, "ping does not wait for the tools: \(ids)")
+        XCTAssertEqual(ids.count, 3)
+        XCTAssertTrue(ids.contains(1) && ids.contains(2), "\(ids)")
+    }
+
     func testSerializationIsOneLineAndRoundTrips() throws {
         let value: JSON = ["text": "say \"hi\"\n\tthen\u{1}stop \\ ok", "seconds": 2.354, "frames": 42, "ok": true, "none": nil, "list": [1, "two"]]
         let line = value.serialized

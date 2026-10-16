@@ -166,10 +166,13 @@ public final class APIService: Sendable {
 
     private func speak(_ parameters: SpeechParameters) async throws -> APIResponse {
         let busy = APIError(.tooManyRequests, "Drama Studio is already generating; one request runs at a time. Retry shortly.", headers: ["Retry-After": String(Self.retryAfterSeconds)])
+        let fromLibrary = try await libraryReferences(for: parameters.casting)
         guard await !engineBusyElsewhere(), let job = await jobs.claim() else { throw busy }
         let request: SpeechRequest
         do {
-            request = SpeechRequest(text: parameters.text, references: try await references(for: parameters.casting), config: parameters.config)
+            var references = fromLibrary ?? []
+            if fromLibrary == nil { references = try await encodedClips(for: parameters.casting) }
+            request = SpeechRequest(text: parameters.text, references: references, config: parameters.config)
         } catch {
             await jobs.release(job)
             throw error
@@ -228,7 +231,9 @@ public final class APIService: Sendable {
         return stream
     }
 
-    private func references(for casting: VoiceCasting) async throws -> [ReferenceVoice] {
+    /// Library voices resolve before the job slot is claimed, so a typo gets
+    /// a 400 without turning another request away. Nil for clips.
+    private func libraryReferences(for casting: VoiceCasting) async throws -> [ReferenceVoice]? {
         switch casting {
         case .none:
             return []
@@ -237,15 +242,21 @@ public final class APIService: Sendable {
         case .speakers(let keys):
             let library = await voices.allVoices()
             return try keys.map { try VoiceLookup.find($0, in: library).get() }
-        case .clips(let clips):
-            var encoded: [ReferenceVoice] = []
-            for (index, clip) in clips.enumerated() {
-                encoded.append(try await withAudioFile(clip.audio, field: "references[\(index)]") { url in
-                    try await synthesizer.encodeReference(audioURL: url, transcript: clip.transcript, name: "Reference \(index + 1)")
-                })
-            }
-            return encoded
+        case .clips:
+            return nil
         }
+    }
+
+    /// Encoding runs on the engine, so it happens only once the job slot is held.
+    private func encodedClips(for casting: VoiceCasting) async throws -> [ReferenceVoice] {
+        guard case .clips(let clips) = casting else { return [] }
+        var encoded: [ReferenceVoice] = []
+        for (index, clip) in clips.enumerated() {
+            encoded.append(try await withAudioFile(clip.audio, field: "references[\(index)]") { url in
+                try await synthesizer.encodeReference(audioURL: url, transcript: clip.transcript, name: "Reference \(index + 1)")
+            })
+        }
+        return encoded
     }
 
     /// Hands the engine a file URL for the clip, writing uploaded bytes to a temporary file.
