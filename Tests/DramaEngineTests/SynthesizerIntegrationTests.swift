@@ -7,7 +7,11 @@ final class SynthesizerIntegrationTests: XCTestCase {
     func testShortSentenceProducesSpeech() async throws {
         guard let loc = ModelLocation.huggingFaceCache(), loc.isComplete else { throw XCTSkip("drama-3 not downloaded") }
         guard DramaCodec.modelsExist() else { throw XCTSkip("codec models not converted") }
-        let synth = DramaSynthesizer(location: loc, codecDirectory: DramaCodec.defaultDirectory)
+        // A temp tuning directory keeps the test from writing the user's cache
+        // with a debug-process measurement; the first load tunes into it.
+        let tuning = FileManager.default.temporaryDirectory.appendingPathComponent("drama-tuning-\(UUID().uuidString)")
+        addTeardownBlock { try? FileManager.default.removeItem(at: tuning) }
+        let synth = DramaSynthesizer(location: loc, codecDirectory: DramaCodec.defaultDirectory, tuningDirectory: tuning)
         var config = GenerationConfig()
         config.seed = 2
         let request = SpeechRequest(text: "Hello, my name is Drama and I live inside a computer.", config: config)
