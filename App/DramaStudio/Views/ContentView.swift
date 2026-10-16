@@ -12,7 +12,12 @@ struct ContentView: View {
                 .navigationSplitViewColumnWidth(min: 210, ideal: 240, max: 320)
         } detail: {
             ScriptEditorView(model: model)
-                .safeAreaInset(edge: .bottom, spacing: 0) { TransportBar(model: model) }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    VStack(spacing: 0) {
+                        TransportBar(model: model)
+                        if !model.takes.isEmpty { TakesStrip(model: model) }
+                    }
+                }
                 .inspector(isPresented: $showsInspector) {
                     InspectorView(model: model)
                         .inspectorColumnWidth(min: 270, ideal: 300, max: 380)
@@ -22,6 +27,10 @@ struct ContentView: View {
             ToolbarItem(placement: .primaryAction) {
                 Button("Import Script", systemImage: "square.and.arrow.down") { FilePanels.importScript(into: model) }
                     .help("Import a script (⌘O)")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Menu("Examples", systemImage: "text.badge.star") { ExampleMenuItems(model: model) }
+                    .help("Insert an example line or cast a character")
             }
             ToolbarItem(placement: .primaryAction) {
                 Button("Inspector", systemImage: "sidebar.trailing") { showsInspector.toggle() }

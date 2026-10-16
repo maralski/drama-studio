@@ -56,13 +56,13 @@ final class AppScreenplayTests: XCTestCase {
         let b = ReferenceVoice(name: "B", transcript: "b", codes: [[2]])
         let speakers = (0..<3).map { Speaker(index: $0, name: "S\($0)") }
 
-        let full = Casting(speakers: speakers, assignments: [0: a.id, 1: b.id], library: [a, b])
+        let full = Casting(speakers: speakers, assignments: [0: .library(a.id), 1: .library(b.id)], library: [a, b])
         XCTAssertEqual(full.references.map(\.name), ["A", "B"])
         XCTAssertEqual(full.ignored, [])
 
-        let gap = Casting(speakers: speakers, assignments: [0: a.id, 2: b.id], library: [a, b])
+        let gap = Casting(speakers: speakers, assignments: [0: .library(a.id), 2: .library(b.id)], library: [a, b])
         XCTAssertEqual(gap.references.map(\.name), ["A"])
-        XCTAssertEqual(gap.ignored.map(\.index), [2])
+        XCTAssertEqual(gap.ignored.map(\.speaker.index), [2])
     }
 
     func testCueInsertionAtCursorAndAroundSelection() {

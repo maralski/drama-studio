@@ -7,7 +7,10 @@ final class SessionModel {
     var screenplayMode = false
     var expressiveness = GenerationConfig.defaultExpressiveness
     var quickPreview = false
-    var speakerVoices: [Int: ReferenceVoice.ID] = [:]
+    /// Absent means `.modelDefault`.
+    private(set) var speakerVoices: [Int: VoiceChoice] = [:]
+    /// The first take made with a surprise or designed voice, reused so later takes keep that voice.
+    private(set) var sessionVoices: [VoiceChoice: Take] = [:]
     var selection: TextSelection?
     var notice: String?
 
@@ -20,6 +23,14 @@ final class SessionModel {
     private(set) var generationClock: GenerationClock?
     private(set) var previewingVoice: ReferenceVoice.ID?
     private(set) var modelLoaded = false
+    /// Every finished read of `takesText`, oldest first.
+    private(set) var takes: [SessionTake] = []
+    private(set) var takesText: String?
+    /// The take Export writes.
+    private(set) var keptTakeID: UUID?
+    private(set) var selectedTakeID: UUID?
+    /// The last line tried in the design sheet.
+    private(set) var audition: Audition?
     @ObservationIgnored var playsWhileGenerating = true
 
     let library: VoiceLibrary
@@ -28,6 +39,7 @@ final class SessionModel {
     @ObservationIgnored private let previewPlayer = StreamingPlayer()
     @ObservationIgnored private var generation: Task<Void, Never>?
     @ObservationIgnored private var run = 0
+    @ObservationIgnored private var job: Job?
 
     init(synthesizer: any SpeechSynthesizer, library: VoiceLibrary) {
         self.synthesizer = synthesizer
@@ -41,7 +53,7 @@ final class SessionModel {
     }
 
     var casting: Casting {
-        Casting(speakers: (try? prepared.get())?.speakers ?? [], assignments: speakerVoices, library: library.voices)
+        Casting(speakers: (try? prepared.get())?.speakers ?? [], assignments: speakerVoices, library: library.voices, sessionVoices: sessionVoices)
     }
 
     /// No seed, so every generation draws a fresh one.
@@ -50,7 +62,19 @@ final class SessionModel {
     var canGenerate: Bool { !state.isGenerating && (try? prepared.get()) != nil }
     var canTakeAgain: Bool { canGenerate && !audio.isEmpty }
     var canPlay: Bool { !audio.isEmpty }
-    var canExport: Bool { !audio.isEmpty && !state.isGenerating }
+    var canExport: Bool { !exportSamples.isEmpty && !state.isGenerating }
+    var canRetake: Bool { canGenerate && !takes.isEmpty && retakeBlocker == nil }
+
+    /// Why the takes can't be retaken with a note, when that is not obvious from the controls.
+    var retakeBlocker: String? {
+        guard case .success(let script) = prepared else { return nil }
+        if script.speakers.count > 1 { return "Retakes work on scripts with one speaker, because the note rewrites the line without speaker tags." }
+        if !takes.isEmpty, script.text != takesText { return "The script changed since these takes. Generate to start a new set." }
+        return nil
+    }
+
+    var keptTake: SessionTake? { takes.first { $0.id == keptTakeID } }
+    var exportSamples: [Float] { keptTake?.samples ?? audio }
 
     /// Not observable while playing; poll it from a TimelineView.
     var position: Int { player.position ?? playhead }
@@ -59,15 +83,74 @@ final class SessionModel {
 
     func generate() {
         guard !state.isGenerating, case .success(let script) = prepared else { return }
+        if script.text != takesText {
+            takes = []
+            keptTakeID = nil
+            selectedTakeID = nil
+            takesText = script.text
+        }
+        let casting = casting
+        start(SpeechRequest(text: script.text, references: casting.references, character: casting.character,
+                            previousTakes: casting.voiceTake.map { [$0] } ?? [], config: config),
+              as: .take(note: nil, recordsVoice: casting.recordsVoice))
+    }
+
+    /// Reads the line again with a director's note, after every take so far.
+    func retake(note: String) {
+        guard canRetake, let note = DirectorsNote.clean(note), case .success(let script) = prepared else { return }
+        let casting = casting
+        let voice = casting.voiceTake.flatMap { $0 == takes.first?.take ? nil : $0 }
+        start(SpeechRequest(text: script.text, references: casting.references, character: casting.character, note: note,
+                            previousTakes: (voice.map { [$0] } ?? []) + takes.map(\.take), config: config),
+              as: .take(note: note, recordsVoice: casting.recordsVoice))
+    }
+
+    /// Speaks a line in a designed voice through the preview player, leaving
+    /// the script, the takes, and the transport's audio alone.
+    func tryLine(_ line: String, as design: VoiceDesign) {
+        guard !state.isGenerating, !DirectorsNote.spokenWords(line).isEmpty else { return }
+        audition = nil
+        start(SpeechRequest(text: line, character: design, config: config), as: .audition(design))
+    }
+
+    var isAuditioning: Bool {
+        if state.isGenerating, case .audition? = job { true } else { false }
+    }
+
+    func cancelAudition() {
+        if isAuditioning { stopGeneration() }
+        stopPreview()
+        audition = nil
+    }
+
+    /// Casts the design; when it is the one just tried, the voice heard becomes its session voice.
+    func useDesign(_ design: VoiceDesign, for speaker: Speaker) {
+        setVoice(.designed(design), for: speaker)
+        if let audition, audition.design == design { sessionVoices[.designed(design)] = audition.take }
+        cancelAudition()
+    }
+
+    func cast(_ preset: CastPreset) {
+        script = preset.line
+        screenplayMode = false
+        selection = nil
+        notice = nil
+        setVoice(.designed(preset.design), forSpeaker: 0)
+    }
+
+    private func start(_ request: SpeechRequest, as job: Job) {
         stopPlayback(resetTo: 0)
-        audio = []
-        result = nil
+        stopPreview()
+        if case .take = job {
+            audio = []
+            result = nil
+            generationClock = GenerationClock(start: .now)
+        }
         telemetry = GenerationTelemetry()
-        generationClock = GenerationClock(start: .now)
         state = .loading(progress: 0, detail: "Starting engine")
         run += 1
+        self.job = job
         let current = run
-        let request = SpeechRequest(text: script.text, references: casting.references, config: config)
         let stream = synthesizer.synthesize(request)
         generation = Task { [weak self] in
             do {
@@ -109,6 +192,7 @@ final class SessionModel {
             let elapsed = (now - start).seconds
             if elapsed > 0.25 { telemetry.framesPerSecond = Double(index) / elapsed }
         case .audio(let samples, let chunkIndex):
+            guard case .take? = job else { break }
             audio += samples
             if state.isPlaying {
                 player.feed(audio)
@@ -119,10 +203,48 @@ final class SessionModel {
             telemetry.retries += 1
             telemetry.frame = 0
         case .finished(let result):
-            self.result = result
             if result.timings.framesPerSecond > 0 { telemetry.framesPerSecond = result.timings.framesPerSecond }
-            settleAfterGeneration(state.afterGeneration)
+            switch job {
+            case .take(let note, let voice)?:
+                self.result = result
+                addTake(result, note: note, recordsVoice: voice)
+                settleAfterGeneration(state.afterGeneration)
+            case .audition(let design)?:
+                audition = Audition(design: design, take: result.take)
+                settleAfterGeneration(audio.isEmpty ? .idle : .ready)
+                playAudition(result.samples)
+            case nil:
+                break
+            }
         }
+    }
+
+    private func playAudition(_ samples: [Float]) {
+        do {
+            try previewPlayer.play(samples, from: 0)
+        } catch {
+            notice = "Couldn't start audio output: \(error.localizedDescription)"
+        }
+    }
+
+    private func addTake(_ result: SpeechResult, note: String?, recordsVoice: VoiceChoice?) {
+        if let recordsVoice, sessionVoices[recordsVoice] == nil { sessionVoices[recordsVoice] = result.take }
+        let take = SessionTake(number: (takes.last?.number ?? 0) + 1, note: note, take: result.take, samples: result.samples)
+        takes.append(take)
+        selectedTakeID = take.id
+    }
+
+    /// Plays the take, which becomes the transport's audio.
+    func selectTake(_ id: SessionTake.ID) {
+        guard !state.isGenerating, let take = takes.first(where: { $0.id == id }) else { return }
+        stopPlayback(resetTo: 0)
+        selectedTakeID = id
+        audio = take.samples
+        startPlayback(from: 0)
+    }
+
+    func toggleKeepSelectedTake() {
+        keptTakeID = keptTakeID == selectedTakeID ? nil : selectedTakeID
     }
 
     private func generationEnded(run ended: Int, error: Error?) {
@@ -209,8 +331,14 @@ final class SessionModel {
     }
 
     func insert(_ cue: PerformanceCue) {
-        let range = selectedCharacterRange ?? script.count..<script.count
-        let edit = cue.insert(into: script, at: range)
+        apply(cue.insert(into: script, at: selectedCharacterRange ?? script.count..<script.count))
+    }
+
+    func insert(_ example: ExampleLine) {
+        apply(example.insert(into: script, at: selectedCharacterRange ?? script.count..<script.count))
+    }
+
+    private func apply(_ edit: (text: String, selection: Range<Int>)) {
         script = edit.text
         let start = script.index(script.startIndex, offsetBy: edit.selection.lowerBound)
         let end = script.index(script.startIndex, offsetBy: edit.selection.upperBound)
@@ -224,17 +352,54 @@ final class SessionModel {
         return lower..<(lower + script.distance(from: range.lowerBound, to: range.upperBound))
     }
 
-    func voice(for speaker: Speaker) -> ReferenceVoice.ID? {
-        library.voice(speakerVoices[speaker.index])?.id
+    /// A library voice that has since been removed reads as the model default.
+    func voice(for speaker: Speaker) -> VoiceChoice {
+        let choice = speakerVoices[speaker.index] ?? .modelDefault
+        if case .library(let id) = choice, library.voice(id) == nil { return .modelDefault }
+        return choice
     }
 
-    func setVoice(_ id: ReferenceVoice.ID?, for speaker: Speaker) {
-        speakerVoices[speaker.index] = id
+    /// Choosing a different voice forgets the old one's session voice, so
+    /// picking Surprise me again gives a fresh surprise.
+    func setVoice(_ choice: VoiceChoice, forSpeaker index: Int) {
+        let old = speakerVoices[index] ?? .modelDefault
+        guard old != choice else { return }
+        speakerVoices[index] = choice == .modelDefault ? nil : choice
+        if !speakerVoices.values.contains(old) { sessionVoices[old] = nil }
+    }
+
+    func setVoice(_ choice: VoiceChoice, for speaker: Speaker) {
+        setVoice(choice, forSpeaker: speaker.index)
+    }
+
+    /// Designed voices currently cast, for the voice pickers.
+    var castDesigns: [VoiceDesign] {
+        var seen = Set<VoiceDesign>()
+        return speakerVoices.sorted { $0.key < $1.key }.compactMap(\.value.design).filter { seen.insert($0).inserted }
+    }
+
+    func canKeepVoice(for speaker: Speaker) -> Bool {
+        sessionVoices[voice(for: speaker)] != nil
+    }
+
+    /// Saves the speaker's session voice to the library and casts it from there.
+    func keepVoice(for speaker: Speaker) {
+        let choice = voice(for: speaker)
+        guard let take = sessionVoices[choice] else { return }
+        let design = choice.design
+        let voice = ReferenceVoice(name: design?.name ?? "Surprise voice",
+                                   transcript: DirectorsNote.spokenText(ofTurn: take.text, character: design), codes: take.codes)
+        do {
+            try library.add(voice)
+            setVoice(.library(voice.id), for: speaker)
+        } catch {
+            notice = "Couldn't keep the voice: \(error.localizedDescription)"
+        }
     }
 
     func export(to url: URL, as format: ExportFormat) {
         do {
-            try AudioExporter.write(audio, to: url, as: format)
+            try AudioExporter.write(exportSamples, to: url, as: format)
             notice = nil
         } catch {
             notice = "Export failed: \(error.localizedDescription)"
@@ -271,7 +436,7 @@ final class SessionModel {
     func removeVoice(_ id: ReferenceVoice.ID) {
         do {
             try library.remove(id)
-            speakerVoices = speakerVoices.filter { $0.value != id }
+            speakerVoices = speakerVoices.filter { $0.value != .library(id) }
         } catch {
             notice = "Couldn't remove the voice: \(error.localizedDescription)"
         }
@@ -280,6 +445,28 @@ final class SessionModel {
     static func describe(_ error: Error) -> String {
         (error as? LocalizedError)?.errorDescription ?? String(describing: error)
     }
+}
+
+/// What a generation run is for.
+private enum Job {
+    case take(note: String?, recordsVoice: VoiceChoice?)
+    case audition(VoiceDesign)
+}
+
+/// A line spoken in a designed voice before it is cast.
+struct Audition: Equatable {
+    let design: VoiceDesign
+    let take: Take
+}
+
+/// One finished read of the script, kept so it can be replayed, retaken, or exported.
+struct SessionTake: Identifiable, Equatable {
+    let id = UUID()
+    let number: Int
+    let note: String?
+    let take: Take
+    let samples: [Float]
+    var duration: TimeInterval { Double(samples.count) / Double(ModelConstants.sampleRate) }
 }
 
 struct GenerationClock: Equatable {
@@ -294,23 +481,56 @@ struct GenerationClock: Equatable {
     var duration: TimeInterval? { end.map { $0.timeIntervalSince(start) } }
 }
 
-/// Which references a request carries. The engine contract has no explicit
-/// speaker field on a reference, so reference i speaks for speaker i and the
-/// assigned voices must form an unbroken run from speaker 0.
+/// What a request carries for its voices. The engine contract has no
+/// explicit speaker field on a reference, so reference i speaks for speaker i
+/// and library voices must form an unbroken run from speaker 0. A surprise or
+/// designed voice has no reference to place, so it only casts a script with
+/// one speaker.
 struct Casting: Equatable {
-    var references: [ReferenceVoice] = []
-    /// Speakers whose assigned voice is dropped because an earlier speaker has none.
-    var ignored: [Speaker] = []
+    struct Ignored: Equatable, Identifiable {
+        enum Reason: Equatable { case gap, needsLibrary }
+        var speaker: Speaker
+        var reason: Reason
+        var id: Int { speaker.index }
 
-    init(speakers: [Speaker], assignments: [Int: ReferenceVoice.ID], library: [ReferenceVoice]) {
+        var message: String {
+            switch reason {
+            case .gap: "\(speaker.name)'s voice is not used: voices apply in speaker order, so every earlier speaker needs one too."
+            case .needsLibrary: "\(speaker.name)'s voice is not used: a script with several speakers takes library voices only. Cast it alone and click Keep This Voice to add it to the library first."
+            }
+        }
+    }
+
+    var references: [ReferenceVoice] = []
+    var character: VoiceDesign?
+    /// The session voice the request reuses as its voice reference.
+    var voiceTake: Take?
+    /// The choice whose session voice this request's take becomes.
+    var recordsVoice: VoiceChoice?
+    var ignored: [Ignored] = []
+
+    init(speakers: [Speaker], assignments: [Int: VoiceChoice], library: [ReferenceVoice], sessionVoices: [VoiceChoice: Take] = [:]) {
         var gap = false
         for speaker in speakers.sorted(by: { $0.index < $1.index }) {
-            let voice = library.first { $0.id == assignments[speaker.index] }
-            if let voice, !gap, speaker.index == references.count {
-                references.append(voice)
-            } else if voice != nil {
-                ignored.append(speaker)
-            } else {
+            switch assignments[speaker.index] ?? .modelDefault {
+            case .library(let id):
+                guard let voice = library.first(where: { $0.id == id }) else {
+                    gap = true
+                    continue
+                }
+                if !gap, speaker.index == references.count {
+                    references.append(voice)
+                } else {
+                    ignored.append(Ignored(speaker: speaker, reason: .gap))
+                }
+            case .modelDefault:
+                gap = true
+            case let choice where speakers.count == 1:
+                character = choice.design
+                voiceTake = sessionVoices[choice]
+                if voiceTake == nil { recordsVoice = choice }
+            case .surprise, .designed:
+                ignored.append(Ignored(speaker: speaker, reason: .needsLibrary))
                 gap = true
             }
         }
