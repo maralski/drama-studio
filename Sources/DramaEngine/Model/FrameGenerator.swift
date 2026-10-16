@@ -180,8 +180,11 @@ public final class FrameGenerator {
             if !result.frames.isEmpty { history.push(text: chunk.turn, codes: result.codes) }
             if !finishing.contains(where: { $0.result.index == index }) { finish(result) }
         }
+        while let next = finishing.first {
+            next.probe.waitForFinal()
+            try deliver()
+        }
         runner.drain()
-        try deliver()
         return results
     }
 }

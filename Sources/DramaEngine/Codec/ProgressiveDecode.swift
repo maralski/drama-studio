@@ -121,6 +121,7 @@ final class SilenceProbe: @unchecked Sendable {
     private let lock = NSLock()
     private var last = 0.0
     private var finalReading: Result<Double, Error>?
+    private let finalTaken = DispatchSemaphore(value: 0)
 
     init(_ reading: @escaping ([Frame]) throws -> Double) { self.reading = reading }
 
@@ -138,8 +139,14 @@ final class SilenceProbe: @unchecked Sendable {
     func measureFinal(_ frames: [Frame]) {
         let silence = Result { try reading(frames) }
         lock.withLock { finalReading = silence }
+        finalTaken.signal()
     }
 
     /// Nil until `measureFinal` has run.
     func final() throws -> Double? { try lock.withLock { finalReading }?.get() }
+
+    func waitForFinal() {
+        finalTaken.wait()
+        finalTaken.signal()
+    }
 }
