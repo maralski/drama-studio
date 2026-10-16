@@ -53,4 +53,42 @@ final class APIServerSocketTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(100))
         XCTAssertEqual(states.values.last, "stopped")
     }
+
+    func testHangingUpBeforeTheFirstChunkFreesTheEngine() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let ports = Seen()
+        let service = APIService(synthesizer: MockSynthesizer(pace: .init(loadSeconds: 0, framesPerSecond: 20)), voices: VoiceDirectory(url: directory), token: nil, version: "test")
+        let server = APIServer(service: service, port: 0) { state in
+            if let port = state.port { ports.append(String(port)) }
+        }
+        server.start()
+        defer { server.stop() }
+        let deadline = Date().addingTimeInterval(5)
+        while ports.values.isEmpty, Date() < deadline { try await Task.sleep(for: .milliseconds(20)) }
+        let base = "http://127.0.0.1:\(try XCTUnwrap(ports.values.first ?? nil))"
+
+        func busy() async throws -> Bool {
+            let (data, _) = try await URLSession.shared.data(from: URL(string: base + "/v1/health")!)
+            return String(decoding: data, as: UTF8.self).contains("\"busy\":true")
+        }
+
+        for stream in [true, false] {
+            var request = URLRequest(url: URL(string: base + "/v1/audio/speech")!)
+            request.httpMethod = "POST"
+            request.httpBody = try JSONSerialization.data(withJSONObject: ["input": "A sentence that takes the slow engine several seconds to speak.", "stream": stream])
+            let call = Task { try await URLSession.shared.data(for: request) }
+            try await Task.sleep(for: .milliseconds(300))
+            let busyWhileRunning = try await busy()
+            XCTAssertTrue(busyWhileRunning, "stream \(stream)")
+            call.cancel()
+            var stillBusy = true
+            let until = Date().addingTimeInterval(1)
+            while stillBusy, Date() < until {
+                try await Task.sleep(for: .milliseconds(20))
+                stillBusy = try await busy()
+            }
+            XCTAssertFalse(stillBusy, "stream \(stream): the slot frees once the client hangs up")
+        }
+    }
 }

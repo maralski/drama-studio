@@ -94,7 +94,8 @@ public final class APIServer: @unchecked Sendable {
             }
             switch HTTPRequestParser.parse(buffer) {
             case .complete(let request):
-                Task { await self.send(await self.service.respond(to: request), on: connection) }
+                let work = Task { await self.send(await self.service.respond(to: request), on: connection) }
+                self.watchForHangUp(on: connection) { work.cancel() }
             case .invalid(let status, let message):
                 Task { await self.send(.error(APIError(status, message)), on: connection) }
             case .incomplete(let head):
@@ -104,6 +105,14 @@ public final class APIServer: @unchecked Sendable {
                 }
                 self.receive(on: connection, buffer: buffer, head: head, sentContinue: sentContinue || head?.expectsContinue == true)
             }
+        }
+    }
+
+    /// A client sends nothing after its request, so a read that ends means it
+    /// hung up; cancelling the request's task stops a generation nobody will hear.
+    private func watchForHangUp(on connection: NWConnection, _ hangUp: @escaping @Sendable () -> Void) {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 1) { _, _, isComplete, error in
+            if isComplete || error != nil { hangUp() }
         }
     }
 
