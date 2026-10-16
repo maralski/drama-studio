@@ -1,8 +1,6 @@
 import AppKit
 import SwiftUI
 
-/// Drama Studio stays in the menu bar when its windows close: the dock icon
-/// and the app menu leave with the last window and come back with the next.
 @MainActor @Observable
 final class AppPresence {
     private(set) var hasWindow = true

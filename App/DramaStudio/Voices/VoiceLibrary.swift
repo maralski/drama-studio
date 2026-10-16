@@ -2,8 +2,8 @@ import DramaEngine
 import DramaServer
 import Foundation
 
-/// The voice files on disk, observable by the window. The HTTP API writes
-/// through this same object so its changes show up immediately.
+/// The HTTP API writes through this object, not the directory, so its
+/// changes show up in the window at once.
 @MainActor @Observable
 final class VoiceLibrary: VoiceStore {
     private(set) var voices: [ReferenceVoice] = []

@@ -10,7 +10,6 @@ public protocol VoiceStore: Sendable {
     func remove(_ id: ReferenceVoice.ID) async throws
 }
 
-/// One JSON file per voice, named by its id.
 public struct VoiceDirectory: VoiceStore {
     public let url: URL
 
@@ -20,7 +19,6 @@ public struct VoiceDirectory: VoiceStore {
 
     public init(url: URL = VoiceDirectory.defaultURL) { self.url = url }
 
-    /// Readable voices sorted by name, and the names of files that failed to decode.
     public func load() -> (voices: [ReferenceVoice], unreadable: [String]) {
         let files = (try? FileManager.default.contentsOfDirectory(at: url, includingPropertiesForKeys: nil)) ?? []
         var voices: [ReferenceVoice] = []
@@ -52,7 +50,6 @@ public struct VoiceDirectory: VoiceStore {
 }
 
 public enum VoiceLookup {
-    /// Matches an id first, then an exact name, then a name ignoring case.
     public static func find(_ key: VoiceKey, in voices: [ReferenceVoice]) -> Result<ReferenceVoice, APIError> {
         if let id = UUID(uuidString: key), let voice = voices.first(where: { $0.id == id }) { return .success(voice) }
         for matches in [voices.filter { $0.name == key }, voices.filter { $0.name.caseInsensitiveCompare(key) == .orderedSame }] {

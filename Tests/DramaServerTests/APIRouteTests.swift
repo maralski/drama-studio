@@ -2,7 +2,6 @@ import DramaEngine
 import DramaServer
 import XCTest
 
-/// Records each request on its way to the mock engine.
 actor RecordingSynthesizer: SpeechSynthesizer {
     let mock: MockSynthesizer
     private(set) var requests: [SpeechRequest] = []

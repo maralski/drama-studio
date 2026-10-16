@@ -6,7 +6,6 @@ public protocol MCPTransport: Sendable {
     func write(_ line: String) async
 }
 
-/// MCP over newline-delimited JSON-RPC 2.0.
 public struct MCPServer: Sendable {
     public static let protocolVersion = "2025-06-18"
     public static let version = "0.1"
@@ -27,7 +26,6 @@ public struct MCPServer: Sendable {
         static let invalidParams = -32602
     }
 
-    /// Answers one message; nil for notifications, which get no reply.
     public func handle(_ line: String) async -> String? {
         guard let message = try? JSON(parsing: Data(line.utf8)) else {
             return Self.error(id: .null, code: RPCError.parse, message: "Parse error: the message is not JSON.")
@@ -98,7 +96,6 @@ public struct MCPServer: Sendable {
     }
 }
 
-/// Runs operations one after another in the order they arrive.
 actor SerialQueue {
     private var tail: Task<Void, Never>?
 
@@ -113,7 +110,7 @@ actor SerialQueue {
     }
 }
 
-/// stdin and stdout. Logs go to stderr because stdout carries the protocol.
+/// Logs go to stderr because stdout carries the protocol.
 public final class StdioTransport: MCPTransport, @unchecked Sendable {
     private let writeLock = NSLock()
 

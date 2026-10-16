@@ -15,7 +15,6 @@ public enum AudioFormat: String, Sendable, Equatable, CaseIterable {
 
 public enum Delivery: Sendable, Equatable {
     case file(AudioFormat)
-    /// 16-bit little-endian mono PCM, one HTTP chunk per generated chunk.
     case pcmStream
 }
 
@@ -29,14 +28,12 @@ public struct ReferenceClip: Sendable, Equatable {
     public var transcript: String
 }
 
-/// A voice by library id or name.
 public typealias VoiceKey = String
 
 public enum VoiceCasting: Sendable, Equatable {
     case none
     case voice(VoiceKey)
     case clips([ReferenceClip])
-    /// Speaker i speaks with the i-th voice.
     case speakers([VoiceKey])
 }
 
@@ -59,11 +56,9 @@ public struct NewVoice: Sendable, Equatable {
     public var name: String
     public var transcript: String
     public var audio: AudioSource
-    /// The clip's own file name, kept with the voice; nil for base64 uploads.
     public var fileName: String?
 }
 
-/// A request the API understands, parsed and validated off the wire.
 public enum APIRequest: Sendable, Equatable {
     case health
     case models
@@ -114,7 +109,7 @@ public struct APIResponse: Sendable {
         APIResponse(status: error.status, headers: error.headers.merging(["Content-Type": "text/plain; charset=utf-8"]) { a, _ in a }, body: .data(Data((error.message + "\n").utf8)))
     }
 
-    /// Status line and headers; keep-alive is off, so every response closes its connection.
+    /// Keep-alive is off, so every response closes its connection.
     public var head: Data {
         var lines = ["HTTP/1.1 \(status.rawValue) \(status.reason)"]
         var all = headers

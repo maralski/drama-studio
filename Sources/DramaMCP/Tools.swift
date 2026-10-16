@@ -15,7 +15,6 @@ public struct ToolResult: Sendable, Equatable {
     }
 }
 
-/// What a tool may touch besides the API: the clock, the disk, the speakers.
 public struct ToolContext: Sendable {
     public var api: any DramaAPI
     public var outputDirectory: URL

@@ -5,7 +5,6 @@ import Foundation
 public enum AudioEncoding {
     public static let sampleRate = ModelConstants.sampleRate
 
-    /// 16-bit little-endian mono, clipped to [-1, 1].
     public static func pcm16(_ samples: [Float]) -> Data {
         var data = Data(capacity: samples.count * 2)
         for sample in samples {

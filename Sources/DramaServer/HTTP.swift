@@ -30,7 +30,7 @@ public enum HTTPStatus: Int, Sendable {
     }
 }
 
-/// One request off the wire. Header names are lowercased.
+/// Header names are lowercased.
 public struct HTTPRequest: Sendable, Equatable {
     public var method: String
     public var path: String
@@ -49,7 +49,6 @@ public struct HTTPRequest: Sendable, Equatable {
     public func header(_ name: String) -> String? { headers[name.lowercased()] }
 }
 
-/// What the head of a request promises, known before its body arrives.
 public struct HTTPHead: Sendable, Equatable {
     public var totalLength: Int
     public var expectsContinue: Bool

@@ -13,7 +13,6 @@ public enum ServerState: Sendable, Equatable {
     }
 }
 
-/// HTTP/1.1 on 127.0.0.1, one request per connection.
 public final class APIServer: @unchecked Sendable {
     public let service: APIService
     public let requestedPort: UInt16

@@ -3,7 +3,6 @@ import DramaEngine
 import DramaServer
 import Foundation
 
-/// The app's HTTP API: the same engine and voice library as the window.
 @MainActor @Observable
 final class APIServerController {
     static let startsWithAppKey = "apiServerStartsWithApp"

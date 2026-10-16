@@ -28,7 +28,6 @@ public struct APIReply: Sendable, Equatable {
     public func header(_ name: String) -> String? { headers.first { $0.key.caseInsensitiveCompare(name) == .orderedSame }?.value }
 }
 
-/// The Drama Studio HTTP API as the MCP tools see it.
 public protocol DramaAPI: Sendable {
     var baseURL: URL { get }
     func send(_ call: APICall) async throws -> APIReply
@@ -39,7 +38,6 @@ public struct APIUnavailable: Error, LocalizedError {
     public var errorDescription: String? { message }
 }
 
-/// Talks to the API over HTTP and opens Drama Studio when nothing answers.
 public struct HTTPDramaAPI: DramaAPI {
     public let baseURL: URL
     public let tokenURL: URL
@@ -57,8 +55,6 @@ public struct HTTPDramaAPI: DramaAPI {
         launchTimeout = .seconds(90)
     }
 
-    /// DRAMA_APP_PATH, then the app this binary ships inside, then
-    /// /Applications, then the repository's dist folder above a SwiftPM build.
     static func appCandidates(environment: [String: String], executable: URL) -> [URL] {
         var candidates: [URL] = []
         if let path = environment["DRAMA_APP_PATH"] { candidates.append(URL(filePath: path)) }

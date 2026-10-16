@@ -259,7 +259,6 @@ public final class APIService: Sendable {
         return encoded
     }
 
-    /// Hands the engine a file URL for the clip, writing uploaded bytes to a temporary file.
     private func withAudioFile<T>(_ source: AudioSource, field: String, _ body: (URL) async throws -> T) async throws -> T {
         let url: URL
         var temporary: URL?
