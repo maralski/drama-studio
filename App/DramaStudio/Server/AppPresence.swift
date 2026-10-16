@@ -23,7 +23,7 @@ final class AppPresence {
     }
 
     private func windowsChanged() {
-        hasWindow = NSApp.windows.contains { $0.isVisible && $0.canBecomeMain && !($0 is NSPanel) }
+        hasWindow = NSApp.windows.contains { ($0.isVisible || $0.isMiniaturized) && $0.canBecomeMain && !($0 is NSPanel) }
         let policy: NSApplication.ActivationPolicy = hasWindow ? .regular : .accessory
         if NSApp.activationPolicy() != policy { NSApp.setActivationPolicy(policy) }
     }

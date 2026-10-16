@@ -227,8 +227,8 @@ final class APIRouteTests: XCTestCase {
         for try await chunk in stream { chunks.append(chunk) }
         XCTAssertEqual(chunks.count, 2, "one HTTP chunk per generated chunk")
         XCTAssertTrue(chunks.allSatisfy { $0.count % (ModelConstants.samplesPerFrame * 2) == 0 })
-        let busy = object(await send("GET", "/v1/health"))["busy"] as? Bool
-        XCTAssertEqual(busy, false, "the job slot frees when the stream ends")
+        let next = await send("POST", "/v1/tts", json: ["text": "Right after."])
+        XCTAssertEqual(next.status, .ok, "the slot is free by the time the client sees the stream end")
     }
 
     func testSecondRequestWhileBusyGets429() async throws {

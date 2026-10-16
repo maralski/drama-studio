@@ -134,7 +134,7 @@ public final class APIService: Sendable {
     private func handle(_ request: APIRequest) async throws -> APIResponse {
         switch request {
         case .health:
-            let tuned: Bool? = if let engine = synthesizer as? DramaSynthesizer { await engine.isTuned } else { false }
+            let tuned: Bool? = if let engine = synthesizer as? DramaSynthesizer { engine.isTuned } else { false }
             return .json(Health(modelLoaded: await synthesizer.isLoaded, engine: info.kind.rawValue, busy: await isBusy(), tuned: tuned, version: info.version))
         case .models:
             return .json(ModelList(data: [ModelEntry(id: info.modelID, snapshot: info.snapshot)]))
@@ -222,11 +222,12 @@ public final class APIService: Sendable {
                     await jobs.advance(job, with: event)
                     if case .audio(let samples, _) = event { continuation.yield(AudioEncoding.pcm16(samples)) }
                 }
+                await jobs.release(job)
                 continuation.finish()
             } catch {
+                await jobs.release(job)
                 continuation.finish(throwing: error)
             }
-            await jobs.release(job)
         }
         continuation.onTermination = { _ in task.cancel() }
         return (stream, task)

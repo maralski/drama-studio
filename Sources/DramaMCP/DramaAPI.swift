@@ -77,13 +77,15 @@ public struct HTTPDramaAPI: DramaAPI {
     public func send(_ call: APICall) async throws -> APIReply {
         do {
             return try await perform(call)
-        } catch let error as URLError where [.cannotConnectToHost, .cannotFindHost, .networkConnectionLost].contains(error.code) {
+        } catch let error as URLError where [.cannotConnectToHost, .cannotFindHost].contains(error.code) {
             try await launchAndWait()
             return try await perform(call)
         }
     }
 
-    private func perform(_ call: APICall, timeout: TimeInterval = 600) async throws -> APIReply {
+    /// A file response sends nothing until the whole script is generated, and
+    /// the timeout counts idle time, so it allows for an hour-long script.
+    private func perform(_ call: APICall, timeout: TimeInterval = 3600) async throws -> APIReply {
         var request = URLRequest(url: baseURL.appending(path: call.path), timeoutInterval: timeout)
         request.httpMethod = call.method
         if let token = try? String(contentsOf: tokenURL, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines), !token.isEmpty {

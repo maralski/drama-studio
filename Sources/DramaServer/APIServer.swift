@@ -19,6 +19,7 @@ public final class APIServer: @unchecked Sendable {
     private let onState: @Sendable (ServerState) -> Void
     private let queue = DispatchQueue(label: "DramaServer.listener")
     private var listener: NWListener?
+    private var whenStopped: (@Sendable () -> Void)?
 
     /// Port 0 asks the system for a free port.
     public init(service: APIService, port: UInt16 = APIService.defaultPort, onState: @escaping @Sendable (ServerState) -> Void = { _ in }) {
@@ -31,10 +32,16 @@ public final class APIServer: @unchecked Sendable {
         queue.async { self.startOnQueue() }
     }
 
-    public func stop() {
+    /// `stopped` runs once the port is free, so a restart on the same port can bind.
+    public func stop(stopped: (@Sendable () -> Void)? = nil) {
         queue.async {
-            self.listener?.cancel()
+            guard let listener = self.listener else {
+                stopped?()
+                return
+            }
+            self.whenStopped = stopped
             self.listener = nil
+            listener.cancel()
         }
     }
 
@@ -64,6 +71,8 @@ public final class APIServer: @unchecked Sendable {
                 if self.listener === listener { self.listener = nil }
             case .cancelled:
                 if !failed { self.onState(.stopped) }
+                self.whenStopped?()
+                self.whenStopped = nil
             default:
                 break
             }
@@ -78,32 +87,42 @@ public final class APIServer: @unchecked Sendable {
         return error.localizedDescription
     }
 
-    private func accept(_ connection: NWConnection) {
-        connection.start(queue: queue)
-        receive(on: connection, buffer: Data(), head: nil, sentContinue: false)
+    /// Lives on the listener's queue for one connection. A class, so each
+    /// read appends in place instead of copying everything read so far.
+    private final class Pending {
+        var bytes = Data()
+        var head: HTTPHead?
+        var sentContinue = false
     }
 
-    private func receive(on connection: NWConnection, buffer: Data, head: HTTPHead?, sentContinue: Bool) {
+    private func accept(_ connection: NWConnection) {
+        connection.start(queue: queue)
+        receive(on: connection, into: Pending())
+    }
+
+    private func receive(on connection: NWConnection, into pending: Pending) {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 1 << 20) { [weak self] data, _, isComplete, error in
             guard let self else { return connection.cancel() }
-            var buffer = buffer
-            if let data { buffer.append(data) }
-            if let head, buffer.count < head.totalLength {
+            if let data { pending.bytes.append(data) }
+            if let head = pending.head, pending.bytes.count < head.totalLength {
                 guard error == nil, !isComplete else { return connection.cancel() }
-                return self.receive(on: connection, buffer: buffer, head: head, sentContinue: sentContinue)
+                return self.receive(on: connection, into: pending)
             }
-            switch HTTPRequestParser.parse(buffer) {
+            switch HTTPRequestParser.parse(pending.bytes) {
             case .complete(let request):
+                pending.bytes = Data()
                 let work = Task { await self.send(await self.service.respond(to: request), on: connection) }
                 self.watchForHangUp(on: connection) { work.cancel() }
             case .invalid(let status, let message):
                 Task { await self.send(.error(APIError(status, message)), on: connection) }
             case .incomplete(let head):
                 guard error == nil, !isComplete else { return connection.cancel() }
-                if let head, head.expectsContinue, !sentContinue {
+                pending.head = head
+                if let head, head.expectsContinue, !pending.sentContinue {
+                    pending.sentContinue = true
                     connection.send(content: Data("HTTP/1.1 100 Continue\r\n\r\n".utf8), completion: .idempotent)
                 }
-                self.receive(on: connection, buffer: buffer, head: head, sentContinue: sentContinue || head?.expectsContinue == true)
+                self.receive(on: connection, into: pending)
             }
         }
     }

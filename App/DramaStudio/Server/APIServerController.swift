@@ -13,6 +13,9 @@ final class APIServerController {
     private(set) var token: String?
     let session: SessionModel
     @ObservationIgnored private var server: APIServer?
+    @ObservationIgnored private lazy var jobs = SpeechJobSlot { job in
+        DispatchQueue.main.async { MainActor.assumeIsolated { self.jobChanged(job) } }
+    }
 
     init(session: SessionModel) {
         self.session = session
@@ -50,9 +53,6 @@ final class APIServerController {
             state = .failed("Couldn't create the API token: \(error.localizedDescription)")
             return
         }
-        let jobs = SpeechJobSlot { job in
-            DispatchQueue.main.async { MainActor.assumeIsolated { self.jobChanged(job) } }
-        }
         let service = APIService(
             synthesizer: session.synthesizer,
             voices: session.library,
@@ -68,20 +68,25 @@ final class APIServerController {
         server.start()
     }
 
-    func stop() {
-        server?.stop()
-        server = nil
+    func stop(then next: (@MainActor () -> Void)? = nil) {
+        guard let server else {
+            state = .stopped
+            next?()
+            return
+        }
+        self.server = nil
         state = .stopped
+        server.stop { DispatchQueue.main.async { MainActor.assumeIsolated { next?() } } }
     }
 
     func toggle() {
         isRunning ? stop() : start()
     }
 
+    /// After a port change: also retries a server that failed to bind.
     func restart() {
-        guard server != nil else { return }
-        stop()
-        start()
+        guard isRunning || state != .stopped else { return }
+        stop { self.start() }
     }
 
     func copyURL() { Self.copy(url) }
