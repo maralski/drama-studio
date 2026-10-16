@@ -179,7 +179,8 @@ public final class APIService: Sendable {
         }
         switch parameters.delivery {
         case .pcmStream:
-            return APIResponse(status: .ok, headers: Self.pcmHeaders(contentType: AudioFormat.pcm.contentType), body: .chunked(stream(request, job: job)))
+            let (pcm, generation) = stream(request, job: job)
+            return APIResponse(status: .ok, headers: Self.pcmHeaders(contentType: AudioFormat.pcm.contentType), body: .chunked(pcm), abandon: { generation.cancel() })
         case .file(let format):
             let start = ContinuousClock.now
             let result: SpeechResult?
@@ -213,7 +214,7 @@ public final class APIService: Sendable {
         return result
     }
 
-    private func stream(_ request: SpeechRequest, job: UUID) -> AsyncThrowingStream<Data, Error> {
+    private func stream(_ request: SpeechRequest, job: UUID) -> (AsyncThrowingStream<Data, Error>, Task<Void, Never>) {
         let (stream, continuation) = AsyncThrowingStream<Data, Error>.makeStream()
         let task = Task { [synthesizer, jobs] in
             do {
@@ -228,7 +229,7 @@ public final class APIService: Sendable {
             await jobs.release(job)
         }
         continuation.onTermination = { _ in task.cancel() }
-        return stream
+        return (stream, task)
     }
 
     /// Library voices resolve before the job slot is claimed, so a typo gets

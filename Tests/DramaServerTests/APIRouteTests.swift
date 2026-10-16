@@ -249,6 +249,22 @@ final class APIRouteTests: XCTestCase {
         _ = first
     }
 
+    func testAbandonedStreamFreesTheEngine() async throws {
+        let slow = APIService(synthesizer: MockSynthesizer(pace: .init(loadSeconds: 0, framesPerSecond: 200)), voices: VoiceDirectory(url: directory), token: nil, version: "test")
+        let response = await slow.respond(to: HTTPRequest(method: "POST", path: "/v1/audio/speech", body: try JSONSerialization.data(withJSONObject: ["input": Self.twoChunkText, "stream": true])))
+        guard case .chunked(let stream) = response.body else { return XCTFail("not chunked") }
+        var iterator = stream.makeAsyncIterator()
+        _ = try await iterator.next()
+        response.abandon()
+        let deadline = Date().addingTimeInterval(0.5)
+        var busy = true
+        while busy, Date() < deadline {
+            busy = String(decoding: await slow.respond(to: HTTPRequest(method: "GET", path: "/v1/health")).bodyData ?? Data(), as: UTF8.self).contains("\"busy\":true")
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertFalse(busy, "a client that hangs up mid-stream releases the job slot")
+    }
+
     func testTokenIsEnforced() async {
         let guarded = APIService(synthesizer: engine, voices: VoiceDirectory(url: directory), token: "t0ken", version: "test")
         let open = await guarded.respond(to: HTTPRequest(method: "GET", path: "/v1/health"))

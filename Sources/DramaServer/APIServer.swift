@@ -113,10 +113,10 @@ public final class APIServer: @unchecked Sendable {
         case .data(let body):
             _ = await write(response.head + body, on: connection, final: true)
         case .chunked(let stream):
-            guard await write(response.head, on: connection, final: false) else { return }
+            guard await write(response.head, on: connection, final: false) else { return response.abandon() }
             do {
                 for try await chunk in stream {
-                    guard await write(ChunkedEncoding.frame(chunk), on: connection, final: false) else { return }
+                    guard await write(ChunkedEncoding.frame(chunk), on: connection, final: false) else { return response.abandon() }
                 }
             } catch {
                 return
@@ -125,7 +125,6 @@ public final class APIServer: @unchecked Sendable {
         }
     }
 
-    /// Returning on a failed write drops the stream, which cancels the generation behind it.
     private func write(_ data: Data, on connection: NWConnection, final: Bool) async -> Bool {
         await withCheckedContinuation { continuation in
             connection.send(content: data, contentContext: final ? .finalMessage : .defaultMessage, isComplete: true, completion: .contentProcessed { error in

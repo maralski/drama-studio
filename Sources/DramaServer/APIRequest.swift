@@ -91,11 +91,16 @@ public struct APIResponse: Sendable {
     public var status: HTTPStatus
     public var headers: [String: String]
     public var body: Body
+    /// The producer of a chunked body holds its own continuation, so the
+    /// stream outlives a consumer that stops reading; the server calls this
+    /// when the client goes away.
+    public var abandon: @Sendable () -> Void
 
-    public init(status: HTTPStatus, headers: [String: String] = [:], body: Body) {
+    public init(status: HTTPStatus, headers: [String: String] = [:], body: Body, abandon: @escaping @Sendable () -> Void = {}) {
         self.status = status
         self.headers = headers
         self.body = body
+        self.abandon = abandon
     }
 
     public static func json<T: Encodable>(_ value: T, status: HTTPStatus = .ok) -> APIResponse {
