@@ -151,8 +151,9 @@ public struct SpeechResult: Sendable {
 /// What the app talks to. `DramaEngine` is the Metal implementation; tests and
 /// previews use a mock.
 public protocol SpeechSynthesizer: Sendable {
-    /// Loads weights and compiles kernels. Safe to call more than once.
-    func load() async throws
+    /// Loads weights and compiles kernels, reporting each phase that takes
+    /// long enough to name. Safe to call more than once.
+    func load(onPhase: @escaping @Sendable (String) -> Void) async throws
     var isLoaded: Bool { get async }
     /// Encodes a reference clip (any format AVFoundation reads) to codec codes.
     func encodeReference(audioURL: URL, transcript: String, name: String) async throws -> ReferenceVoice
@@ -160,6 +161,10 @@ public protocol SpeechSynthesizer: Sendable {
     func decode(frames: [Frame]) async throws -> [Float]
     /// Streams events for one request. Cancel by cancelling the consuming task.
     func synthesize(_ request: SpeechRequest) -> AsyncThrowingStream<SpeechEvent, Error>
+}
+
+public extension SpeechSynthesizer {
+    func load() async throws { try await load { _ in } }
 }
 
 /// Where the weights live. Defaults to the Hugging Face cache snapshot.

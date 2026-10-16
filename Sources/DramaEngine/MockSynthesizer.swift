@@ -28,8 +28,8 @@ public actor MockSynthesizer: SpeechSynthesizer {
 
     public var isLoaded: Bool { loaded }
 
-    public func load() async throws {
-        try await load { _, _ in }
+    public func load(onPhase: @escaping @Sendable (String) -> Void) async throws {
+        try await load { _, detail in onPhase(detail) }
     }
 
     public func encodeReference(audioURL: URL, transcript: String, name: String) async throws -> ReferenceVoice {

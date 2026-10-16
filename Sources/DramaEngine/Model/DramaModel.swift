@@ -106,6 +106,19 @@ public final class DramaModel: @unchecked Sendable {
         return cb.gpuEndTime - cb.gpuStartTime
     }
 
+    /// The final-norm output of one backbone forward of `rows` synthetic
+    /// frames from position 0 on cleared states, for comparing schedules.
+    public func probeHidden(rows: Int) throws -> [Float] {
+        backbone.reset()
+        for r in 0..<rows { let p = backbone.frames.ints + r * 11; p[0] = config.semanticStart + Int32(r % config.codebookSize); for i in 1..<11 { p[i] = Int32((i * 13 + r) % 1024) } }
+        let (cb, enc) = commandBuffer()
+        try backbone.forward(enc, rows: rows, pos0: 0)
+        enc.endEncoding()
+        cb.commit(); cb.waitUntilCompleted()
+        if let e = cb.error { throw EngineError.badModel("\(e)") }
+        return backbone.hiddenOut.read(rows * config.hiddenSize)
+    }
+
     /// GPU seconds for one tower prefill of `rows` rows.
     public func benchTower(rows: Int) throws -> Double {
         var fake: [Frame] = []

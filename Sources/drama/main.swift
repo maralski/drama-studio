@@ -40,7 +40,8 @@ func loadModel(_ args: Args) throws -> DramaModel {
     var precision = Precision.exact
     if args["precision"] == "reference" { precision = .reference }
     let t0 = Date()
-    let model = try DramaModel(location: loc, precision: precision, capacity: args.int("capacity", DramaModel.defaultCapacity))
+    let model = try DramaModel(location: loc, precision: precision, capacity: args.int("capacity", DramaModel.defaultCapacity),
+                               schedule: args.flags.contains("untuned") ? .default : nil)
     FileHandle.standardError.write("loaded \(loc.directory.lastPathComponent) in \(String(format: "%.2f", Date().timeIntervalSince(t0)))s\n".data(using: .utf8)!)
     return model
 }
@@ -108,8 +109,17 @@ func dump(_ args: Args) throws {
     print("prefill \(prompt.count) rows: \(String(format: "%.2f", prefillSeconds))s; \(F) steps: \(String(format: "%.2f", decodeSeconds))s (\(String(format: "%.1f", Double(F) / max(decodeSeconds, 1e-9))) frames/s); wrote \(outPath)")
 }
 
+func scheduleLine(_ model: DramaModel, args: Args) -> String {
+    switch model.scheduleSource {
+    case .cache(let url): return "schedule: tuned (\(url.path))"
+    case .given: return args.flags.contains("untuned") ? "schedule: default (--untuned)" : "schedule: given"
+    case .default: return "schedule: default (no tuning cache; run drama tune)"
+    }
+}
+
 func bench(_ args: Args) throws {
     let model = try loadModel(args)
+    print(scheduleLine(model, args: args))
     if args.flags.contains("warm") { print(String(format: "warm-up walk: %.2fs", model.benchWarmUp())) }
     let t0 = Date(); _ = try model.benchBackbone(rows: 1, skip: []); print(String(format: "first forward (page faults): %.2fs", Date().timeIntervalSince(t0)))
     for rows in [1, 8, 32, 128, 300] {
@@ -206,6 +216,46 @@ func profile(_ args: Args) throws {
     }
 }
 
+func printTuneTable(_ report: TuningReport) {
+    func pad(_ s: String, _ n: Int) -> String { s.padding(toLength: max(n, s.count), withPad: " ", startingAt: 0) }
+    print(pad("entry", 18) + pad("default", 10) + pad("chosen", 10) + pad("default ms", 12) + pad("chosen ms", 11) + pad("gain %", 8) + "relL2")
+    for e in report.entries {
+        let ms = e.rounds == 0 ? ("not measured", "") : (String(format: "%.3f", e.defaultMs), String(format: "%.3f", e.chosenMs))
+        print(pad(e.name, 18) + pad(e.defaultLabel, 10) + pad(e.chosenLabel, 10) + pad(ms.0, 12) + pad(ms.1, 11) + pad(String(format: "%.1f", e.gainPercent), 8) + String(format: "%.1e", e.relL2))
+        for r in e.rejected { print("  rejected \(r.label): \(r.reason)") }
+    }
+    print(String(format: "tuned in %.1f s wall", report.wallSeconds))
+}
+
+/// drama tune [--force] [--rounds N] [--budget S]: tunes the kernel schedule
+/// for this Mac and model, caches it, and compares a forward on both schedules.
+func tune(_ args: Args) throws {
+    let model = try loadModel(args)
+    model.warmUp()
+    let key = model.tuningKey
+    print("chip \(key.chip); OS \(key.os); kernels \(key.kernels.prefix(12)); model \(key.model)")
+    if case .cache(let url) = model.scheduleSource, !args.flags.contains("force") {
+        guard let hit = TuningCache.load(key: key) else { fail("tuning cache vanished: \(url.path)") }
+        print("tuning cache hit, nothing measured: \(url.path)")
+        printTuneTable(hit.report)
+        return
+    }
+    var options = Autotune.Options()
+    options.rounds = args.int("rounds", options.rounds)
+    options.budgetSeconds = args.double("budget", options.budgetSeconds)
+    options.progress = { FileHandle.standardError.write(($0 + "\n").data(using: .utf8)!) }
+    let report = try Autotune.tune(model: model, options: options)
+    printTuneTable(report)
+    for rows in [128, 1] {
+        try model.apply(.default)
+        let before = try model.probeHidden(rows: rows)
+        try model.apply(report.schedule)
+        let after = try model.probeHidden(rows: rows)
+        print(String(format: "hiddenOut relative L2, default against tuned, %d rows: %.2e", rows, Autotune.relL2(before, after)))
+    }
+    print("cache: \(TuningCache.url(for: key).path)")
+}
+
 /// drama kbench --n 8192 --k 2048 [--ms 2,8,32,128]
 func kbench(_ args: Args) throws {
     let ms = (args["ms"] ?? "2,4,8,16,32,64,128").split(separator: ",").compactMap { Int($0) }
@@ -219,7 +269,8 @@ case "dump": try dump(args)
 case "bench": try bench(args)
 case "kbench": try kbench(args)
 case "profile": try profile(args)
+case "tune": try tune(args)
 case "generate": try generate(args)
 case "decode": try decodeCommand(args)
-default: fail("usage: drama <dump> [options]")
+default: fail("usage: drama <dump|bench|kbench|profile|tune|generate|decode> [options]")
 }

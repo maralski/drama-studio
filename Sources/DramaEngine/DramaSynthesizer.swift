@@ -17,7 +17,10 @@ public actor DramaSynthesizer: SpeechSynthesizer {
 
     public var isLoaded: Bool { model != nil && codec != nil }
 
-    public func load() async throws {
+    /// The first load on a Mac also tunes the kernel schedule and caches it,
+    /// so later loads find the cache and skip the step. A tuning failure
+    /// leaves the default schedule in place; it never fails the load.
+    public func load(onPhase: @escaping @Sendable (String) -> Void) async throws {
         if isLoaded { return }
         if let loading { return try await loading.value }
         let task = Task { [location, codecDirectory] in
@@ -25,6 +28,14 @@ public actor DramaSynthesizer: SpeechSynthesizer {
             let tokenizer = try Tokenizer(url: location.directory.appendingPathComponent("tokenizer.json"))
             let model = try DramaModel(location: location)
             model.warmUp()
+            if model.scheduleSource == .default {
+                onPhase("Tuning kernels for this Mac, about a minute")
+                do {
+                    try Autotune.tune(model: model)
+                } catch {
+                    FileHandle.standardError.write("kernel autotune failed, keeping the default schedule: \(error)\n".data(using: .utf8)!)
+                }
+            }
             self.install(model: model, tokenizer: tokenizer, codec: codec)
         }
         loading = task
@@ -95,7 +106,7 @@ public actor DramaSynthesizer: SpeechSynthesizer {
 
     private func run(_ request: SpeechRequest, continuation: AsyncThrowingStream<SpeechEvent, Error>.Continuation) async throws {
         continuation.yield(.loadingModel(progress: 0, detail: "Loading Drama 3"))
-        try await load()
+        try await load { detail in continuation.yield(.loadingModel(progress: 0, detail: detail)) }
         continuation.yield(.loadingModel(progress: 1, detail: "Ready"))
         let generator = FrameGenerator(model: model!, tokenizer: tokenizer!)
         let codec = self.codec!
