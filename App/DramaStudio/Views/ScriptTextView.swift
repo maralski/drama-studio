@@ -43,6 +43,9 @@ struct ScriptTextView: NSViewRepresentable {
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = Self.makeScrollView()
         let textView = scrollView.documentView as! NSTextView
+        // Reading layoutManager moves the view to TextKit 1, whose temporary
+        // attributes draw the highlight without touching the text storage.
+        _ = textView.layoutManager
         textView.delegate = context.coordinator
         textView.isRichText = false
         textView.importsGraphics = false
@@ -123,23 +126,15 @@ struct ScriptTextView: NSViewRepresentable {
             }
         }
 
+        /// Temporary attributes need TextKit 1; `makeNSView` switches the view to it.
         func show(_ range: NSRange?, in textView: NSTextView) {
             let length = (textView.string as NSString).length
-            if let layout = textView.textLayoutManager, let content = layout.textContentManager {
-                layout.removeRenderingAttribute(.backgroundColor, for: content.documentRange)
-                if let range, range.upperBound <= length,
-                   let start = content.location(content.documentRange.location, offsetBy: range.location),
-                   let end = content.location(start, offsetBy: range.length),
-                   let textRange = NSTextRange(location: start, end: end) {
-                    layout.addRenderingAttribute(.backgroundColor, value: ScriptTextView.highlightColor, for: textRange)
-                }
-            } else if let layout = textView.layoutManager {
-                layout.removeTemporaryAttribute(.backgroundColor, forCharacterRange: NSRange(location: 0, length: length))
-                if let range, range.upperBound <= length {
-                    layout.addTemporaryAttribute(.backgroundColor, value: ScriptTextView.highlightColor, forCharacterRange: range)
-                }
+            guard let layout = textView.layoutManager else { return }
+            layout.removeTemporaryAttribute(.backgroundColor, forCharacterRange: NSRange(location: 0, length: length))
+            if let range, range.upperBound <= length {
+                layout.addTemporaryAttribute(.backgroundColor, value: ScriptTextView.highlightColor, forCharacterRange: range)
+                textView.scrollRangeToVisible(range)
             }
-            if let range, range.upperBound <= length { textView.scrollRangeToVisible(range) }
             shown = .some(range)
         }
     }

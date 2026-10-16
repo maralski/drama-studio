@@ -161,7 +161,7 @@ private struct StatusLine: View {
     private var summary: String {
         if model.document != nil {
             return TransportBar.sectionSummary(sections: model.narrationTakes.count, audioSeconds: model.duration,
-                                               stoppedEarly: model.result == nil, generationSeconds: model.generationClock?.duration)
+                                               stoppedEarly: model.result == nil && model.generationClock != nil, generationSeconds: model.generationClock?.duration)
         }
         return TransportBar.summary(
             audioSeconds: model.duration,
