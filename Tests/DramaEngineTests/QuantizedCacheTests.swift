@@ -108,8 +108,8 @@ final class QuantizedCacheTests: XCTestCase {
     func testModeTable() {
         for mode in ModelPrecisionMode.allCases {
             XCTAssertEqual(mode.format(for: .narrow), .bf16, "\(mode)")
-            XCTAssertFalse(mode.isExperimental)
         }
+        XCTAssertEqual(ModelPrecisionMode.allCases.filter(\.isExperimental), [.compact], "the measured verdict: compact only")
         XCTAssertEqual(ModelPrecisionMode.full.format(for: .backbone), .bf16)
         XCTAssertEqual(ModelPrecisionMode.full.format(for: .tower), .bf16)
         XCTAssertEqual(ModelPrecisionMode.balanced.format(for: .backbone), .int8)

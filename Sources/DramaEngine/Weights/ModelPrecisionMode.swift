@@ -11,9 +11,13 @@ public enum ModelPrecisionMode: String, CaseIterable, Codable, Sendable {
     /// Dense matrices int4, experts int4, tower matrices int8.
     case compact
 
-    /// Whether the mode is offered as experimental. The measurement decides;
-    /// every case stays false until it has been made.
-    public var isExperimental: Bool { false }
+    /// Whether the app may offer the mode as an Advanced option (false) or
+    /// only as experimental (true). Decided by the measurements in the
+    /// README's "Model precision" section: compact's speaker similarity
+    /// (0.856) sits below every per-seed mean of full (0.866 to 0.874), its
+    /// teacher-forced error is four to five times the bf16 oracle's own, and
+    /// it ran to the frame cap without eos on the reference-chunking prompt.
+    public var isExperimental: Bool { self == .compact }
 
     /// The storage format of a projection matrix by its role. Narrow matrices
     /// stay bf16 in every mode: they are about one percent of the bytes and
