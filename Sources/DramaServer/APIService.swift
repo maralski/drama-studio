@@ -95,6 +95,7 @@ public final class APIService: Sendable {
     public let token: String?
     public let info: EngineInfo
     public let jobs: SpeechJobSlot
+    public let takes = TakeCache()
     private let engineBusyElsewhere: @Sendable () async -> Bool
 
     public init(
@@ -155,7 +156,43 @@ public final class APIService: Sendable {
             return .json(["deleted": voice.id.uuidString])
         case .speech(let parameters):
             return try await speak(parameters)
+        case .take(let key):
+            guard let id = UUID(uuidString: key), let entry = await takes.entry(id) else {
+                throw APIError(.notFound, "No take \"\(key)\"; the server keeps its last \(TakeCache.capacity) takes.")
+            }
+            return .json(TakeSummary(entry))
         }
+    }
+
+    /// A take id in `previous_takes` stands for that take and the cached
+    /// takes it was made after, so naming a line's latest take carries its
+    /// first take (the voice) and its recent history. Without input, the
+    /// request retakes the line, voice and character of the last named take.
+    private func resolve(_ parameters: SpeechParameters) async throws -> (line: String, casting: VoiceCasting, character: VoiceDesign?, previous: [Take], lineage: [UUID]) {
+        var previous: [Take] = []
+        var lineage: [UUID] = []
+        var named: TakeCache.Entry?
+        for source in parameters.previousTakes {
+            switch source {
+            case .inline(let take):
+                previous.append(take)
+            case .cached(let id):
+                guard let entry = await takes.entry(id) else {
+                    throw APIError(.notFound, "No take \(id.uuidString); the server keeps its last \(TakeCache.capacity) takes.")
+                }
+                for earlier in entry.lineage where !lineage.contains(earlier) {
+                    guard let found = await takes.entry(earlier) else { continue }
+                    previous.append(found.take)
+                    lineage.append(earlier)
+                }
+                named = entry
+            }
+        }
+        let inherits = parameters.casting == .none && parameters.character == nil
+        let casting = inherits ? named?.casting ?? .none : parameters.casting
+        let character = inherits ? named?.character : parameters.character
+        guard let line = parameters.text ?? named?.line else { throw APIError.bad("input is required: the text to speak.") }
+        return (line, casting, character, previous, lineage)
     }
 
     private func isBusy() async -> Bool {
@@ -166,21 +203,32 @@ public final class APIService: Sendable {
 
     private func speak(_ parameters: SpeechParameters) async throws -> APIResponse {
         let busy = APIError(.tooManyRequests, "Drama Studio is already generating; one request runs at a time. Retry shortly.", headers: ["Retry-After": String(Self.retryAfterSeconds)])
-        let fromLibrary = try await libraryReferences(for: parameters.casting)
+        let resolved = try await resolve(parameters)
+        let fromLibrary = try await libraryReferences(for: resolved.casting)
         guard await !engineBusyElsewhere(), let job = await jobs.claim() else { throw busy }
         let request: SpeechRequest
         do {
             var references = fromLibrary ?? []
-            if fromLibrary == nil { references = try await encodedClips(for: parameters.casting) }
-            request = SpeechRequest(text: parameters.text, references: references, config: parameters.config)
+            if fromLibrary == nil { references = try await encodedClips(for: resolved.casting) }
+            request = SpeechRequest(text: resolved.line, references: references, character: resolved.character, note: parameters.note,
+                                    previousTakes: resolved.previous, config: parameters.config)
+            _ = try GenerationPlan(request)
         } catch {
             await jobs.release(job)
+            if let error = error as? PromptError { throw APIError.bad(error.description) }
             throw error
+        }
+        let takeID = UUID()
+        let remember: @Sendable (Take) async -> Void = { [takes] take in
+            await takes.insert(TakeCache.Entry(id: takeID, take: take, line: resolved.line, casting: resolved.casting, character: resolved.character,
+                                               lineage: resolved.lineage + [takeID]))
         }
         switch parameters.delivery {
         case .pcmStream:
-            let (pcm, generation) = stream(request, job: job)
-            return APIResponse(status: .ok, headers: Self.pcmHeaders(contentType: AudioFormat.pcm.contentType), body: .chunked(pcm), abandon: { generation.cancel() })
+            let (pcm, generation) = stream(request, job: job, remember: remember)
+            var headers = Self.pcmHeaders(contentType: AudioFormat.pcm.contentType)
+            headers["X-Drama-Take-Id"] = takeID.uuidString
+            return APIResponse(status: .ok, headers: headers, body: .chunked(pcm), abandon: { generation.cancel() })
         case .file(let format):
             let start = ContinuousClock.now
             let result: SpeechResult?
@@ -192,9 +240,11 @@ public final class APIService: Sendable {
             }
             await jobs.release(job)
             guard let result else { throw APIError(.internalServerError, "The engine stopped without producing audio.") }
+            await remember(result.take)
             let elapsed = ContinuousClock.now - start
             var headers = format == .pcm ? Self.pcmHeaders(contentType: format.contentType) : ["Content-Type": format.contentType]
-            headers["X-Drama-Frames"] = String(result.frames.count)
+            headers["X-Drama-Take-Id"] = takeID.uuidString
+            headers["X-Drama-Frames"] = String(result.take.frameCount)
             headers["X-Drama-Seconds"] = String(format: "%.3f", Double(result.samples.count) / Double(AudioEncoding.sampleRate))
             headers["X-Drama-Generation-Seconds"] = String(format: "%.3f", Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18)
             return APIResponse(status: .ok, headers: headers, body: .data(try AudioEncoding.encode(result.samples, as: format)))
@@ -214,13 +264,17 @@ public final class APIService: Sendable {
         return result
     }
 
-    private func stream(_ request: SpeechRequest, job: UUID) -> (AsyncThrowingStream<Data, Error>, Task<Void, Never>) {
+    private func stream(_ request: SpeechRequest, job: UUID, remember: @escaping @Sendable (Take) async -> Void) -> (AsyncThrowingStream<Data, Error>, Task<Void, Never>) {
         let (stream, continuation) = AsyncThrowingStream<Data, Error>.makeStream()
         let task = Task { [synthesizer, jobs] in
             do {
                 for try await event in synthesizer.synthesize(request) {
                     await jobs.advance(job, with: event)
-                    if case .audio(let samples, _) = event { continuation.yield(AudioEncoding.pcm16(samples)) }
+                    switch event {
+                    case .audio(let samples, _): continuation.yield(AudioEncoding.pcm16(samples))
+                    case .finished(let result): await remember(result.take)
+                    default: break
+                    }
                 }
                 await jobs.release(job)
                 continuation.finish()
@@ -341,4 +395,24 @@ struct VoiceSummary: Encodable {
 
 struct VoiceList: Encodable {
     var voices: [VoiceSummary]
+}
+
+struct TakeSummary: Encodable {
+    var id: String
+    var input: String
+    var text: String
+    var seconds: Double
+    var frames: Int
+    var codes_base64: String
+    var previous_take_ids: [String]
+
+    init(_ entry: TakeCache.Entry) {
+        id = entry.id.uuidString
+        input = entry.line
+        text = entry.take.text
+        seconds = (entry.take.durationSeconds * 1000).rounded() / 1000
+        frames = entry.take.frameCount
+        codes_base64 = TakeCodes.encode(entry.take.codes)
+        previous_take_ids = entry.lineage.dropLast().map(\.uuidString)
+    }
 }

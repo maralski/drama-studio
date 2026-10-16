@@ -106,6 +106,7 @@ The speech request follows the
 | `GET /v1/voices` | The voice library: id, name, transcript, seconds, source file. |
 | `POST /v1/voices` | Clones a voice: JSON `{name, transcript, audio_base64 or audio_path}`, or multipart with a `file` part plus `name` and `transcript` fields. |
 | `DELETE /v1/voices/{id}` | Deletes a voice. |
+| `GET /v1/takes/{id}` | One of the last 20 takes: `{id, input, text, seconds, frames, codes_base64, previous_take_ids}`. |
 
 The speech body takes these fields:
 
@@ -120,8 +121,19 @@ The speech body takes these fields:
 | `expressiveness` | 0 to 1, default 0.5: the app's Expressiveness slider. |
 | `quick_preview` | `true` skips retries and tightens the length cap. |
 | `seed` | A fixed sampler seed, for repeatable takes. |
+| `character` | A voice designed from a description instead of a clip: `{name, description, scene?}`. |
+| `note` | A director's note, such as `"softer and warmer"`. The line is generated again as one turn, with the note as a direction and as a cue before every sentence. |
+| `previous_takes` | Earlier takes of the line, oldest first: `[{take_id}]` or `[{text, codes_base64}]`. The last two are context. With no `voice` or `references`, the first one is the voice. |
 
-A request takes at most one of `voice`, `references`, and `speaker_voices`.
+A request takes at most one of `voice`, `references`, `speaker_voices`, and
+`character`. Every generation is a take: the response carries its id in
+`X-Drama-Take-Id`, and the server keeps the last 20. A `take_id` in
+`previous_takes` also brings the takes that take was made after, so naming a
+line's latest take carries its first take, the voice. Leave out `input` to
+retake the line of the last named take, with its voice and character.
+`codes_base64` is the take's codes as 16-bit little-endian integers, codebook
+by codebook, as `GET /v1/takes/{id}` returns them.
+
 A file response carries `X-Drama-Frames`, `X-Drama-Seconds`, and
 `X-Drama-Generation-Seconds`. The engine runs one generation at a time. A
 request that arrives while another runs, through the API or in the window, gets
@@ -135,6 +147,11 @@ curl -sS -H "$AUTH" localhost:8780/v1/audio/speech \
 curl -sS -H "$AUTH" localhost:8780/v1/tts -d '{"text": "The alias route."}' -o alias.wav
 curl -sS -H "$AUTH" localhost:8780/v1/audio/speech \
   -d '{"input": "Cloned on the fly.", "references": [{"audio_path": "/path/to/clip.wav", "text": "What the clip says."}]}' -o clone.wav
+curl -sS -H "$AUTH" -D headers.txt localhost:8780/v1/audio/speech \
+  -d '{"input": "[low and menacing] Pray ye never find out.", "character": {"name": "Captain", "description": "gravelly old male voice, weathered and slow"}}' -o captain.wav
+TAKE=$(awk 'tolower($1) == "x-drama-take-id:" {print $2}' headers.txt | tr -d '\r')
+curl -sS -H "$AUTH" localhost:8780/v1/audio/speech \
+  -d "{\"note\": \"softer and warmer\", \"previous_takes\": [{\"take_id\": \"$TAKE\"}]}" -o captain-retake.wav
 ```
 
 Streaming sends `Transfer-Encoding: chunked` with one HTTP chunk per generated
@@ -172,7 +189,8 @@ repository's `dist/DramaStudio.app`. `DRAMA_API_URL` overrides
 
 | Tool | Does |
 | --- | --- |
-| `synthesize_speech` | `text`, with optional `voice`, `output_path`, `expressiveness`, `quick_preview`, and `play`. Writes a WAV, by default to `~/Library/Application Support/DramaStudio/Output/<timestamp>.wav`. Returns the path, seconds, frames, and generation seconds. `play` plays it with `afplay`. |
+| `synthesize_speech` | `text`, with optional `voice` or `character` (`{name, description, scene?}`), `output_path`, `expressiveness`, `quick_preview`, and `play`. Writes a WAV, by default to `~/Library/Application Support/DramaStudio/Output/<timestamp>.wav`. Returns the path, seconds, frames, generation seconds, and `take_id`. `play` plays it with `afplay`. |
+| `retake_with_note` | `take_id` and `note`, with optional `output_path` and `play`. Generates that take's line again in the same voice with the note. Returns what `synthesize_speech` returns, with the new `take_id`. |
 | `list_voices` | The voice library. |
 | `add_voice` | Clones `audio_path` with its `transcript` under `name`. |
 | `delete_voice` | Deletes a voice by `id`. |

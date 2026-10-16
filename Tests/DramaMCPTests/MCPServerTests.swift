@@ -81,7 +81,7 @@ final class MCPServerTests: XCTestCase {
     func testToolsListDescribesEveryTool() async throws {
         let reply = try parse(await server(StubAPI([:])).handle(#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#))
         guard case .array(let tools)? = reply["result"]?["tools"] else { return XCTFail("\(reply)") }
-        XCTAssertEqual(tools.compactMap { $0["name"]?.string }, ["synthesize_speech", "list_voices", "add_voice", "delete_voice", "studio_status"])
+        XCTAssertEqual(tools.compactMap { $0["name"]?.string }, ["synthesize_speech", "retake_with_note", "list_voices", "add_voice", "delete_voice", "studio_status"])
         for tool in tools {
             XCTAssertEqual(tool["inputSchema"]?["type"], "object", "\(tool)")
             XCTAssertGreaterThan(tool["description"]?.string?.count ?? 0, 150, "\(tool["name"]!)")
@@ -110,6 +110,26 @@ final class MCPServerTests: XCTestCase {
 
         let sent = try XCTUnwrap(api.calls.first?.json)
         XCTAssertEqual(sent, ["input": "Hello.", "voice": "Narrator", "expressiveness": 0.8, "response_format": "wav"])
+    }
+
+    func testCharacterAndRetakeWithNoteSpeakThroughTheSpeechRoute() async throws {
+        let api = StubAPI(["POST /v1/audio/speech": APIReply(status: 200, headers: ["X-Drama-Take-Id": "TAKE-2", "X-Drama-Frames": "10"], body: Data("RIFF".utf8))])
+        let character: JSON = ["name": "Captain", "description": "gravelly old male voice"]
+        let first = try await call(server(api), "synthesize_speech", ["text": "Ahoy.", "character": character])
+        XCTAssertEqual(first["result"]?["structuredContent"]?["take_id"], "TAKE-2")
+        XCTAssertEqual(api.calls.last?.json, ["input": "Ahoy.", "character": character, "response_format": "wav"])
+
+        let retake = try await call(server(api), "retake_with_note", ["take_id": "TAKE-1", "note": "angrier", "output_path": .string(output.appending(path: "r.wav").path)])
+        XCTAssertEqual(retake["result"]?["isError"], false)
+        XCTAssertEqual(retake["result"]?["structuredContent"]?["take_id"], "TAKE-2")
+        XCTAssertEqual(api.calls.last?.json, ["note": "angrier", "previous_takes": [["take_id": "TAKE-1"]], "response_format": "wav"])
+        XCTAssertEqual(try Data(contentsOf: output.appending(path: "r.wav")), Data("RIFF".utf8))
+
+        let both = try await call(server(api), "synthesize_speech", ["text": "Ahoy.", "character": character, "voice": "Narrator"])
+        XCTAssertEqual(both["result"]?["isError"], true)
+        let missing = try await call(server(api), "retake_with_note", ["take_id": "TAKE-1", "note": "  "])
+        XCTAssertEqual(missing["result"]?["isError"], true)
+        XCTAssertEqual(api.calls.count, 2, "invalid calls never reach the API")
     }
 
     private static var localStamp: String {

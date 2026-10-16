@@ -37,9 +37,19 @@ public enum VoiceCasting: Sendable, Equatable {
     case speakers([VoiceKey])
 }
 
+/// An earlier take named in `previous_takes`.
+public enum TakeSource: Sendable, Equatable {
+    case cached(UUID)
+    case inline(Take)
+}
+
 public struct SpeechParameters: Sendable, Equatable {
-    public var text: String
+    /// Nil when the request continues the line of a cached take it names.
+    public var text: String?
     public var casting: VoiceCasting
+    public var character: VoiceDesign?
+    public var note: String?
+    public var previousTakes: [TakeSource]
     public var delivery: Delivery
     public var expressiveness: Double
     public var quickPreview: Bool
@@ -66,6 +76,7 @@ public enum APIRequest: Sendable, Equatable {
     case addVoice(NewVoice)
     case deleteVoice(VoiceKey)
     case speech(SpeechParameters)
+    case take(String)
 }
 
 public struct APIError: Error, Sendable, Equatable {
@@ -148,6 +159,7 @@ extension APIRequest {
         Route(method: "DELETE", pattern: ["v1", "voices", "{id}"]) { captures, _ in .deleteVoice(captures[0]) },
         Route(method: "POST", pattern: ["v1", "audio", "speech"]) { _, request in .speech(try speech(request.body, textField: "input")) },
         Route(method: "POST", pattern: ["v1", "tts"]) { _, request in .speech(try speech(request.body, textField: "text")) },
+        Route(method: "GET", pattern: ["v1", "takes", "{id}"]) { captures, _ in .take(captures[0]) },
     ]
 
     public static func parse(_ request: HTTPRequest) -> Result<APIRequest, APIError> {
@@ -197,6 +209,21 @@ extension APIRequest {
         var quick_preview: Bool?
         var seed: Int64?
         var speaker_voices: [String: String]?
+        var character: CharacterBody?
+        var note: String?
+        var previous_takes: [TakeBody]?
+    }
+
+    private struct CharacterBody: Decodable {
+        var name: String?
+        var description: String?
+        var scene: String?
+    }
+
+    private struct TakeBody: Decodable {
+        var take_id: String?
+        var text: String?
+        var codes_base64: String?
     }
 
     private struct ReferenceBody: Decodable {
@@ -214,9 +241,17 @@ extension APIRequest {
 
     static func speech(_ body: Data, textField: String) throws -> SpeechParameters {
         let decoded = try decode(SpeechBody.self, from: body)
-        guard let text = (decoded.input ?? decoded.text)?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else {
-            throw APIError.bad("\(textField) is required: the text to speak.")
+        let previousTakes = try takes(decoded.previous_takes ?? [])
+        let text = (decoded.input ?? decoded.text)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let continuesTake = previousTakes.contains { if case .cached = $0 { true } else { false } }
+        guard text?.isEmpty == false || (text == nil && continuesTake) else {
+            throw APIError.bad("\(textField) is required: the text to speak. Leave it out only to retake the line of a take_id in previous_takes.")
         }
+        let character = try character(decoded.character)
+        if character != nil, decoded.voice != nil || decoded.references?.isEmpty == false || decoded.speaker_voices?.isEmpty == false {
+            throw APIError.bad("character designs a voice; it can't be combined with voice, references, or speaker_voices.")
+        }
+        let note = decoded.note?.trimmingCharacters(in: .whitespacesAndNewlines)
         let expressiveness = decoded.expressiveness ?? GenerationConfig.defaultExpressiveness
         guard (0...1).contains(expressiveness) else { throw APIError.bad("expressiveness must be between 0 and 1.") }
         var format: AudioFormat?
@@ -237,11 +272,43 @@ extension APIRequest {
         return SpeechParameters(
             text: text,
             casting: try casting(decoded),
+            character: character,
+            note: note?.isEmpty == false ? note : nil,
+            previousTakes: previousTakes,
             delivery: delivery,
             expressiveness: expressiveness,
             quickPreview: decoded.quick_preview ?? false,
             seed: decoded.seed.map(UInt64.init)
         )
+    }
+
+    private static func character(_ body: CharacterBody?) throws -> VoiceDesign? {
+        guard let body else { return nil }
+        guard let name = body.name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty,
+              let description = body.description?.trimmingCharacters(in: .whitespacesAndNewlines), !description.isEmpty else {
+            throw APIError.bad("character needs a name and a description.")
+        }
+        let scene = body.scene?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return VoiceDesign(name: name, description: description, scene: scene?.isEmpty == false ? scene : nil)
+    }
+
+    private static func takes(_ bodies: [TakeBody]) throws -> [TakeSource] {
+        try bodies.enumerated().map { index, body in
+            let field = "previous_takes[\(index)]"
+            switch (body.take_id, body.text, body.codes_base64) {
+            case (let id?, nil, nil):
+                guard let uuid = UUID(uuidString: id) else { throw APIError.bad("\(field).take_id is not a take id.") }
+                return .cached(uuid)
+            case (nil, let text?, let codes?):
+                guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw APIError.bad("\(field).text must not be empty.") }
+                guard let decoded = TakeCodes.decode(codes) else {
+                    throw APIError.bad("\(field).codes_base64 must be base64 of 16-bit little-endian codes, 10 codebooks of equal length, each code below 4096.")
+                }
+                return .inline(Take(text: text, codes: decoded))
+            default:
+                throw APIError.bad("\(field) needs either take_id, or text and codes_base64.")
+            }
+        }
     }
 
     private static func casting(_ body: SpeechBody) throws -> VoiceCasting {
