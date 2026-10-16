@@ -478,6 +478,98 @@ thresholds. That holds for this one prompt only; the faithfulness gate above
 runs on a single prompt and would not catch the same kind of divergence on
 another.
 
+## Streaming
+
+`GenerationConfig.streaming` decides when decoded audio leaves the engine.
+`.sentence`, the CLI's mode, sends each chunk's audio once the chunk is
+generated. `.lowLatency(stepFrames: 64)`, used by `stream: true`, the event
+stream, the live route, and app playback, also sends a partial every 64
+generated frames (about 3 s of audio). The CPU decodes those frames while the
+GPU generates the next ones. A low-latency chunk is never generated again,
+because its first audio may already be playing; the help and the API section
+say so.
+
+The decode reuses the windows a full decode of the chunk would run
+(`DecodeWindow.covering`), so a chunk's partials join into exactly its audio.
+On the Core ML codec, 600 frames decoded in 64-frame steps differ from one
+full decode by a maximum absolute error of 0
+(`DRAMA_CODEC_SEAM=1 swift test --filter testSeamOnTheRealCodec`); decoding
+each step with a bare 256-frame left context instead differs by 0.027. The
+silence probe reads the same decode, so each window is decoded once. All codec
+work of a run goes through one serial queue: a low-latency chunk's last frames
+decode while the next chunk prefills and generates.
+
+Measured on the M3 Max (16 cores, 12 performance), with the same two-sentence
+line, 9.4 s of audio in 202 frames, seed 7, in every run. The machine was not
+idle: other users' jobs kept the load average at 5 to 7 (two Python processes
+at a full core each), so every comparison interleaves its sides, and the raw
+rows are in `.audit/streaming.tsv`.
+
+Time to the first audio byte of `stream: true` through `curl -N`
+(`tools/streaming_ttfb.py`, 5 runs per side, alternating). Before is the
+engine at `1365b5e`, which decoded every chunk after the whole request was
+generated. Both sides returned the same 827,392 bytes, with HTTP 200 and curl
+exit 0 every time. Server CPU comes from `ps -o time=` before and after each
+request:
+
+| | before | after (low latency) |
+| --- | --- | --- |
+| first audio byte | 12.95 s (12.61 to 13.20) | 4.49 s (4.48 to 4.60) |
+| last byte | 14.48 s (14.14 to 14.72) | 8.57 s (8.49 to 8.68) |
+| server CPU per request | 39.0 s | 22.6 s |
+| average cores in use | 2.69 | 2.65 |
+| peak cores over any 0.5 s | 4.3 (3.8 to 4.7) | 4.0 (3.8 to 4.5) |
+
+The first byte now comes after the prefill (0.7 s), 64 frames (1.8 s), and
+one decode of a 512-frame window (about 2 s). The request also uses less CPU:
+before, the silence probe decoded the whole chunk so far every 16 frames
+whenever no probe was running, and every chunk was decoded once more at the
+end; now each window is decoded once.
+
+Generation speed with the decode on and off, in one process
+(`DRAMA_STREAMING_BENCH=1 swift test -c release -Xswiftc -enable-testing
+--filter StreamingBenchTests`, 5 runs per mode, modes interleaved, medians
+with ranges). "Decode after" turns the silence stop off, so the codec is idle
+while frames land and runs once per chunk at its end:
+
+| mode | frames/s while frames land | end-to-end frames/s | first audio | wall | CPU cores |
+| --- | --- | --- | --- | --- | --- |
+| decode after | 34.9 (34.7 to 37.5) | 19.1 | 5.07 s | 10.58 s | 1.20 |
+| sentence | 33.0 (32.2 to 33.7) | 15.2 | 6.51 s | 13.30 s | 2.03 |
+| low latency, 64 frames | 32.7 (32.4 to 33.6) | 18.9 | 6.77 s | 10.68 s | 2.11 |
+| low latency, 32 frames | 32.9 (32.8 to 33.5) | 19.2 | 6.03 s | 10.50 s | 2.17 |
+
+- The CPU decode slows generation by about 6 percent while it overlaps the
+  GPU (34.9 to 32.7 frames/s). Low latency still finishes with "decode after"
+  and 2.6 s ahead of sentence mode, because the GPU never waits for the codec.
+- What limits the first audio is the decode, not the GPU. One window takes
+  1.6 s alone ("decode after" spends 3.35 s on two) and 4.6 s while the GPU
+  generates: in the event trace of the first low-latency run, the window was
+  queued at 2.50 s and its audio arrived at 7.09 s. The cause of the slowdown
+  was not isolated; contention for memory bandwidth or for the chip's power
+  budget is a guess. The test runner also sees slower decodes than `drama
+  serve` (first audio 6.77 s here against 4.49 s through the server), and
+  that cause was not isolated either.
+- For this short first sentence (4.7 s of audio), low latency is no faster
+  than sentence mode to the first audio. It pays off on a long first
+  sentence: on one 12.5 s sentence (3 runs), low latency started at 6.19 s
+  (6.09 to 6.94) against 23.5 s for sentence mode. Part of that gap is the
+  retry: sentence mode judged the first attempt too short and generated the
+  sentence again, while low latency kept that attempt (336 to 369 frames).
+- 32-frame steps start 0.7 s sooner but stutter: in every trace the first
+  1.5 s of audio ran out 1.1 to 1.5 s before the next partial arrived. With
+  64-frame steps every trace played without a gap, so 64 stays the default.
+
+The app shows the time left beside the elapsed time while it generates
+(`GenerationEstimate`): the expected frames of the unfinished chunks (text
+length at 16 characters per second, times 21.53 frames per second) less the
+frames of the current chunk, over a 3 s moving average of frames per second
+that starts at 35, plus one prefill per chunk not yet prefilled (0.7 s until
+the first is measured). It reads "about 12 s left", rounded to 5 s above 20 s,
+and "finishing…" or "retrying" once the frames stop predicting the end. The
+same numbers are `X-Drama-Estimated-Seconds` and the `estimate` field of
+`/v1/health`.
+
 ## Kernel autotune
 
 Kernel schedule parameters (the GEMV token tile and rows per threadgroup, the
