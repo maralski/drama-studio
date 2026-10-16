@@ -96,7 +96,7 @@ final class APIServerController {
 
     private func jobChanged(_ next: SpeechJob?) {
         job = next
-        if next == nil { session.refreshEngineState() }
+        session.refreshEngineState()
     }
 
     private static func copy(_ string: String) {
