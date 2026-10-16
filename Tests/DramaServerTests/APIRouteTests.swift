@@ -94,6 +94,7 @@ final class APIRouteTests: XCTestCase {
         let multipart = await send("POST", "/v1/voices", body: boundary, headers: ["Content-Type": "multipart/form-data; boundary=b0"])
         XCTAssertEqual(multipart.status, .created, text(multipart))
         XCTAssertEqual(object(multipart)["name"] as? String, "Villain", "the file name stands in for a missing name field")
+        XCTAssertEqual(object(multipart)["source_file"] as? String, "Villain.wav", "the upload's name, not the temporary file's")
 
         let listed = (object(await send("GET", "/v1/voices"))["voices"] as? [[String: Any]]) ?? []
         XCTAssertEqual(listed.map { $0["name"] as? String }, ["Narrator", "Villain"])

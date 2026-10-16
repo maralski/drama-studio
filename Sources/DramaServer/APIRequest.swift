@@ -59,6 +59,8 @@ public struct NewVoice: Sendable, Equatable {
     public var name: String
     public var transcript: String
     public var audio: AudioSource
+    /// The clip's own file name, kept with the voice; nil for base64 uploads.
+    public var fileName: String?
 }
 
 /// A request the API understands, parsed and validated off the wire.
@@ -294,18 +296,19 @@ extension APIRequest {
             }
             let field = { (name: String) in parts.first { $0.name == name }?.text?.trimmingCharacters(in: .whitespacesAndNewlines) }
             let fallbackName = file.filename.map { URL(filePath: $0).deletingPathExtension().lastPathComponent }
-            return try voice(name: field("name") ?? fallbackName, transcript: field("transcript"), audio: .bytes(file.data))
+            return try voice(name: field("name") ?? fallbackName, transcript: field("transcript"), audio: .bytes(file.data), fileName: file.filename)
         }
         let body = try decode(VoiceBody.self, from: request.body)
-        return try voice(name: body.name, transcript: body.transcript, audio: try audio(path: body.audio_path, base64: body.audio_base64, field: "the voice"))
+        let fileName = body.audio_path.map { URL(filePath: $0).lastPathComponent }
+        return try voice(name: body.name, transcript: body.transcript, audio: try audio(path: body.audio_path, base64: body.audio_base64, field: "the voice"), fileName: fileName)
     }
 
-    private static func voice(name: String?, transcript: String?, audio: AudioSource) throws -> NewVoice {
+    private static func voice(name: String?, transcript: String?, audio: AudioSource, fileName: String?) throws -> NewVoice {
         guard let name = name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty else { throw APIError.bad("name is required.") }
         guard let transcript = transcript?.trimmingCharacters(in: .whitespacesAndNewlines), !transcript.isEmpty else {
             throw APIError.bad("transcript is required: the words spoken in the clip.")
         }
-        return NewVoice(name: name, transcript: transcript, audio: audio)
+        return NewVoice(name: name, transcript: transcript, audio: audio, fileName: fileName)
     }
 
     private static func decode<T: Decodable>(_ type: T.Type, from body: Data) throws -> T {

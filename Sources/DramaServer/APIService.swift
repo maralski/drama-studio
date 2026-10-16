@@ -11,6 +11,11 @@ public struct SpeechJob: Sendable, Equatable {
     public let id: UUID
     public var progress: Progress
 
+    public init(id: UUID, progress: Progress) {
+        self.id = id
+        self.progress = progress
+    }
+
     public var summary: String {
         switch progress {
         case .starting: "Starting"
@@ -136,9 +141,10 @@ public final class APIService: Sendable {
         case .listVoices:
             return .json(VoiceList(voices: await voices.allVoices().map(VoiceSummary.init)))
         case .addVoice(let new):
-            let voice = try await withAudioFile(new.audio, field: "the clip") { url in
+            var voice = try await withAudioFile(new.audio, field: "the clip") { url in
                 try await synthesizer.encodeReference(audioURL: url, transcript: new.transcript, name: new.name)
             }
+            voice.sourceFileName = new.fileName
             try await voices.add(voice)
             return .json(VoiceSummary(voice), status: .created)
         case .deleteVoice(let key):
