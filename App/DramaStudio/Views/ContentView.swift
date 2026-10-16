@@ -24,6 +24,10 @@ struct ContentView: View {
                     .help("Import a script (⌘O)")
             }
             ToolbarItem(placement: .primaryAction) {
+                Menu("Examples", systemImage: "text.badge.star") { ExampleMenuItems(model: model) }
+                    .help("Insert an example line or cast a character")
+            }
+            ToolbarItem(placement: .primaryAction) {
                 Button("Inspector", systemImage: "sidebar.trailing") { showsInspector.toggle() }
                     .help("Show or hide voice and tuning controls")
             }

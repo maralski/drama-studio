@@ -92,6 +92,7 @@ struct StudioCommands: Commands {
         }
         CommandMenu("Script") {
             Menu("Insert Cue") { CueMenuItems(model: model) }
+            Menu("Examples") { ExampleMenuItems(model: model) }
             Toggle("Screenplay Mode", isOn: $model.screenplayMode)
                 .keyboardShortcut("p", modifiers: [.command, .shift])
         }
@@ -107,6 +108,18 @@ struct CueMenuItems: View {
                 ForEach(PerformanceCue.cues(of: kind)) { cue in
                     Button("\(cue.title)  \(cue.opening)") { model.insert(cue) }
                 }
+            }
+        }
+    }
+}
+
+struct ExampleMenuItems: View {
+    let model: SessionModel
+
+    var body: some View {
+        Section("Lines") {
+            ForEach(Examples.lines) { line in
+                Button(line.title) { model.insert(line) }
             }
         }
     }

@@ -209,8 +209,14 @@ final class SessionModel {
     }
 
     func insert(_ cue: PerformanceCue) {
-        let range = selectedCharacterRange ?? script.count..<script.count
-        let edit = cue.insert(into: script, at: range)
+        apply(cue.insert(into: script, at: selectedCharacterRange ?? script.count..<script.count))
+    }
+
+    func insert(_ example: ExampleLine) {
+        apply(example.insert(into: script, at: selectedCharacterRange ?? script.count..<script.count))
+    }
+
+    private func apply(_ edit: (text: String, selection: Range<Int>)) {
         script = edit.text
         let start = script.index(script.startIndex, offsetBy: edit.selection.lowerBound)
         let end = script.index(script.startIndex, offsetBy: edit.selection.upperBound)
