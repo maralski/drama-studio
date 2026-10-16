@@ -14,31 +14,35 @@ public struct TuningKey: Codable, Equatable, Sendable {
     /// Snapshot directory name, a dash, and the first 16 hex digits of the
     /// SHA-256 of model.safetensors.index.json.
     public var model: String
+    /// The `ModelPrecisionMode`; each mode runs different kernels and tunes its own schedule.
+    public var mode: String
     /// Bumped when KernelSchedule's fields change without a kernel change.
     public var schema: Int
 
-    public static let currentSchema = 1
+    public static let currentSchema = 2
 
-    public init(chip: String, os: String, kernels: String, model: String, schema: Int = TuningKey.currentSchema) {
+    public init(chip: String, os: String, kernels: String, model: String, mode: String, schema: Int = TuningKey.currentSchema) {
         self.chip = chip
         self.os = os
         self.kernels = kernels
         self.model = model
+        self.mode = mode
         self.schema = schema
     }
 
-    public init(ctx: MetalContext, location: ModelLocation) throws {
+    public init(ctx: MetalContext, location: ModelLocation, mode: ModelPrecisionMode) throws {
         let v = ProcessInfo.processInfo.operatingSystemVersion
         let index = try Data(contentsOf: location.directory.appendingPathComponent("model.safetensors.index.json"))
         self.init(chip: ctx.device.name,
                   os: "\(v.majorVersion).\(v.minorVersion).\(v.patchVersion)",
                   kernels: ctx.kernelDigest,
-                  model: location.directory.lastPathComponent + "-" + Self.hex(SHA256.hash(data: index)).prefix(16))
+                  model: location.directory.lastPathComponent + "-" + Self.hex(SHA256.hash(data: index)).prefix(16),
+                  mode: mode.rawValue)
     }
 
     /// First 16 hex digits of the SHA-256 over the fields, plus ".json".
     public var fileName: String {
-        let text = [chip, os, kernels, model, String(schema)].joined(separator: "\n")
+        let text = [chip, os, kernels, model, mode, String(schema)].joined(separator: "\n")
         return String(Self.hex(SHA256.hash(data: Data(text.utf8))).prefix(16)) + ".json"
     }
 

@@ -67,7 +67,7 @@ struct Kernels {
         enc.setBytes(&v, length: MemoryLayout<T>.stride, index: index)
     }
 
-    private func dispatch(_ enc: MTLComputeCommandEncoder, _ name: String, grid: MTLSize, group: MTLSize) throws {
+    func dispatch(_ enc: MTLComputeCommandEncoder, _ name: String, grid: MTLSize, group: MTLSize) throws {
         enc.setComputePipelineState(try ctx.pipeline(name))
         enc.dispatchThreads(grid, threadsPerThreadgroup: group)
     }
@@ -77,7 +77,7 @@ struct Kernels {
         enc.dispatchThreadgroups(groups, threadsPerThreadgroup: group)
     }
 
-    // y[m*N + n] = W[rowStart + n] . x[m]
+    // y[m*N + n] = W[n] . x[m] for the matrix's N rows and K columns.
     //
     // One GEMM tile for every M above 1 so a row's result is the same
     // whichever chunk it lands in (the prefix cache relies on that); below 16
@@ -86,22 +86,23 @@ struct Kernels {
     // invariance. Narrow outputs (N up to 64) keep the GEMV at every M: a
     // GEMM would have one or two column tiles walking K alone, while the
     // GEMV spreads the rows over threadgroups.
-    func gemv(_ enc: MTLComputeCommandEncoder, _ w: TensorRef, x: Buf, xOffset: Int = 0, y: Buf, yOffset: Int = 0,
-              n: Int, k: Int, m: Int, rowStart: Int = 0, round: Bool? = nil) throws {
-        struct P { var N: UInt32; var K: UInt32; var M: UInt32; var rowStart: UInt32; var round: UInt32 }
+    func gemv(_ enc: MTLComputeCommandEncoder, _ w: WeightMatrix, x: Buf, xOffset: Int = 0, y: Buf, yOffset: Int = 0, m: Int) throws {
+        struct P { var N: UInt32; var K: UInt32; var M: UInt32; var round: UInt32 }
+        let n = w.rows, k = w.cols
         precondition(k % 256 == 0)
         enc.setBuffer(w.buffer, offset: w.offset, index: 0)
         enc.setBuffer(x.buffer, offset: x.byteOffset + (xOffset * 4), index: 1)
         enc.setBuffer(y.buffer, offset: y.byteOffset + (yOffset * 4), index: 2)
-        set(enc, P(N: UInt32(n), K: UInt32(k), M: UInt32(m), rowStart: UInt32(rowStart), round: (round ?? precision.mimicBF16) ? 1 : 0), index: 3)
+        set(enc, P(N: UInt32(n), K: UInt32(k), M: UInt32(m), round: precision.mimicBF16 ? 1 : 0), index: 3)
+        enc.setBuffer(w.buffer, offset: w.paramOffset, index: 4)
         if m > 1 && n > 64 && !forceGemv {
             let tile = schedule.gemmTile
-            try dispatchGroups(enc, "gemm_bf16_\(tile.label)",
+            try dispatchGroups(enc, "gemm_\(w.format.kernelTag)_\(tile.label)",
                                groups: MTLSize(width: (n + tile.bn - 1) / tile.bn, height: (m + tile.bm - 1) / tile.bm, depth: 1),
                                group: MTLSize(width: 128, height: 1, depth: 1))
         } else {
             let shape = m == 1 ? schedule.gemvDecode : schedule.gemvNarrow
-            try dispatchGroups(enc, "gemv_bf16_t\(shape.tokenTile)",
+            try dispatchGroups(enc, "gemv_\(w.format.kernelTag)_t\(shape.tokenTile)",
                                groups: MTLSize(width: (n + shape.simdgroups - 1) / shape.simdgroups, height: (m + shape.tokenTile - 1) / shape.tokenTile, depth: 1),
                                group: MTLSize(width: 32 * shape.simdgroups, height: 1, depth: 1))
         }
@@ -264,42 +265,44 @@ struct Kernels {
          precision.roundExpertWeights ? 1 : 0, precision.mimicBF16 ? 1 : 0)
     }
 
-    func moeGateUp(_ enc: MTLComputeCommandEncoder, act: Buf, x: Buf, table: MTLBuffer, counts: Buf, lists: Buf, active: Buf, maxActive: Int, capacity: Int, rows: Int, config: ModelConfig) throws {
+    func moeGateUp(_ enc: MTLComputeCommandEncoder, act: Buf, x: Buf, experts: ExpertTable, counts: Buf, lists: Buf, active: Buf, maxActive: Int, capacity: Int, rows: Int, config: ModelConfig) throws {
         struct P { var hidden: UInt32; var intermediate: UInt32; var topK: UInt32; var capacity: UInt32; var roundWeights: UInt32; var roundOutput: UInt32 }
         let p = moeParams(capacity: capacity, config: config)
         enc.setBuffer(act.buffer, offset: act.byteOffset + (0), index: 0)
         enc.setBuffer(x.buffer, offset: x.byteOffset + (0), index: 1)
-        enc.setBuffer(table, offset: 0, index: 2)
+        enc.setBuffer(experts.table, offset: 0, index: 2)
         enc.setBuffer(counts.buffer, offset: counts.byteOffset + (0), index: 3)
         enc.setBuffer(lists.buffer, offset: lists.byteOffset + (0), index: 4)
         set(enc, P(hidden: p.0, intermediate: p.1, topK: p.2, capacity: p.3, roundWeights: p.4, roundOutput: p.5), index: 5)
         enc.setBuffer(active.buffer, offset: active.byteOffset, index: 6)
+        let tag = experts.format.kernelTag
         if moeTiled(rows: rows) {
             let t = schedule.moeTile
-            try dispatchGroups(enc, "moe_gate_up_fp8_tiled_\(t.label)", groups: MTLSize(width: maxActive, height: config.moeIntermediate / t.bn, depth: 1), group: MTLSize(width: 4 * t.bn, height: 1, depth: 1))
+            try dispatchGroups(enc, "moe_gate_up_\(tag)_tiled_\(t.label)", groups: MTLSize(width: maxActive, height: config.moeIntermediate / t.bn, depth: 1), group: MTLSize(width: 4 * t.bn, height: 1, depth: 1))
         } else {
             let sg = schedule.moeRowSimdgroups
-            try dispatchGroups(enc, "moe_gate_up_fp8", groups: MTLSize(width: maxActive, height: config.moeIntermediate / sg, depth: 1), group: MTLSize(width: 32 * sg, height: 1, depth: 1))
+            try dispatchGroups(enc, "moe_gate_up_\(tag)", groups: MTLSize(width: maxActive, height: config.moeIntermediate / sg, depth: 1), group: MTLSize(width: 32 * sg, height: 1, depth: 1))
         }
     }
 
-    func moeDown(_ enc: MTLComputeCommandEncoder, slotOut: Buf, act: Buf, weights: Buf, table: MTLBuffer, counts: Buf, lists: Buf, active: Buf, maxActive: Int, capacity: Int, rows: Int, config: ModelConfig) throws {
+    func moeDown(_ enc: MTLComputeCommandEncoder, slotOut: Buf, act: Buf, weights: Buf, experts: ExpertTable, counts: Buf, lists: Buf, active: Buf, maxActive: Int, capacity: Int, rows: Int, config: ModelConfig) throws {
         struct P { var hidden: UInt32; var intermediate: UInt32; var topK: UInt32; var capacity: UInt32; var roundWeights: UInt32; var roundOutput: UInt32 }
         let p = moeParams(capacity: capacity, config: config)
         enc.setBuffer(slotOut.buffer, offset: slotOut.byteOffset + (0), index: 0)
         enc.setBuffer(act.buffer, offset: act.byteOffset + (0), index: 1)
         enc.setBuffer(weights.buffer, offset: weights.byteOffset + (0), index: 2)
-        enc.setBuffer(table, offset: 0, index: 3)
+        enc.setBuffer(experts.table, offset: 0, index: 3)
         enc.setBuffer(counts.buffer, offset: counts.byteOffset + (0), index: 4)
         enc.setBuffer(lists.buffer, offset: lists.byteOffset + (0), index: 5)
         set(enc, P(hidden: p.0, intermediate: p.1, topK: p.2, capacity: p.3, roundWeights: p.4, roundOutput: p.5), index: 6)
         enc.setBuffer(active.buffer, offset: active.byteOffset, index: 7)
+        let tag = experts.format.kernelTag
         if moeTiled(rows: rows) {
             let t = schedule.moeTile
-            try dispatchGroups(enc, "moe_down_fp8_tiled_\(t.label)", groups: MTLSize(width: maxActive, height: config.hiddenSize / t.bn, depth: 1), group: MTLSize(width: 4 * t.bn, height: 1, depth: 1))
+            try dispatchGroups(enc, "moe_down_\(tag)_tiled_\(t.label)", groups: MTLSize(width: maxActive, height: config.hiddenSize / t.bn, depth: 1), group: MTLSize(width: 4 * t.bn, height: 1, depth: 1))
         } else {
             let sg = schedule.moeRowSimdgroups
-            try dispatchGroups(enc, "moe_down_fp8", groups: MTLSize(width: maxActive, height: config.hiddenSize / sg, depth: 1), group: MTLSize(width: 32 * sg, height: 1, depth: 1))
+            try dispatchGroups(enc, "moe_down_\(tag)", groups: MTLSize(width: maxActive, height: config.hiddenSize / sg, depth: 1), group: MTLSize(width: 32 * sg, height: 1, depth: 1))
         }
     }
 

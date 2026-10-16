@@ -69,6 +69,50 @@ public final class SafeTensorsStore: @unchecked Sendable {
     public func has(_ name: String) -> Bool { tensors[name] != nil }
     public var tensorNames: [String] { Array(tensors.keys) }
 
+    /// Tensors closer than this share one pinned run.
+    static let pinnedRunGap = 1 << 20
+
+    /// Keeps `refs` readable in place without binding whole shards: coalesces
+    /// them into page-aligned runs of their shard mappings, wraps each run in
+    /// a Metal buffer of its own, and returns the refs re-pointed at the run
+    /// buffers, in the given order, plus the runs. Metal wires a buffer in full
+    /// the first time a command buffer binds it, so what a quantized mode keeps
+    /// in place must be bound as runs and never as the 41 GB of shards.
+    public func pinned(_ refs: [TensorRef], device: MTLDevice) throws -> (refs: [TensorRef], runs: [MTLBuffer]) {
+        let pageSize = Int(getpagesize())
+        var runs: [MTLBuffer] = []
+        var repointed = [TensorRef?](repeating: nil, count: refs.count)
+        for shard in shards {
+            let members = refs.indices.filter { refs[$0].buffer === shard }.sorted { refs[$0].offset < refs[$1].offset }
+            var i = 0
+            while i < members.count {
+                let start = refs[members[i]].offset / pageSize * pageSize
+                var end = 0
+                var j = i
+                while j < members.count {
+                    let ref = refs[members[j]]
+                    let refStart = ref.offset / pageSize * pageSize
+                    if j > i && refStart - end >= Self.pinnedRunGap { break }
+                    end = max(end, (ref.offset + ref.byteCount + pageSize - 1) / pageSize * pageSize)
+                    j += 1
+                }
+                guard let run = device.makeBuffer(bytesNoCopy: shard.contents() + start, length: end - start, options: .storageModeShared, deallocator: nil) else {
+                    throw EngineError.badModel("Metal refused a \(end - start) byte run of \(shard.label ?? "a shard")")
+                }
+                run.label = "\(shard.label ?? "shard")+\(start)"
+                for m in members[i..<j] {
+                    let ref = refs[m]
+                    repointed[m] = TensorRef(name: ref.name, dtype: ref.dtype, shape: ref.shape, buffer: run, offset: ref.offset - start)
+                }
+                runs.append(run)
+                i = j
+            }
+        }
+        let all = repointed.compactMap { $0 }
+        guard all.count == refs.count else { throw EngineError.badModel("a tensor to pin is not in any shard") }
+        return (all, runs)
+    }
+
     private func mapShard(_ url: URL, device: MTLDevice) throws {
         let fd = open(url.path, O_RDONLY)
         guard fd >= 0 else { throw EngineError.badModel("cannot open \(url.lastPathComponent)") }

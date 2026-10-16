@@ -3,6 +3,8 @@ import DramaEngine
 import DramaServer
 import Foundation
 
+let wiredAtStart = SystemMemory.wiredBytes()
+
 struct Args {
     var values: [String: String] = [:]
     var flags: Set<String> = []
@@ -40,11 +42,27 @@ func loadModel(_ args: Args) throws -> DramaModel {
     }
     var precision = Precision.exact
     if args["precision"] == "reference" { precision = .reference }
+    guard let mode = ModelPrecisionMode(rawValue: args["precision-mode"] ?? "full") else {
+        fail("--precision-mode must be one of " + ModelPrecisionMode.allCases.map(\.rawValue).joined(separator: ", "))
+    }
     let t0 = Date()
-    let model = try DramaModel(location: loc, precision: precision, capacity: args.int("capacity", DramaModel.defaultCapacity),
+    let model = try DramaModel(location: loc, mode: mode, precision: precision, capacity: args.int("capacity", DramaModel.defaultCapacity),
                                schedule: args.flags.contains("untuned") ? .default : nil)
     FileHandle.standardError.write("loaded \(loc.directory.lastPathComponent) in \(String(format: "%.2f", Date().timeIntervalSince(t0)))s\n".data(using: .utf8)!)
+    if let cache = model.quantizedCache { FileHandle.standardError.write((quantizedCacheLine(cache) + "\n").data(using: .utf8)!) }
     return model
+}
+
+func quantizedCacheLine(_ cache: QuantizedCacheInfo) -> String {
+    let size = String(format: "%.2f GB", Double(cache.bytes) / 1e9)
+    if let seconds = cache.buildSeconds { return "quantized cache: \(cache.url.path), \(size), built in \(String(format: "%.1f", seconds)) s" }
+    return "quantized cache: \(cache.url.path), \(size) (hit)"
+}
+
+func memoryLine(_ label: String) -> String {
+    let gb = 1e9
+    return String(format: "memory %@: wired %+.2f GB since process start, resident %.2f GB, footprint %.2f GB", label,
+                  (Double(SystemMemory.wiredBytes()) - Double(wiredAtStart)) / gb, Double(SystemMemory.residentBytes()) / gb, Double(SystemMemory.footprintBytes()) / gb)
 }
 
 func readFrames(_ path: String) throws -> [Frame] {
@@ -121,8 +139,11 @@ func scheduleLine(_ model: DramaModel, args: Args) -> String {
 func bench(_ args: Args) throws {
     let model = try loadModel(args)
     print(scheduleLine(model, args: args))
+    if let cache = model.quantizedCache { print(quantizedCacheLine(cache)) }
+    print(memoryLine("after load"))
     if args.flags.contains("warm") { print(String(format: "warm-up walk: %.2fs", model.benchWarmUp())) }
     let t0 = Date(); _ = try model.benchBackbone(rows: 1, skip: []); print(String(format: "first forward (page faults): %.2fs", Date().timeIntervalSince(t0)))
+    print(memoryLine("after warm-up"))
     for rows in [1, 8, 32, 128, 300] {
         var line = "rows \(rows):"
         for skip in [Set<String>(), ["moe"], ["experts"], ["shared"], ["linear"], ["gdn"], ["full"], ["attn"], ["moe", "linear", "full"]] {

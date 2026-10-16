@@ -35,7 +35,8 @@ cloning a real person's voice without their consent is not permitted.
 
 - Apple silicon Mac with plenty of unified memory. The weights are 41.5 GB and
   are mapped, not copied, plus about 2 GB of state and codec; only a 128 GB M3
-  Max has been tested.
+  Max has been tested. The `balanced` precision mode (see "Model precision")
+  adds a 2.5 GB cache file on disk; the experimental `compact` mode a 20 GB one.
 - macOS 15 or newer, Xcode 26 command line tools.
 - The model in the Hugging Face cache:
 
@@ -68,6 +69,7 @@ Command line:
 .build/release/drama generate --text "Hello there." --out frames.npy
 .build/release/drama bench                     # add --untuned to compare against the hand-written schedule
 .build/release/drama serve                     # the HTTP API without the app; --port 8780, --no-token
+.build/release/drama generate --precision-mode balanced --text "Hello there." --out frames.npy   # int8 matrices, see "Model precision"
 ```
 
 `DRAMA_PREVIEW_ENGINE=1` runs the app or `drama serve` on a mock engine that
@@ -220,7 +222,9 @@ Or with Claude Desktop, in `~/Library/Application Support/Claude/claude_desktop_
   (`MAP_SHARED`) and wrapped as Metal buffers without copying. Experts stay in
   FP8 E4M3 with their 128x128 block scales and are decoded inside the kernel
   through a 256-entry table; every other weight is bf16 widened to fp32 in the
-  kernel.
+  kernel. Two optional precision modes quantize the matrices to int8 or int4
+  on the GPU at first load into one cache file per mode (see "Model
+  precision" below).
 - `Sources/DramaEngine/Kernels`: zero-centered RMSNorm, a bf16 GEMV for decode
   and a simdgroup-matrix GEMM for prefill, the Gated DeltaNet depthwise conv and
   recurrence, GQA attention with an online softmax over an fp32 KV cache,
@@ -468,6 +472,142 @@ none is expected: with the reverted fields the schedule is the default there.
 To redo the end-to-end table on an idle machine: `eval/tune_ab.sh
 .build/release/drama 5 eval/out/perf/ab_tune_idle` then
 `eval/.venv/bin/python -I eval/perf_ab_summary.py eval/out/perf/ab_tune_idle`.
+
+## Model precision
+
+The engine has three weight precision modes, `ModelPrecisionMode.full`,
+`.balanced` and `.compact`, taken by `DramaModel.init(mode:)` and
+`DramaSynthesizer.init(mode:)` and by the CLI as `--precision-mode`. `full`
+is the default and the engine described above, unchanged bit for bit
+(`drama dump --untuned` on the previous binary and on this one agree on every
+array with a relative L2 of exactly 0). The other two quantize the matrices on
+the GPU at the first load, in one pass over the mmapped weights, into one
+cache file per mode at
+`~/Library/Application Support/DramaStudio/Quantized/<snapshot>-<mode>.bin`;
+later loads map that file and quantize nothing. Delete the file to rebuild it.
+
+| mode | backbone matrices | tower matrices | experts | cache file, first build from a warm page cache |
+| --- | --- | --- | --- | --- |
+| `full` | bf16 in place | bf16 in place | FP8 in place | none |
+| `balanced` | int8, fp16 scale per row per 128 columns | int8, the same | FP8 in place | 2.53 GB, 1.0 s |
+| `compact` | int4, fp16 scale and bias per row per 64 columns | int8 | int4, re-quantized from FP8 with the same groups | 20.01 GB, 5.1 s |
+
+In every mode the embeddings stay bf16 in place, the router and the other
+matrices with 256 rows or fewer stay bf16 (one percent of the bytes, and they
+gate the routing and the GDN recurrence), lm_head is stored as its 4097
+candidate rows, and the KV caches stay fp32: at 1000 positions they are under
+3 percent of a decode frame's bytes and under 5 percent of `compact`'s
+memory, so an fp16 cache would not show in these measurements and was not
+built. Scales are fp16 because their rounding (2^-11 relative) is an eighth of
+the int8 step at half the bytes of fp32. Metal wires every buffer a command
+buffer binds, in full, so the quantized modes never bind the 41.5 GB of
+shards: they bind the cache file plus page-aligned runs over the tensors they
+still read in place (embeddings, and the FP8 experts in `balanced`).
+
+Measured on the M3 Max, one release binary, each mode with its own tuned
+schedule, the modes interleaved round by round. The machine was not idle
+(load average 8 to 33 from other sessions' builds and tests, not this
+project's to stop), so the ranges are wide and the medians are what to read.
+Memory is the process's resident size after its own page walk
+(`task_info`), the bytes it mapped and bound, the same in all three runs per
+mode. The host wired delta from `host_statistics64` is beside it as a check
+from the runs where no other process released memory meanwhile: two of three
+for `full`, one of three for the other two modes, so the wired column is a
+corroboration and not a repeatable measurement on this machine (`drama bench
+--warm` prints both; `eval/precision_memory.sh` waits 20 s between runs
+because Metal releases a process's wiring a few seconds after it exits).
+
+| measurement | `full` | `balanced` | `compact` |
+| --- | --- | --- | --- |
+| resident after load and page walk (host wired delta in the clean runs) | 39.7 GB (+40.2, +40.5) | 36.3 GB (+36.7), 9 percent less | 21.5 GB (+22.3), 46 percent less |
+| backbone decode, one row, GPU, median of 5 [range] | 15.8 ms [14.9..16.1] | 12.8 ms [12.3..14.1] | 9.2 ms [8.7..12.4] |
+| tower decode, one row, GPU | 6.2 ms [6.1..6.2] | 3.7 ms [3.6..4.1] | 3.7 ms [3.5..3.8] |
+| backbone prefill, 128 and 300 rows, GPU | 200 ms, 380 ms | 206 ms, 413 ms | 209 ms, 399 ms (all within the series' spread) |
+| end-to-end decode after a 324-row prompt, GPU ms per frame | 23.6 [22.7..37.0] | 17.4 [16.3..26.8], 26 percent less | 15.4 [13.7..24.1], 35 percent less |
+| same, frames per second (wall) | 42.4 [27.1..44.1] | 57.6 [36.9..61.3] | 64.9 [41.3..72.9] |
+| hidden state against the float32 oracle, 120 forced frames, relative L2 | 5.8e-7 | 3.9e-2 | 2.6e-1 |
+| candidate logits, relative L2; top-1; mean KL | 3.0e-7; 1.000; 1e-12 | 1.7e-2; 0.992; 2.0e-3 | 1.1e-1; 0.769; 6.9e-2 |
+| tower logits, relative L2; top-1; mean KL | 4.4e-7; 1.000; 4e-12 | 9.8e-3; 0.944; 1.7e-3 | 4.7e-2; 0.795; 4.1e-2 |
+| the 12-frame prompt against float32: hidden relative L2; candidate top-1, KL; tower top-1, KL. The oracle's own bf16 run scores 5.2e-2; 0.846, 7.8e-3; 0.907, 2.3e-3 | 1.5e-6; 1.000, 1e-11; 1.000, 6e-12 | 5.7e-2; 0.923, 1.0e-2; 0.880, 4.6e-3 | 2.4e-1; 0.615, 1.0e-1; 0.722, 4.2e-2 |
+| speech suite, 36 runs: mean WER; runs at or under 0.1; eos; speaker similarity | 0.016; 92%; 100%; 0.870 | 0.023; 89%; 100%; 0.868 | 0.027; 86%; 100%; 0.856 |
+
+On the 12-frame prompt `balanced` sits at the bf16 oracle's own distance from
+float32: closer on the hidden state and candidate top-1 (12 against 11 of 13
+positions), farther on the tower (KL twice the bf16 run's). `compact` is four
+to five times farther on every metric.
+
+The rule written before any run was that a mode ships only if its mean word
+error rate and speaker similarity fall within the seed-to-seed spread of
+`full`. In the `full` run on this binary the per-seed mean word error rates
+are 0.014, 0.014 and 0.022 and the per-seed speaker similarities 0.866,
+0.868 and 0.874. Word error rate turned out unable to separate the modes:
+pairing the 36 runs by name, `balanced` differs from `full` in 4 runs
+(mean +0.006, standard error 0.006) and `compact` in 5 (+0.011, standard
+error 0.008), and every difference is Whisper writing "21 March" for "the
+21st of March", "Drummer" for "Drama" in one run or another, a "2R7" or a
+"2nd floor"; by the rule as written both modes miss it (0.023 and 0.027
+against a top seed of 0.022) and by what the misses are neither does
+(`eval/precision_pairs.py`). The verdict therefore rests on speaker
+similarity and faithfulness. Paired over the 18 cloned runs, `balanced` is
+0.002 below `full` with a standard error of 0.006 (better in 8, worse in 10;
+per-seed 0.871, 0.871, 0.862, the last below `full`'s lowest seed), and
+`compact` is 0.014 below with a standard error of 0.005 (better in 6, worse
+in 12; per-seed 0.859, 0.864, 0.845, all three below `full`'s lowest seed).
+
+The five interleaved `drama generate` runs on the 324-row reference-chunking
+prompt are one deterministic sample per mode (all five rounds of a mode gave
+the same frames). Decoded with the PyTorch codec and transcribed
+(`eval/out/quant/ab_transcribe.txt`): `full` spoke the whole text in 425
+frames (word error rate 0.023, Whisper's "guls", speaker similarity 0.896),
+`balanced` spoke it in 338 frames (0.000, 0.895), and `compact` spoke the
+first sentence, fell silent for 493 frames and never reached eos (0.628,
+0.868). The speech suite, which stops a chunk after 2 s of silence and
+retries a short chunk, does not see that failure; the app's long-text path
+with the reference chunking would.
+
+So `balanced` passes the bar the brief set and may be offered as an Advanced
+option: speaker similarity within noise of `full`, teacher-forced error at
+the bf16 floor, and 26 percent less GPU time per decode frame against the 20
+percent bar (per round, 28, 27, 26, 17 and 28 percent; the 17 percent round
+is one where `full`'s own frame time rose to 27 ms, and an idle rerun would
+firm the number up). It saves 9 percent of memory, under the brief's
+alternative 25 percent bar, because the 30 GB of FP8 experts stay as they
+are. The brief asked for frames per second over 400 or more frames;
+`balanced` stopped at eos after 338, and the per-frame GPU time does not
+depend on the count. `compact` stays in the enum as `experimental`
+(`ModelPrecisionMode.isExperimental`) for the reasons above. `full` stays
+the default. The app exposes no mode yet; the CLI's `--precision-mode` and
+`DramaModel.init(mode:)` do, and the app can add the option afterwards.
+
+Why the decode gain is smaller than the byte count suggests: by the
+parameter counts a `balanced` frame reads about 3.4 GB of weights against
+5.8 GB, a `compact` frame about 2.4 GB, yet the GPU time falls 26 and 35
+percent. `drama profile --rows 1` shows where the rest goes
+(`eval/out/quant/profile1_*.txt`): the dense projections do shrink with
+their bytes (the linear layers' qkv projection 2.70, 1.59 and 1.19 ms over
+the 30 layers; the tower 6.2 to 3.7 ms), but the one-row expert kernels take
+3.9, 3.8 and 3.5 ms in the three modes, so int4 experts return only a tenth
+of their byte saving at one row, and the parts that read no weights (router
+and bucket 0.9 ms, norms and residuals 0.6 ms, the GDN recurrence and conv
+0.5 ms, RoPE, attention, the sampler) stay the same. In `compact` those fixed
+parts are about a quarter of the frame (2.6 of 10.7 ms in the profile).
+Prefill is unchanged in the measurements: it is bound by compute over the
+expert walk, `compact`'s int4 experts read fewer bytes without it showing,
+and the tuner kept the same prefill kernels in every mode.
+
+Two costs the tables do not show. The first build of a cache file was timed
+from a warm page cache; a cold first load, which reads every shard from
+disk, was not measured. And the tuning cache key now carries the mode, so
+every existing install re-tunes once, about 30 s, on its first load after
+this change, in `full` as well.
+
+Every number above comes from the scripts in `eval/`:
+`eval/precision_faithfulness.sh` (the dumps and `compare.py` tables under
+`eval/out/quant/faith/`), `eval/precision_ab.sh` with
+`eval/precision_summary.py` (`eval/out/quant/ab/`),
+`eval/precision_memory.sh` and `eval/precision_e2e.sh`
+(`eval/out/e2e/precision-<mode>/report.json`). The decision trail is
+`.audit/quantization.tsv`.
 
 ## Licenses
 
