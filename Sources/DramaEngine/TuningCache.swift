@@ -64,16 +64,29 @@ public struct TuningEntryResult: Codable, Equatable, Sendable {
     /// Timing rounds measured; 0 when the budget ran out before this entry.
     public var rounds: Int
     public var rejected: [Rejected]
+    /// Why the row does not show the entry's own winner, when it does not.
+    public var note: String? = nil
+}
+
+/// One whole-forward timing of the default schedule against the tuned one,
+/// medians over interleaved rounds. `kept` false means the side of the
+/// schedule this row count exercises was reverted to the default.
+public struct ForwardCheck: Codable, Equatable, Sendable {
+    public var rows: Int
+    public var defaultMs: Double
+    public var tunedMs: Double
+    public var kept: Bool
 }
 
 public struct TuningReport: Codable, Equatable, Sendable {
-    public static let currentVersion = 1
+    public static let currentVersion = 2
     public var version: Int = TuningReport.currentVersion
     public var key: TuningKey
     public var created: Date
     public var schedule: KernelSchedule
     public var entries: [TuningEntryResult]
     public var wallSeconds: Double
+    public var forwardChecks: [ForwardCheck] = []
 }
 
 /// JSON files under Application Support, one per `TuningKey`.

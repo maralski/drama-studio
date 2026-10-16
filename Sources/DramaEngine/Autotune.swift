@@ -172,18 +172,117 @@ public enum Autotune {
         return s.count % 2 == 1 ? s[s.count / 2] : (s[s.count / 2 - 1] + s[s.count / 2]) / 2
     }
 
-    /// Tunes `model`, applies the schedule and saves it under `cacheDirectory`.
-    /// Run it before any generation session: the workloads overwrite the
-    /// scratch buffers, KV caches and recurrent states.
+    /// Tunes `model`, checks the choices on whole forwards, applies the
+    /// schedule and saves it under `cacheDirectory`. Run it before any
+    /// generation session: the workloads overwrite the scratch buffers, KV
+    /// caches and recurrent states.
     @discardableResult
     public static func tune(model: DramaModel, options: Options = Options(), cacheDirectory: URL = TuningCache.defaultDirectory) throws -> TuningReport {
+        let start = Date()
         let entries = try census(model: model)
-        let report = try run(entries: entries, ctx: model.ctx, precision: model.precision, key: model.tuningKey,
+        var report = try run(entries: entries, ctx: model.ctx, precision: model.precision, key: model.tuningKey,
                              makeCommandBuffer: model.commandBuffer, options: options)
+        try forwardCheck(model: model, report: &report, options: options)
         try model.apply(report.schedule)
+        report.wallSeconds = Date().timeIntervalSince(start)
         let url = try TuningCache.save(report, directory: cacheDirectory)
         model.scheduleSource = .cache(url)
         return report
+    }
+
+    /// Which side of a forward each schedule field and census entry serves.
+    /// A prefill forward of a chunk runs the prefill fields, a one-row decode
+    /// forward the decode fields.
+    enum Side: CaseIterable {
+        case prefill, decode
+        var rows: Int { self == .prefill ? 128 : 1 }
+        init(rows: Int) { self = rows == 1 ? .decode : .prefill }
+    }
+
+    struct Field {
+        let entry: String
+        let side: Side
+        /// Copies the field from `defaults` into `schedule`; true when it changed.
+        let revert: (_ schedule: inout KernelSchedule, _ defaults: KernelSchedule) -> Bool
+
+        init<V: Equatable>(_ entry: String, _ side: Side, _ path: WritableKeyPath<KernelSchedule, V>) {
+            self.entry = entry
+            self.side = side
+            revert = { schedule, defaults in
+                let changed = schedule[keyPath: path] != defaults[keyPath: path]
+                schedule[keyPath: path] = defaults[keyPath: path]
+                return changed
+            }
+        }
+    }
+
+    static let fields = [
+        Field("gemv.decode", .decode, \.gemvDecode),
+        Field("gemv.narrow", .prefill, \.gemvNarrow),
+        Field("gemm.prefill", .prefill, \.gemmTile),
+        Field("moe.tiled", .prefill, \.moeTile),
+        Field("moe.rows", .decode, \.moeRowSimdgroups),
+        Field("attention.decode", .decode, \.attentionSplitDecode),
+        Field("attention.prefill", .prefill, \.attentionSplitPrefill),
+        Field("gdn.decode", .decode, \.gdnPartsDecode),
+        Field("gdn.prefill", .prefill, \.gdnPartsPrefill),
+    ]
+
+    static let revertedNote = "reverted by the whole-forward check"
+
+    /// Reverts the fields of every side whose check was not kept to their
+    /// defaults. Returns the schedule and, per census entry whose choice was
+    /// undone, the note for its report row.
+    static func applyForwardChecks(schedule: KernelSchedule, defaults: KernelSchedule, checks: [ForwardCheck]) -> (schedule: KernelSchedule, notes: [String: String]) {
+        var schedule = schedule
+        var notes: [String: String] = [:]
+        let lost = Set(checks.filter { !$0.kept }.map { Side(rows: $0.rows) })
+        for field in fields where lost.contains(field.side) {
+            if field.revert(&schedule, defaults) { notes[field.entry] = revertedNote }
+        }
+        return (schedule, notes)
+    }
+
+    static let forwardCheckRounds = 5
+
+    /// The safety net under the per-entry choices: times whole forwards on
+    /// the default and the tuned schedule, interleaved, once per side, and
+    /// reverts a side whose tuned median is not below the default's. A
+    /// reverted side is measured once more and both rows recorded, the second
+    /// with `kept` false as well. Runs regardless of the budget.
+    static func forwardCheck(model: DramaModel, report: inout TuningReport, options: Options) throws {
+        func measure(rows: Int) throws -> (defaultMs: Double, tunedMs: Double) {
+            var d: [Double] = [], t: [Double] = []
+            for _ in 0..<forwardCheckRounds {
+                try model.apply(.default)
+                d.append(try model.benchBackbone(rows: rows, skip: []) * 1000)
+                try model.apply(report.schedule)
+                t.append(try model.benchBackbone(rows: rows, skip: []) * 1000)
+            }
+            return (median(d), median(t))
+        }
+        for side in Side.allCases {
+            let (d, t) = try measure(rows: side.rows)
+            let check = ForwardCheck(rows: side.rows, defaultMs: d, tunedMs: t, kept: t < d)
+            report.forwardChecks.append(check)
+            options.progress?(String(format: "forward %d rows: default %.1f ms, tuned %.1f ms, %@", side.rows, d, t, check.kept ? "kept" : "reverting the \(side) fields"))
+            if check.kept { continue }
+            let (schedule, notes) = applyForwardChecks(schedule: report.schedule, defaults: .default, checks: [check])
+            report.schedule = schedule
+            for i in report.entries.indices {
+                guard let note = notes[report.entries[i].name] else { continue }
+                var e = report.entries[i]
+                e.note = note + String(format: "; measured %@ at %.3f ms", e.chosenLabel, e.chosenMs)
+                e.chosenLabel = e.defaultLabel
+                e.chosenMs = e.defaultMs
+                e.gainPercent = 0
+                e.relL2 = 0
+                report.entries[i] = e
+            }
+            let again = try measure(rows: side.rows)
+            report.forwardChecks.append(ForwardCheck(rows: side.rows, defaultMs: again.defaultMs, tunedMs: again.tunedMs, kept: false))
+            options.progress?(String(format: "forward %d rows after the revert: default %.1f ms, tuned %.1f ms", side.rows, again.defaultMs, again.tunedMs))
+        }
     }
 }
 

@@ -223,6 +223,10 @@ func printTuneTable(_ report: TuningReport) {
         let ms = e.rounds == 0 ? ("not measured", "") : (String(format: "%.3f", e.defaultMs), String(format: "%.3f", e.chosenMs))
         print(pad(e.name, 18) + pad(e.defaultLabel, 10) + pad(e.chosenLabel, 10) + pad(ms.0, 12) + pad(ms.1, 11) + pad(String(format: "%.1f", e.gainPercent), 8) + String(format: "%.1e", e.relL2))
         for r in e.rejected { print("  rejected \(r.label): \(r.reason)") }
+        if let note = e.note { print("  \(note)") }
+    }
+    for f in report.forwardChecks {
+        print(String(format: "forward %d rows: default %.1f ms, tuned %.1f ms, %@", f.rows, f.defaultMs, f.tunedMs, f.kept ? "kept" : "reverted to default"))
     }
     print(String(format: "tuned in %.1f s wall", report.wallSeconds))
 }
