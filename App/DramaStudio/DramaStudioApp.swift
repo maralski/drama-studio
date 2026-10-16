@@ -102,8 +102,12 @@ struct CueMenuItems: View {
     let model: SessionModel
 
     var body: some View {
-        ForEach(PerformanceCue.all) { cue in
-            Button("\(cue.title)  \(cue.opening)") { model.insert(cue) }
+        ForEach(PerformanceCue.Kind.allCases, id: \.self) { kind in
+            Section(kind.title) {
+                ForEach(PerformanceCue.cues(of: kind)) { cue in
+                    Button("\(cue.title)  \(cue.opening)") { model.insert(cue) }
+                }
+            }
         }
     }
 }

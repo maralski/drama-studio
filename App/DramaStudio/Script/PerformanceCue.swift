@@ -1,27 +1,58 @@
 import Foundation
 
 /// Inline performance tags Drama 3 understands. Add a row to extend the
-/// Insert Cue menu.
+/// Insert Cue menu; its kind picks the menu section and the written form.
 struct PerformanceCue: Identifiable, Hashable {
     enum Form: Hashable { case marker, paired }
 
+    enum Kind: String, CaseIterable {
+        case reaction = "Reactions"
+        case style = "Opening Styles"
+        case passage = "Passages"
+
+        var title: String { rawValue }
+
+        var form: Form {
+            switch self {
+            case .reaction, .style: .marker
+            case .passage: .paired
+            }
+        }
+    }
+
     let tag: String
     let title: String
-    let form: Form
+    let kind: Kind
 
     var id: String { tag }
+    var form: Form { kind.form }
     var opening: String { form == .marker ? "[\(tag)]" : "<\(tag)>" }
     var closing: String { form == .marker ? "" : "</\(tag)>" }
 
     static let all: [PerformanceCue] = [
-        PerformanceCue(tag: "laughs", title: "Laughs", form: .marker),
-        PerformanceCue(tag: "sighs", title: "Sighs", form: .marker),
-        PerformanceCue(tag: "gasps", title: "Gasps", form: .marker),
-        PerformanceCue(tag: "coughs", title: "Coughs", form: .marker),
-        PerformanceCue(tag: "clears throat", title: "Clears Throat", form: .marker),
-        PerformanceCue(tag: "whispers", title: "Whispers", form: .marker),
-        PerformanceCue(tag: "whisper", title: "Whisper Passage", form: .paired),
+        PerformanceCue(tag: "laughs", title: "Laughs", kind: .reaction),
+        PerformanceCue(tag: "chuckles", title: "Chuckles", kind: .reaction),
+        PerformanceCue(tag: "sighs", title: "Sighs", kind: .reaction),
+        PerformanceCue(tag: "gasps", title: "Gasps", kind: .reaction),
+        PerformanceCue(tag: "pause", title: "Pause", kind: .reaction),
+        PerformanceCue(tag: "clears throat", title: "Clears Throat", kind: .reaction),
+        PerformanceCue(tag: "hesitates", title: "Hesitates", kind: .reaction),
+        PerformanceCue(tag: "coughs", title: "Coughs", kind: .reaction),
+        PerformanceCue(tag: "whispers", title: "Whispers", kind: .reaction),
+        PerformanceCue(tag: "with bright eager excitement", title: "Excited", kind: .style),
+        PerformanceCue(tag: "icy calm", title: "Icy Calm", kind: .style),
+        PerformanceCue(tag: "heavy, deflated sadness", title: "Sad", kind: .style),
+        PerformanceCue(tag: "sarcastic and deadpan", title: "Deadpan", kind: .style),
+        PerformanceCue(tag: "breathless and terrified", title: "Terrified", kind: .style),
+        PerformanceCue(tag: "furious, barely holding it together", title: "Furious", kind: .style),
+        PerformanceCue(tag: "warm, gentle bedtime voice", title: "Bedtime", kind: .style),
+        PerformanceCue(tag: "low and menacing", title: "Menacing", kind: .style),
+        PerformanceCue(tag: "whisper", title: "Whisper Passage", kind: .passage),
+        PerformanceCue(tag: "slow", title: "Slow Passage", kind: .passage),
+        PerformanceCue(tag: "emphasis", title: "Emphasis", kind: .passage),
     ]
+
+    static func cues(of kind: Kind) -> [PerformanceCue] { all.filter { $0.kind == kind } }
 
     static var pairedTagNames: [String] { all.filter { $0.form == .paired }.map(\.tag) }
 
