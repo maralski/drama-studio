@@ -76,6 +76,9 @@ public struct QuantizedCacheInfo: Sendable, Equatable {
 public final class QuantizedWeightFile {
     struct Header: Equatable {
         static let magic = Data("DRMQ".utf8)
+        /// Bump when a quantizer changes the bytes it writes for the same
+        /// layout: the header carries no checksum of the payload, so an old
+        /// file would otherwise verify and be read.
         static let currentVersion: UInt32 = 1
         var version: UInt32 = currentVersion
         var mode: String
@@ -179,10 +182,18 @@ public final class QuantizedWeightFile {
         let layout = plan.layout
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let partial = url.appendingPathExtension("partial")
+        let total = QuantizedLayout.headerBytes + layout.payloadBytes
+        let directory = url.deletingLastPathComponent()
+        if let free = try? directory.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]).volumeAvailableCapacityForImportantUsage, free < Int64(total) {
+            throw EngineError.badModel(String(format: "the %@ weight cache needs %.1f GB of disk at %@ and %.1f GB is free", mode.rawValue, Double(total) / 1e9, directory.path, Double(free) / 1e9))
+        }
         let fd = Darwin.open(partial.path, O_WRONLY | O_CREAT | O_TRUNC, 0o644)
         guard fd >= 0 else { throw EngineError.badModel("cannot create \(partial.path)") }
-        defer { close(fd) }
-        let total = QuantizedLayout.headerBytes + layout.payloadBytes
+        var renamed = false
+        defer {
+            close(fd)
+            if !renamed { try? FileManager.default.removeItem(at: partial) }
+        }
         guard ftruncate(fd, off_t(total)) == 0 else { throw EngineError.badModel("cannot size \(partial.path)") }
         func write(_ pointer: UnsafeRawPointer, count: Int, at offset: Int) throws {
             var done = 0
@@ -230,11 +241,16 @@ public final class QuantizedWeightFile {
             if let e = cb.error { throw EngineError.badModel("GPU error quantizing \(item.name): \(e)") }
             try write(staging.contents(), count: item.byteCount, at: item.offset)
         }
-        guard fsync(fd) == 0 else { throw EngineError.badModel("fsync failed for \(partial.path)") }
+        // F_FULLFSYNC asks the drive to flush as well; fsync alone does not on macOS.
+        func flush() throws {
+            guard fcntl(fd, F_FULLFSYNC) == 0 || fsync(fd) == 0 else { throw EngineError.badModel("fsync failed for \(partial.path)") }
+        }
+        try flush()
         let header = Header(mode: mode.rawValue, modelId: modelId, digest: layout.digest, payloadBytes: UInt64(layout.payloadBytes), itemCount: UInt32(layout.items.count)).encoded()
         try header.withUnsafeBytes { try write($0.baseAddress!, count: header.count, at: 0) }
-        guard fsync(fd) == 0 else { throw EngineError.badModel("fsync failed for \(partial.path)") }
+        try flush()
         guard rename(partial.path, url.path) == 0 else { throw EngineError.badModel("cannot rename \(partial.path) into place") }
+        renamed = true
         return (Date().timeIntervalSince(t0), total)
     }
 }
