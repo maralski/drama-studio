@@ -105,7 +105,7 @@ public actor DramaSynthesizer: SpeechSynthesizer {
         try blocking { try await codec.decode(codes: codes) }
     }
 
-    nonisolated static func decodeBlocking(_ codec: DramaCodec, codes: [[Int32]], window: DecodeWindow) throws -> [Float] {
+    public nonisolated static func decodeBlocking(_ codec: DramaCodec, codes: [[Int32]], window: DecodeWindow) throws -> [Float] {
         try blocking { try await codec.decode(codes: codes, window: window) }
     }
 

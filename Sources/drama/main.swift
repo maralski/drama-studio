@@ -163,13 +163,17 @@ func writeWav(frames: [Frame], to wavPath: String) throws {
     let t0 = Date()
     let codes = (0..<ModelConstants.numCodebooks).map { c in frames.map { $0[1 + c] } }
     let samples = try DramaSynthesizer.decodeBlocking(codec, codes: codes)
+    try writeWav(samples: samples, to: wavPath)
+    print(String(format: "decoded %.1fs of audio with the Core ML codec in %.2fs -> %@", Double(samples.count) / 44_100, Date().timeIntervalSince(t0), wavPath))
+}
+
+func writeWav(samples: [Float], to wavPath: String) throws {
     let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 44_100, channels: 1, interleaved: false)!
     let file = try AVAudioFile(forWriting: URL(fileURLWithPath: wavPath), settings: format.settings, commonFormat: .pcmFormatFloat32, interleaved: false)
     let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count))!
     buffer.frameLength = AVAudioFrameCount(samples.count)
     samples.withUnsafeBufferPointer { buffer.floatChannelData![0].update(from: $0.baseAddress!, count: samples.count) }
     try file.write(from: buffer)
-    print(String(format: "decoded %.1fs of audio with the Core ML codec in %.2fs -> %@", Double(samples.count) / 44_100, Date().timeIntervalSince(t0), wavPath))
 }
 
 /// drama decode --frames frames.npy --wav out.wav
@@ -201,15 +205,13 @@ func generate(_ args: Args) throws {
     if args.flags.contains("no-retry") { config.minSpokenRatio = 0 }
     if DramaCodec.modelsExist(), !args.flags.contains("no-codec") {
         let codec = try awaitBlocking { try await DramaCodec(directory: DramaCodec.defaultDirectory) }
-        gen.silenceProbe = { frames in
-            let codes = (0..<ModelConstants.numCodebooks).map { c in frames.map { $0[1 + c] } }
-            return DramaSynthesizer.trailingSilenceSeconds(try DramaSynthesizer.decodeBlocking(codec, codes: codes))
-        }
+        gen.codec = { codes, window in try DramaSynthesizer.decodeBlocking(codec, codes: codes, window: window) }
         FileHandle.standardError.write("codec probe: Core ML\n".data(using: .utf8)!)
     } else {
         config.stopAfterSilenceSeconds = nil
     }
     var all: [Frame] = []
+    var audio: [Float] = []
     _ = try gen.generate(text: text, references: refs, config: config) { event in
         switch event {
         case .chunkStarted(let i, let n, let t): FileHandle.standardError.write("chunk \(i + 1)/\(n): \(t.prefix(60))\n".data(using: .utf8)!)
@@ -217,13 +219,17 @@ func generate(_ args: Args) throws {
             FileHandle.standardError.write(String(format: "  retry %d: spoke %.1fs of an expected %.1fs\n", attempt, spoken, expected).data(using: .utf8)!)
         case .chunkFinished(let r):
             all += r.frames
+            audio += r.samples
             FileHandle.standardError.write(String(format: "  %d rows prefilled in %.2fs; %d frames in %.2fs (%.1f frames/s, GPU %.1f ms/frame) eos=%@ attempts=%d\n", r.promptRows, r.prefillSeconds, r.frames.count, r.decodeSeconds, Double(r.frames.count) / max(r.decodeSeconds, 1e-9), r.gpuSeconds * 1000 / Double(max(r.frames.count, 1)), r.finishedByEOS ? "yes" : "no", r.attempts).data(using: .utf8)!)
         default: break
         }
     }
     try NPY.write(.int64(all.flatMap { $0.map(Int64.init) }, shape: [all.count, 11]), to: URL(fileURLWithPath: outPath))
     print("wrote \(all.count) frames (\(String(format: "%.1f", Double(all.count) * 2048 / 44100))s of audio) to \(outPath)")
-    if let wavPath = args["wav"], !all.isEmpty { try writeWav(frames: all, to: wavPath) }
+    guard let wavPath = args["wav"], !all.isEmpty else { return }
+    if audio.isEmpty { return try writeWav(frames: all, to: wavPath) }
+    try writeWav(samples: audio, to: wavPath)
+    print(String(format: "wrote %.1fs of audio decoded during generation -> %@", Double(audio.count) / 44_100, wavPath))
 }
 
 /// drama profile [--rows 128]: GPU ms per kernel group for one backbone forward.

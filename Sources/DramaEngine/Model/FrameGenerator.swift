@@ -41,11 +41,9 @@ public final class FrameGenerator {
     /// Decodes one window of a chunk's codes. Set, the generator decodes each
     /// chunk while it generates: the early stop measures the silence of that
     /// audio, `.lowLatency` streams it, and `ChunkResult.samples` carries it.
+    /// Without it, the early stop is off and the spoken-duration check falls
+    /// back to the frame count.
     public var codec: ((_ codes: [[Int32]], _ window: DecodeWindow) throws -> [Float])?
-    /// Seconds of silence at the end of the chunk so far, for callers without
-    /// a `codec`. With neither, the early stop is off and the spoken-duration
-    /// check falls back to the frame count.
-    public var silenceProbe: ((_ frames: [Frame]) throws -> Double)?
     static let silenceProbeEveryFrames = 16
 
     static let charactersPerSecond = 16.0
@@ -137,7 +135,7 @@ public final class FrameGenerator {
                 let t1 = Date()
                 let silenceFrames = config.stopAfterSilenceSeconds.map { Int(($0 * Double(ModelConstants.sampleRate) / Double(ModelConstants.samplesPerFrame)).rounded(.up)) }
                 let decoder = codec.map(ChunkDecoder.init)
-                let probe = (decoder.map { decoder in { try decoder.advance(to: $0) } } ?? silenceProbe).map(SilenceProbe.init)
+                let probe = decoder.map { decoder in SilenceProbe { try decoder.advance(to: $0) } }
                 var offered = 0
                 for step in 0..<budget {
                     guard shouldContinue() else { break }
