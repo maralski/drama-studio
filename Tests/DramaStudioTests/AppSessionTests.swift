@@ -109,7 +109,7 @@ final class AppSessionTests: XCTestCase {
         session.screenplayMode = true
         session.script = "ANN: Hi.\nBEN: Hello."
         let speakers = try session.prepared.get().speakers
-        session.setVoice(ann.id, for: speakers[0])
+        session.setVoice(.library(ann.id), for: speakers[0])
         XCTAssertEqual(session.casting.references.map(\.name), ["Ann"])
 
         session.removeVoice(ann.id)

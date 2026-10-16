@@ -41,8 +41,13 @@ private struct CastSection: View {
             case .success(let script):
                 ForEach(script.speakers) { speaker in
                     Picker(selection: voiceBinding(for: speaker)) {
-                        Text("Model default").tag(ReferenceVoice.ID?.none)
-                        ForEach(model.library.voices) { Text($0.name).tag(Optional($0.id)) }
+                        if !model.library.voices.isEmpty {
+                            ForEach(model.library.voices) { Text($0.name).tag(VoicePickerTag.choice(.library($0.id))) }
+                            Divider()
+                        }
+                        Text("Model default").tag(VoicePickerTag.choice(.modelDefault))
+                        Text("Surprise me").tag(VoicePickerTag.choice(.surprise))
+                        ForEach(model.castDesigns, id: \.self) { Text("\($0.name) (designed)").tag(VoicePickerTag.choice(.designed($0))) }
                     } label: {
                         HStack(spacing: 4) {
                             VStack(alignment: .leading, spacing: 1) {
@@ -52,9 +57,13 @@ private struct CastSection: View {
                             HelpButton(.speakerVoice)
                         }
                     }
+                    if model.canKeepVoice(for: speaker) {
+                        Button("Keep This Voice", systemImage: "square.and.arrow.down") { model.keepVoice(for: speaker) }
+                            .help("Save the voice of the first take to the library, so it stays the same in later sessions")
+                    }
                 }
-                ForEach(model.casting.ignored) { speaker in
-                    Label("\(speaker.name)'s voice is not used: voices apply in speaker order, so every earlier speaker needs one too.", systemImage: "exclamationmark.triangle.fill")
+                ForEach(model.casting.ignored) { ignored in
+                    Label(ignored.message, systemImage: "exclamationmark.triangle.fill")
                         .font(.caption)
                         .foregroundStyle(.orange)
                 }
@@ -70,8 +79,10 @@ private struct CastSection: View {
         }
     }
 
-    private func voiceBinding(for speaker: Speaker) -> Binding<ReferenceVoice.ID?> {
-        Binding(get: { model.voice(for: speaker) }, set: { model.setVoice($0, for: speaker) })
+    private func voiceBinding(for speaker: Speaker) -> Binding<VoicePickerTag> {
+        Binding(get: { .choice(model.voice(for: speaker)) }, set: { tag in
+            if case .choice(let choice) = tag { model.setVoice(choice, for: speaker) }
+        })
     }
 }
 
