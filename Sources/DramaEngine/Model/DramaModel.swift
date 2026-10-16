@@ -6,6 +6,9 @@ public final class DramaModel: @unchecked Sendable {
     public let ctx: MetalContext
     public let config: ModelConfig
     public let location: ModelLocation
+    public let mode: ModelPrecisionMode
+    /// The cache file a quantized mode read; nil in mode full.
+    public let quantizedCache: QuantizedCacheInfo?
     public let precision: Precision
     public let capacity: Int
     /// The kernel schedule both stacks run with; `apply` replaces it.
@@ -21,6 +24,8 @@ public final class DramaModel: @unchecked Sendable {
     public internal(set) var scheduleSource: ScheduleSource
     public let tuningKey: TuningKey
     let store: SafeTensorsStore
+    /// Owns the cache file's mapping for as long as its buffer is in use.
+    private let quantizedFile: QuantizedWeightFile?
     let weights: ModelWeights
     let backbone: Backbone
     let tower: Tower
@@ -44,18 +49,42 @@ public final class DramaModel: @unchecked Sendable {
     var prefixCache: PrefixCache?
     public func clearPrefixCache() { prefixCache = nil }
 
-    /// `schedule` nil means the tuning cache's schedule for this device and
-    /// model when there is one, else the default; a value is used as given.
-    public init(location: ModelLocation, precision: Precision = .exact, capacity: Int = DramaModel.defaultCapacity,
-                schedule: KernelSchedule? = nil, tuningDirectory: URL = TuningCache.defaultDirectory) throws {
+    /// `schedule` nil means the tuning cache's schedule for this device, model
+    /// and mode when there is one, else the default; a value is used as given.
+    /// A quantized mode opens its cache file under `quantizedDirectory`, or
+    /// builds it first.
+    public init(location: ModelLocation, mode: ModelPrecisionMode = .full, precision: Precision = .exact, capacity: Int = DramaModel.defaultCapacity,
+                schedule: KernelSchedule? = nil, tuningDirectory: URL = TuningCache.defaultDirectory,
+                quantizedDirectory: URL = QuantizedWeightFile.defaultDirectory) throws {
         ctx = try MetalContext()
         self.location = location
+        self.mode = mode
         self.precision = precision
         self.capacity = capacity
         config = try ModelConfig(url: location.directory.appendingPathComponent("config.json"))
-        tuningKey = try TuningKey(ctx: ctx, location: location)
+        tuningKey = try TuningKey(ctx: ctx, location: location, mode: mode)
         store = try SafeTensorsStore(directory: location.directory, device: ctx.device)
-        weights = try ModelWeights(source: InPlaceSource(store: store, config: config, device: ctx.device), config: config)
+        let inPlace = InPlaceSource(store: store, config: config, device: ctx.device)
+        if mode == .full {
+            quantizedFile = nil
+            quantizedCache = nil
+            weights = try ModelWeights(source: inPlace, config: config)
+        } else {
+            let recorder = LayoutRecorder(inPlace: inPlace, mode: mode)
+            _ = try ModelWeights(source: recorder, config: config)
+            let plan = recorder.plan
+            let url = QuantizedWeightFile.url(snapshot: location.directory.lastPathComponent, mode: mode, directory: quantizedDirectory)
+            var buildSeconds: Double?
+            var file = QuantizedWeightFile.open(url: url, layout: plan.layout, modelId: tuningKey.model, mode: mode, device: ctx.device)
+            if file == nil {
+                buildSeconds = try QuantizedWeightFile.build(plan: plan, store: store, mode: mode, modelId: tuningKey.model, ctx: ctx, to: url).seconds
+                file = QuantizedWeightFile.open(url: url, layout: plan.layout, modelId: tuningKey.model, mode: mode, device: ctx.device)
+            }
+            guard let file else { throw EngineError.badModel("the quantized cache at \(url.path) did not verify after being built") }
+            quantizedFile = file
+            quantizedCache = QuantizedCacheInfo(url: url, bytes: file.bytes, buildSeconds: buildSeconds)
+            weights = try ModelWeights(source: try CacheSource(file: file, plan: plan, mode: mode, inPlace: inPlace), config: config)
+        }
         let chosen: KernelSchedule
         if let schedule {
             try schedule.validate()

@@ -121,17 +121,22 @@ struct InPlaceSource: WeightSource {
         return WeightMatrix(name: name, format: .bf16, rows: rows, cols: cols, buffer: ref.buffer, offset: ref.offset + rowOffset * cols * 2, paramOffset: 0)
     }
 
+    /// Every expert's fp8 weights and block scales for one matrix kind of a layer.
+    func expertRefs(prefix: String, kind: ExpertMatrix) throws -> [(weights: TensorRef, scales: TensorRef)] {
+        let (rows, cols) = kind.shape(config)
+        return try (0..<config.numExperts).map { e in
+            let ep = prefix + "mlp.experts.\(e)." + kind.name
+            return (try tensor(ep + ".weight", .f8e4m3, [rows, cols]), try tensor(ep + ".weight_scale_inv", .f32, [rows / 128, cols / 128]))
+        }
+    }
+
     func experts(layer: Int, prefix: String) throws -> ExpertTable {
-        let H = config.hiddenSize, I = config.moeIntermediate
         var table = [UInt64](repeating: 0, count: config.numExperts * 6)
-        for e in 0..<config.numExperts {
-            let ep = prefix + "mlp.experts.\(e)."
-            table[e * 6 + 0] = try tensor(ep + "gate_proj.weight", .f8e4m3, [I, H]).gpuAddress
-            table[e * 6 + 1] = try tensor(ep + "gate_proj.weight_scale_inv", .f32, [I / 128, H / 128]).gpuAddress
-            table[e * 6 + 2] = try tensor(ep + "up_proj.weight", .f8e4m3, [I, H]).gpuAddress
-            table[e * 6 + 3] = try tensor(ep + "up_proj.weight_scale_inv", .f32, [I / 128, H / 128]).gpuAddress
-            table[e * 6 + 4] = try tensor(ep + "down_proj.weight", .f8e4m3, [H, I]).gpuAddress
-            table[e * 6 + 5] = try tensor(ep + "down_proj.weight_scale_inv", .f32, [H / 128, I / 128]).gpuAddress
+        for kind in ExpertMatrix.allCases {
+            for (e, refs) in try expertRefs(prefix: prefix, kind: kind).enumerated() {
+                table[e * 6 + kind.rawValue * 2] = refs.weights.gpuAddress
+                table[e * 6 + kind.rawValue * 2 + 1] = refs.scales.gpuAddress
+            }
         }
         return ExpertTable(table: try ExpertTable.buffer(table, layer: layer, device: device), format: .fp8BlockScaled)
     }

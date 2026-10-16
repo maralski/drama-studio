@@ -5,6 +5,15 @@ import Metal
 enum ExpertMatrix: Int, CaseIterable {
     case gate, up, down
 
+    /// The tensor name stem under `mlp.experts.<e>.`.
+    var name: String {
+        switch self {
+        case .gate: return "gate_proj"
+        case .up: return "up_proj"
+        case .down: return "down_proj"
+        }
+    }
+
     func shape(_ config: ModelConfig) -> (rows: Int, cols: Int) {
         self == .down ? (config.hiddenSize, config.moeIntermediate) : (config.moeIntermediate, config.hiddenSize)
     }
