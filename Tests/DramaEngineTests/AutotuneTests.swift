@@ -120,6 +120,12 @@ final class AutotuneTests: XCTestCase {
         let model = try DramaModel(location: loc, schedule: .default)
         let entries = try Autotune.census(model: model)
         XCTAssertEqual(entries.map(\.name), ["gemv.decode", "gemv.narrow", "gemm.prefill", "moe.tiled", "moe.rows", "attention.decode", "attention.prefill", "gdn.decode", "gdn.prefill"])
+        // The MoE workload routes real hidden states, not the noise pool.
+        let H = model.config.hiddenSize
+        let moeInput = try model.probeMoEInput(rows: 128)
+        let tiled = try XCTUnwrap(entries.first { $0.name == "moe.tiled" })
+        tiled.seedInputs()
+        XCTAssertEqual(model.backbone.h.read(H), Array(moeInput.prefix(H)))
         for entry in entries {
             let (accepted, rejected) = try Autotune.validate(entry, ctx: model.ctx, precision: model.precision, makeCommandBuffer: model.commandBuffer, tolerance: 1e-5)
             XCTAssertTrue(rejected.isEmpty, "\(entry.name): \(rejected)")

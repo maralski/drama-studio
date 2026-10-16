@@ -106,17 +106,39 @@ public final class DramaModel: @unchecked Sendable {
         return cb.gpuEndTime - cb.gpuStartTime
     }
 
-    /// The final-norm output of one backbone forward of `rows` synthetic
-    /// frames from position 0 on cleared states, for comparing schedules.
-    public func probeHidden(rows: Int) throws -> [Float] {
+    /// One backbone forward of `rows` synthetic frames from position 0 on
+    /// cleared states, with the current schedule. Even rows are text tokens,
+    /// odd rows audio frames.
+    private func probeForward(rows: Int) throws {
         backbone.reset()
-        for r in 0..<rows { let p = backbone.frames.ints + r * 11; p[0] = config.semanticStart + Int32(r % config.codebookSize); for i in 1..<11 { p[i] = Int32((i * 13 + r) % 1024) } }
+        for r in 0..<rows {
+            let p = backbone.frames.ints + r * 11
+            if r % 2 == 0 {
+                p[0] = 1000 + Int32(r)
+                for i in 1..<11 { p[i] = 0 }
+            } else {
+                p[0] = config.semanticStart + Int32(r % config.codebookSize)
+                for i in 1..<11 { p[i] = Int32((i * 13 + r) % 1024) }
+            }
+        }
         let (cb, enc) = commandBuffer()
         try backbone.forward(enc, rows: rows, pos0: 0)
         enc.endEncoding()
         cb.commit(); cb.waitUntilCompleted()
         if let e = cb.error { throw EngineError.badModel("\(e)") }
+    }
+
+    /// The final-norm output of the probe forward, for comparing schedules.
+    public func probeHidden(rows: Int) throws -> [Float] {
+        try probeForward(rows: rows)
         return backbone.hiddenOut.read(rows * config.hiddenSize)
+    }
+
+    /// The last layer's MoE input after the probe forward: its post-attention
+    /// norm output, `rows` x `hiddenSize`, which the real router routes unevenly.
+    public func probeMoEInput(rows: Int) throws -> [Float] {
+        try probeForward(rows: rows)
+        return backbone.h.read(rows * config.hiddenSize)
     }
 
     /// GPU seconds for one tower prefill of `rows` rows.

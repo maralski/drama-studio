@@ -240,6 +240,12 @@ extension Autotune {
             guard case .full(let w) = weights.backbone.layers[fullLayers[i]].mixer else { preconditionFailure() }
             return w
         }
+        // Captured before any noise is written: the forward overwrites every
+        // scratch buffer. Noise routes almost evenly over the experts, a few
+        // rows each, which favours small row tiles; real hidden states route
+        // unevenly, with some experts taking 30 or more rows, so the MoE tile
+        // is chosen on real activations.
+        let moeInput = try model.probeMoEInput(rows: 128)
         var noise = Noise(seed: 2026)
         let capacityPairs = bb.maxRows * c.topK
         var entries: [Entry] = []
@@ -315,10 +321,11 @@ extension Autotune {
                 seedInputs: seed))
         }
 
-        // moe.tiled and moe.rows: the routed experts, routed by the real router.
+        // moe.tiled and moe.rows: the routed experts, routed by the real router
+        // on the captured hidden states (the first row for moe.rows).
         func moeEntry(name: String, rowCounts: [Int], candidates: [Candidate]) -> Entry {
             let rows = rowCounts.max()!
-            let seed = seeds([noise.fill(bb.h, count: rows * H)])
+            let seed = { moeInput.withUnsafeBufferPointer { _ = memcpy(bb.h.floats, $0.baseAddress!, rows * H * 4) } }
             return Entry(
                 name: name,
                 candidates: candidates,
