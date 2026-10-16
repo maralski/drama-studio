@@ -172,59 +172,117 @@ final class KernelParityTests: XCTestCase {
 }
 
 extension KernelParityTests {
-    /// Synthetic FP8 experts: the tiled prefill kernels against the one-row
-    /// kernels on a random routing of 50 rows over 16 experts.
+    static func moeConfig() throws -> ModelConfig {
+        guard let loc = ModelLocation.huggingFaceCache() else { throw XCTSkip("config.json of drama-3 needed for the MoE shapes") }
+        return try ModelConfig(url: loc.directory.appendingPathComponent("config.json"))
+    }
+
+    func runMoe(_ f: Fixture, _ k: Kernels, _ m: KernelBench.SyntheticMoE) throws -> ([Float], [Float]) {
+        try f.run { enc in
+            try m.bucket(enc, k)
+            try m.gateUp(enc, k)
+            try m.down(enc, k)
+        }
+        return (m.act.read(m.act.count), m.slotOut.read(m.slotOut.count))
+    }
+
+    /// Synthetic experts in both formats: the tiled prefill kernels against
+    /// the one-row kernels on a random routing of 50 rows over 16 experts.
     func testMoeTiledMatchesRowKernels() throws {
         let f = try Fixture()
-        guard let loc = ModelLocation.huggingFaceCache() else { throw XCTSkip("config.json of drama-3 needed for the MoE shapes") }
-        let config = try ModelConfig(url: loc.directory.appendingPathComponent("config.json"))
+        let config = try Self.moeConfig()
         let rows = 50
-        let moe = KernelBench.SyntheticMoE(device: f.ctx.device, config: config, rows: rows, experts: 16, maxRows: 64)
-        func run(_ k: Kernels, _ m: KernelBench.SyntheticMoE) throws -> ([Float], [Float]) {
-            try f.run { enc in
-                try m.bucket(enc, k)
-                try m.gateUp(enc, k)
-                try m.down(enc, k)
+        let fp8 = KernelBench.SyntheticMoE(device: f.ctx.device, config: config, rows: rows, experts: 16, maxRows: 64)
+        for format in ExpertFormat.allCases {
+            let moe = format == .fp8BlockScaled ? fp8 : try fp8.quantizedInt4(f.ctx)
+            var rowKernels = f.k
+            rowKernels.forceMoeRows = true
+            let byRows = try runMoe(f, rowKernels, moe)
+            let tiled = try runMoe(f, f.k, moe)
+            let actErr = Self.relL2(byRows.0, tiled.0)
+            let outErr = Self.relL2(byRows.1, tiled.1)
+            XCTAssertLessThan(actErr, 2e-6, "\(format)")
+            XCTAssertLessThan(outErr, 2e-6, "\(format)")
+            XCTAssertTrue(tiled.1.allSatisfy { $0.isFinite })
+            print("moe tiled parity \(format): act \(actErr) slotOut \(outErr)")
+
+            // Every tile accumulates each output in the same 8-wide order over K,
+            // so the whole domain must agree exactly.
+            for tile in KernelSchedule.moeTiles {
+                var s = KernelSchedule.default
+                s.moeTile = tile
+                let got = try runMoe(f, Kernels(ctx: f.ctx, precision: .exact, schedule: s), moe)
+                XCTAssertEqual(got.0, tiled.0, "\(format) tile \(tile.label)")
+                XCTAssertEqual(got.1, tiled.1, "\(format) tile \(tile.label)")
             }
-            return (m.act.read(m.act.count), m.slotOut.read(m.slotOut.count))
+
+            // The one-row kernels only change which rows share a threadgroup.
+            for sg in KernelSchedule.moeRowSimdgroups {
+                var s = KernelSchedule.default
+                s.moeRowSimdgroups = sg
+                var k = Kernels(ctx: f.ctx, precision: .exact, schedule: s)
+                k.forceMoeRows = true
+                let got = try runMoe(f, k, moe)
+                XCTAssertEqual(got.0, byRows.0, "\(format) simdgroups \(sg)")
+                XCTAssertEqual(got.1, byRows.1, "\(format) simdgroups \(sg)")
+            }
+
+            // A routed row's result must not depend on which other rows share its chunk.
+            let part = KernelBench.SyntheticMoE(prefixOf: moe, rows: 11, device: f.ctx.device)
+            let partial = try runMoe(f, f.k, part)
+            XCTAssertEqual(partial.0, Array(tiled.0.prefix(part.act.count)), "\(format)")
+            XCTAssertEqual(partial.1, Array(tiled.1.prefix(part.slotOut.count)), "\(format)")
+        }
+    }
+
+    /// The int4 expert kernels must compute the experts the staged bytes
+    /// define: gate-up and down for every routed pair of a 3-row chunk against
+    /// a CPU reference over the dequantized int4 rows, through the row kernels
+    /// and the tiled kernels alike.
+    func testInt4MoeMatchesCpuReference() throws {
+        let f = try Fixture()
+        let config = try Self.moeConfig()
+        let rows = 3, topK = config.topK, H = config.hiddenSize, I = config.moeIntermediate
+        let moe = try KernelBench.SyntheticMoE(device: f.ctx.device, config: config, rows: rows, experts: 16, maxRows: 8).quantizedInt4(f.ctx)
+        let pool = moe.buffers[0]
+        let addresses = Array(UnsafeBufferPointer(start: moe.table.table.contents().assumingMemoryBound(to: UInt64.self), count: config.numExperts * 6))
+        func row(expert e: Int, slot: Int, n: Int, cols: Int) -> [Float] {
+            let w = (pool.contents() + Int(addresses[e * 6 + slot] - pool.gpuAddress)).assumingMemoryBound(to: UInt8.self) + n * (cols / 2)
+            let p = (pool.contents() + Int(addresses[e * 6 + slot + 1] - pool.gpuAddress)).assumingMemoryBound(to: Float16.self) + n * (cols / 64) * 2
+            return (0..<cols).map { k in
+                let nibble = k % 2 == 0 ? w[k / 2] & 0xf : w[k / 2] >> 4
+                return fma(Float(nibble), Float(p[2 * (k / 64)]), Float(p[2 * (k / 64) + 1]))
+            }
+        }
+        func dot(_ a: [Float], _ b: UnsafeMutablePointer<Float>) -> Float {
+            var acc = 0.0
+            for i in a.indices { acc += Double(a[i]) * Double(b[i]) }
+            return Float(acc)
+        }
+        var expectedAct = [Float](repeating: 0, count: rows * topK * I)
+        for pair in 0..<(rows * topK) {
+            let e = Int(moe.ids.ints[pair]), m = pair / topK
+            for n in 0..<I {
+                let g = dot(row(expert: e, slot: 0, n: n, cols: H), moe.x.floats + m * H)
+                let u = dot(row(expert: e, slot: 2, n: n, cols: H), moe.x.floats + m * H)
+                expectedAct[pair * I + n] = g / (1 + exp(-g)) * u
+            }
         }
         var rowKernels = f.k
         rowKernels.forceMoeRows = true
-        let byRows = try run(rowKernels, moe)
-        let tiled = try run(f.k, moe)
-        let actErr = Self.relL2(byRows.0, tiled.0)
-        let outErr = Self.relL2(byRows.1, tiled.1)
-        XCTAssertLessThan(actErr, 2e-6)
-        XCTAssertLessThan(outErr, 2e-6)
-        XCTAssertTrue(tiled.1.allSatisfy { $0.isFinite })
-        print("moe tiled parity: act \(actErr) slotOut \(outErr)")
-
-        // Every tile accumulates each output in the same 8-wide order over K,
-        // so the whole domain must agree exactly.
-        for tile in KernelSchedule.moeTiles {
-            var s = KernelSchedule.default
-            s.moeTile = tile
-            let got = try run(Kernels(ctx: f.ctx, precision: .exact, schedule: s), moe)
-            XCTAssertEqual(got.0, tiled.0, "tile \(tile.label)")
-            XCTAssertEqual(got.1, tiled.1, "tile \(tile.label)")
+        for (label, k) in [("rows", rowKernels), ("tiled", f.k)] {
+            let (act, slotOut) = try runMoe(f, k, moe)
+            XCTAssertLessThan(Self.relL2(expectedAct, act), 1e-5, "\(label) gate-up")
+            var expectedOut = [Float](repeating: 0, count: rows * topK * H)
+            for pair in 0..<(rows * topK) {
+                let e = Int(moe.ids.ints[pair])
+                for n in 0..<H {
+                    expectedOut[pair * H + n] = dot(row(expert: e, slot: 4, n: n, cols: I), moe.act.floats + pair * I) * moe.rw.floats[pair]
+                }
+            }
+            XCTAssertLessThan(Self.relL2(expectedOut, slotOut), 1e-5, "\(label) down")
+            XCTAssertGreaterThan(act.map { abs($0) }.max()!, 0.1)
         }
-
-        // The one-row kernels only change which rows share a threadgroup.
-        for sg in KernelSchedule.moeRowSimdgroups {
-            var s = KernelSchedule.default
-            s.moeRowSimdgroups = sg
-            var k = Kernels(ctx: f.ctx, precision: .exact, schedule: s)
-            k.forceMoeRows = true
-            let got = try run(k, moe)
-            XCTAssertEqual(got.0, byRows.0, "simdgroups \(sg)")
-            XCTAssertEqual(got.1, byRows.1, "simdgroups \(sg)")
-        }
-
-        // A routed row's result must not depend on which other rows share its chunk.
-        let part = KernelBench.SyntheticMoE(prefixOf: moe, rows: 11, device: f.ctx.device)
-        let partial = try run(f.k, part)
-        XCTAssertEqual(partial.0, Array(tiled.0.prefix(part.act.count)))
-        XCTAssertEqual(partial.1, Array(tiled.1.prefix(part.slotOut.count)))
     }
 }
 

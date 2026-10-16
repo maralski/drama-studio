@@ -39,14 +39,17 @@ enum WeightFormat: String, CaseIterable {
 }
 
 /// How one layer's routed experts are stored.
-enum ExpertFormat {
+enum ExpertFormat: CaseIterable {
     /// FP8 E4M3 bytes with fp32 128x128 block scales, as released.
     case fp8BlockScaled
+    /// The dense int4 scheme per expert matrix: nibbles plus a half (scale, bias) per row per 64 columns.
+    case int4
 
     /// The infix of the MoE kernel names.
     var kernelTag: String {
         switch self {
         case .fp8BlockScaled: return "fp8"
+        case .int4: return "i4"
         }
     }
 }

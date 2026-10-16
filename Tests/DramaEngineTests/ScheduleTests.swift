@@ -7,12 +7,15 @@ import XCTest
 final class ScheduleTests: XCTestCase {
     func testEveryDomainValueHasAPipeline() throws {
         let ctx = try MetalContext()
-        var names: [String] = ["attention", "moe_gate_up_fp8", "moe_down_fp8", "quantize_bf16_i8", "quantize_bf16_i4", "quantize_fp8_i4"]
+        var names: [String] = ["attention", "quantize_bf16_i8", "quantize_bf16_i4", "quantize_fp8_i4"]
         for format in WeightFormat.allCases {
             names += KernelSchedule.gemvTokenTiles.map { "gemv_\(format.kernelTag)_t\($0)" }
             names += KernelSchedule.gemmTiles.map { "gemm_\(format.kernelTag)_\($0.label)" }
         }
-        names += KernelSchedule.moeTiles.flatMap { ["moe_gate_up_fp8_tiled_\($0.label)", "moe_down_fp8_tiled_\($0.label)"] }
+        for format in ExpertFormat.allCases {
+            names += ["moe_gate_up_\(format.kernelTag)", "moe_down_\(format.kernelTag)"]
+            names += KernelSchedule.moeTiles.flatMap { ["moe_gate_up_\(format.kernelTag)_tiled_\($0.label)", "moe_down_\(format.kernelTag)_tiled_\($0.label)"] }
+        }
         names += KernelSchedule.gdnParts.map { "gdn_recurrent_p\($0)" }
         for name in names {
             XCTAssertNoThrow(try ctx.pipeline(name), name)
