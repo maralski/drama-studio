@@ -23,6 +23,12 @@ final class SessionModel {
     private(set) var generationClock: GenerationClock?
     private(set) var previewingVoice: ReferenceVoice.ID?
     private(set) var modelLoaded = false
+    /// Every finished read of `takesText`, oldest first.
+    private(set) var takes: [SessionTake] = []
+    private(set) var takesText: String?
+    /// The take Export writes.
+    private(set) var keptTakeID: UUID?
+    private(set) var selectedTakeID: UUID?
     @ObservationIgnored var playsWhileGenerating = true
 
     let library: VoiceLibrary
@@ -31,7 +37,7 @@ final class SessionModel {
     @ObservationIgnored private let previewPlayer = StreamingPlayer()
     @ObservationIgnored private var generation: Task<Void, Never>?
     @ObservationIgnored private var run = 0
-    @ObservationIgnored private var recordsVoice: VoiceChoice?
+    @ObservationIgnored private var job: Job?
 
     init(synthesizer: any SpeechSynthesizer, library: VoiceLibrary) {
         self.synthesizer = synthesizer
@@ -54,7 +60,19 @@ final class SessionModel {
     var canGenerate: Bool { !state.isGenerating && (try? prepared.get()) != nil }
     var canTakeAgain: Bool { canGenerate && !audio.isEmpty }
     var canPlay: Bool { !audio.isEmpty }
-    var canExport: Bool { !audio.isEmpty && !state.isGenerating }
+    var canExport: Bool { !exportSamples.isEmpty && !state.isGenerating }
+    var canRetake: Bool { canGenerate && !takes.isEmpty && retakeBlocker == nil }
+
+    /// Why the takes can't be retaken with a note, when that is not obvious from the controls.
+    var retakeBlocker: String? {
+        guard case .success(let script) = prepared else { return nil }
+        if script.speakers.count > 1 { return "Retakes work on scripts with one speaker, because the note rewrites the line without speaker tags." }
+        if !takes.isEmpty, script.text != takesText { return "The script changed since these takes. Generate to start a new set." }
+        return nil
+    }
+
+    var keptTake: SessionTake? { takes.first { $0.id == keptTakeID } }
+    var exportSamples: [Float] { keptTake?.samples ?? audio }
 
     /// Not observable while playing; poll it from a TimelineView.
     var position: Int { player.position ?? playhead }
@@ -63,6 +81,29 @@ final class SessionModel {
 
     func generate() {
         guard !state.isGenerating, case .success(let script) = prepared else { return }
+        if script.text != takesText {
+            takes = []
+            keptTakeID = nil
+            selectedTakeID = nil
+            takesText = script.text
+        }
+        let casting = casting
+        start(SpeechRequest(text: script.text, references: casting.references, character: casting.character,
+                            previousTakes: casting.voiceTake.map { [$0] } ?? [], config: config),
+              as: .take(note: nil, recordsVoice: casting.recordsVoice))
+    }
+
+    /// Reads the line again with a director's note, after every take so far.
+    func retake(note: String) {
+        guard canRetake, let note = DirectorsNote.clean(note), case .success(let script) = prepared else { return }
+        let casting = casting
+        let voice = casting.voiceTake.flatMap { $0 == takes.first?.take ? nil : $0 }
+        start(SpeechRequest(text: script.text, references: casting.references, character: casting.character, note: note,
+                            previousTakes: (voice.map { [$0] } ?? []) + takes.map(\.take), config: config),
+              as: .take(note: note, recordsVoice: casting.recordsVoice))
+    }
+
+    private func start(_ request: SpeechRequest, as job: Job) {
         stopPlayback(resetTo: 0)
         audio = []
         result = nil
@@ -70,11 +111,8 @@ final class SessionModel {
         generationClock = GenerationClock(start: .now)
         state = .loading(progress: 0, detail: "Starting engine")
         run += 1
+        self.job = job
         let current = run
-        let casting = casting
-        recordsVoice = casting.recordsVoice
-        let request = SpeechRequest(text: script.text, references: casting.references, character: casting.character,
-                                    previousTakes: casting.voiceTake.map { [$0] } ?? [], config: config)
         let stream = synthesizer.synthesize(request)
         generation = Task { [weak self] in
             do {
@@ -127,10 +165,30 @@ final class SessionModel {
             telemetry.frame = 0
         case .finished(let result):
             self.result = result
-            if let key = recordsVoice, sessionVoices[key] == nil { sessionVoices[key] = result.take }
+            if case .take(let note, let voice) = job { addTake(result, note: note, recordsVoice: voice) }
             if result.timings.framesPerSecond > 0 { telemetry.framesPerSecond = result.timings.framesPerSecond }
             settleAfterGeneration(state.afterGeneration)
         }
+    }
+
+    private func addTake(_ result: SpeechResult, note: String?, recordsVoice: VoiceChoice?) {
+        if let recordsVoice, sessionVoices[recordsVoice] == nil { sessionVoices[recordsVoice] = result.take }
+        let take = SessionTake(number: (takes.last?.number ?? 0) + 1, note: note, take: result.take, samples: result.samples)
+        takes.append(take)
+        selectedTakeID = take.id
+    }
+
+    /// Plays the take, which becomes the transport's audio.
+    func selectTake(_ id: SessionTake.ID) {
+        guard !state.isGenerating, let take = takes.first(where: { $0.id == id }) else { return }
+        stopPlayback(resetTo: 0)
+        selectedTakeID = id
+        audio = take.samples
+        startPlayback(from: 0)
+    }
+
+    func toggleKeepSelectedTake() {
+        keptTakeID = keptTakeID == selectedTakeID ? nil : selectedTakeID
     }
 
     private func generationEnded(run ended: Int, error: Error?) {
@@ -285,7 +343,7 @@ final class SessionModel {
 
     func export(to url: URL, as format: ExportFormat) {
         do {
-            try AudioExporter.write(audio, to: url, as: format)
+            try AudioExporter.write(exportSamples, to: url, as: format)
             notice = nil
         } catch {
             notice = "Export failed: \(error.localizedDescription)"
@@ -331,6 +389,21 @@ final class SessionModel {
     static func describe(_ error: Error) -> String {
         (error as? LocalizedError)?.errorDescription ?? String(describing: error)
     }
+}
+
+/// What a generation run is for.
+private enum Job {
+    case take(note: String?, recordsVoice: VoiceChoice?)
+}
+
+/// One finished read of the script, kept so it can be replayed, retaken, or exported.
+struct SessionTake: Identifiable, Equatable {
+    let id = UUID()
+    let number: Int
+    let note: String?
+    let take: Take
+    let samples: [Float]
+    var duration: TimeInterval { Double(samples.count) / Double(ModelConstants.sampleRate) }
 }
 
 struct GenerationClock: Equatable {

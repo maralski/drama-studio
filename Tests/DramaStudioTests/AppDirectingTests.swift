@@ -1,8 +1,10 @@
+import AVFoundation
 import DramaEngine
 import XCTest
 @testable import DramaStudio
 
-/// The mock engine, keeping every request it was sent.
+/// The mock engine, keeping every request it was sent. Request n's audio is
+/// scaled by n, so takes of the same text have different samples.
 final class RecordingSynthesizer: SpeechSynthesizer, @unchecked Sendable {
     private let mock = MockSynthesizer(pace: .instant)
     private let lock = NSLock()
@@ -17,8 +19,30 @@ final class RecordingSynthesizer: SpeechSynthesizer, @unchecked Sendable {
     }
     func decode(frames: [Frame]) async throws -> [Float] { try await mock.decode(frames: frames) }
     func synthesize(_ request: SpeechRequest) -> AsyncThrowingStream<SpeechEvent, Error> {
-        lock.withLock { sent.append(request) }
-        return mock.synthesize(request)
+        let gain = Float(lock.withLock {
+            sent.append(request)
+            return sent.count
+        })
+        let events = mock.synthesize(request)
+        return AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    for try await event in events {
+                        switch event {
+                        case .audio(let samples, let index): continuation.yield(.audio(samples: samples.map { $0 * gain }, chunkIndex: index))
+                        case .finished(var result):
+                            result.samples = result.samples.map { $0 * gain }
+                            continuation.yield(.finished(result))
+                        default: continuation.yield(event)
+                        }
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
     }
 }
 
@@ -106,6 +130,95 @@ final class AppDirectingTests: XCTestCase {
         XCTAssertEqual(session.casting.references, [kept])
         XCTAssertNil(session.casting.character)
         XCTAssertTrue(session.sessionVoices.isEmpty)
+    }
+
+    func testTakesAreNumberedAndClearedWhenTheScriptChanges() async {
+        let session = makeSession()
+        await finish(session.generate, in: session)
+        await finish(session.generate, in: session)
+        XCTAssertEqual(session.takes.map(\.number), [1, 2])
+        XCTAssertEqual(session.takes.map(\.note), [nil, nil])
+        XCTAssertEqual(session.selectedTakeID, session.takes[1].id)
+        XCTAssertEqual(session.takes[1].samples, session.audio)
+        session.selectTake(session.takes[0].id)
+        session.toggleKeepSelectedTake()
+        XCTAssertEqual(session.keptTakeID, session.takes[0].id)
+
+        session.script += " The end."
+        XCTAssertFalse(session.canRetake, "takes of the old text can't be retaken")
+        XCTAssertNotNil(session.retakeBlocker)
+        await finish(session.generate, in: session)
+        XCTAssertEqual(session.takes.map(\.number), [1])
+        XCTAssertNil(session.keptTakeID)
+    }
+
+    func testRetakeSendsTheNoteAfterEveryTakeSoFar() async throws {
+        let session = makeSession()
+        XCTAssertFalse(session.canRetake, "a retake needs a take")
+        await finish(session.generate, in: session)
+        await finish(session.generate, in: session)
+        let earlier = session.takes.map(\.take)
+        await finish({ session.retake(note: "  softer [and] warmer ") }, in: session)
+
+        let request = try XCTUnwrap(synthesizer.requests.last)
+        XCTAssertEqual(request.note, "softer and warmer")
+        XCTAssertEqual(request.text, try session.prepared.get().text)
+        XCTAssertEqual(request.previousTakes, earlier)
+        XCTAssertEqual(session.takes.map(\.number), [1, 2, 3])
+        XCTAssertEqual(session.takes.last?.note, "softer and warmer")
+        XCTAssertEqual(session.selectedTakeID, session.takes.last?.id)
+        XCTAssertTrue(session.takes[2].take.text.hasPrefix("Direction: softer and warmer"), session.takes[2].take.text)
+    }
+
+    func testRetakeLeadsWithTheSessionVoiceUnlessItIsTheFirstTake() async throws {
+        let session = makeSession()
+        session.setVoice(.designed(design), forSpeaker: 0)
+        await finish(session.generate, in: session)
+        let voice = session.takes[0].take
+        await finish({ session.retake(note: "slower") }, in: session)
+        XCTAssertEqual(synthesizer.requests[1].previousTakes, [voice], "the voice is already the first take")
+        XCTAssertEqual(synthesizer.requests[1].character, design)
+
+        session.script = "A new line to read."
+        await finish(session.generate, in: session)
+        let first = session.takes[0].take
+        XCTAssertNotEqual(first, voice)
+        await finish({ session.retake(note: "angrier") }, in: session)
+        XCTAssertEqual(synthesizer.requests[3].previousTakes, [voice, first])
+    }
+
+    func testRetakeIsOffForSeveralSpeakers() async {
+        let session = makeSession(script: "ANN: Hi there.\nBEN: Hello.")
+        session.screenplayMode = true
+        await finish(session.generate, in: session)
+        XCTAssertEqual(session.takes.count, 1)
+        XCTAssertFalse(session.canRetake)
+        XCTAssertTrue(session.retakeBlocker?.contains("one speaker") == true)
+        session.retake(note: "softer")
+        XCTAssertEqual(synthesizer.requests.count, 1)
+    }
+
+    func testExportWritesTheKeptTake() async throws {
+        let session = makeSession()
+        await finish(session.generate, in: session)
+        await finish(session.generate, in: session)
+        let first = session.takes[0]
+        XCTAssertNotEqual(first.samples, session.takes[1].samples)
+        XCTAssertEqual(session.exportSamples, session.takes[1].samples, "no kept take: the current audio")
+
+        session.selectTake(first.id)
+        session.toggleKeepSelectedTake()
+        session.selectTake(session.takes[1].id)
+        XCTAssertEqual(session.audio, session.takes[1].samples)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appending(path: "kept.wav")
+        session.export(to: url, as: .wav16)
+        let written = try AVAudioFile(forReading: url)
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: written.processingFormat, frameCapacity: AVAudioFrameCount(written.length)))
+        try written.read(into: buffer)
+        let peak = UnsafeBufferPointer(start: buffer.floatChannelData![0], count: Int(buffer.frameLength)).map(abs).max() ?? 0
+        XCTAssertEqual(Int(written.length), first.samples.count)
+        XCTAssertEqual(peak, first.samples.map(abs).max() ?? 0, accuracy: 0.001, "the kept take's samples, not the selected one's")
     }
 
     func testKeptSurpriseIsNamedSurpriseVoice() async throws {

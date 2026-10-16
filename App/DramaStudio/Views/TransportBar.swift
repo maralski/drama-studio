@@ -12,7 +12,7 @@ struct TransportBar: View {
                 Button("New Take", systemImage: "dice") { model.generate() }
                     .labelStyle(.iconOnly)
                     .disabled(!model.canTakeAgain)
-                    .help("Generate the script again for a different read")
+                    .help("Generate the script again for a different read; the takes so far stay below")
                 Button(model.state.isPlaying ? "Pause" : "Play", systemImage: model.state.isPlaying ? "pause.fill" : "play.fill") {
                     model.togglePlayback()
                 }
@@ -70,7 +70,7 @@ struct TransportBar: View {
         }
         .fixedSize()
         .disabled(!model.canExport)
-        .help("Export audio (⌘E)")
+        .help(model.keptTake == nil ? "Export audio (⌘E)" : "Export the kept take (⌘E)")
     }
 
     static func seconds(_ value: TimeInterval) -> String {

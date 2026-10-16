@@ -12,7 +12,12 @@ struct ContentView: View {
                 .navigationSplitViewColumnWidth(min: 210, ideal: 240, max: 320)
         } detail: {
             ScriptEditorView(model: model)
-                .safeAreaInset(edge: .bottom, spacing: 0) { TransportBar(model: model) }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    VStack(spacing: 0) {
+                        TransportBar(model: model)
+                        if !model.takes.isEmpty { TakesStrip(model: model) }
+                    }
+                }
                 .inspector(isPresented: $showsInspector) {
                     InspectorView(model: model)
                         .inspectorColumnWidth(min: 270, ideal: 300, max: 380)
