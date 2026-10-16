@@ -9,6 +9,7 @@ enum SettingHelp: String, CaseIterable, Identifiable {
     case performanceCues
     case examples
     case surpriseMe
+    case voiceDesign
     case referenceClip
     case voiceTranscript
     case voiceConsent
@@ -35,7 +36,7 @@ enum SettingHelp: String, CaseIterable, Identifiable {
         switch self {
         case .gettingStarted: .start
         case .screenplayMode, .speakerVoice, .performanceCues, .examples: .script
-        case .surpriseMe, .referenceClip, .voiceTranscript, .voiceConsent: .voices
+        case .surpriseMe, .voiceDesign, .referenceClip, .voiceTranscript, .voiceConsent: .voices
         case .newTake, .directorsNote, .keepTake, .quickPreview, .expressiveness: .takes
         case .modelLocation: .model
         case .license: .about
@@ -59,6 +60,7 @@ enum SettingHelp: String, CaseIterable, Identifiable {
         case .performanceCues: "Performance Cues"
         case .examples: "Examples"
         case .surpriseMe: "Surprise Me"
+        case .voiceDesign: "Voice Design"
         case .referenceClip: "Reference Clip"
         case .voiceTranscript: "Transcript"
         case .voiceConsent: "Consent"
@@ -86,6 +88,8 @@ enum SettingHelp: String, CaseIterable, Identifiable {
             "The Examples menu has a line for each opening style, which goes in at the cursor, and a cast of ready-made characters. Choosing a character replaces the script with its line and casts its designed voice. Use them to hear what cues and voice design can do before you write your own."
         case .surpriseMe:
             "Lets the model invent a voice for this speaker. The first take you generate sets that voice, and later takes and retakes keep it. Pick Surprise me again for a different voice, or click Keep This Voice to save it to the library."
+        case .voiceDesign:
+            "Casts a voice from a description instead of a recording: a name, how the voice sounds, and an optional scene. Try a Line speaks a sample in that voice, and if you then click Use Voice without changing the design, the voice you heard is the voice you get. Designed voices cast scripts with one speaker, so click Keep This Voice to save one to the library for a screenplay."
         case .referenceClip:
             "A short recording of the voice you want, from a file or recorded here. Use 5 to 20 seconds of clean speech with no music or background noise. In testing, cloned voices scored 0.87 speaker similarity to their clip, against about 0.55 for the model's own voices."
         case .voiceTranscript:

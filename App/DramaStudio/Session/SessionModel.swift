@@ -29,6 +29,8 @@ final class SessionModel {
     /// The take Export writes.
     private(set) var keptTakeID: UUID?
     private(set) var selectedTakeID: UUID?
+    /// The last line tried in the design sheet.
+    private(set) var audition: Audition?
     @ObservationIgnored var playsWhileGenerating = true
 
     let library: VoiceLibrary
@@ -103,12 +105,48 @@ final class SessionModel {
               as: .take(note: note, recordsVoice: casting.recordsVoice))
     }
 
+    /// Speaks a line in a designed voice through the preview player, leaving
+    /// the script, the takes, and the transport's audio alone.
+    func tryLine(_ line: String, as design: VoiceDesign) {
+        guard !state.isGenerating, !DirectorsNote.spokenWords(line).isEmpty else { return }
+        audition = nil
+        start(SpeechRequest(text: line, character: design, config: config), as: .audition(design))
+    }
+
+    var isAuditioning: Bool {
+        if state.isGenerating, case .audition? = job { true } else { false }
+    }
+
+    func cancelAudition() {
+        if isAuditioning { stopGeneration() }
+        stopPreview()
+        audition = nil
+    }
+
+    /// Casts the design; when it is the one just tried, the voice heard becomes its session voice.
+    func useDesign(_ design: VoiceDesign, for speaker: Speaker) {
+        setVoice(.designed(design), for: speaker)
+        if let audition, audition.design == design { sessionVoices[.designed(design)] = audition.take }
+        cancelAudition()
+    }
+
+    func cast(_ preset: CastPreset) {
+        script = preset.line
+        screenplayMode = false
+        selection = nil
+        notice = nil
+        setVoice(.designed(preset.design), forSpeaker: 0)
+    }
+
     private func start(_ request: SpeechRequest, as job: Job) {
         stopPlayback(resetTo: 0)
-        audio = []
-        result = nil
+        stopPreview()
+        if case .take = job {
+            audio = []
+            result = nil
+            generationClock = GenerationClock(start: .now)
+        }
         telemetry = GenerationTelemetry()
-        generationClock = GenerationClock(start: .now)
         state = .loading(progress: 0, detail: "Starting engine")
         run += 1
         self.job = job
@@ -154,6 +192,7 @@ final class SessionModel {
             let elapsed = (now - start).seconds
             if elapsed > 0.25 { telemetry.framesPerSecond = Double(index) / elapsed }
         case .audio(let samples, let chunkIndex):
+            guard case .take? = job else { break }
             audio += samples
             if state.isPlaying {
                 player.feed(audio)
@@ -164,10 +203,27 @@ final class SessionModel {
             telemetry.retries += 1
             telemetry.frame = 0
         case .finished(let result):
-            self.result = result
-            if case .take(let note, let voice) = job { addTake(result, note: note, recordsVoice: voice) }
             if result.timings.framesPerSecond > 0 { telemetry.framesPerSecond = result.timings.framesPerSecond }
-            settleAfterGeneration(state.afterGeneration)
+            switch job {
+            case .take(let note, let voice)?:
+                self.result = result
+                addTake(result, note: note, recordsVoice: voice)
+                settleAfterGeneration(state.afterGeneration)
+            case .audition(let design)?:
+                audition = Audition(design: design, take: result.take)
+                settleAfterGeneration(audio.isEmpty ? .idle : .ready)
+                playAudition(result.samples)
+            case nil:
+                break
+            }
+        }
+    }
+
+    private func playAudition(_ samples: [Float]) {
+        do {
+            try previewPlayer.play(samples, from: 0)
+        } catch {
+            notice = "Couldn't start audio output: \(error.localizedDescription)"
         }
     }
 
@@ -394,6 +450,13 @@ final class SessionModel {
 /// What a generation run is for.
 private enum Job {
     case take(note: String?, recordsVoice: VoiceChoice?)
+    case audition(VoiceDesign)
+}
+
+/// A line spoken in a designed voice before it is cast.
+struct Audition: Equatable {
+    let design: VoiceDesign
+    let take: Take
 }
 
 /// One finished read of the script, kept so it can be replayed, retaken, or exported.

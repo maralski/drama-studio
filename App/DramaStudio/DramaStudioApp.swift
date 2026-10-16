@@ -122,6 +122,11 @@ struct ExampleMenuItems: View {
                 Button(line.title) { model.insert(line) }
             }
         }
+        Section("Cast") {
+            ForEach(Examples.cast) { preset in
+                Button(preset.design.name) { model.cast(preset) }
+            }
+        }
     }
 }
 

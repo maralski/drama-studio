@@ -221,6 +221,69 @@ final class AppDirectingTests: XCTestCase {
         XCTAssertEqual(peak, first.samples.map(abs).max() ?? 0, accuracy: 0.001, "the kept take's samples, not the selected one's")
     }
 
+    func testTriedLineBecomesTheSessionVoiceOnlyForTheSameDesign() async throws {
+        let session = makeSession()
+        let speaker = try session.prepared.get().speakers[0]
+        await finish({ session.tryLine("[sighs] Off to bed now.", as: design) }, in: session)
+        let audition = try XCTUnwrap(session.audition)
+        let tried = synthesizer.requests[0]
+        XCTAssertEqual(tried.text, "[sighs] Off to bed now.")
+        XCTAssertEqual(tried.character, design)
+        XCTAssertEqual(tried.previousTakes, [])
+        XCTAssertTrue(session.takes.isEmpty, "trying a line adds no take")
+        XCTAssertTrue(session.audio.isEmpty, "trying a line leaves the transport alone")
+        XCTAssertEqual(session.script, "[sighs] Once there was a lighthouse.")
+        XCTAssertEqual(session.state, .idle)
+
+        session.useDesign(design, for: speaker)
+        XCTAssertEqual(session.voice(for: speaker), .designed(design))
+        XCTAssertEqual(session.sessionVoices[.designed(design)], audition.take)
+        await finish(session.generate, in: session)
+        XCTAssertEqual(synthesizer.requests[1].previousTakes, [audition.take], "the voice heard is the voice used")
+
+        var changed = design
+        changed.description = "brisk young woman"
+        await finish({ session.tryLine("Hello.", as: design) }, in: session)
+        session.useDesign(changed, for: speaker)
+        XCTAssertNil(session.sessionVoices[.designed(changed)], "a changed design was not heard")
+    }
+
+    func testTryingALineCountsAsBusy() {
+        let session = makeSession()
+        session.tryLine("Hello there.", as: design)
+        XCTAssertTrue(session.state.isGenerating, "the API's busy check reads this")
+        XCTAssertTrue(session.isAuditioning)
+        session.cancelAudition()
+        XCTAssertFalse(session.state.isGenerating)
+        XCTAssertNil(session.audition)
+    }
+
+    func testCastPresetReplacesTheScriptAndDesignsTheNarrator() throws {
+        let session = makeSession(script: "ANN: Hi.\nBEN: Hello.")
+        session.screenplayMode = true
+        let nana = try XCTUnwrap(Examples.cast.first { $0.id == "Nana" })
+        session.cast(nana)
+        XCTAssertEqual(session.script, nana.line)
+        XCTAssertFalse(session.screenplayMode)
+        let speakers = try session.prepared.get().speakers
+        XCTAssertEqual(speakers.count, 1)
+        XCTAssertEqual(session.voice(for: speakers[0]), .designed(nana.design))
+        XCTAssertEqual(session.casting.character, nana.design)
+    }
+
+    func testDesignDraftNeedsANameAndADescription() {
+        var draft = DesignDraft(editing: nil, line: "")
+        XCTAssertNil(draft.design)
+        draft.name = " Ivy "
+        XCTAssertNil(draft.design)
+        draft.description = "bright, quick"
+        XCTAssertEqual(draft.design, VoiceDesign(name: "Ivy", description: "bright, quick"))
+        draft.fill(Examples.cast[0])
+        XCTAssertEqual(draft.design, Examples.cast[0].design)
+        XCTAssertEqual(draft.line, Examples.cast[0].line)
+        XCTAssertEqual(DesignDraft(editing: design, line: "x").design, design)
+    }
+
     func testKeptSurpriseIsNamedSurpriseVoice() async throws {
         let session = makeSession(script: "Hello there.")
         let speaker = try session.prepared.get().speakers[0]

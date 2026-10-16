@@ -3,10 +3,11 @@ import SwiftUI
 
 struct InspectorView: View {
     @Bindable var model: SessionModel
+    @State private var designing: Speaker?
 
     var body: some View {
         Form {
-            CastSection(model: model)
+            CastSection(model: model, designing: $designing)
             Section("Performance") {
                 HStack {
                     Menu("Insert Cue", systemImage: "theatermasks") { CueMenuItems(model: model) }
@@ -27,11 +28,13 @@ struct InspectorView: View {
         }
         .formStyle(.grouped)
         .disabled(model.state.isGenerating)
+        .sheet(item: $designing) { DesignVoiceSheet(model: model, speaker: $0) }
     }
 }
 
 private struct CastSection: View {
     @Bindable var model: SessionModel
+    @Binding var designing: Speaker?
 
     var body: some View {
         Section {
@@ -48,6 +51,8 @@ private struct CastSection: View {
                         Text("Model default").tag(VoicePickerTag.choice(.modelDefault))
                         Text("Surprise me").tag(VoicePickerTag.choice(.surprise))
                         ForEach(model.castDesigns, id: \.self) { Text("\($0.name) (designed)").tag(VoicePickerTag.choice(.designed($0))) }
+                        Divider()
+                        Text("Design a Voice\u{2026}").tag(VoicePickerTag.designNew)
                     } label: {
                         HStack(spacing: 4) {
                             VStack(alignment: .leading, spacing: 1) {
@@ -81,7 +86,10 @@ private struct CastSection: View {
 
     private func voiceBinding(for speaker: Speaker) -> Binding<VoicePickerTag> {
         Binding(get: { .choice(model.voice(for: speaker)) }, set: { tag in
-            if case .choice(let choice) = tag { model.setVoice(choice, for: speaker) }
+            switch tag {
+            case .choice(let choice): model.setVoice(choice, for: speaker)
+            case .designNew: designing = speaker
+            }
         })
     }
 }
