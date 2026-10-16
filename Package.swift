@@ -25,7 +25,7 @@ let package = Package(
         .testTarget(name: "DramaEngineTests", dependencies: ["DramaEngine"], path: "Tests/DramaEngineTests"),
         .testTarget(name: "DramaServerTests", dependencies: ["DramaServer", "DramaEngine"], path: "Tests/DramaServerTests"),
         .testTarget(name: "DramaMCPTests", dependencies: ["DramaMCP"], path: "Tests/DramaMCPTests"),
-        .testTarget(name: "DramaStudioTests", dependencies: ["DramaStudio", "DramaEngine"], path: "Tests/DramaStudioTests"),
+        .testTarget(name: "DramaStudioTests", dependencies: ["DramaStudio", "DramaEngine", "DramaServer"], path: "Tests/DramaStudioTests"),
     ],
     swiftLanguageVersions: [.v5]
 )

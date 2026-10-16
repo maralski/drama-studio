@@ -22,7 +22,7 @@ public struct ToolContext: Sendable {
     public var now: @Sendable () -> Date
     public var play: @Sendable (URL) throws -> Void
 
-    public init(api: any DramaAPI, outputDirectory: URL = ToolContext.defaultOutputDirectory, now: @escaping @Sendable () -> Date = Date.init, play: @escaping @Sendable (URL) throws -> Void = ToolContext.afplay) {
+    public init(api: any DramaAPI, outputDirectory: URL = ToolContext.defaultOutputDirectory, now: @escaping @Sendable () -> Date = { Date() }, play: @escaping @Sendable (URL) throws -> Void = ToolContext.afplay) {
         self.api = api
         self.outputDirectory = outputDirectory
         self.now = now

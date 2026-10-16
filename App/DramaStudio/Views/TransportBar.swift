@@ -3,6 +3,7 @@ import SwiftUI
 
 struct TransportBar: View {
     @Bindable var model: SessionModel
+    @Environment(APIServerController.self) private var server: APIServerController?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -31,6 +32,7 @@ struct TransportBar: View {
             }
             HStack(spacing: 8) {
                 StatusLine(model: model)
+                if let server { APIChip(server: server) }
                 Toggle(isOn: $model.quickPreview) { HelpLabel("Quick preview", help: .quickPreview) }
                     .toggleStyle(.checkbox)
                     .controlSize(.small)
