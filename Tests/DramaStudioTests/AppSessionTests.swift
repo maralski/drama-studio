@@ -28,7 +28,7 @@ final class AppSessionTests: XCTestCase {
 
     func testGenerationStreamsEveryChunkThenSettlesReady() async {
         let session = makeSession()
-        session.script = String(repeating: "This sentence is about forty bytes long. ", count: 20)
+        session.script = String(repeating: "This sentence is about forty bytes long. ", count: 3)
         var states: [PlaybackState] = []
         session.generate()
         await waitUntil {

@@ -67,53 +67,41 @@ public actor DramaCodec {
         }
     }
 
-    /// A model call over frames `start ..< end` whose output is kept from `keep` on.
-    struct Window: Equatable {
-        let start: Int
-        let keep: Int
-        let end: Int
-    }
-
-    static func windows(frames: Int) -> [Window] {
-        var out: [Window] = []
-        var keep = 0
-        while keep < frames {
-            let start = keep == 0 ? 0 : keep - contextFrames
-            let end = min(frames, start + windowFrames)
-            out.append(Window(start: start, keep: keep, end: end))
-            keep = end
-        }
-        return out
-    }
-
     /// `[10][T]` codes to `T * 2048` mono samples at 44.1 kHz.
     public func decode(codes: [[Int32]]) async throws -> [Float] {
+        var audio: [Float] = []
+        audio.reserveCapacity((codes.first?.count ?? 0) * Self.samplesPerFrame)
+        for w in DecodeWindow.windows(frames: codes.first?.count ?? 0) {
+            audio += try await decode(codes: codes, window: w)
+        }
+        return audio
+    }
+
+    /// The samples of frames `window.keep ..< window.end`, from one model call
+    /// over `window.start ..< window.end` of `codes`.
+    public func decode(codes: [[Int32]], window w: DecodeWindow) async throws -> [Float] {
         guard codes.count == Self.numCodebooks else {
             throw CodecError.badCodes("expected \(Self.numCodebooks) codebooks, got \(codes.count)")
         }
         let frames = codes[0].count
         guard codes.allSatisfy({ $0.count == frames }) else { throw CodecError.badCodes("codebooks differ in length") }
+        guard w.end <= frames, w.end - w.start <= Self.windowFrames else { throw CodecError.badCodes("window \(w) does not fit \(frames) frames") }
 
         let width = Self.windowFrames
-        var audio: [Float] = []
-        audio.reserveCapacity(frames * Self.samplesPerFrame)
-        for w in Self.windows(frames: frames) {
-            var flat = [Int32](repeating: 0, count: Self.numCodebooks * width)
-            for (book, row) in codes.enumerated() {
-                flat.replaceSubrange(book * width ..< book * width + (w.end - w.start), with: row[w.start ..< w.end])
-            }
-            let input = MLMultiArray(MLShapedArray<Int32>(scalars: flat, shape: [1, Self.numCodebooks, width]))
-            let output = try await decoder.prediction(from: MLDictionaryFeatureProvider(dictionary: ["codes": input]))
-            guard let samples = output.featureValue(for: "audio")?.multiArrayValue else {
-                throw CodecError.unexpectedOutput("decoder returned no `audio`")
-            }
-            let scalars = MLShapedArray<Float>(converting: samples).scalars
-            guard scalars.count == width * Self.samplesPerFrame else {
-                throw CodecError.unexpectedOutput("decoder returned \(scalars.count) samples for \(width) frames")
-            }
-            audio.append(contentsOf: scalars[(w.keep - w.start) * Self.samplesPerFrame ..< (w.end - w.start) * Self.samplesPerFrame])
+        var flat = [Int32](repeating: 0, count: Self.numCodebooks * width)
+        for (book, row) in codes.enumerated() {
+            flat.replaceSubrange(book * width ..< book * width + (w.end - w.start), with: row[w.start ..< w.end])
         }
-        return audio
+        let input = MLMultiArray(MLShapedArray<Int32>(scalars: flat, shape: [1, Self.numCodebooks, width]))
+        let output = try await decoder.prediction(from: MLDictionaryFeatureProvider(dictionary: ["codes": input]))
+        guard let samples = output.featureValue(for: "audio")?.multiArrayValue else {
+            throw CodecError.unexpectedOutput("decoder returned no `audio`")
+        }
+        let scalars = MLShapedArray<Float>(converting: samples).scalars
+        guard scalars.count == width * Self.samplesPerFrame else {
+            throw CodecError.unexpectedOutput("decoder returned \(scalars.count) samples for \(width) frames")
+        }
+        return Array(scalars[(w.keep - w.start) * Self.samplesPerFrame ..< (w.end - w.start) * Self.samplesPerFrame])
     }
 
     /// 44.1 kHz mono samples to `[10][ceil(n / 2048)]` codes.
@@ -121,7 +109,7 @@ public actor DramaCodec {
         let frames = (samples.count + Self.samplesPerFrame - 1) / Self.samplesPerFrame
         let width = Self.windowFrames
         var codes = [[Int32]](repeating: [], count: Self.numCodebooks)
-        for w in Self.windows(frames: frames) {
+        for w in DecodeWindow.windows(frames: frames) {
             let lo = w.start * Self.samplesPerFrame
             let hi = min(samples.count, w.end * Self.samplesPerFrame)
             var audio = [Float](repeating: 0, count: width * Self.samplesPerFrame)

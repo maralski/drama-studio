@@ -58,11 +58,11 @@ final class CodecTests: XCTestCase {
     }
 
     func testWindowsCoverEveryFrameOnce() {
-        typealias W = DramaCodec.Window
-        XCTAssertEqual(DramaCodec.windows(frames: 0), [])
-        XCTAssertEqual(DramaCodec.windows(frames: 300), [W(start: 0, keep: 0, end: 300)])
-        XCTAssertEqual(DramaCodec.windows(frames: 512), [W(start: 0, keep: 0, end: 512)])
-        XCTAssertEqual(DramaCodec.windows(frames: 1000), [
+        typealias W = DecodeWindow
+        XCTAssertEqual(DecodeWindow.windows(frames: 0), [])
+        XCTAssertEqual(DecodeWindow.windows(frames: 300), [W(start: 0, keep: 0, end: 300)])
+        XCTAssertEqual(DecodeWindow.windows(frames: 512), [W(start: 0, keep: 0, end: 512)])
+        XCTAssertEqual(DecodeWindow.windows(frames: 1000), [
             W(start: 0, keep: 0, end: 512),
             W(start: 256, keep: 512, end: 768),
             W(start: 512, keep: 768, end: 1000),

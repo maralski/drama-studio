@@ -20,6 +20,9 @@ public final class FrameGenerator {
         public var gpuSeconds: Double
         public var spokenSeconds: Double
         public var attempts: Int
+        /// The chunk's decoded audio; empty without a `codec`.
+        public var samples: [Float]
+        public var codecSeconds: Double
         /// `[10][T]` codes, the shape the codec and history take.
         public var codes: [[Int32]] { (0..<ModelConstants.numCodebooks).map { c in frames.map { $0[1 + c] } } }
     }
@@ -29,12 +32,18 @@ public final class FrameGenerator {
         case prefilled(rows: Int)
         case frame(index: Int, maxFrames: Int)
         case retry(index: Int, attempt: Int, spokenSeconds: Double, expectedSeconds: Double)
+        /// Under `.lowLatency`, audio of frames `frames` of the chunk generating.
+        case partialAudio(samples: [Float], index: Int, frames: Range<Int>)
         case chunkFinished(ChunkResult)
     }
 
-    /// Seconds of silence at the end of the chunk so far. The synthesizer
-    /// decodes the frames with the codec and measures; nil disables the early
-    /// stop and the spoken-duration check falls back to the frame count.
+    /// Decodes one window of a chunk's codes. Set, the generator decodes each
+    /// chunk while it generates: the early stop measures the silence of that
+    /// audio, `.lowLatency` streams it, and `ChunkResult.samples` carries it.
+    public var codec: ((_ codes: [[Int32]], _ window: DecodeWindow) throws -> [Float])?
+    /// Seconds of silence at the end of the chunk so far, for callers without
+    /// a `codec`. With neither, the early stop is off and the spoken-duration
+    /// check falls back to the frame count.
     public var silenceProbe: ((_ frames: [Frame]) throws -> Double)?
     static let silenceProbeEveryFrames = 16
 
@@ -48,9 +57,10 @@ public final class FrameGenerator {
         init(_ probe: @escaping ([Frame]) throws -> Double) { self.probe = probe }
 
         /// Starts a probe on a snapshot unless one is already running.
-        func offer(_ frames: [Frame]) {
+        @discardableResult
+        func offer(_ frames: [Frame]) -> Bool {
             lock.lock()
-            if inFlight { lock.unlock(); return }
+            if inFlight { lock.unlock(); return false }
             inFlight = true
             lock.unlock()
             group.enter()
@@ -59,6 +69,7 @@ public final class FrameGenerator {
                 lock.lock(); latest = r; inFlight = false; lock.unlock()
                 group.leave()
             }
+            return true
         }
 
         var latestSilence: Double { lock.lock(); defer { lock.unlock() }; return latest }
@@ -116,7 +127,9 @@ public final class FrameGenerator {
             let budget = min(config.frameCap.frames(expectedSeconds: expected), model.capacity - prompt.count - 1)
             guard budget >= 1 else { throw PromptError.tooLong(prompt.count) }
             var best: ChunkResult?
-            for attempt in 0...max(0, config.maxRetries) {
+            let streamStep = config.streaming.stepFrames
+            let maxRetries = streamStep == nil ? max(0, config.maxRetries) : 0
+            for attempt in 0...maxRetries {
                 guard shouldContinue() else { break }
                 let t0 = Date()
                 let session = try GenerationSession(model: model, prompt: prompt, prefixRows: prefixRows)
@@ -127,27 +140,39 @@ public final class FrameGenerator {
                 var trailingSilence = 0.0
                 let t1 = Date()
                 let silenceFrames = config.stopAfterSilenceSeconds.map { Int(($0 * Double(ModelConstants.sampleRate) / Double(ModelConstants.samplesPerFrame)).rounded(.up)) }
-                let runner = silenceProbe.map(ProbeRunner.init)
+                let decoder = codec.map(ChunkDecoder.init)
+                let probe = decoder.map { decoder in { try decoder.advance(to: $0) } } ?? silenceProbe
+                let runner = probe.map(ProbeRunner.init)
+                func deliverPartials() {
+                    guard streamStep != nil, let decoder else { return }
+                    for piece in decoder.takePieces() { onEvent(.partialAudio(samples: piece.samples, index: index, frames: piece.frames)) }
+                }
+                var offered = 0
                 for step in 0..<budget {
                     guard shouldContinue() else { break }
                     let r = try session.step(temperature: config.temperature, topK: config.topK, topP: config.topP, sampler: &sampler)
                     guard let frame = r.frame else { eos = true; break }
                     frames.append(frame)
                     onEvent(.frame(index: step, maxFrames: budget))
-                    if let runner, let silenceFrames, let limit = config.stopAfterSilenceSeconds, frames.count > silenceFrames {
-                        if frames.count % Self.silenceProbeEveryFrames == 0 { runner.offer(frames) }
-                        if runner.latestSilence >= limit { break }
-                    }
+                    deliverPartials()
+                    guard let runner else { continue }
+                    let probing = silenceFrames.map { frames.count > $0 } ?? false
+                    let due = if let streamStep, decoder != nil { frames.count - offered >= streamStep }
+                              else { probing && frames.count % Self.silenceProbeEveryFrames == 0 }
+                    if due, runner.offer(frames) { offered = frames.count }
+                    if probing, let limit = config.stopAfterSilenceSeconds, runner.latestSilence >= limit { break }
                 }
                 runner?.drain()
-                if let probe = silenceProbe, !frames.isEmpty { trailingSilence = try probe(frames) }
+                if let probe, !frames.isEmpty { trailingSilence = try probe(frames) }
+                deliverPartials()
                 let total = Double(frames.count) * Double(ModelConstants.samplesPerFrame) / Double(ModelConstants.sampleRate)
                 let spoken = max(0, total - trailingSilence)
                 let result = ChunkResult(index: index, count: chunks.count, text: chunk.turn, frames: frames, promptRows: prompt.count,
                                          finishedByEOS: eos, prefillSeconds: prefillSeconds, decodeSeconds: Date().timeIntervalSince(t1),
-                                         gpuSeconds: session.gpuSeconds, spokenSeconds: spoken, attempts: attempt + 1)
+                                         gpuSeconds: session.gpuSeconds, spokenSeconds: spoken, attempts: attempt + 1,
+                                         samples: decoder?.samples ?? [], codecSeconds: decoder?.codecSeconds ?? 0)
                 if best == nil || spoken > best!.spokenSeconds { best = result }
-                if config.minSpokenRatio <= 0 || spoken >= config.minSpokenRatio * expected || attempt == config.maxRetries { break }
+                if config.minSpokenRatio <= 0 || spoken >= config.minSpokenRatio * expected || attempt == maxRetries { break }
                 onEvent(.retry(index: index, attempt: attempt + 1, spokenSeconds: spoken, expectedSeconds: expected))
             }
             guard let result = best else { break }

@@ -74,10 +74,9 @@ public actor MockSynthesizer: SpeechSynthesizer {
 
     private func run(_ request: SpeechRequest, emit: @Sendable (SpeechEvent) -> Void) async throws {
         try await load { emit(.loadingModel(progress: $0, detail: $1)) }
-        let chunks = Self.chunks(of: request.text, maxBytes: request.config.chunkBytes)
-        guard !chunks.isEmpty else { throw MockError.emptyText }
+        guard !UnicodeWhitespace.strip(request.text).isEmpty else { throw MockError.emptyText }
         let plan = try GenerationPlan(request)
-        let lines = request.note.flatMap(DirectorsNote.clean) == nil ? chunks : [request.text]
+        let lines = plan.chunks.map(\.line)
 
         var rng = SplitMix64(seed: request.config.seed ?? UInt64.random(in: 0...UInt64.max))
         var frames: [Frame] = []
@@ -94,6 +93,14 @@ public actor MockSynthesizer: SpeechSynthesizer {
             let spokenSeconds = Double(text.count) / 15
             let budget = request.config.frameCap.frames(expectedSeconds: FrameGenerator.expectedSeconds(for: text))
             let target = min(budget, max(8, Int(spokenSeconds * framesPerSecondOfAudio)))
+            let audio = Self.sweep(frameCount: target, pitch: 1 + Double(index % 4) * 0.25)
+            var streamed = 0
+            func stream(through frame: Int) {
+                guard frame > streamed else { return }
+                let n = ModelConstants.samplesPerFrame
+                emit(.partialAudio(samples: Array(audio[streamed * n ..< frame * n]), chunkIndex: index, frameRange: streamed ..< frame))
+                streamed = frame
+            }
             let start = ContinuousClock.now
             for frameIndex in 0..<target {
                 try await wait(pace.framesPerSecond > 0 ? 1 / pace.framesPerSecond : 0)
@@ -101,11 +108,12 @@ public actor MockSynthesizer: SpeechSynthesizer {
                 let residual = (1..<ModelConstants.numCodebooks).map { _ in Int32(rng.next() % UInt64(ModelConstants.residualCodebookSize)) }
                 frames.append([c0 + ModelConstants.semanticStart, c0] + residual)
                 emit(.frame(index: frameIndex, maxFrames: budget))
+                if let step = request.config.streaming.stepFrames, (frameIndex + 1) % step == 0 { stream(through: frameIndex + 1) }
             }
+            if request.config.streaming.stepFrames != nil { stream(through: target) }
             timings.decodeSeconds += (ContinuousClock.now - start).seconds
             timings.framesGenerated += target
 
-            let audio = Self.sweep(frameCount: target, pitch: 1 + Double(index % 4) * 0.25)
             samples += audio
             emit(.audio(samples: audio, chunkIndex: index))
         }
@@ -119,27 +127,6 @@ public actor MockSynthesizer: SpeechSynthesizer {
         } else {
             try Task.checkCancellation()
         }
-    }
-
-    /// Sentence-aware split at about `maxBytes` UTF-8 bytes, the way the
-    /// hosted server chunks long text.
-    static func chunks(of text: String, maxBytes: Int) -> [String] {
-        var sentences: [String] = []
-        text.enumerateSubstrings(in: text.startIndex..., options: .bySentences) { sentence, _, _, _ in
-            if let s = sentence?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty { sentences.append(s) }
-        }
-        var chunks: [String] = []
-        var current = ""
-        for sentence in sentences {
-            if !current.isEmpty, current.utf8.count + 1 + sentence.utf8.count > maxBytes {
-                chunks.append(current)
-                current = sentence
-            } else {
-                current = current.isEmpty ? sentence : current + " " + sentence
-            }
-        }
-        if !current.isEmpty { chunks.append(current) }
-        return chunks
     }
 
     static func sweep(frameCount: Int, pitch: Double) -> [Float] {

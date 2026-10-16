@@ -91,11 +91,19 @@ public actor DramaSynthesizer: SpeechSynthesizer {
 
     /// Runs a codec decode from synchronous generator code.
     public nonisolated static func decodeBlocking(_ codec: DramaCodec, codes: [[Int32]]) throws -> [Float] {
+        try blocking { try await codec.decode(codes: codes) }
+    }
+
+    nonisolated static func decodeBlocking(_ codec: DramaCodec, codes: [[Int32]], window: DecodeWindow) throws -> [Float] {
+        try blocking { try await codec.decode(codes: codes, window: window) }
+    }
+
+    private nonisolated static func blocking(_ work: @escaping @Sendable () async throws -> [Float]) throws -> [Float] {
         let group = DispatchGroup()
         group.enter()
-        var result: Result<[Float], Error> = .failure(EngineError.badModel("codec did not answer"))
+        nonisolated(unsafe) var result: Result<[Float], Error> = .failure(EngineError.badModel("codec did not answer"))
         Task.detached {
-            do { result = .success(try await codec.decode(codes: codes)) } catch { result = .failure(error) }
+            do { result = .success(try await work()) } catch { result = .failure(error) }
             group.leave()
         }
         group.wait()
@@ -122,41 +130,30 @@ public actor DramaSynthesizer: SpeechSynthesizer {
         continuation.yield(.loadingModel(progress: 1, detail: "Ready"))
         let generator = FrameGenerator(model: model!, tokenizer: tokenizer!)
         let codec = self.codec!
-        generator.silenceProbe = { frames in
-            // The codec is causal, so decoding the whole chunk so far gives the true tail.
-            let codes = (0..<ModelConstants.numCodebooks).map { c in frames.map { $0[1 + c] } }
-            return Self.trailingSilenceSeconds(try Self.decodeBlocking(codec, codes: codes))
-        }
+        generator.codec = { codes, window in try Self.decodeBlocking(codec, codes: codes, window: window) }
         let plan = try GenerationPlan(request)
-        var allFrames: [Frame] = []
-        var allSamples: [Float] = []
-        var timings = SpeechTimings()
-        var eos = true
-        // Generation is synchronous GPU work; decode each finished chunk right after it lands.
         let results = try generator.generate(plan: plan, config: request.config, shouldContinue: { !Task.isCancelled }) { event in
             switch event {
             case .chunkStarted(let i, let n, let text): continuation.yield(.chunkStarted(index: i, count: n, text: text))
             case .prefilled(let rows): continuation.yield(.prefill(rows: rows))
             case .frame(let i, let max): continuation.yield(.frame(index: i, maxFrames: max))
             case .retry(let i, let attempt, _, _): continuation.yield(.retry(chunkIndex: i, attempt: attempt))
-            case .chunkFinished: break
+            case .partialAudio(let samples, let i, let frames): continuation.yield(.partialAudio(samples: samples, chunkIndex: i, frameRange: frames))
+            case .chunkFinished(let r): if !r.samples.isEmpty { continuation.yield(.audio(samples: r.samples, chunkIndex: r.index)) }
             }
         }
         try Task.checkCancellation()
+        var timings = SpeechTimings()
         for r in results {
             timings.prefillSeconds += r.prefillSeconds
             timings.decodeSeconds += r.decodeSeconds
+            timings.codecSeconds += r.codecSeconds
             timings.promptRows += r.promptRows
             timings.framesGenerated += r.frames.count
-            eos = eos && r.finishedByEOS
-            allFrames += r.frames
-            guard !r.frames.isEmpty else { continue }
-            let t0 = Date()
-            let samples = try await codec.decode(codes: r.codes)
-            timings.codecSeconds += Date().timeIntervalSince(t0)
-            allSamples += samples
-            continuation.yield(.audio(samples: samples, chunkIndex: r.index))
         }
+        let allFrames = results.flatMap(\.frames)
+        let allSamples = results.flatMap(\.samples)
+        let eos = results.allSatisfy(\.finishedByEOS)
         let take = Take(text: plan.turnText, codes: (0..<ModelConstants.numCodebooks).map { c in allFrames.map { $0[1 + c] } })
         continuation.yield(.finished(SpeechResult(take: take, samples: allSamples, timings: timings, finishedByEOS: eos)))
     }

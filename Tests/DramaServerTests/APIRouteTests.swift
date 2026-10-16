@@ -48,7 +48,7 @@ final class APIRouteTests: XCTestCase {
     }
 
     private static let clip = AudioEncoding.wav((0..<44_100).map { Float(sin(Double($0) * 0.05) * 0.3) })
-    private static let twoChunkText = String(repeating: "This sentence is about forty bytes long. ", count: 10)
+    private static let twoChunkText = String(repeating: "This sentence is about forty bytes long. ", count: 2)
 
     private func send(_ method: String, _ path: String, json: Any? = nil, body: Data? = nil, headers: [String: String] = [:]) async -> APIResponse {
         let data = body ?? json.map { try! JSONSerialization.data(withJSONObject: $0) } ?? Data()
@@ -217,7 +217,7 @@ final class APIRouteTests: XCTestCase {
         XCTAssertEqual(wrongMethod.headers["Allow"], "POST")
     }
 
-    func testStreamingWritesPCMPerChunk() async throws {
+    func testStreamingWritesPCMAsItIsDecoded() async throws {
         let response = await send("POST", "/v1/audio/speech", json: ["input": Self.twoChunkText, "stream": true, "response_format": "pcm"])
         XCTAssertEqual(response.status, .ok)
         XCTAssertEqual(response.headers["X-Drama-Sample-Rate"], "44100")
@@ -225,7 +225,7 @@ final class APIRouteTests: XCTestCase {
         guard case .chunked(let stream) = response.body else { return XCTFail("not chunked") }
         var chunks: [Data] = []
         for try await chunk in stream { chunks.append(chunk) }
-        XCTAssertEqual(chunks.count, 2, "one HTTP chunk per generated chunk")
+        XCTAssertGreaterThanOrEqual(chunks.count, 2, "at least one HTTP chunk per sentence")
         XCTAssertTrue(chunks.allSatisfy { $0.count % (ModelConstants.samplesPerFrame * 2) == 0 })
         let next = await send("POST", "/v1/tts", json: ["text": "Right after."])
         XCTAssertEqual(next.status, .ok, "the slot is free by the time the client sees the stream end")

@@ -42,6 +42,7 @@ final class SessionModel {
     @ObservationIgnored private var generation: Task<Void, Never>?
     @ObservationIgnored private var run = 0
     @ObservationIgnored private var job: Job?
+    @ObservationIgnored private var streamed = StreamedAudio()
 
     init(synthesizer: any SpeechSynthesizer, library: VoiceLibrary) {
         self.synthesizer = synthesizer
@@ -152,6 +153,7 @@ final class SessionModel {
             generationClock = GenerationClock(start: .now)
         }
         telemetry = GenerationTelemetry()
+        streamed = StreamedAudio()
         state = .loading(progress: 0, detail: "Starting engine")
         run += 1
         self.job = job
@@ -196,14 +198,8 @@ final class SessionModel {
             telemetry.maxFrames = maxFrames
             let elapsed = (now - start).seconds
             if elapsed > 0.25 { telemetry.framesPerSecond = Double(index) / elapsed }
-        case .audio(let samples, let chunkIndex):
-            guard case .take? = job else { break }
-            audio += samples
-            if state.isPlaying {
-                player.feed(audio)
-            } else if chunkIndex == 0, playsWhileGenerating {
-                startPlayback(from: 0)
-            }
+        case .partialAudio, .audio:
+            receive(streamed.newSamples(from: event))
         case .retry:
             telemetry.retries += 1
             telemetry.frame = 0
@@ -221,6 +217,17 @@ final class SessionModel {
             case nil:
                 break
             }
+        }
+    }
+
+    private func receive(_ samples: [Float]) {
+        guard case .take? = job, !samples.isEmpty else { return }
+        let first = audio.isEmpty
+        audio += samples
+        if state.isPlaying {
+            player.feed(audio)
+        } else if first, playsWhileGenerating {
+            startPlayback(from: 0)
         }
     }
 
