@@ -43,13 +43,37 @@ final class AppSessionTests: XCTestCase {
         XCTAssertTrue(session.canExport)
     }
 
+    func testAudioArrivesBeforeTheFirstSentenceIsDoneAndMatchesTheTake() async {
+        let session = makeSession(pace: .init(loadSeconds: 0, framesPerSecond: 200))
+        session.script = "The first sentence is long enough to take a while to say. The second sentence ends the script."
+        session.generate()
+        await waitUntil { !session.audio.isEmpty || !session.state.isGenerating }
+        XCTAssertEqual(session.state, .generating(chunk: 1, of: 2, playing: false), "the first audio lands while sentence one is generating")
+        XCTAssertEqual(session.audio.count, 64 * ModelConstants.samplesPerFrame, "one 64-frame partial")
+        XCTAssertNotNil(session.estimateLabel(at: .now))
+        await waitUntil { !session.state.isGenerating }
+        XCTAssertEqual(session.audio, session.result?.samples, "partials, then each chunk's remainder, add up to the take")
+        XCTAssertEqual(session.takes.last?.samples, session.audio)
+    }
+
+    func testStreamingSettingTurnsLowLatencyOff() {
+        let session = makeSession()
+        UserDefaults.standard.set(false, forKey: SessionModel.streamsAudioKey)
+        defer { UserDefaults.standard.removeObject(forKey: SessionModel.streamsAudioKey) }
+        XCTAssertEqual(session.config.streaming, .sentence)
+    }
+
     func testRequestFollowsTheControlsAndNewTakeNeedsATake() async {
         let session = makeSession()
         session.script = "One line to say."
-        XCTAssertEqual(session.config, GenerationConfig())
+        var expected = GenerationConfig()
+        expected.streaming = .defaultLowLatency
+        XCTAssertEqual(session.config, expected, "playback streams by default")
         session.quickPreview = true
         session.expressiveness = 1
-        XCTAssertEqual(session.config, .make(expressiveness: 1, quickPreview: true))
+        expected = .make(expressiveness: 1, quickPreview: true)
+        expected.streaming = .defaultLowLatency
+        XCTAssertEqual(session.config, expected)
 
         XCTAssertFalse(session.canTakeAgain, "nothing to take again yet")
         session.generate()

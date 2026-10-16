@@ -110,7 +110,8 @@ private struct StatusLine: View {
                 ProgressView(value: chunkProgress(chunk: chunk, of: count)).frame(width: 120)
                 TimelineView(.periodic(from: .now, by: 0.1)) { context in
                     let elapsed = model.generationClock.map { " \u{00B7} \(TransportBar.seconds($0.elapsed(at: context.date)))" } ?? ""
-                    Text("Chunk \(chunk) of \(count) \u{00B7} frame \(model.telemetry.frame) of \(model.telemetry.maxFrames) \u{00B7} \(model.telemetry.framesPerSecond, format: .number.precision(.fractionLength(1))) frames/s\(elapsed)")
+                    let left = model.estimateLabel(at: context.date).map { " \u{00B7} \($0)" } ?? ""
+                    Text("Chunk \(chunk) of \(count) \u{00B7} frame \(model.telemetry.frame) of \(model.telemetry.maxFrames) \u{00B7} \(model.telemetry.framesPerSecond, format: .number.precision(.fractionLength(1))) frames/s\(elapsed)\(left)")
                         .monospacedDigit()
                 }
             case .ready, .playing:
