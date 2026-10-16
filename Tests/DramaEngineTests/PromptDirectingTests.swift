@@ -104,6 +104,17 @@ final class PromptDirectingTests: XCTestCase {
         XCTAssertEqual(plan.turnText, "Direction: whispered\nLine: [whispered] It was a dark and stormy night.")
     }
 
+    func testATakeOfTheSameTurnIsTheVoiceButNeverHistory() throws {
+        let line = "It was a dark and stormy night."
+        let first = Take(text: line, codes: Self.codes(3))
+        let plain = try GenerationPlan(text: line, references: [], previousTakes: [first], config: GenerationConfig())
+        XCTAssertEqual(plain.references.map(\.codes), [first.codes], "still the voice")
+        XCTAssertEqual(plain.history, [], "replaying the same turn copies its audio")
+        let angrier = Take(text: "Direction: angrier\nLine: [angrier] It was a dark and stormy night.", codes: Self.codes(4))
+        let again = try GenerationPlan(text: line, references: [], previousTakes: [first, angrier], note: "angrier", config: GenerationConfig())
+        XCTAssertEqual(again.history, [first], "the same note again leaves out the take it would copy")
+    }
+
     func testClonedRetakeKeepsTheClipAndSplitsNothing() throws {
         let clip = Drama3Prompt.Reference(transcript: "My own voice.", codes: Self.codes(6))
         let line = "The first sentence is long enough to stand. The second one is long enough too."

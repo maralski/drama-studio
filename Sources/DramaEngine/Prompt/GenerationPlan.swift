@@ -51,8 +51,11 @@ public struct GenerationPlan: Sendable, Equatable {
             if pieces.isEmpty { pieces = [text] }
             chunks = pieces.map { Chunk(turn: turn($0), line: $0) }
         }
-        history = Array(previousTakes.suffix(Self.historyTakes))
-        turnText = character?.turn(body) ?? body
+        let turnText = character?.turn(body) ?? body
+        self.turnText = turnText
+        // A take of the very turn being generated, as history, makes the model
+        // replay that take's audio: measured envelope correlation 0.93 to 0.99.
+        history = Array(previousTakes.filter { $0.text != turnText }.suffix(Self.historyTakes))
     }
 
     public init(_ request: SpeechRequest) throws {
