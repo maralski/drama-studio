@@ -18,6 +18,7 @@ enum SettingHelp: String, CaseIterable, Identifiable {
     case keepTake
     case quickPreview
     case expressiveness
+    case streaming
     case modelLocation
     case license
 
@@ -38,7 +39,7 @@ enum SettingHelp: String, CaseIterable, Identifiable {
         case .screenplayMode, .speakerVoice, .performanceCues, .examples: .script
         case .surpriseMe, .voiceDesign, .referenceClip, .voiceTranscript, .voiceConsent: .voices
         case .newTake, .directorsNote, .keepTake, .quickPreview, .expressiveness: .takes
-        case .modelLocation: .model
+        case .modelLocation, .streaming: .model
         case .license: .about
         }
     }
@@ -48,6 +49,7 @@ enum SettingHelp: String, CaseIterable, Identifiable {
         switch self {
         case .newTake: "seed"
         case .quickPreview: "frameCap"
+        case .streaming: "streaming"
         default: nil
         }
     }
@@ -69,6 +71,7 @@ enum SettingHelp: String, CaseIterable, Identifiable {
         case .keepTake: "Keep Take"
         case .quickPreview: "Quick Preview"
         case .expressiveness: "Expressiveness"
+        case .streaming: "Streaming"
         case .modelLocation: "Model Location"
         case .license: "License and Consent"
         }
@@ -106,6 +109,8 @@ enum SettingHelp: String, CaseIterable, Identifiable {
             "Makes faster rough takes for checking casting, cues, and pacing. It trades a possible dropped sentence for speed, because a sentence the model cuts short is kept instead of generated again, and each sentence gets less time to run. Turn it off for the take you export."
         case .expressiveness:
             "Sets how much the delivery varies from one take to the next. The default, in the middle, is the model vendor's own sampling, temperature 0.7 and top-p 0.7. Lower is steadier and flatter, and higher is more varied, with more risk of slurred or skipped words. No setting was measured to beat the default on word error rate, so move it for taste rather than accuracy."
+        case .streaming:
+            "Plays a take about three seconds after you click Generate, instead of after its first sentence is generated. The audio is decoded on the CPU every few seconds while the GPU generates, so it keeps several CPU cores busy during generation. A sentence that comes out too short is kept rather than generated again, because you may already be hearing it. Turn it off to hear each sentence once it is finished and let the retry fix short sentences."
         case .modelLocation:
             "Where Drama Studio looks for the Drama 3 weights, about 41.5 GB. By default it uses the Hugging Face cache, where \u{201C}hf download fishaudio/drama-3\u{201D} puts them. Choose a folder only if you keep the model somewhere else, such as an external drive. Restart Drama Studio after changing it."
         case .license:

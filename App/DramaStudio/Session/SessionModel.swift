@@ -21,6 +21,9 @@ final class SessionModel {
     private(set) var playhead = 0
     /// Wall time of the current or last generation, from Generate to the end of the run.
     private(set) var generationClock: GenerationClock?
+    /// Time left in the current run, from its events.
+    private(set) var estimate: GenerationEstimate?
+    @ObservationIgnored private var estimateStart = Date()
     private(set) var previewingVoice: ReferenceVoice.ID?
     private(set) var modelLoaded = false
     /// Every finished read of `takesBasis`, oldest first.
@@ -42,6 +45,7 @@ final class SessionModel {
     @ObservationIgnored private var generation: Task<Void, Never>?
     @ObservationIgnored private var run = 0
     @ObservationIgnored private var job: Job?
+    @ObservationIgnored private var streamed = StreamedAudio()
 
     init(synthesizer: any SpeechSynthesizer, library: VoiceLibrary) {
         self.synthesizer = synthesizer
@@ -59,7 +63,13 @@ final class SessionModel {
     }
 
     /// No seed, so every generation draws a fresh one.
-    var config: GenerationConfig { .make(expressiveness: expressiveness, quickPreview: quickPreview) }
+    var config: GenerationConfig {
+        var config = GenerationConfig.make(expressiveness: expressiveness, quickPreview: quickPreview)
+        if UserDefaults.standard.object(forKey: Self.streamsAudioKey) as? Bool ?? true { config.streaming = .defaultLowLatency }
+        return config
+    }
+
+    static let streamsAudioKey = "streamsAudio"
 
     var canGenerate: Bool { !state.isGenerating && (try? prepared.get()) != nil }
     var canTakeAgain: Bool { canGenerate && !audio.isEmpty }
@@ -79,6 +89,10 @@ final class SessionModel {
 
     var keptTake: SessionTake? { takes.first { $0.id == keptTakeID } }
     var exportSamples: [Float] { keptTake?.samples ?? audio }
+
+    func estimateLabel(at date: Date) -> String? {
+        estimate?.label(at: date.timeIntervalSince(estimateStart))
+    }
 
     /// Not observable while playing; poll it from a TimelineView.
     var position: Int { player.position ?? playhead }
@@ -152,6 +166,9 @@ final class SessionModel {
             generationClock = GenerationClock(start: .now)
         }
         telemetry = GenerationTelemetry()
+        streamed = StreamedAudio()
+        estimate = (try? GenerationPlan(request)).map(GenerationEstimate.init(plan:))
+        estimateStart = .now
         state = .loading(progress: 0, detail: "Starting engine")
         run += 1
         self.job = job
@@ -179,6 +196,7 @@ final class SessionModel {
     }
 
     func apply(_ event: SpeechEvent) {
+        estimate?.apply(event, at: Date().timeIntervalSince(estimateStart))
         switch event {
         case .loadingModel(let progress, let detail):
             state = .loading(progress: progress, detail: detail)
@@ -196,14 +214,8 @@ final class SessionModel {
             telemetry.maxFrames = maxFrames
             let elapsed = (now - start).seconds
             if elapsed > 0.25 { telemetry.framesPerSecond = Double(index) / elapsed }
-        case .audio(let samples, let chunkIndex):
-            guard case .take? = job else { break }
-            audio += samples
-            if state.isPlaying {
-                player.feed(audio)
-            } else if chunkIndex == 0, playsWhileGenerating {
-                startPlayback(from: 0)
-            }
+        case .partialAudio, .audio:
+            receive(streamed.newSamples(from: event))
         case .retry:
             telemetry.retries += 1
             telemetry.frame = 0
@@ -221,6 +233,17 @@ final class SessionModel {
             case nil:
                 break
             }
+        }
+    }
+
+    private func receive(_ samples: [Float]) {
+        guard case .take? = job, !samples.isEmpty else { return }
+        let first = audio.isEmpty
+        audio += samples
+        if state.isPlaying {
+            player.feed(audio)
+        } else if first, playsWhileGenerating {
+            startPlayback(from: 0)
         }
     }
 

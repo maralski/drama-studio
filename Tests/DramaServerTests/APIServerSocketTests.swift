@@ -41,6 +41,15 @@ final class APIServerSocketTests: XCTestCase {
         XCTAssertGreaterThan(pcm.count, 0)
         XCTAssertEqual(pcm.count % (ModelConstants.samplesPerFrame * 2), 0)
 
+        var live = URLRequest(url: URL(string: base + "/v1/audio/speech/live")!)
+        live.httpMethod = "POST"
+        live.setValue("Bearer abc", forHTTPHeaderField: "Authorization")
+        live.httpBodyStream = InputStream(data: Data("A sentence sent as a chunked body.\nAnd a second one to close it.\n".utf8))
+        let (livePCM, liveResponse) = try await session.data(for: live)
+        XCTAssertEqual((liveResponse as? HTTPURLResponse)?.statusCode, 200, String(decoding: livePCM.prefix(200), as: UTF8.self))
+        XCTAssertGreaterThan(livePCM.count, 0)
+        XCTAssertEqual(livePCM.count % (ModelConstants.samplesPerFrame * 2), 0)
+
         let bigBody = Data(repeating: 0x20, count: 3 << 20)
         var big = URLRequest(url: URL(string: base + "/v1/voices")!)
         big.httpMethod = "POST"

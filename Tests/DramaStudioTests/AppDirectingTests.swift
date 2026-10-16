@@ -29,6 +29,8 @@ final class RecordingSynthesizer: SpeechSynthesizer, @unchecked Sendable {
                 do {
                     for try await event in events {
                         switch event {
+                        case .partialAudio(let samples, let index, let frames):
+                            continuation.yield(.partialAudio(samples: samples.map { $0 * gain }, chunkIndex: index, frameRange: frames))
                         case .audio(let samples, let index): continuation.yield(.audio(samples: samples.map { $0 * gain }, chunkIndex: index))
                         case .finished(var result):
                             result.samples = result.samples.map { $0 * gain }

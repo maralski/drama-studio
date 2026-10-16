@@ -30,6 +30,8 @@ public struct SpeechJob: Sendable, Equatable {
 public actor SpeechJobSlot {
     public private(set) var current: SpeechJob?
     private let onChange: @Sendable (SpeechJob?) -> Void
+    private var estimate: GenerationEstimate?
+    private var estimateStart = ContinuousClock.now
 
     public init(onChange: @escaping @Sendable (SpeechJob?) -> Void = { _ in }) {
         self.onChange = onChange
@@ -43,8 +45,23 @@ public actor SpeechJobSlot {
         return job.id
     }
 
+    /// Starts timing a generation; a live session begins one per sentence.
+    func begin(_ id: UUID, estimate: GenerationEstimate) {
+        guard current?.id == id else { return }
+        self.estimate = estimate
+        estimateStart = .now
+    }
+
+    public var progress: EstimateSnapshot? {
+        guard current != nil, let estimate else { return nil }
+        let elapsed = (ContinuousClock.now - estimateStart).seconds
+        return EstimateSnapshot(elapsedSeconds: elapsed, remainingSeconds: estimate.remainingSeconds(at: elapsed),
+                                framesDone: estimate.framesDone, framesExpected: estimate.framesExpected)
+    }
+
     func advance(_ id: UUID, with event: SpeechEvent) {
         guard current?.id == id else { return }
+        estimate?.apply(event, at: (ContinuousClock.now - estimateStart).seconds)
         let progress: SpeechJob.Progress
         switch event {
         case .loadingModel(_, let detail): progress = .loadingModel(detail)
@@ -59,8 +76,34 @@ public actor SpeechJobSlot {
     func release(_ id: UUID) {
         guard current?.id == id else { return }
         current = nil
+        estimate = nil
         onChange(nil)
     }
+}
+
+/// `/v1/health`'s view of the running generation; `remainingSeconds` is nil
+/// once the last chunk is in its silence tail or a retry runs.
+public struct EstimateSnapshot: Sendable, Equatable, Encodable {
+    public var elapsedSeconds: Double
+    public var remainingSeconds: Double?
+    public var framesDone: Int
+    public var framesExpected: Int
+
+    enum CodingKeys: String, CodingKey {
+        case elapsedSeconds = "elapsed_seconds", remainingSeconds = "remaining_seconds", framesDone = "frames_done", framesExpected = "frames_expected"
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode((elapsedSeconds * 10).rounded() / 10, forKey: .elapsedSeconds)
+        try container.encode(remainingSeconds.map { ($0 * 10).rounded() / 10 }, forKey: .remainingSeconds)
+        try container.encode(framesDone, forKey: .framesDone)
+        try container.encode(framesExpected, forKey: .framesExpected)
+    }
+}
+
+private extension Duration {
+    var seconds: Double { Double(components.seconds) + Double(components.attoseconds) / 1e18 }
 }
 
 public struct EngineInfo: Sendable, Equatable {
@@ -114,7 +157,9 @@ public final class APIService: Sendable {
         self.engineBusyElsewhere = engineBusyElsewhere
     }
 
-    public func respond(to request: HTTPRequest) async -> APIResponse {
+    /// `body` carries the request body as it arrives, for routes where
+    /// `APIRequest.streamsBody` holds; other routes read `request.body`.
+    public func respond(to request: HTTPRequest, body: AsyncThrowingStream<Data, Error>? = nil) async -> APIResponse {
         guard APIToken.authorizes(request, token: token) else {
             return .error(APIError(.unauthorized, "Missing or wrong bearer token. Send Authorization: Bearer <token>, with the token from ~/Library/Application Support/DramaStudio/api-token.", headers: ["WWW-Authenticate": "Bearer"]))
         }
@@ -123,6 +168,7 @@ public final class APIService: Sendable {
             return .error(error)
         case .success(let api):
             do {
+                if case .live(let parameters) = api { return try await live(parameters, body: body ?? AsyncThrowingStream { $0.finish() }) }
                 return try await handle(api)
             } catch let error as APIError {
                 return .error(error)
@@ -136,7 +182,8 @@ public final class APIService: Sendable {
         switch request {
         case .health:
             let tuned: Bool? = if let engine = synthesizer as? DramaSynthesizer { engine.isTuned } else { false }
-            return .json(Health(modelLoaded: await synthesizer.isLoaded, engine: info.kind.rawValue, busy: await isBusy(), tuned: tuned, version: info.version))
+            return .json(Health(modelLoaded: await synthesizer.isLoaded, engine: info.kind.rawValue, busy: await isBusy(), tuned: tuned, version: info.version,
+                                estimate: await jobs.progress))
         case .models:
             return .json(ModelList(data: [ModelEntry(id: info.modelID, snapshot: info.snapshot)]))
         case .listVoices:
@@ -156,6 +203,8 @@ public final class APIService: Sendable {
             return .json(["deleted": voice.id.uuidString])
         case .speech(let parameters):
             return try await speak(parameters)
+        case .live:
+            throw APIError(.internalServerError, "The live route reads its body as it arrives.")
         case .take(let key):
             guard let id = UUID(uuidString: key), let entry = await takes.entry(id) else {
                 throw APIError(.notFound, "No take \"\(key)\"; the server keeps its last \(TakeCache.capacity) takes.")
@@ -201,34 +250,40 @@ public final class APIService: Sendable {
         return await engineBusyElsewhere()
     }
 
+    private static let busy = APIError(.tooManyRequests, "Drama Studio is already generating; one request runs at a time. Retry shortly.", headers: ["Retry-After": String(retryAfterSeconds)])
+
     private func speak(_ parameters: SpeechParameters) async throws -> APIResponse {
-        let busy = APIError(.tooManyRequests, "Drama Studio is already generating; one request runs at a time. Retry shortly.", headers: ["Retry-After": String(Self.retryAfterSeconds)])
+        let busy = Self.busy
         let resolved = try await resolve(parameters)
         let fromLibrary = try await libraryReferences(for: resolved.casting)
         guard await !engineBusyElsewhere(), let job = await jobs.claim() else { throw busy }
         let request: SpeechRequest
+        let plan: GenerationPlan
         do {
             var references = fromLibrary ?? []
             if fromLibrary == nil { references = try await encodedClips(for: resolved.casting) }
             request = SpeechRequest(text: resolved.line, references: references, character: resolved.character, note: parameters.note,
                                     previousTakes: resolved.previous, config: parameters.config)
-            _ = try GenerationPlan(request)
+            plan = try GenerationPlan(request)
         } catch {
             await jobs.release(job)
             if let error = error as? PromptError { throw APIError.bad(error.description) }
             throw error
         }
+        await jobs.begin(job, estimate: GenerationEstimate(plan: plan))
         let takeID = UUID()
         let remember: @Sendable (Take) async -> Void = { [takes] take in
             await takes.insert(TakeCache.Entry(id: takeID, take: take, line: resolved.line, casting: resolved.casting, character: resolved.character,
                                                lineage: resolved.lineage + [takeID]))
         }
         switch parameters.delivery {
-        case .pcmStream:
-            let (pcm, generation) = stream(request, job: job, remember: remember)
-            var headers = Self.pcmHeaders(contentType: AudioFormat.pcm.contentType)
+        case .pcmStream, .events:
+            let framing = StreamFraming(parameters.delivery)!
+            let (body, generation) = stream(request, framing: framing, job: job, takeID: takeID, remember: remember)
+            var headers = framing.headers
             headers["X-Drama-Take-Id"] = takeID.uuidString
-            return APIResponse(status: .ok, headers: headers, body: .chunked(pcm), abandon: { generation.cancel() })
+            headers["X-Drama-Estimated-Seconds"] = String(format: "%.1f", GenerationEstimate(plan: plan).remainingSeconds(at: 0) ?? 0)
+            return APIResponse(status: .ok, headers: headers, body: .chunked(body), abandon: { generation.cancel() })
         case .file(let format):
             let start = ContinuousClock.now
             let result: SpeechResult?
@@ -264,27 +319,108 @@ public final class APIService: Sendable {
         return result
     }
 
-    private func stream(_ request: SpeechRequest, job: UUID, remember: @escaping @Sendable (Take) async -> Void) -> (AsyncThrowingStream<Data, Error>, Task<Void, Never>) {
-        let (stream, continuation) = AsyncThrowingStream<Data, Error>.makeStream()
-        let task = Task { [synthesizer, jobs] in
+    private func stream(_ request: SpeechRequest, framing: StreamFraming, job: UUID, takeID: UUID,
+                        remember: @escaping @Sendable (Take) async -> Void) -> (AsyncThrowingStream<Data, Error>, Task<Void, Never>) {
+        let (stream, out) = AsyncThrowingStream<Data, Error>.makeStream()
+        let task = Task {
             do {
-                for try await event in synthesizer.synthesize(request) {
-                    await jobs.advance(job, with: event)
-                    switch event {
-                    case .audio(let samples, _): continuation.yield(AudioEncoding.pcm16(samples))
-                    case .finished(let result): await remember(result.take)
-                    default: break
-                    }
+                var sentences = 0
+                if let result = try await forward(request, framing: framing, job: job, into: out, sentences: &sentences) {
+                    await remember(result.take)
+                    Self.send(framing.done(["take_id": takeID.uuidString, "frames": result.take.frameCount,
+                                            "seconds": Self.seconds(result.samples)]), to: out)
                 }
                 await jobs.release(job)
-                continuation.finish()
+                out.finish()
             } catch {
+                Self.send(framing.error(Self.describe(error)), to: out)
                 await jobs.release(job)
-                continuation.finish(throwing: error)
+                out.finish(throwing: error)
             }
         }
-        continuation.onTermination = { _ in task.cancel() }
+        out.onTermination = { _ in task.cancel() }
         return (stream, task)
+    }
+
+    /// Streams one request's audio, and a `sentence` event per chunk, into
+    /// `out`; `sentences` numbers the chunks across a live session.
+    private func forward(_ request: SpeechRequest, framing: StreamFraming, job: UUID, into out: AsyncThrowingStream<Data, Error>.Continuation,
+                         sentences: inout Int) async throws -> SpeechResult? {
+        var audio = StreamedAudio()
+        var texts: [Int: String] = [:]
+        var result: SpeechResult?
+        for try await event in synthesizer.synthesize(request) {
+            await jobs.advance(job, with: event)
+            Self.send(framing.audio(audio.newSamples(from: event)), to: out)
+            switch event {
+            case .chunkStarted(let index, _, let text):
+                texts[index] = text
+            case .audio(let samples, let index):
+                Self.send(framing.sentence(index: sentences, text: texts[index] ?? "", seconds: Self.seconds(samples)), to: out)
+                sentences += 1
+            case .finished(let finished):
+                result = finished
+            default:
+                break
+            }
+        }
+        return result
+    }
+
+    /// Speaks text as it arrives in `body`, one sentence at a time, on one
+    /// connection. Each sentence's take is the voice and history of the next.
+    private func live(_ parameters: SpeechParameters, body: AsyncThrowingStream<Data, Error>) async throws -> APIResponse {
+        let references = try await libraryReferences(for: parameters.casting) ?? []
+        guard await !engineBusyElsewhere(), let job = await jobs.claim() else { throw Self.busy }
+        let framing = StreamFraming(parameters.delivery)!
+        let (stream, out) = AsyncThrowingStream<Data, Error>.makeStream()
+        let task = Task {
+            var lines = LineSplitter()
+            var text = LiveText()
+            var spoken: [Take] = []
+            var takeIDs: [String] = []
+            var sentences = 0
+            var seconds = 0.0
+            func say(_ sentence: String) async throws {
+                let context = spoken.count <= 3 ? spoken : [spoken[0]] + spoken.suffix(2)
+                let request = SpeechRequest(text: sentence, references: references, character: parameters.character,
+                                            previousTakes: context, config: parameters.config)
+                await jobs.begin(job, estimate: GenerationEstimate(plan: try GenerationPlan(request)))
+                guard let result = try await forward(request, framing: framing, job: job, into: out, sentences: &sentences) else { return }
+                spoken.append(result.take)
+                seconds += Self.seconds(result.samples)
+                let id = UUID()
+                await takes.insert(TakeCache.Entry(id: id, take: result.take, line: sentence, casting: parameters.casting,
+                                                   character: parameters.character, lineage: [id]))
+                takeIDs.append(id.uuidString)
+            }
+            do {
+                for try await data in body {
+                    for line in lines.feed(data) {
+                        for sentence in text.append(line: line) { try await say(sentence) }
+                    }
+                }
+                for sentence in lines.finish().flatMap({ text.append(line: $0) }) + text.flush() { try await say(sentence) }
+                Self.send(framing.done(["sentences": sentences, "seconds": (seconds * 1000).rounded() / 1000, "take_ids": takeIDs]), to: out)
+                await jobs.release(job)
+                out.finish()
+            } catch {
+                let message = (error as? PromptError)?.description ?? (error as? APIError)?.message ?? Self.describe(error)
+                Self.send(framing.error(message), to: out)
+                await jobs.release(job)
+                out.finish(throwing: error)
+            }
+        }
+        out.onTermination = { _ in task.cancel() }
+        return APIResponse(status: .ok, headers: framing.headers, body: .chunked(stream), abandon: { task.cancel() })
+    }
+
+    private static func send(_ data: Data, to out: AsyncThrowingStream<Data, Error>.Continuation) {
+        if !data.isEmpty { out.yield(data) }
+    }
+
+    private static func seconds(_ samples: [Float]) -> Double {
+        (Double(samples.count) / Double(AudioEncoding.sampleRate) * 1000).rounded() / 1000
     }
 
     /// Library voices resolve before the job slot is claimed, so a typo gets
@@ -346,8 +482,9 @@ struct Health: Encodable {
     var busy: Bool
     var tuned: Bool?
     var version: String
+    var estimate: EstimateSnapshot?
 
-    enum CodingKeys: String, CodingKey { case status, model_loaded, engine, busy, tuned, version }
+    enum CodingKeys: String, CodingKey { case status, model_loaded, engine, busy, tuned, version, estimate }
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
@@ -357,6 +494,7 @@ struct Health: Encodable {
         try container.encode(busy, forKey: .busy)
         try container.encode(tuned, forKey: .tuned)
         try container.encode(version, forKey: .version)
+        try container.encodeIfPresent(estimate, forKey: .estimate)
     }
 }
 

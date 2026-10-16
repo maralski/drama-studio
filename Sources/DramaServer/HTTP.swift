@@ -66,14 +66,35 @@ public enum HTTPParse: Sendable, Equatable {
     case invalid(HTTPStatus, String)
 }
 
+/// How the bytes after the head make up the body.
+public enum BodyFraming: Sendable, Equatable {
+    case length(Int)
+    case chunked
+}
+
+/// A request head whose body has not been read; `bodyStart` is the offset of
+/// the first body byte in the buffer the head was parsed from.
+public struct ParsedHead: Sendable, Equatable {
+    public var request: HTTPRequest
+    public var framing: BodyFraming
+    public var bodyStart: Int
+    public var expectsContinue: Bool
+}
+
+public enum HTTPHeadParse: Sendable, Equatable {
+    case incomplete
+    case head(ParsedHead)
+    case invalid(HTTPStatus, String)
+}
+
 public enum HTTPRequestParser {
     public static let maxHeaderBytes = 64 * 1024
     public static let maxBodyBytes = 64 * 1024 * 1024
     private static let headerEnd = Data("\r\n\r\n".utf8)
 
-    public static func parse(_ buffer: Data) -> HTTPParse {
+    public static func parseHead(_ buffer: Data) -> HTTPHeadParse {
         guard let end = buffer.range(of: headerEnd) else {
-            return buffer.count > maxHeaderBytes ? .invalid(.headersTooLarge, "The request headers are larger than 64 KB.") : .incomplete(nil)
+            return buffer.count > maxHeaderBytes ? .invalid(.headersTooLarge, "The request headers are larger than 64 KB.") : .incomplete
         }
         let headBytes = buffer[buffer.startIndex..<end.lowerBound]
         guard headBytes.count <= maxHeaderBytes else { return .invalid(.headersTooLarge, "The request headers are larger than 64 KB.") }
@@ -92,27 +113,117 @@ public enum HTTPRequestParser {
             let value = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
             headers[name] = headers[name].map { $0 + ", " + value } ?? value
         }
-        if headers["transfer-encoding"] != nil {
-            return .invalid(.notImplemented, "Chunked request bodies are not supported; send Content-Length.")
-        }
-        let length: Int
-        if let declared = headers["content-length"] {
+        let framing: BodyFraming
+        if let encoding = headers["transfer-encoding"] {
+            guard encoding.lowercased() == "chunked" else {
+                return .invalid(.notImplemented, "Transfer-Encoding \(encoding) is not supported; send chunked or Content-Length.")
+            }
+            framing = .chunked
+        } else if let declared = headers["content-length"] {
             guard let value = Int(declared), value >= 0 else { return .invalid(.badRequest, "Content-Length is not a number.") }
-            length = value
+            framing = .length(value)
         } else {
-            length = 0
-        }
-        guard length <= maxBodyBytes else { return .invalid(.payloadTooLarge, "The request body is larger than 64 MB.") }
-        let bodyStart = end.upperBound
-        let total = bodyStart - buffer.startIndex + length
-        guard buffer.count >= total else {
-            return .incomplete(HTTPHead(totalLength: total, expectsContinue: headers["expect"]?.lowercased() == "100-continue"))
+            framing = .length(0)
         }
         guard let target = URLComponents(string: String(requestLine[1])) else { return .invalid(.badRequest, "Malformed request target.") }
         var query: [String: String] = [:]
         for item in target.queryItems ?? [] { query[item.name] = item.value ?? "" }
-        let body = Data(buffer[bodyStart..<(bodyStart + length)])
-        return .complete(HTTPRequest(method: String(requestLine[0]).uppercased(), path: target.path, query: query, headers: headers, body: body))
+        let request = HTTPRequest(method: String(requestLine[0]).uppercased(), path: target.path, query: query, headers: headers)
+        return .head(ParsedHead(request: request, framing: framing, bodyStart: end.upperBound - buffer.startIndex,
+                                expectsContinue: headers["expect"]?.lowercased() == "100-continue"))
+    }
+
+    /// A whole request with its body, for routes that read the body at once.
+    public static func parse(_ buffer: Data) -> HTTPParse {
+        let head: ParsedHead
+        switch parseHead(buffer) {
+        case .incomplete: return .incomplete(nil)
+        case .invalid(let status, let message): return .invalid(status, message)
+        case .head(let parsed): head = parsed
+        }
+        guard case .length(let length) = head.framing else {
+            return .invalid(.notImplemented, "Only /v1/audio/speech/live reads a chunked request body; send Content-Length.")
+        }
+        guard length <= maxBodyBytes else { return .invalid(.payloadTooLarge, "The request body is larger than 64 MB.") }
+        let total = head.bodyStart + length
+        guard buffer.count >= total else { return .incomplete(HTTPHead(totalLength: total, expectsContinue: head.expectsContinue)) }
+        var request = head.request
+        let bodyStart = buffer.startIndex + head.bodyStart
+        request.body = Data(buffer[bodyStart..<(bodyStart + length)])
+        return .complete(request)
+    }
+}
+
+/// Reads a request body as it arrives, framed by Content-Length or by
+/// chunked transfer encoding.
+public struct IncrementalBody: Sendable {
+    private enum State: Sendable {
+        case remaining(Int)
+        case chunkSize
+        case chunkData(Int)
+        case chunkDataEnd
+        case trailers
+        case done
+    }
+
+    private var state: State
+    private var buffer = Data()
+
+    public init(_ framing: BodyFraming) {
+        switch framing {
+        case .length(let length): state = length > 0 ? .remaining(length) : .done
+        case .chunked: state = .chunkSize
+        }
+    }
+
+    public var isFinished: Bool { if case .done = state { true } else { false } }
+
+    /// The payload bytes in `data`, in order. Bytes past the body's end are dropped.
+    public mutating func feed(_ data: Data) throws -> [Data] {
+        buffer.append(data)
+        var out: [Data] = []
+        while true {
+            switch state {
+            case .done:
+                buffer = Data()
+                return out
+            case .remaining(let left):
+                guard !buffer.isEmpty else { return out }
+                out.append(take(min(left, buffer.count)))
+                state = left == out.last!.count ? .done : .remaining(left - out.last!.count)
+            case .chunkSize:
+                guard let line = takeLine() else { return out }
+                let digits = line.split(separator: ";", maxSplits: 1).first.map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
+                guard let size = Int(digits, radix: 16), size >= 0 else { throw APIError(.badRequest, "Malformed chunk size line: \(line)") }
+                state = size == 0 ? .trailers : .chunkData(size)
+            case .chunkData(let left):
+                guard !buffer.isEmpty else { return out }
+                out.append(take(min(left, buffer.count)))
+                state = left == out.last!.count ? .chunkDataEnd : .chunkData(left - out.last!.count)
+            case .chunkDataEnd:
+                guard let line = takeLine() else { return out }
+                guard line.isEmpty else { throw APIError(.badRequest, "A chunk is longer than its size line says.") }
+                state = .chunkSize
+            case .trailers:
+                guard let line = takeLine() else { return out }
+                if line.isEmpty { state = .done }
+            }
+        }
+    }
+
+    private mutating func take(_ count: Int) -> Data {
+        let taken = Data(buffer.prefix(count))
+        buffer = Data(buffer.dropFirst(count))
+        return taken
+    }
+
+    private mutating func takeLine() -> String? {
+        guard let newline = buffer.firstIndex(of: 10) else { return nil }
+        var line = buffer[buffer.startIndex..<newline]
+        if line.last == 13 { line = line.dropLast() }
+        let text = String(decoding: line, as: UTF8.self)
+        buffer = Data(buffer[(newline + 1)...])
+        return text
     }
 }
 

@@ -16,6 +16,10 @@ public enum AudioFormat: String, Sendable, Equatable, CaseIterable {
 public enum Delivery: Sendable, Equatable {
     case file(AudioFormat)
     case pcmStream
+    /// Server-Sent Events: `audio`, `sentence`, `done`, and `error`.
+    case events
+
+    public var streams: Bool { if case .file = self { false } else { true } }
 }
 
 public enum AudioSource: Sendable, Equatable {
@@ -58,6 +62,7 @@ public struct SpeechParameters: Sendable, Equatable {
     public var config: GenerationConfig {
         var config = GenerationConfig.make(expressiveness: expressiveness, quickPreview: quickPreview)
         config.seed = seed
+        if delivery.streams { config.streaming = .defaultLowLatency }
         return config
     }
 }
@@ -76,6 +81,8 @@ public enum APIRequest: Sendable, Equatable {
     case addVoice(NewVoice)
     case deleteVoice(VoiceKey)
     case speech(SpeechParameters)
+    /// Text arrives in the request body while the response streams audio.
+    case live(SpeechParameters)
     case take(String)
 }
 
@@ -160,7 +167,24 @@ extension APIRequest {
         Route(method: "POST", pattern: ["v1", "audio", "speech"]) { _, request in .speech(try speech(request.body, textField: "input")) },
         Route(method: "POST", pattern: ["v1", "tts"]) { _, request in .speech(try speech(request.body, textField: "text")) },
         Route(method: "GET", pattern: ["v1", "takes", "{id}"]) { captures, _ in .take(captures[0]) },
+        Route(method: "GET", pattern: ["v1", "audio", "speech", "stream"]) { _, request in
+            .speech(try speech(query: request.query, requireText: true, delivery: .events))
+        },
+        Route(method: "POST", pattern: liveRoute) { _, request in
+            .live(try speech(query: request.query, requireText: false, delivery: wantsEvents(request) ? .events : .pcmStream))
+        },
     ]
+
+    private static let liveRoute = ["v1", "audio", "speech", "live"]
+
+    /// The routes whose body the server hands over as it arrives instead of reading it whole.
+    public static func streamsBody(_ request: HTTPRequest) -> Bool {
+        request.method == "POST" && request.path.split(separator: "/").map(String.init) == liveRoute
+    }
+
+    private static func wantsEvents(_ request: HTTPRequest) -> Bool {
+        request.header("accept")?.lowercased().contains("text/event-stream") == true
+    }
 
     public static func parse(_ request: HTTPRequest) -> Result<APIRequest, APIError> {
         let segments = request.path.split(separator: "/").map(String.init)
@@ -240,11 +264,35 @@ extension APIRequest {
     }
 
     static func speech(_ body: Data, textField: String) throws -> SpeechParameters {
-        let decoded = try decode(SpeechBody.self, from: body)
+        try speech(try decode(SpeechBody.self, from: body), textField: textField, requireText: true)
+    }
+
+    /// The speech fields a URL can carry, for EventSource-style GETs and the live route.
+    static func speech(query: [String: String], requireText: Bool, delivery: Delivery) throws -> SpeechParameters {
+        func number<T: LosslessStringConvertible>(_ key: String) throws -> T? {
+            guard let value = query[key] else { return nil }
+            guard let number = T(value) else { throw APIError.bad("\(key) must be a number.") }
+            return number
+        }
+        var body = SpeechBody()
+        body.input = query["input"]
+        body.voice = query["voice"]
+        body.expressiveness = try number("expressiveness")
+        body.seed = try number("seed")
+        body.quick_preview = query["quick_preview"].map { ["1", "true", "yes"].contains($0.lowercased()) }
+        if query["character_name"] != nil || query["character_description"] != nil {
+            body.character = CharacterBody(name: query["character_name"], description: query["character_description"], scene: query["character_scene"])
+        }
+        var parameters = try speech(body, textField: "input", requireText: requireText)
+        parameters.delivery = delivery
+        return parameters
+    }
+
+    private static func speech(_ decoded: SpeechBody, textField: String, requireText: Bool) throws -> SpeechParameters {
         let previousTakes = try takes(decoded.previous_takes ?? [])
         let text = (decoded.input ?? decoded.text)?.trimmingCharacters(in: .whitespacesAndNewlines)
         let continuesTake = previousTakes.contains { if case .cached = $0 { true } else { false } }
-        guard text?.isEmpty == false || (text == nil && continuesTake) else {
+        guard !requireText || text?.isEmpty == false || (text == nil && continuesTake) else {
             throw APIError.bad("\(textField) is required: the text to speak. Leave it out only to retake the line of a take_id in previous_takes.")
         }
         let character = try character(decoded.character)

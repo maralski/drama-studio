@@ -35,4 +35,38 @@ final class SynthesizerIntegrationTests: XCTestCase {
         XCTAssertGreaterThan(Double(r.frames.count) * 2048 / 44100, 2.0)
         print("integration: \(r.frames.count) frames, \(String(format: "%.1f", Double(r.samples.count) / 44100))s audio, rms \(rms), \(String(format: "%.1f", r.timings.framesPerSecond)) frames/s, codec \(String(format: "%.2f", r.timings.codecSeconds))s")
     }
+
+    /// Low latency: each chunk's partials, in order, are exactly its audio, and
+    /// a chunk's audio is complete before the next chunk's first partial.
+    func testLowLatencyStreamsEachChunkInOrder() async throws {
+        guard let loc = ModelLocation.huggingFaceCache(), loc.isComplete else { throw XCTSkip("drama-3 not downloaded") }
+        guard DramaCodec.modelsExist() else { throw XCTSkip("codec models not converted") }
+        let tuning = FileManager.default.temporaryDirectory.appendingPathComponent("drama-tuning-\(UUID().uuidString)")
+        addTeardownBlock { try? FileManager.default.removeItem(at: tuning) }
+        let synth = DramaSynthesizer(location: loc, codecDirectory: DramaCodec.defaultDirectory, tuningDirectory: tuning)
+        var config = GenerationConfig()
+        config.seed = 5
+        config.streaming = .defaultLowLatency
+        let request = SpeechRequest(text: "The storm had passed by morning, leaving the harbor strangely quiet. Old Tom walked the pier, counting the boats that had survived the night.", config: config)
+        var partials: [Int: [Float]] = [:]
+        var finals: [Int: [Float]] = [:]
+        var order: [String] = []
+        var result: SpeechResult?
+        for try await event in synth.synthesize(request) {
+            switch event {
+            case .partialAudio(let samples, let chunk, let frames):
+                XCTAssertEqual(frames.lowerBound, (partials[chunk]?.count ?? 0) / ModelConstants.samplesPerFrame, "chunk \(chunk): contiguous")
+                partials[chunk, default: []] += samples
+                if order.last != "partial \(chunk)" { order.append("partial \(chunk)") }
+            case .audio(let samples, let chunk):
+                finals[chunk] = samples
+                order.append("audio \(chunk)")
+            case .finished(let r): result = r
+            default: break
+            }
+        }
+        XCTAssertEqual(order, ["partial 0", "audio 0", "partial 1", "audio 1"])
+        XCTAssertEqual(partials, finals)
+        XCTAssertEqual(try XCTUnwrap(result).samples, finals[0]! + finals[1]!)
+    }
 }

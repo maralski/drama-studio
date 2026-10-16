@@ -50,6 +50,8 @@ public struct GenerationConfig: Sendable, Codable, Equatable {
     /// at most 0.65. 0 disables retries.
     public var minSpokenRatio: Double = 0.6
     public var maxRetries: Int = 2
+    /// When decoded audio leaves the engine.
+    public var streaming: StreamingMode = .sentence
     public init() {}
 
     public enum Chunking: String, Sendable, Codable, CaseIterable {
@@ -75,6 +77,22 @@ public extension GenerationConfig {
             config.frameCap = .fromText(margin: 1.2, floorSeconds: 1.0)
         }
         return config
+    }
+}
+
+public enum StreamingMode: Sendable, Codable, Equatable {
+    /// Each chunk's audio arrives once the chunk is generated.
+    case sentence
+    /// Audio arrives as `.partialAudio` every `stepFrames` generated frames,
+    /// decoded on the CPU while the GPU generates. A chunk is never generated
+    /// again, because its first audio may already be playing.
+    case lowLatency(stepFrames: Int)
+
+    /// About 3 s of audio.
+    public static let defaultLowLatency = StreamingMode.lowLatency(stepFrames: 64)
+
+    public var stepFrames: Int? {
+        if case .lowLatency(let step) = self { max(1, step) } else { nil }
     }
 }
 
@@ -203,6 +221,10 @@ public enum SpeechEvent: Sendable {
     case frame(index: Int, maxFrames: Int)
     /// The chunk spoke too little of its text and is being generated again.
     case retry(chunkIndex: Int, attempt: Int)
+    /// Decoded audio for frames `frameRange` of a chunk still generating,
+    /// under `.lowLatency`. A chunk's partials, in order, join into exactly the
+    /// samples of its `.audio`.
+    case partialAudio(samples: [Float], chunkIndex: Int, frameRange: Range<Int>)
     /// Decoded audio for one finished chunk, 44.1 kHz mono.
     case audio(samples: [Float], chunkIndex: Int)
     case finished(SpeechResult)

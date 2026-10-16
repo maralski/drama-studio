@@ -93,6 +93,30 @@ public final class APIServer: @unchecked Sendable {
         var bytes = Data()
         var head: HTTPHead?
         var sentContinue = false
+        var body: StreamingBody?
+    }
+
+    /// A request body the service reads while it answers.
+    private final class StreamingBody {
+        var framing: IncrementalBody
+        let continuation: AsyncThrowingStream<Data, Error>.Continuation
+        let work: Task<Void, Never>
+
+        init(framing: IncrementalBody, continuation: AsyncThrowingStream<Data, Error>.Continuation, work: Task<Void, Never>) {
+            self.framing = framing
+            self.continuation = continuation
+            self.work = work
+        }
+
+        func feed(_ data: Data) {
+            guard !framing.isFinished else { return }
+            do {
+                for payload in try framing.feed(data) { continuation.yield(payload) }
+                if framing.isFinished { continuation.finish() }
+            } catch {
+                continuation.finish(throwing: error)
+            }
+        }
     }
 
     private func accept(_ connection: NWConnection) {
@@ -103,7 +127,19 @@ public final class APIServer: @unchecked Sendable {
     private func receive(on connection: NWConnection, into pending: Pending) {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 1 << 20) { [weak self] data, _, isComplete, error in
             guard let self else { return connection.cancel() }
+            if let body = pending.body {
+                if let data { body.feed(data) }
+                guard error == nil, !isComplete else {
+                    // A client may half-close to end its text; after the body's end, a close is a hang-up.
+                    if body.framing.isFinished { body.work.cancel() } else { body.continuation.finish() }
+                    return
+                }
+                return self.receive(on: connection, into: pending)
+            }
             if let data { pending.bytes.append(data) }
+            if pending.head == nil, case .head(let head) = HTTPRequestParser.parseHead(pending.bytes), APIRequest.streamsBody(head.request) {
+                return self.stream(head, on: connection, into: pending, ended: isComplete || error != nil)
+            }
             if let head = pending.head, pending.bytes.count < head.totalLength {
                 guard error == nil, !isComplete else { return connection.cancel() }
                 return self.receive(on: connection, into: pending)
@@ -124,6 +160,21 @@ public final class APIServer: @unchecked Sendable {
                 }
                 self.receive(on: connection, into: pending)
             }
+        }
+    }
+
+    private func stream(_ head: ParsedHead, on connection: NWConnection, into pending: Pending, ended: Bool) {
+        if head.expectsContinue { connection.send(content: Data("HTTP/1.1 100 Continue\r\n\r\n".utf8), completion: .idempotent) }
+        let (stream, continuation) = AsyncThrowingStream<Data, Error>.makeStream()
+        let work = Task { await self.send(await self.service.respond(to: head.request, body: stream), on: connection) }
+        let body = StreamingBody(framing: IncrementalBody(head.framing), continuation: continuation, work: work)
+        pending.body = body
+        body.feed(Data(pending.bytes.dropFirst(head.bodyStart)))
+        pending.bytes = Data()
+        if ended {
+            continuation.finish()
+        } else {
+            receive(on: connection, into: pending)
         }
     }
 

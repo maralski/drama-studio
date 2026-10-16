@@ -101,10 +101,12 @@ The speech request follows the
 
 | Route | Does |
 | --- | --- |
-| `GET /v1/health` | `{status, model_loaded, engine: "metal" or "mock", busy, tuned, version}`. `tuned` is `null` until the model loads. |
+| `GET /v1/health` | `{status, model_loaded, engine: "metal" or "mock", busy, tuned, version}`. `tuned` is `null` until the model loads. While a generation runs it adds `estimate: {elapsed_seconds, remaining_seconds, frames_done, frames_expected}`; `remaining_seconds` is `null` once the last sentence is in its silence tail or a retry runs. |
 | `GET /v1/models` | The one model, `fishaudio/drama-3`, with its snapshot id. |
 | `POST /v1/audio/speech` | Speaks `input`. Returns the audio file, or a PCM stream. |
 | `POST /v1/tts` | The same, with the text in `text`. |
+| `GET /v1/audio/speech/stream` | Speaks the `input` query parameter as Server-Sent Events. See [Streaming](#streaming-framing). |
+| `POST /v1/audio/speech/live` | Speaks text while the client is still sending it, and streams the audio back on the same connection. See [Streaming](#streaming-framing). |
 | `GET /v1/voices` | The voice library: id, name, transcript, seconds, source file. |
 | `POST /v1/voices` | Clones a voice: JSON `{name, transcript, audio_base64 or audio_path}`, or multipart with a `file` part plus `name` and `transcript` fields. |
 | `DELETE /v1/voices/{id}` | Deletes a voice. |
@@ -119,7 +121,7 @@ The speech body takes these fields:
 | `references` | Clips to clone on the fly: `[{audio_path or audio_base64, text}]`. |
 | `speaker_voices` | Library voices per speaker for a multi-speaker script: `{"0": "Narrator", "1": "<id>"}`, with no gaps from speaker 0. |
 | `response_format` | `wav` (default, 16-bit), `pcm` (raw 16-bit little-endian), or `m4a`. |
-| `stream` | `true` streams PCM as each chunk finishes. |
+| `stream` | `true` streams PCM about every 3 s of generated audio, while each sentence is still generating. |
 | `expressiveness` | 0 to 1, default 0.5: the app's Expressiveness slider. |
 | `quick_preview` | `true` skips retries and tightens the length cap. |
 | `seed` | A fixed sampler seed, for repeatable takes. |
@@ -156,16 +158,89 @@ curl -sS -H "$AUTH" localhost:8780/v1/audio/speech \
   -d "{\"note\": \"softer and warmer\", \"previous_takes\": [{\"take_id\": \"$TAKE\"}]}" -o captain-retake.wav
 ```
 
-Streaming sends `Transfer-Encoding: chunked` with one HTTP chunk per generated
-chunk. The audio is 16-bit little-endian mono at 44.1 kHz, as the
-`X-Drama-Format: pcm_s16le_mono` and `X-Drama-Sample-Rate: 44100` headers say.
-Pipe it into a player to hear the first sentence while the rest generates:
+#### Streaming framing
+
+All three streaming routes run the engine in low-latency mode: the CPU decodes
+the newest 64 frames (about 3 s of audio) while the GPU generates the next
+ones, and the audio leaves as soon as it is decoded. A sentence that comes out
+too short is not generated again in this mode, because the client may already
+be playing it. The audio is always 16-bit little-endian mono at 44.1 kHz, as
+the `X-Drama-Format: pcm_s16le_mono` and `X-Drama-Sample-Rate: 44100` headers
+say. `stream: true` and the event stream also send `X-Drama-Take-Id` and
+`X-Drama-Estimated-Seconds`, the time the generation is expected to take,
+before the first audio.
+
+**PCM.** `stream: true` on `POST /v1/audio/speech` answers with
+`Transfer-Encoding: chunked` and raw PCM in the HTTP chunks. A chunk boundary
+means nothing; concatenate the chunks. Every chunk holds a whole number of
+2048-sample frames. Pipe it into a player:
 
 ```bash
 curl -sSN -H "$AUTH" localhost:8780/v1/audio/speech \
   -d '{"input": "A long script, read as it is generated.", "stream": true, "response_format": "pcm"}' |
   ffplay -f s16le -ar 44100 -ch_layout mono -nodisp -autoexit -
 ```
+
+**Server-Sent Events.** `GET /v1/audio/speech/stream` takes its fields as query
+parameters: `input` (required), `voice`, `expressiveness`, `quick_preview`,
+`seed`, and `character_name`, `character_description` and `character_scene`
+for a designed voice. It answers with `Content-Type: text/event-stream` and
+these events:
+
+| Event | `data` |
+| --- | --- |
+| `audio` | Base64 of the next PCM bytes, a whole number of frames. |
+| `sentence` | `{"index", "text", "seconds"}` after the last audio of each sentence. |
+| `done` | `{"take_id", "frames", "seconds"}` once the take is complete. |
+| `error` | `{"message"}`, after which the stream ends. |
+
+The route still needs the bearer token, and the server sends no CORS headers,
+so a browser's `EventSource`, which cannot send an `Authorization` header, does
+not work with the token on. Read the events with `fetch` and a stream reader
+from a page the server already trusts, or with any HTTP client.
+
+```bash
+curl -sSN -H "$AUTH" "localhost:8780/v1/audio/speech/stream?input=Hello%20there.%20Good%20to%20see%20you."
+```
+
+**Live text input.** `POST /v1/audio/speech/live` is for an agent that writes
+text a piece at a time. It takes `voice`, `expressiveness`, `quick_preview`,
+`seed` and the `character_*` fields as query parameters, and the text as the
+request body:
+
+- Send the body with `Transfer-Encoding: chunked`, or with a `Content-Length`
+  that covers everything you will send. The server reads it as it arrives.
+- The body is UTF-8 text in lines ended by `\n` (or `\r\n`). The server acts
+  on a line once its newline arrives.
+- The server joins the lines with spaces and speaks each sentence once a
+  sentence end (`.`, `!`, `?`, `;`, `…`, or a CJK one, optionally followed by a
+  closing quote or bracket) arrives. Sentences are cut with the same splitter
+  as `input`, so `<|speaker:N|>` tags and cues work.
+- An empty line speaks the text held back so far, finished or not. The end of
+  the body does the same, and a client may half-close its side of the
+  connection to end the body.
+- Each sentence is a take, and the session's takes carry the voice and the
+  history: the first take is the voice of every later sentence when no
+  `voice` is given, and the last two are context.
+- The response is chunked PCM as for `stream: true`. Send
+  `Accept: text/event-stream` to get the events above instead, with `done`
+  carrying `{"sentences", "seconds", "take_ids"}`. The response ends once the
+  body has ended and its last sentence is spoken.
+- The session holds the engine from the request to the end of the response,
+  so other requests get `429` meanwhile.
+
+`tools/live_speech.py` sends each line of its standard input as one chunk as
+soon as it reads it, and writes the PCM to standard output:
+
+```bash
+some-agent | tools/live_speech.py --voice Narrator |
+  ffplay -f s16le -ar 44100 -ch_layout mono -nodisp -
+tools/live_speech.py --events < script.txt      # prints each event with its arrival time
+```
+
+`curl -T -` also speaks a piped body, but it holds the piped lines back before
+sending them: on the mock engine its first audio came 1.7 s later than the
+same feed through `tools/live_speech.py`.
 
 Manage voices:
 
@@ -197,6 +272,10 @@ repository's `dist/DramaStudio.app`. `DRAMA_API_URL` overrides
 | `add_voice` | Clones `audio_path` with its `transcript` under `name`. |
 | `delete_voice` | Deletes a voice by `id`. |
 | `studio_status` | Health, the model snapshot, and the API address. |
+
+There is no MCP tool for streaming or live text input. An MCP tool call is one
+request and one result, so it cannot carry audio while text is still being
+written; an agent that wants that calls `POST /v1/audio/speech/live` itself.
 
 Register it with Claude Code:
 
@@ -402,6 +481,98 @@ state, where the previous engine was off by 3.9e-3 and failed the suite's
 thresholds. That holds for this one prompt only; the faithfulness gate above
 runs on a single prompt and would not catch the same kind of divergence on
 another.
+
+## Streaming
+
+`GenerationConfig.streaming` decides when decoded audio leaves the engine.
+`.sentence`, the CLI's mode, sends each chunk's audio once the chunk is
+generated. `.lowLatency(stepFrames: 64)`, used by `stream: true`, the event
+stream, the live route, and app playback, also sends a partial every 64
+generated frames (about 3 s of audio). The CPU decodes those frames while the
+GPU generates the next ones. A low-latency chunk is never generated again,
+because its first audio may already be playing; the help and the API section
+say so.
+
+The decode reuses the windows a full decode of the chunk would run
+(`DecodeWindow.covering`), so a chunk's partials join into exactly its audio.
+On the Core ML codec, 600 frames decoded in 64-frame steps differ from one
+full decode by a maximum absolute error of 0
+(`DRAMA_CODEC_SEAM=1 swift test --filter testSeamOnTheRealCodec`); decoding
+each step with a bare 256-frame left context instead differs by 0.027. The
+silence probe reads the same decode, so each window is decoded once. All codec
+work of a run goes through one serial queue: a low-latency chunk's last frames
+decode while the next chunk prefills and generates.
+
+Measured on the M3 Max (16 cores, 12 performance), with the same two-sentence
+line, 9.4 s of audio in 202 frames, seed 7, in every run. The machine was not
+idle: other users' jobs kept the load average at 5 to 7 (two Python processes
+at a full core each), so every comparison interleaves its sides, and the raw
+rows are in `.audit/streaming.tsv`.
+
+Time to the first audio byte of `stream: true` through `curl -N`
+(`tools/streaming_ttfb.py`, 5 runs per side, alternating). Before is the
+engine at `1365b5e`, which decoded every chunk after the whole request was
+generated. Both sides returned the same 827,392 bytes, with HTTP 200 and curl
+exit 0 every time. Server CPU comes from `ps -o time=` before and after each
+request:
+
+| | before | after (low latency) |
+| --- | --- | --- |
+| first audio byte | 12.95 s (12.61 to 13.20) | 4.49 s (4.48 to 4.60) |
+| last byte | 14.48 s (14.14 to 14.72) | 8.57 s (8.49 to 8.68) |
+| server CPU per request | 39.0 s | 22.6 s |
+| average cores in use | 2.69 | 2.65 |
+| peak cores over any 0.5 s | 4.3 (3.8 to 4.7) | 4.0 (3.8 to 4.5) |
+
+The first byte now comes after the prefill (0.7 s), 64 frames (1.8 s), and
+one decode of a 512-frame window (about 2 s). The request also uses less CPU:
+before, the silence probe decoded the whole chunk so far every 16 frames
+whenever no probe was running, and every chunk was decoded once more at the
+end; now each window is decoded once.
+
+Generation speed with the decode on and off, in one process
+(`DRAMA_STREAMING_BENCH=1 swift test -c release -Xswiftc -enable-testing
+--filter StreamingBenchTests`, 5 runs per mode, modes interleaved, medians
+with ranges). "Decode after" turns the silence stop off, so the codec is idle
+while frames land and runs once per chunk at its end:
+
+| mode | frames/s while frames land | end-to-end frames/s | first audio | wall | CPU cores |
+| --- | --- | --- | --- | --- | --- |
+| decode after | 34.9 (34.7 to 37.5) | 19.1 | 5.07 s | 10.58 s | 1.20 |
+| sentence | 33.0 (32.2 to 33.7) | 15.2 | 6.51 s | 13.30 s | 2.03 |
+| low latency, 64 frames | 32.7 (32.4 to 33.6) | 18.9 | 6.77 s | 10.68 s | 2.11 |
+| low latency, 32 frames | 32.9 (32.8 to 33.5) | 19.2 | 6.03 s | 10.50 s | 2.17 |
+
+- The CPU decode slows generation by about 6 percent while it overlaps the
+  GPU (34.9 to 32.7 frames/s). Low latency still finishes with "decode after"
+  and 2.6 s ahead of sentence mode, because the GPU never waits for the codec.
+- What limits the first audio is the decode, not the GPU. One window takes
+  1.6 s alone ("decode after" spends 3.35 s on two) and 4.6 s while the GPU
+  generates: in the event trace of the first low-latency run, the window was
+  queued at 2.50 s and its audio arrived at 7.09 s. The cause of the slowdown
+  was not isolated; contention for memory bandwidth or for the chip's power
+  budget is a guess. The test runner also sees slower decodes than `drama
+  serve` (first audio 6.77 s here against 4.49 s through the server), and
+  that cause was not isolated either.
+- For this short first sentence (4.7 s of audio), low latency is no faster
+  than sentence mode to the first audio. It pays off on a long first
+  sentence: on one 12.5 s sentence (3 runs), low latency started at 6.19 s
+  (6.09 to 6.94) against 23.5 s for sentence mode. Part of that gap is the
+  retry: sentence mode judged the first attempt too short and generated the
+  sentence again, while low latency kept that attempt (336 to 369 frames).
+- 32-frame steps start 0.7 s sooner but stutter: in every trace the first
+  1.5 s of audio ran out 1.1 to 1.5 s before the next partial arrived. With
+  64-frame steps every trace played without a gap, so 64 stays the default.
+
+The app shows the time left beside the elapsed time while it generates
+(`GenerationEstimate`): the expected frames of the unfinished chunks (text
+length at 16 characters per second, times 21.53 frames per second) less the
+frames of the current chunk, over a 3 s moving average of frames per second
+that starts at 35, plus one prefill per chunk not yet prefilled (0.7 s until
+the first is measured). It reads "about 12 s left", rounded to 5 s above 20 s,
+and "finishing…" or "retrying" once the frames stop predicting the end. The
+same numbers are `X-Drama-Estimated-Seconds` and the `estimate` field of
+`/v1/health`.
 
 ## Kernel autotune
 

@@ -7,6 +7,7 @@ struct SettingsView: View {
     @AppStorage(ModelSetup.customDirectoryKey) private var modelPath = ""
     @AppStorage(APIServerController.startsWithAppKey) private var startsWithApp = true
     @AppStorage(APIServerController.portKey) private var port = Int(APIService.defaultPort)
+    @AppStorage(SessionModel.streamsAudioKey) private var streamsAudio = true
     @State private var status: ModelSetup.Status = .missing
 
     var body: some View {
@@ -36,6 +37,9 @@ struct SettingsView: View {
                     .padding(8)
                     .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
                 }
+            }
+            Section("Playback") {
+                Toggle(isOn: $streamsAudio) { HelpLabel("Stream audio while generating", help: .streaming) }
             }
             APIServerSection(server: server, startsWithApp: $startsWithApp, port: $port)
             Section("About") {
