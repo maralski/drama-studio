@@ -45,9 +45,8 @@ enum FilePanels {
 
     static func exportSlidePackage(_ model: SessionModel) {
         guard model.canExportSlidePackage else { return }
-        let format = lastExportFormat
-        guard let folder = save(name: "\(model.title) Slide Narration", type: .folder, message: "A folder with one \(format.title) file per slide, named by slide number, and a README on adding them in PowerPoint") else { return }
-        model.exportSlidePackage(to: folder, as: format)
+        guard let folder = save(name: "\(model.title) Slide Narration", type: .folder, message: "A folder with one WAV file per slide, named by slide number, and a README on adding them in PowerPoint") else { return }
+        model.exportSlidePackage(to: folder, as: .wav16)
     }
 
     static func saveProject(_ model: SessionModel) {
