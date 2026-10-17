@@ -1,12 +1,12 @@
 """Reliability study: does every sentence come out as speech, every time?
 
-One row per (condition, mode, seed): the drama CLI generates frames, the
+One row per (condition, seed): the drama CLI generates frames, the
 reference PyTorch codec decodes them, Whisper small.en transcribes, and the row
 records word error rate, whether eos was reached, how many retries ran, the
 spoken and silent durations, and a verdict. Rows append to a JSONL file so
 several workers can run disjoint slices in parallel and the summary joins them.
 
-  eval/.venv/bin/python -u eval/reliability.py --slice eval/reliability/slices/a.json --mode full --seeds 1 2 3 4 5
+  eval/.venv/bin/python -u eval/reliability.py --slice eval/reliability/slices/a.json --seeds 1 2 3 4 5
   eval/.venv/bin/python eval/reliability.py --summary eval/out/reliability
 """
 import argparse, json, re, subprocess, sys, time
@@ -29,10 +29,10 @@ def spoken_text(text):
     return re.sub(r"\s+", " ", text).strip()
 
 
-def run_one(drama, item, mode, seed, out_dir, codec, asr):
-    name = f"{item['id']}__{mode}__s{seed}"
+def run_one(drama, item, seed, out_dir, codec, asr):
+    name = f"{item['id']}__s{seed}"
     frames_path = out_dir / f"{name}.npy"
-    cmd = [str(drama), "generate", "--precision-mode", mode, "--seed", str(seed), "--text", item["text"],
+    cmd = [str(drama), "generate", "--seed", str(seed), "--text", item["text"],
            "--chunking", item.get("chunking", "sentences"), "--out", str(frames_path)]
     for flag, value in item.get("flags", {}).items():
         cmd += [f"--{flag}"] + ([str(value)] if value != "" else [])
@@ -41,7 +41,7 @@ def run_one(drama, item, mode, seed, out_dir, codec, asr):
     t0 = time.time()
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=900)
     wall = time.time() - t0
-    row = {"name": name, "id": item["id"], "category": item.get("category", ""), "mode": mode, "seed": seed, "wall_seconds": round(wall, 2)}
+    row = {"name": name, "id": item["id"], "category": item.get("category", ""), "seed": seed, "wall_seconds": round(wall, 2)}
     if proc.returncode != 0 or not frames_path.exists():
         row.update(verdict="error", error=proc.stderr[-400:])
         return row
@@ -81,13 +81,13 @@ def summary(out_dir):
     rows = [json.loads(line) for p in Path(out_dir).glob("*.jsonl") for line in p.read_text().splitlines() if line.strip()]
     if not rows:
         print("no rows"); return
-    modes = sorted({r["mode"] for r in rows})
+    modes = sorted({r.get("mode", "full") for r in rows})
     print(f"{len(rows)} rows, modes {modes}\n")
     print(f"{'category':14s} {'mode':9s} {'n':>3s} {'ok':>5s} {'dropped':>7s} {'garbled':>7s} {'runaway':>7s} {'error':>5s} {'meanWER':>8s} {'retries':>7s}")
     cats = sorted({r["category"] for r in rows})
     for cat in cats + ["ALL"]:
         for mode in modes:
-            sel = [r for r in rows if r["mode"] == mode and (cat == "ALL" or r["category"] == cat)]
+            sel = [r for r in rows if r.get("mode", "full") == mode and (cat == "ALL" or r["category"] == cat)]
             if not sel: continue
             v = [r.get("verdict") for r in sel]
             wers = [r["wer"] for r in sel if "wer" in r]
@@ -95,7 +95,7 @@ def summary(out_dir):
     if len(modes) == 2:
         a, b = modes
         by = {}
-        for r in rows: by.setdefault((r["id"], r["seed"]), {})[r["mode"]] = r
+        for r in rows: by.setdefault((r["id"], r["seed"]), {})[r.get("mode", "full")] = r
         pairs = [(v[a], v[b]) for v in by.values() if a in v and b in v and "wer" in v[a] and "wer" in v[b]]
         if pairs:
             d = np.array([pb["wer"] - pa["wer"] for pa, pb in pairs])
@@ -112,7 +112,6 @@ def summary(out_dir):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--slice", type=Path)
-    ap.add_argument("--mode", default="full")
     ap.add_argument("--seeds", type=int, nargs="+", default=[1, 2, 3, 4, 5])
     ap.add_argument("--out", type=Path, default=HERE / "out/reliability")
     ap.add_argument("--drama", type=Path, default=ROOT / ".build/release/drama")
@@ -126,13 +125,13 @@ def main():
     from decode_codes import load_codec
     asr = whisper.load_model("small.en")
     codec = load_codec(next(Path.home().glob(".cache/huggingface/hub/models--fishaudio--drama-3/snapshots/*/")) / "codec.pth")
-    log = a.out / f"{a.slice.stem}__{a.mode}.jsonl"
+    log = a.out / f"{a.slice.stem}.jsonl"
     done = {json.loads(l)["name"] for l in log.read_text().splitlines()} if log.exists() else set()
     with log.open("a") as f:
         for item in items:
             for seed in a.seeds:
-                if f"{item['id']}__{a.mode}__s{seed}" in done: continue
-                row = run_one(a.drama, item, a.mode, seed, a.out, codec, asr)
+                if f"{item['id']}__s{seed}" in done: continue
+                row = run_one(a.drama, item, seed, a.out, codec, asr)
                 f.write(json.dumps(row) + "\n"); f.flush()
                 print(f"{row['name']:40s} {row.get('verdict'):8s} wer={row.get('wer', 'n/a')} retries={row.get('retries', 0)} {str(row.get('hyp', ''))[:60]}", flush=True)
 
