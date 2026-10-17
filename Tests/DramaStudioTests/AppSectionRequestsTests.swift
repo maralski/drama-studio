@@ -109,4 +109,13 @@ final class AppSectionRequestsTests: XCTestCase {
         document.segments[4].text = ""
         XCTAssertEqual(document.flattened(), "One.\n\nTwo.\n\nThree.", "one speaker left: no tags")
     }
+
+    func testSectionNarrationAlwaysUsesSentenceModeSoRetriesStay() {
+        let document = NarrationDocument(title: "t", source: .text, segments: [.init(index: 0, label: "Slide 1", text: "Hello there.")])
+        var config = GenerationConfig()
+        config.streaming = .lowLatency(stepFrames: 64)
+        let narrator = SectionRequests.casting(forSpeaker: 0, assignments: [:], library: [])
+        let request = SectionRequests.request(for: document.segments[0], in: document, casting: narrator, takes: [:], config: config)
+        guard case .sentence = request.config.streaming else { return XCTFail("document narration must keep the retrying sentence mode") }
+    }
 }

@@ -129,7 +129,10 @@ sentence under 24 bytes to the next), and with "Stream audio while
 generating" on, a chunk that comes out short is kept rather than generated
 again. With the setting off, Narrate This Section gave slide 1 both sentences
 and slide 3 "How it works Import". That is one run per slide, not a
-measurement; turn streaming off in Settings for a narration you export.
+measurement. Because narration is exported, document sections now always
+generate in the retrying sentence mode whatever the streaming setting says;
+playback of a section starts when the section is done rather than three
+seconds in.
 
 ## Agents and programs
 

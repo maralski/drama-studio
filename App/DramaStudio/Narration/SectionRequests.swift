@@ -44,7 +44,11 @@ enum SectionRequests {
             previous.append(anchor)
         }
         if let latest = earlier.last, !previous.contains(latest) { previous.append(latest) }
+        // Narration is exported, so a dropped sentence costs more than a later start:
+        // sentence mode keeps the short-chunk retry that low-latency streaming gives up.
+        var narration = config
+        narration.streaming = .sentence
         return SpeechRequest(text: spokenText(of: segment), references: casting.references, character: casting.character,
-                             previousTakes: previous, config: config)
+                             previousTakes: previous, config: narration)
     }
 }
