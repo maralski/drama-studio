@@ -121,17 +121,6 @@ private struct AdvancedSection: View {
                     .labelsHidden()
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    Picker(selection: $model.modelPrecision) {
-                        ForEach(ModelSetup.offeredPrecisions(current: model.modelPrecision), id: \.self) { mode in
-                            Text(mode.studioTitle).tag(mode)
-                        }
-                    } label: {
-                        HelpLabel("Model precision", help: .modelPrecision)
-                    }
-                    .padding(.top, 8)
-                    Text("Takes effect at the next Generate, which reloads the model.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
             } label: {
                 Button { withAnimation { isExpanded.toggle() } } label: {

@@ -34,18 +34,6 @@ final class AppScriptTextViewTests: XCTestCase {
         XCTAssertNil(ScriptTextView.nsRange(of: nil, in: text))
     }
 
-    func testPrecisionTitlesMarkExperimentalModesFromTheEngine() {
-        XCTAssertEqual(ModelPrecisionMode.full.studioTitle, "Full (default)")
-        XCTAssertEqual(ModelPrecisionMode.balanced.studioTitle, "Balanced (int8, 26 percent faster decode, 97 percent prose reliability against 100)")
-        XCTAssertEqual(ModelPrecisionMode.compact.studioTitle, "Compact (Experimental)")
-        UserDefaults.standard.removeObject(forKey: ModelSetup.showExperimentalPrecisionKey)
-        XCTAssertEqual(ModelSetup.offeredPrecisions(current: .full), [.full, .balanced])
-        XCTAssertEqual(ModelSetup.offeredPrecisions(current: .compact), [.full, .balanced, .compact], "a chosen mode stays listed")
-        UserDefaults.standard.set(true, forKey: ModelSetup.showExperimentalPrecisionKey)
-        defer { UserDefaults.standard.removeObject(forKey: ModelSetup.showExperimentalPrecisionKey) }
-        XCTAssertEqual(ModelSetup.offeredPrecisions(current: .full), ModelPrecisionMode.allCases)
-    }
-
     func testTransportLabels() {
         XCTAssertEqual(SessionModel.playbackRates.map(TransportBar.speed), ["0.75x", "1x", "1.25x", "1.5x"])
         XCTAssertEqual(TransportBar.sectionSummary(sections: 3, audioSeconds: 12.34, stoppedEarly: false, generationSeconds: 4), "3 sections narrated \u{00B7} 12.3 s of audio \u{00B7} generated in 4.0 s")

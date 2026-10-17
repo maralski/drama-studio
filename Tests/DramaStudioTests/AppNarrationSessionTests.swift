@@ -16,7 +16,6 @@ final class AppNarrationSessionTests: XCTestCase {
 
     override func tearDown() async throws {
         try? FileManager.default.removeItem(at: directory)
-        UserDefaults.standard.removeObject(forKey: ModelSetup.precisionKey)
     }
 
     private func document() -> NarrationDocument {
@@ -29,10 +28,9 @@ final class AppNarrationSessionTests: XCTestCase {
         ])
     }
 
-    private func makeSession(pronunciation: URL? = nil, make: ((ModelPrecisionMode) -> any SpeechSynthesizer)? = nil) -> SessionModel {
+    private func makeSession(pronunciation: URL? = nil) -> SessionModel {
         let session = SessionModel(synthesizer: synthesizer, library: VoiceLibrary(directory: directory.appending(path: "voices")),
-                                   pronunciationURL: pronunciation ?? directory.appending(path: "pronunciation.json"),
-                                   makeSynthesizer: make ?? { _ in RecordingSynthesizer() })
+                                   pronunciationURL: pronunciation ?? directory.appending(path: "pronunciation.json"))
         session.playsWhileGenerating = false
         return session
     }
@@ -247,46 +245,6 @@ final class AppNarrationSessionTests: XCTestCase {
         session.generate()
         await finish(session)
         XCTAssertEqual(synthesizer.requests.last?.text, "Open the GIF in the viewer now. Then send it to the team.", "the dictionary is read again at every Generate")
-    }
-
-    func testPrecisionSwapHappensOnGenerateNotOnThePickerChange() async throws {
-        var made: [ModelPrecisionMode] = []
-        var replaced = 0
-        let session = makeSession { mode in
-            made.append(mode)
-            return self.synthesizer
-        }
-        session.synthesizerReplaced = { replaced += 1 }
-        session.script = "Swap me."
-        XCTAssertEqual(session.modelPrecision, .full)
-        session.modelPrecision = .balanced
-        XCTAssertEqual(made, [], "the picker change loads nothing")
-        XCTAssertEqual(replaced, 0)
-        XCTAssertEqual(UserDefaults.standard.string(forKey: ModelSetup.precisionKey), "balanced")
-
-        session.generate()
-        XCTAssertEqual(made, [.balanced], "Generate rebuilds the synthesizer")
-        XCTAssertEqual(replaced, 1)
-        await finish(session)
-        XCTAssertEqual(synthesizer.requests.count, 1)
-        session.generate()
-        await finish(session)
-        XCTAssertEqual(made, [.balanced], "the same mode keeps the synthesizer")
-    }
-
-    func testThePrecisionSwapWaitsForARunningAPIJob() async throws {
-        var busy = true
-        let session = makeSession { _ in self.synthesizer }
-        session.engineBusyElsewhere = { busy }
-        session.script = "Wait for me."
-        session.modelPrecision = .balanced
-        session.generate()
-        XCTAssertEqual(session.state, .loading(progress: 0, detail: "Switching to the balanced model"))
-        try await Task.sleep(for: .milliseconds(250))
-        XCTAssertEqual(synthesizer.requests.count, 0, "nothing is sent while the API job runs")
-        busy = false
-        await finish(session)
-        XCTAssertEqual(synthesizer.requests.count, 1)
     }
 
     func testHighlightNamesTheSentenceAtAPosition() async throws {

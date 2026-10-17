@@ -9,38 +9,12 @@ enum ModelSetup {
     /// Set DRAMA_PREVIEW_ENGINE=1 to run the app on the mock instead of the Metal engine.
     static let isPreviewEngine = ProcessInfo.processInfo.environment["DRAMA_PREVIEW_ENGINE"] == "1"
 
-    static let precisionKey = "modelPrecision"
-    /// A hidden defaults key: true offers the experimental precision modes too.
-    static let showExperimentalPrecisionKey = "showExperimentalPrecision"
-
-    static var storedPrecision: ModelPrecisionMode {
-        UserDefaults.standard.string(forKey: precisionKey).flatMap(ModelPrecisionMode.init) ?? .full
-    }
-
-    /// The modes the inspector offers: the shipped ones, plus the experimental
-    /// ones behind the hidden key, plus whatever is chosen already.
-    static func offeredPrecisions(current: ModelPrecisionMode) -> [ModelPrecisionMode] {
-        let experimental = UserDefaults.standard.bool(forKey: showExperimentalPrecisionKey)
-        return ModelPrecisionMode.allCases.filter { experimental || !$0.isExperimental || $0 == current }
-    }
-
-    /// The mock in every mode under the preview engine or without weights.
-    static func makeSynthesizer(mode: ModelPrecisionMode = storedPrecision) -> any SpeechSynthesizer {
+    /// The mock under the preview engine or without weights.
+    static func makeSynthesizer() -> any SpeechSynthesizer {
         if isPreviewEngine { return MockSynthesizer() }
         let customPath = UserDefaults.standard.string(forKey: customDirectoryKey) ?? ""
         guard let location = location(customPath: customPath) else { return MockSynthesizer() }
-        return DramaSynthesizer(location: location, codecDirectory: DramaCodec.defaultDirectory, mode: mode)
-    }
-
-    /// The picker rows. The experimental suffix follows the engine's own verdict.
-    static func precisionTitle(_ mode: ModelPrecisionMode) -> String {
-        let base: String
-        switch mode {
-        case .full: base = "Full (default)"
-        case .balanced: base = "Balanced (int8, 26 percent faster decode, 97 percent prose reliability against 100)"
-        case .compact: base = "Compact"
-        }
-        return mode.isExperimental ? base + " (Experimental)" : base
+        return DramaSynthesizer(location: location, codecDirectory: DramaCodec.defaultDirectory)
     }
 
     enum Status: Equatable {
@@ -65,8 +39,4 @@ enum ModelSetup {
         guard let location = location(customPath: customPath) else { return .missing }
         return location.isComplete ? .ready(location.directory) : .incomplete(location.directory)
     }
-}
-
-extension ModelPrecisionMode {
-    var studioTitle: String { ModelSetup.precisionTitle(self) }
 }
