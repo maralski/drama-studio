@@ -1,0 +1,60 @@
+[
+ {
+  "id": "short-yes",
+  "category": "short",
+  "text": "Yes."
+ },
+ {
+  "id": "short-hello",
+  "category": "short",
+  "text": "Hello there, how are you today?"
+ },
+ {
+  "id": "short-exclaim",
+  "category": "short",
+  "text": "We did it! I can't believe we actually did it!"
+ },
+ {
+  "id": "two-fox",
+  "category": "two-sentence",
+  "text": "The quick brown fox jumps over the lazy dog. She sells sea shells by the sea shore."
+ },
+ {
+  "id": "two-weather",
+  "category": "two-sentence",
+  "text": "It rained all morning. By noon the clouds had cleared and the valley was glowing."
+ },
+ {
+  "id": "two-question",
+  "category": "two-sentence",
+  "text": "Have you ever wondered why the sky turns red at sunset? It's all about how light scatters."
+ },
+ {
+  "id": "long-one",
+  "category": "long",
+  "text": "When the old lighthouse keeper finally retired after forty years of watching the same stretch of grey water, the whole town, fishermen and shopkeepers and children who had never once seen him smile, gathered on the pier to throw him a party he had never asked for."
+ },
+ {
+  "id": "long-para",
+  "category": "long",
+  "text": "The museum opens at nine. Tickets are cheaper before noon, and the east wing closes early on Thursdays. If you bring a student card, the guided tour is free, but you have to book it at the front desk at least an hour ahead."
+ },
+ {
+  "id": "clone-short",
+  "category": "cloned",
+  "ref": true,
+  "text": "Thank you for calling. Your order has shipped and should arrive on Tuesday."
+ },
+ {
+  "id": "clone-two",
+  "category": "cloned",
+  "ref": true,
+  "text": "I never thought I would miss the fog. But here we are, back on the coast again."
+ },
+ {
+  "id": "clone-long",
+  "category": "cloned",
+  "ref": true,
+  "text": "Before we begin, a quick reminder that the exits are at the back of the hall, the restrooms are to your left, and the session will run for about forty minutes with questions at the end."
+ }
+]

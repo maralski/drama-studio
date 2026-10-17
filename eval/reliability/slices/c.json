@@ -1,0 +1,85 @@
+[
+ {
+  "id": "es-greeting",
+  "category": "non-english",
+  "language": "es",
+  "text": "Buenos días a todos. Hoy vamos a hablar del tiempo y de los planes para el fin de semana.",
+  "wer_threshold": 0.3
+ },
+ {
+  "id": "fr-greeting",
+  "category": "non-english",
+  "language": "fr",
+  "text": "Bonjour tout le monde. Aujourd'hui, nous allons parler de la météo et du week-end.",
+  "wer_threshold": 0.3
+ },
+ {
+  "id": "de-greeting",
+  "category": "non-english",
+  "language": "de",
+  "text": "Guten Morgen zusammen. Heute sprechen wir über das Wetter und die Pläne für das Wochenende.",
+  "wer_threshold": 0.3
+ },
+ {
+  "id": "hi-exp-short",
+  "category": "high-expressive",
+  "text": "Hello there, how are you today?",
+  "flags": {
+   "temperature": 0.9,
+   "top-p": 0.9
+  }
+ },
+ {
+  "id": "hi-exp-two",
+  "category": "high-expressive",
+  "text": "The quick brown fox jumps over the lazy dog. She sells sea shells by the sea shore.",
+  "flags": {
+   "temperature": 0.9,
+   "top-p": 0.9
+  }
+ },
+ {
+  "id": "hi-exp-long",
+  "category": "high-expressive",
+  "text": "The museum opens at nine. Tickets are cheaper before noon, and the east wing closes early on Thursdays. If you bring a student card, the guided tour is free, but you have to book it at the front desk at least an hour ahead.",
+  "flags": {
+   "temperature": 0.9,
+   "top-p": 0.9
+  }
+ },
+ {
+  "id": "lo-exp-two",
+  "category": "low-expressive",
+  "text": "The quick brown fox jumps over the lazy dog. She sells sea shells by the sea shore.",
+  "flags": {
+   "temperature": 0.5,
+   "top-p": 0.5
+  }
+ },
+ {
+  "id": "refchunk-two",
+  "category": "reference-chunking",
+  "chunking": "reference",
+  "text": "The quick brown fox jumps over the lazy dog. She sells sea shells by the sea shore."
+ },
+ {
+  "id": "refchunk-para",
+  "category": "reference-chunking",
+  "chunking": "reference",
+  "text": "The museum opens at nine. Tickets are cheaper before noon, and the east wing closes early on Thursdays. If you bring a student card, the guided tour is free, but you have to book it at the front desk at least an hour ahead."
+ },
+ {
+  "id": "noretry-two",
+  "category": "no-retry",
+  "flags": {
+   "no-retry": ""
+  },
+  "text": "It rained all morning. By noon the clouds had cleared and the valley was glowing."
+ },
+ {
+  "id": "tongue",
+  "category": "tongue-twister",
+  "text": "Peter Piper picked a peck of pickled peppers. How many pickled peppers did Peter Piper pick?",
+  "wer_threshold": 0.2
+ }
+]

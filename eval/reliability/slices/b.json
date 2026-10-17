@@ -1,0 +1,63 @@
+[
+ {
+  "id": "num-time",
+  "category": "numbers",
+  "text": "The meeting is at 3:45 on the 21st of March, in room 207 on the second floor.",
+  "wer_threshold": 0.25
+ },
+ {
+  "id": "num-money",
+  "category": "numbers",
+  "text": "The invoice total is $1,249.99, due within 30 days, or 2.5 percent interest applies.",
+  "wer_threshold": 0.3
+ },
+ {
+  "id": "num-year",
+  "category": "numbers",
+  "text": "In 1969 three astronauts flew 384,400 kilometres to the Moon and came home eight days later.",
+  "wer_threshold": 0.25
+ },
+ {
+  "id": "abbr-dr",
+  "category": "abbreviations",
+  "text": "Dr. Smith met Mr. and Mrs. Jones at 10 a.m. on Main St. to discuss the U.S. tax forms.",
+  "wer_threshold": 0.3
+ },
+ {
+  "id": "caps-warning",
+  "category": "all-caps",
+  "text": "WARNING. DO NOT OPEN THE DOOR UNTIL THE LIGHT TURNS GREEN.",
+  "wer_threshold": 0.2
+ },
+ {
+  "id": "cue-laugh",
+  "category": "cues",
+  "text": "[laughs] You should have seen your face. [sighs] Fine, I'll help you move the couch."
+ },
+ {
+  "id": "cue-whisper",
+  "category": "cues",
+  "text": "Promise me <whisper>you won't tell her</whisper>. [pause] Not a word. Not even a hint."
+ },
+ {
+  "id": "cue-style",
+  "category": "cues",
+  "text": "[with bright eager excitement] We won! We actually won! [laughs] I can't believe it!"
+ },
+ {
+  "id": "speakers-two",
+  "category": "multi-speaker",
+  "text": "<|speaker:0|> Did you lock the back door? <|speaker:1|> I thought you did. <|speaker:0|> Well, one of us had better check."
+ },
+ {
+  "id": "speakers-three",
+  "category": "multi-speaker",
+  "text": "<|speaker:0|> All right, who ate the last slice? <|speaker:1|> Not me. <|speaker:2|> Don't look at me either."
+ },
+ {
+  "id": "clone-cues",
+  "category": "cloned",
+  "ref": true,
+  "text": "[sighs] Fine. If we miss the train, it's on you. [laughs] Well, maybe that's fair."
+ }
+]

@@ -134,6 +134,27 @@ generate in the retrying sentence mode whatever the streaming setting says;
 playback of a section starts when the section is done rather than three
 seconds in.
 
+## Reliability
+
+`eval/reliability/REPORT.md` is a 330-run study of whether every sentence
+comes out as speech: 33 conditions (short and long lines, numbers,
+abbreviations, all caps, performance cues, multi-speaker tags, Spanish,
+French and German, a cloned voice, both expressiveness extremes, and two
+control conditions), five seeds each, in `full` and `balanced`.
+
+| rows | full | balanced |
+| --- | --- | --- |
+| plain prose under the shipped defaults | 130 of 130 | 126 of 130 |
+| performance-cue lines | 16 of 20 | 14 of 20 |
+| retries off (control) | 1 of 5 | 3 of 5 |
+| reference 300-byte chunking (control) | 7 of 10 | 9 of 10 |
+
+Paired by seed, balanced is never right where full is wrong, and wrong where
+full is right in 4 of 130 prose pairs. Performance cues are the one area
+where both modes drop content a few times in twenty; `[laughs]` can also turn
+into a laughter loop that the app's text-derived frame cap ends near 8 s.
+Reproduce with `eval/reliability.py` (slices under `eval/reliability/slices/`).
+
 ## Agents and programs
 
 While Drama Studio is open, including when only its menu bar icon is left, it

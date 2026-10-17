@@ -37,7 +37,7 @@ enum ModelSetup {
         let base: String
         switch mode {
         case .full: base = "Full (default)"
-        case .balanced: base = "Balanced (int8, about 26 percent faster decode)"
+        case .balanced: base = "Balanced (int8, 26 percent faster decode, 97 percent prose reliability against 100)"
         case .compact: base = "Compact"
         }
         return mode.isExperimental ? base + " (Experimental)" : base
