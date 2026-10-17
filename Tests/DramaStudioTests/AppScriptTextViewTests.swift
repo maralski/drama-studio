@@ -36,7 +36,7 @@ final class AppScriptTextViewTests: XCTestCase {
 
     func testPrecisionTitlesMarkExperimentalModesFromTheEngine() {
         XCTAssertEqual(ModelPrecisionMode.full.studioTitle, "Full (default)")
-        XCTAssertEqual(ModelPrecisionMode.balanced.studioTitle, "Balanced (int8, about 26 percent faster decode)")
+        XCTAssertEqual(ModelPrecisionMode.balanced.studioTitle, "Balanced (int8, 26 percent faster decode, 97 percent prose reliability against 100)")
         XCTAssertEqual(ModelPrecisionMode.compact.studioTitle, "Compact (Experimental)")
         UserDefaults.standard.removeObject(forKey: ModelSetup.showExperimentalPrecisionKey)
         XCTAssertEqual(ModelSetup.offeredPrecisions(current: .full), [.full, .balanced])
