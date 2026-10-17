@@ -21,9 +21,21 @@ cloning a real person's voice without their consent is not permitted.
   over temperature and top-p, with the vendor's defaults in the middle), and an
   insert menu for performance cues such as `[laughs]`, `[sighs]` and
   `<whisper>…</whisper>`. Each chunk's frame cap follows the length of its text.
+- **Document narration**: a PowerPoint deck, a PDF or an EPUB opens as
+  sections, one per slide, page or chapter, and narrates section by section
+  with the same voice throughout. Exports are the whole narration, one file
+  per section with a `manifest.csv`, SRT or WebVTT captions, and for a deck a
+  slide narration package. Projects save and reopen as `.dramaproj` bundles
+  (see [Documents](#documents)).
+- **Pronunciation rules** in Settings rewrite words before the model hears
+  them, in the app and through the API.
 - **Voice cloning** from one or more reference clips (any format AVFoundation
   reads) plus their transcripts, kept in a local voice library.
-- **Streaming playback** as chunks finish, scrubbing, and export to WAV or M4A.
+- **Streaming playback** as chunks finish, scrubbing, a speed control from
+  0.75x to 1.5x, the sentence being spoken highlighted in the editor, and
+  export to WAV or M4A.
+- **Model precision** under Advanced: Full, or Balanced with int8 matrices for
+  26 percent less GPU time per decode frame (see "Model precision").
 - **A local HTTP API and an MCP server**, so scripts and agents can speak
   through the same engine and voice library (see
   [Agents and programs](#agents-and-programs)).
@@ -74,6 +86,50 @@ Command line:
 
 `DRAMA_PREVIEW_ENGINE=1` runs the app or `drama serve` on a mock engine that
 produces placeholder tones, for working on everything but the model.
+
+## Documents
+
+Importing a `.pptx`, `.pdf` or `.epub` (File > Import Script or Document,
+drag and drop, or opening the file with the app) opens it as sections: a
+deck's slides, with the speaker notes as the text and the slide text when a
+slide has no notes; a PDF's pages; an EPUB's chapters. The list shows each
+section's label, a preview, its duration once narrated, a skip box and a
+speaker picker. The editor edits the selected section.
+
+![A deck's sections, with the spoken sentence highlighted](docs/screenshots/document-sections.png)
+
+- Generate narrates every section that is not skipped, in order, one request
+  per section, cast with that section's speaker's voice. The speaker's
+  previous section goes along as history, and with no library voice cast
+  the speaker's first narrated section is also the voice, the way takes and
+  the live route already carry a voice. Narrate This Section
+  generates one section again; the takes strip then lists that section's
+  takes, and the one you click is the one the narration uses.
+- Export writes the whole narration, Per Section (numbered files and a
+  `manifest.csv`), Captions as SRT or WebVTT, timed from the frames each
+  sentence took, and for a deck a Slide Narration Package: `slide-NN.wav` per
+  narrated slide and a `README.txt` on adding them with Insert > Audio. The
+  app does not change the deck.
+- Save Project writes a `.dramaproj` bundle with the document or script, the
+  library voices cast, the settings, and the chosen takes with their codes
+  and audio, so a reopened project plays, exports and narrates further
+  sections in the same voice without generating again.
+- Flatten to Script turns the sections back into one plain script.
+
+![The Export menu for a deck](docs/screenshots/document-export-menu.png)
+
+On the five-slide sample deck (`python-pptx`, slide 3 without notes), the
+real engine at the default settings narrated 24.3 s of audio in 34.5 s
+including the model load. Whisper small.en heard slide 4, whose notes read
+"Revenue grew twelve percent. Costs stayed flat, and margins improved.", as
+"Revenue grew 12%. Cost stayed flat, and margins improved." Two slides lost
+words: slide 1 spoke only "Welcome, everyone." of its two sentences, and
+slide 3 only its title. Each was one engine chunk (the splitter joins a
+sentence under 24 bytes to the next), and with "Stream audio while
+generating" on, a chunk that comes out short is kept rather than generated
+again. With the setting off, Narrate This Section gave slide 1 both sentences
+and slide 3 "How it works Import". That is one run per slide, not a
+measurement; turn streaming off in Settings for a narration you export.
 
 ## Agents and programs
 
@@ -751,8 +807,12 @@ are. The brief asked for frames per second over 400 or more frames;
 `balanced` stopped at eos after 338, and the per-frame GPU time does not
 depend on the count. `compact` stays in the enum as `experimental`
 (`ModelPrecisionMode.isExperimental`) for the reasons above. `full` stays
-the default. The app exposes no mode yet; the CLI's `--precision-mode` and
-`DramaModel.init(mode:)` do, and the app can add the option afterwards.
+the default. The app offers Full and Balanced in the inspector's Advanced
+group and switches at the next Generate, which reloads the model; Compact
+appears there, marked Experimental, only when the hidden defaults key
+`showExperimentalPrecision` is true. The CLI takes `--precision-mode`.
+
+![The model precision picker under Advanced](docs/screenshots/model-precision-picker.png)
 
 Why the decode gain is smaller than the byte count suggests: by the
 parameter counts a `balanced` frame reads about 3.4 GB of weights against
