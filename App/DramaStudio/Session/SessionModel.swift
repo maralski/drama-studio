@@ -104,8 +104,6 @@ final class SessionModel {
         previewPlayer.onDrained = { [weak self] in self?.stopPreview() }
     }
 
-    // MARK: Script and sections
-
     var prepared: Result<PreparedScript, ScriptError> {
         Screenplay.prepare(script, asScreenplay: screenplayMode)
     }
@@ -217,8 +215,6 @@ final class SessionModel {
         state = .idle
     }
 
-    // MARK: Narration state
-
     /// The narrated sections in document order with their chosen takes.
     private var chosenSections: [(segment: NarrationDocument.Segment, take: SessionTake)] {
         document?.segments.compactMap { segment in
@@ -286,8 +282,6 @@ final class SessionModel {
         return narrationTakes.first { $0.sampleRange.contains(position) }?.segmentID
     }
 
-    // MARK: Abilities
-
     var canGenerate: Bool {
         guard !state.isGenerating else { return false }
         if let document { return !SectionRequests.queue(document).isEmpty }
@@ -338,8 +332,6 @@ final class SessionModel {
     var position: Int { player.position ?? playhead }
 
     var duration: TimeInterval { Double(audio.count) / Double(ModelConstants.sampleRate) }
-
-    // MARK: Generation
 
     func generate() {
         guard !state.isGenerating else { return }
@@ -679,8 +671,6 @@ final class SessionModel {
         if player.isStarved { stopPlayback(resetTo: 0) }
     }
 
-    // MARK: Playback
-
     func togglePlayback() {
         if state.isPlaying {
             stopPlayback(resetTo: nil)
@@ -724,8 +714,6 @@ final class SessionModel {
         guard !state.isGenerating else { return }
         stopPlayback(resetTo: 0)
     }
-
-    // MARK: Files
 
     func importScript(from url: URL) {
         do {
@@ -781,8 +769,6 @@ final class SessionModel {
         let lower = text.distance(from: text.startIndex, to: range.lowerBound)
         return lower..<(lower + text.distance(from: range.lowerBound, to: range.upperBound))
     }
-
-    // MARK: Voices
 
     /// A library voice that has since been removed reads as the model default.
     func voice(for speaker: Speaker) -> VoiceChoice {
@@ -864,8 +850,6 @@ final class SessionModel {
             notice = "Couldn't remove the voice: \(error.localizedDescription)"
         }
     }
-
-    // MARK: Exports and projects
 
     func export(to url: URL, as format: ExportFormat) {
         report { try AudioExporter.write(exportSamples, to: url, as: format) }
