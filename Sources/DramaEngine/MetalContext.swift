@@ -6,16 +6,16 @@ import Metal
 ///
 /// The kernels ship as `.metal` sources in the bundle and are compiled once at
 /// startup; SwiftPM does not build a metallib from the command line.
-public final class MetalContext {
-    public let device: MTLDevice
-    public let queue: MTLCommandQueue
-    public let library: MTLLibrary
+package final class MetalContext {
+    package let device: MTLDevice
+    package let queue: MTLCommandQueue
+    package let library: MTLLibrary
     /// SHA-256 hex of the exact source string the library was compiled from.
-    public let kernelDigest: String
+    package let kernelDigest: String
     private var pipelines: [String: MTLComputePipelineState] = [:]
     private let lock = NSLock()
 
-    public init() throws {
+    package init() throws {
         guard let device = MTLCreateSystemDefaultDevice() else { throw EngineError.noMetalDevice }
         self.device = device
         guard let queue = device.makeCommandQueue() else { throw EngineError.noMetalDevice }
@@ -69,7 +69,7 @@ public final class MetalContext {
 
     /// Builds every kernel's pipeline state up front, in parallel, so the first
     /// request does not pay for them one dispatch at a time.
-    public func warmPipelines() {
+    package func warmPipelines() {
         let names = library.functionNames
         DispatchQueue.concurrentPerform(iterations: names.count) { i in
             guard let fn = library.makeFunction(name: names[i]), let p = try? device.makeComputePipelineState(function: fn) else { return }
@@ -77,7 +77,7 @@ public final class MetalContext {
         }
     }
 
-    public func pipeline(_ name: String) throws -> MTLComputePipelineState {
+    package func pipeline(_ name: String) throws -> MTLComputePipelineState {
         lock.lock(); defer { lock.unlock() }
         if let p = pipelines[name] { return p }
         guard let fn = library.makeFunction(name: name) else { throw EngineError.missingKernel(name) }

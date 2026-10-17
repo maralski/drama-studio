@@ -33,7 +33,7 @@ public actor DramaCodec {
     public static let windowFrames = 512
     public static let contextFrames = 256
     /// The frame counts the models accept.
-    public static let frameSizes = [windowFrames]
+    package static let frameSizes = [windowFrames]
     public static let encoderName = "DramaCodecEncoder"
     public static let decoderName = "DramaCodecDecoder"
 
@@ -79,7 +79,7 @@ public actor DramaCodec {
 
     /// The samples of frames `window.keep ..< window.end`, from one model call
     /// over `window.start ..< window.end` of `codes`.
-    public func decode(codes: [[Int32]], window w: DecodeWindow) async throws -> [Float] {
+    package func decode(codes: [[Int32]], window w: DecodeWindow) async throws -> [Float] {
         guard codes.count == Self.numCodebooks else {
             throw CodecError.badCodes("expected \(Self.numCodebooks) codebooks, got \(codes.count)")
         }

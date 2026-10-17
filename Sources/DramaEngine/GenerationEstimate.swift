@@ -25,14 +25,14 @@ public struct GenerationEstimate: Sendable, Equatable {
     }
 
     public let expectedFrames: [Int]
-    public private(set) var chunk = 0
-    public private(set) var chunkPrefilled = false
-    public private(set) var framesInChunk = 0
+    package private(set) var chunk = 0
+    package private(set) var chunkPrefilled = false
+    package private(set) var framesInChunk = 0
     public private(set) var framesDone = 0
     public private(set) var framesPerSecond = typicalFramesPerSecond
-    public private(set) var prefillSeconds = typicalPrefillSeconds
-    public private(set) var retrying = false
-    public private(set) var lastEventSeconds = 0.0
+    package private(set) var prefillSeconds = typicalPrefillSeconds
+    package private(set) var retrying = false
+    package private(set) var lastEventSeconds = 0.0
     private var measuredRate = false
     private var chunkStartSeconds = 0.0
     private var sampleSeconds: Double?
@@ -43,7 +43,7 @@ public struct GenerationEstimate: Sendable, Equatable {
         expectedFrames = lines.map { Int((FrameGenerator.expectedSeconds(for: $0) * Self.audioFramesPerSecond).rounded()) }
     }
 
-    public init(plan: GenerationPlan) {
+    package init(plan: GenerationPlan) {
         self.init(lines: plan.chunks.map(\.line))
     }
 

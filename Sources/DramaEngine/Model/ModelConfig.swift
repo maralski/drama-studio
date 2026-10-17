@@ -2,44 +2,44 @@ import Foundation
 
 /// The subset of `config.json` the engine depends on. Values the kernels hard
 /// code (head dim 256, GDN head dim 128, 10 codebooks) are checked, not read.
-public struct ModelConfig: Sendable {
-    public enum LayerType: String, Sendable { case linear = "linear_attention", full = "full_attention" }
+package struct ModelConfig: Sendable {
+    package enum LayerType: String, Sendable { case linear = "linear_attention", full = "full_attention" }
 
-    public let hiddenSize: Int
-    public let vocabSize: Int
-    public let numLayers: Int
-    public let layerTypes: [LayerType]
-    public let numHeads: Int
-    public let numKVHeads: Int
-    public let headDim: Int
-    public let rotaryDim: Int
-    public let ropeTheta: Double
-    public let rmsNormEps: Float
-    public let linearKeyHeads: Int
-    public let linearValueHeads: Int
-    public let convKernel: Int
-    public let numExperts: Int
-    public let topK: Int
-    public let moeIntermediate: Int
-    public let sharedIntermediate: Int
-    public let maxPositions: Int
+    package let hiddenSize: Int
+    package let vocabSize: Int
+    package let numLayers: Int
+    package let layerTypes: [LayerType]
+    package let numHeads: Int
+    package let numKVHeads: Int
+    package let headDim: Int
+    package let rotaryDim: Int
+    package let ropeTheta: Double
+    package let rmsNormEps: Float
+    package let linearKeyHeads: Int
+    package let linearValueHeads: Int
+    package let convKernel: Int
+    package let numExperts: Int
+    package let topK: Int
+    package let moeIntermediate: Int
+    package let sharedIntermediate: Int
+    package let maxPositions: Int
 
-    public let towerLayers: Int
-    public let towerIntermediate: Int
-    public let towerHeads: Int
-    public let towerKVHeads: Int
-    public let towerRotaryDim: Int
-    public let towerRopeBase: Double
-    public let towerNormEps: Float
-    public let numCodebooks: Int
-    public let codebookSize: Int
-    public let vqBackboneCodebooks: Int
+    package let towerLayers: Int
+    package let towerIntermediate: Int
+    package let towerHeads: Int
+    package let towerKVHeads: Int
+    package let towerRotaryDim: Int
+    package let towerRopeBase: Double
+    package let towerNormEps: Float
+    package let numCodebooks: Int
+    package let codebookSize: Int
+    package let vqBackboneCodebooks: Int
 
-    public let semanticStart: Int32
-    public let semanticEnd: Int32
-    public let eos: Int32
+    package let semanticStart: Int32
+    package let semanticEnd: Int32
+    package let eos: Int32
 
-    public init(url: URL) throws {
+    package init(url: URL) throws {
         guard let root = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any],
               let text = root["text_config"] as? [String: Any],
               let audio = root["audio_decoder_config"] as? [String: Any] else {

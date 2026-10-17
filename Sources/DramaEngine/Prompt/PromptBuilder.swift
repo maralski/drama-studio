@@ -41,10 +41,10 @@ enum UnicodeWhitespace {
 /// `build_drama3_prompt` from the reference: frame rows ending in the open
 /// assistant voice turn.
 public enum Drama3Prompt {
-    public static let ttsInstruction = "convert the provided text to speech"
-    public static let referenceInstruction = "convert the provided text to speech reference to the following:"
-    public static let messageEnd = "<|im_end|>\n"
-    public static let generationStart = "<|im_start|>assistant\n<|voice|>"
+    package static let ttsInstruction = "convert the provided text to speech"
+    package static let referenceInstruction = "convert the provided text to speech reference to the following:"
+    package static let messageEnd = "<|im_end|>\n"
+    package static let generationStart = "<|im_start|>assistant\n<|voice|>"
     public static let maxRows = 8192
     static let structuralTokens = ["<|im_start|>", "<|im_end|>", "<|voice|>", "<|text|>", "<|interleave|>", "<|semantic:"]
     static let speakerTag = try! NSRegularExpression(pattern: "<\\|speaker:([0-9]+)\\|>")
@@ -87,7 +87,7 @@ public enum Drama3Prompt {
     }
 
     /// Prefix `<|speaker:0|> ` unless a tag already leads the text after white space.
-    public static func withSpeakerTag(_ text: String) -> String {
+    package static func withSpeakerTag(_ text: String) -> String {
         let body = UnicodeWhitespace.stripLeading(text)
         if speakerTag.firstMatch(in: body, options: .anchored, range: NSRange(location: 0, length: (body as NSString).length)) != nil { return text }
         return "<|speaker:0|> " + text
@@ -105,14 +105,14 @@ public enum Drama3Prompt {
         (0..<codes[0].count).map { t in [codes[0][t] + ModelConstants.semanticStart] + codes.map { $0[t] } }
     }
 
-    public static func build(text: String, tokenizer: Tokenizer, references: [Reference] = [], character: Character? = nil, history: [HistoryTurn] = []) throws -> [Frame] {
+    package static func build(text: String, tokenizer: Tokenizer, references: [Reference] = [], character: Character? = nil, history: [HistoryTurn] = []) throws -> [Frame] {
         try buildWithPrefix(text: text, tokenizer: tokenizer, references: references, character: character, history: history).rows
     }
 
     enum Segment: Equatable { case text(String), codes([[Int32]]) }
 
     /// The prompt as text with each code block shown as `<codes:frames>`.
-    static func render(text: String, references: [Reference] = [], character: Character? = nil, history: [HistoryTurn] = []) throws -> String {
+    public static func render(text: String, references: [Reference] = [], character: Character? = nil, history: [HistoryTurn] = []) throws -> String {
         try layout(text: text, references: references, character: character, history: history).segments.map { segment in
             switch segment {
             case .text(let s): s
@@ -125,7 +125,7 @@ public enum Drama3Prompt {
     /// (instruction and references), which every chunk of a request shares.
     /// A `character` replaces the instruction with its design prompt and
     /// speaks every turn as `Name: text` instead of a speaker tag.
-    public static func buildWithPrefix(text: String, tokenizer: Tokenizer, references: [Reference] = [], character: Character? = nil,
+    package static func buildWithPrefix(text: String, tokenizer: Tokenizer, references: [Reference] = [], character: Character? = nil,
                                        history: [HistoryTurn] = []) throws -> (rows: [Frame], prefixRows: Int) {
         let (segments, systemSegments) = try layout(text: text, references: references, character: character, history: history)
         var rows: [Frame] = []

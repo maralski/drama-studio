@@ -4,9 +4,9 @@ import Foundation
 /// bytes per chunk, at most 3 speakers, cut at sentence ends, then clause
 /// marks, then spaces. Operates on Unicode scalars like Python's `str`.
 public enum Drama3Chunking {
-    public static let chunkBytes = 300
-    public static let maxSpeakers = 3
-    public static let chunkMaxNewFrames = 600
+    package static let chunkBytes = 300
+    package static let maxSpeakers = 3
+    package static let chunkMaxNewFrames = 600
     static let sentenceEnds = Set(".!?;。！？；…\n".unicodeScalars)
     static let clauseMarks = Set(",:，：、".unicodeScalars)
     static let spaces = Set(" ".unicodeScalars)
@@ -74,7 +74,7 @@ public enum Drama3Chunking {
         return out
     }
 
-    public static func splitByLength(_ text: String, length: Int = chunkBytes) -> [String] {
+    package static func splitByLength(_ text: String, length: Int = chunkBytes) -> [String] {
         if UnicodeWhitespace.strip(text).isEmpty { return [] }
         if text.utf8.count <= length { return [text] }
         var pieces = breakAtMarks(protectedPieces(text), 0, sentenceEnds)
@@ -92,7 +92,7 @@ public enum Drama3Chunking {
 
     /// One chunk per sentence: cut at sentence ends only, keep protected spans
     /// whole, and fold fragments shorter than `minBytes` into their neighbour.
-    public static func splitSentences(_ text: String, minBytes: Int = 24) -> [String] {
+    package static func splitSentences(_ text: String, minBytes: Int = 24) -> [String] {
         if UnicodeWhitespace.strip(text).isEmpty { return [] }
         let pieces = breakAtMarks(protectedPieces(text), 0, sentenceEnds)
         var chunks: [[Unicode.Scalar]] = []
@@ -122,7 +122,7 @@ public enum Drama3Chunking {
     }
 
     /// (speaker id, text) per tagged segment; text before the first tag is speaker 0.
-    public static func parseSpeakerSegments(_ text: String) -> [(String, String)] {
+    package static func parseSpeakerSegments(_ text: String) -> [(String, String)] {
         let ns = text as NSString
         let matches = Drama3Prompt.speakerTag.matches(in: text, range: NSRange(location: 0, length: ns.length))
         var segments: [(String, String)] = []
@@ -138,7 +138,7 @@ public enum Drama3Chunking {
         return segments
     }
 
-    public static func split(_ text: String, maxBytes: Int = chunkBytes, maxSpeakers: Int = maxSpeakers) -> [String] {
+    package static func split(_ text: String, maxBytes: Int = chunkBytes, maxSpeakers: Int = maxSpeakers) -> [String] {
         let ns = text as NSString
         if Drama3Prompt.speakerTag.firstMatch(in: text, range: NSRange(location: 0, length: ns.length)) == nil {
             return splitByLength(text, length: maxBytes)
@@ -170,14 +170,14 @@ public enum Drama3Chunking {
 }
 
 /// Context for the next chunk: the first chunk stays pinned plus the latest turn.
-public struct Drama3History {
-    public private(set) var pinned: Drama3Prompt.HistoryTurn?
-    public private(set) var recent: [Drama3Prompt.HistoryTurn] = []
-    public let recentTurns: Int
+struct Drama3History {
+    private(set) var pinned: Drama3Prompt.HistoryTurn?
+    private(set) var recent: [Drama3Prompt.HistoryTurn] = []
+    let recentTurns: Int
 
-    public init(recentTurns: Int = 1) { self.recentTurns = recentTurns }
+    init(recentTurns: Int = 1) { self.recentTurns = recentTurns }
 
-    public mutating func push(text: String, codes: [[Int32]]) {
+    mutating func push(text: String, codes: [[Int32]]) {
         let turn = Drama3Prompt.HistoryTurn(text: text, codes: codes)
         if pinned == nil { pinned = turn } else {
             recent.append(turn)
@@ -186,7 +186,7 @@ public struct Drama3History {
     }
 
     /// Histories to try, longest first, ending with no history.
-    public var candidates: [[Drama3Prompt.HistoryTurn]] {
+    var candidates: [[Drama3Prompt.HistoryTurn]] {
         let p = pinned.map { [$0] } ?? []
         var out: [[Drama3Prompt.HistoryTurn]] = []
         for start in 0...recent.count { out.append(p + recent[start...]) }

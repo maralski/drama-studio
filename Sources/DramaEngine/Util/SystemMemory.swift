@@ -4,8 +4,8 @@ import Foundation
 /// Memory counters for the load report. Metal wires the buffers a command
 /// buffer binds, which the process footprint does not count; the host's
 /// wired count does.
-public enum SystemMemory {
-    public static func wiredBytes() -> UInt64 {
+package enum SystemMemory {
+    package static func wiredBytes() -> UInt64 {
         var stats = vm_statistics64()
         var count = mach_msg_type_number_t(MemoryLayout<vm_statistics64>.stride / MemoryLayout<integer_t>.stride)
         let result = withUnsafeMutablePointer(to: &stats) {
@@ -24,6 +24,6 @@ public enum SystemMemory {
         return result == KERN_SUCCESS ? info : nil
     }
 
-    public static func residentBytes() -> UInt64 { taskVMInfo().map { UInt64($0.resident_size) } ?? 0 }
-    public static func footprintBytes() -> UInt64 { taskVMInfo().map { UInt64($0.phys_footprint) } ?? 0 }
+    package static func residentBytes() -> UInt64 { taskVMInfo().map { UInt64($0.resident_size) } ?? 0 }
+    package static func footprintBytes() -> UInt64 { taskVMInfo().map { UInt64($0.phys_footprint) } ?? 0 }
 }

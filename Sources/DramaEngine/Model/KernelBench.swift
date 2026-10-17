@@ -3,7 +3,7 @@ import Metal
 
 /// GPU time of single kernels on synthetic data, for choosing tile shapes.
 /// No model needed.
-public enum KernelBench {
+package enum KernelBench {
     static func gpuSeconds(_ ctx: MetalContext, iterations: Int, _ body: (MTLComputeCommandEncoder) throws -> Void) throws -> Double {
         let cb = ctx.queue.makeCommandBuffer()!
         let enc = cb.makeComputeCommandEncoder()!
@@ -164,7 +164,7 @@ public enum KernelBench {
 
     /// Prints GPU ms per call of the row kernels and every tiled kernel over
     /// all 256 synthetic experts (768 MB of FP8 weights, as in one real layer).
-    public static func moe(rowCounts: [Int], iterations: Int = 5) throws {
+    package static func moe(rowCounts: [Int], iterations: Int = 5) throws {
         let ctx = try MetalContext()
         guard let loc = ModelLocation.huggingFaceCache() else { throw EngineError.badModel("config.json needed for the MoE shapes") }
         let config = try ModelConfig(url: loc.directory.appendingPathComponent("config.json"))
@@ -191,7 +191,7 @@ public enum KernelBench {
     }
 
     /// Prints GPU ms per call of the GEMV and every GEMM tile for y = x W^T.
-    public static func denseMatmul(n: Int, k: Int, ms: [Int], iterations: Int = 5) throws {
+    package static func denseMatmul(n: Int, k: Int, ms: [Int], iterations: Int = 5) throws {
         let ctx = try MetalContext()
         let w = bf16Weights(ctx.device, rows: n, cols: k)
         var gemv = Kernels(ctx: ctx, precision: .exact)

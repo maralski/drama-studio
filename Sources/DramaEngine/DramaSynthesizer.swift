@@ -11,13 +11,16 @@ public actor DramaSynthesizer: SpeechSynthesizer {
     public let tuningDirectory: URL
     /// Where a quantized mode's weight cache lives.
     public let quantizedDirectory: URL
+    public static var defaultTuningDirectory: URL { TuningCache.defaultDirectory }
+    public static var defaultQuantizedDirectory: URL { QuantizedWeightFile.defaultDirectory }
     private var model: DramaModel?
     private var tokenizer: Tokenizer?
     private var codec: DramaCodec?
     private var loading: Task<Void, Error>?
 
     public init(location: ModelLocation, codecDirectory: URL, mode: ModelPrecisionMode = .full,
-                tuningDirectory: URL = TuningCache.defaultDirectory, quantizedDirectory: URL = QuantizedWeightFile.defaultDirectory) {
+                tuningDirectory: URL = DramaSynthesizer.defaultTuningDirectory,
+                quantizedDirectory: URL = DramaSynthesizer.defaultQuantizedDirectory) {
         self.location = location
         self.codecDirectory = codecDirectory
         self.mode = mode
@@ -86,7 +89,7 @@ public actor DramaSynthesizer: SpeechSynthesizer {
     }
 
     /// Seconds of trailing audio whose 2048-sample frames all stay under an RMS of 0.01.
-    public nonisolated static func trailingSilenceSeconds(_ samples: [Float]) -> Double {
+    package nonisolated static func trailingSilenceSeconds(_ samples: [Float]) -> Double {
         let n = ModelConstants.samplesPerFrame
         var silentFrames = 0
         var end = samples.count / n * n
@@ -101,11 +104,11 @@ public actor DramaSynthesizer: SpeechSynthesizer {
     }
 
     /// Runs a codec decode from synchronous generator code.
-    public nonisolated static func decodeBlocking(_ codec: DramaCodec, codes: [[Int32]]) throws -> [Float] {
+    package nonisolated static func decodeBlocking(_ codec: DramaCodec, codes: [[Int32]]) throws -> [Float] {
         try blocking { try await codec.decode(codes: codes) }
     }
 
-    public nonisolated static func decodeBlocking(_ codec: DramaCodec, codes: [[Int32]], window: DecodeWindow) throws -> [Float] {
+    package nonisolated static func decodeBlocking(_ codec: DramaCodec, codes: [[Int32]], window: DecodeWindow) throws -> [Float] {
         try blocking { try await codec.decode(codes: codes, window: window) }
     }
 

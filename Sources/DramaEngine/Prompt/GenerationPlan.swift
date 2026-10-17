@@ -2,25 +2,25 @@ import Foundation
 
 /// How one request becomes prompts: the voice layout, the user turn of every
 /// chunk, and the earlier takes that precede them as history.
-public struct GenerationPlan: Sendable, Equatable {
-    public var references: [Drama3Prompt.Reference]
+package struct GenerationPlan: Sendable, Equatable {
+    package var references: [Drama3Prompt.Reference]
     /// Set only for the design layout, where the builder writes `Name: `.
-    public var character: Drama3Prompt.Character?
-    public var history: [Take]
-    public var chunks: [Chunk]
+    package var character: Drama3Prompt.Character?
+    package var history: [Take]
+    package var chunks: [Chunk]
     /// The whole request's user turn, as its take records it.
-    public var turnText: String
+    package var turnText: String
 
-    public static let historyTakes = 2
+    package static let historyTakes = 2
 
-    public struct Chunk: Sendable, Equatable {
+    package struct Chunk: Sendable, Equatable {
         /// The user turn text passed to the prompt builder.
-        public var turn: String
+        package var turn: String
         /// The script text the turn speaks, which sets the frame budget.
-        public var line: String
+        package var line: String
     }
 
-    public init(text: String, references: [Drama3Prompt.Reference], character: VoiceDesign? = nil, previousTakes: [Take] = [],
+    package init(text: String, references: [Drama3Prompt.Reference], character: VoiceDesign? = nil, previousTakes: [Take] = [],
                 note: String? = nil, config: GenerationConfig) throws {
         if character != nil && !references.isEmpty { throw PromptError.voiceConflict }
         let note = note.flatMap(DirectorsNote.clean)
@@ -58,7 +58,7 @@ public struct GenerationPlan: Sendable, Equatable {
         history = Array(previousTakes.filter { $0.text != turnText }.suffix(Self.historyTakes))
     }
 
-    public init(_ request: SpeechRequest) throws {
+    package init(_ request: SpeechRequest) throws {
         try self.init(text: request.text, references: request.references.map { Drama3Prompt.Reference(transcript: $0.transcript, codes: $0.codes) },
                       character: request.character, previousTakes: request.previousTakes, note: request.note, config: request.config)
     }

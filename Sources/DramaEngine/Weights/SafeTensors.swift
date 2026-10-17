@@ -1,7 +1,7 @@
 import Foundation
 import Metal
 
-public enum TensorDType: String, Sendable {
+enum TensorDType: String, Sendable {
     case bf16 = "BF16"
     case f32 = "F32"
     case f8e4m3 = "F8_E4M3"
@@ -16,17 +16,19 @@ public enum TensorDType: String, Sendable {
 }
 
 /// A tensor inside one memory-mapped shard. The GPU reads it in place.
-public struct TensorRef: Sendable {
-    public let name: String
-    public let dtype: TensorDType
-    public let shape: [Int]
-    public let buffer: MTLBuffer
-    public let offset: Int
-    public var count: Int { shape.reduce(1, *) }
-    public var byteCount: Int { count * dtype.byteSize }
+/// Unchecked because `MTLBuffer` is not marked Sendable; the buffer wraps
+/// read-only mapped weights that no one writes after the load.
+struct TensorRef: @unchecked Sendable {
+    let name: String
+    let dtype: TensorDType
+    let shape: [Int]
+    let buffer: MTLBuffer
+    let offset: Int
+    var count: Int { shape.reduce(1, *) }
+    var byteCount: Int { count * dtype.byteSize }
     /// GPU virtual address of the first element, for address tables.
-    public var gpuAddress: UInt64 { buffer.gpuAddress + UInt64(offset) }
-    public var pointer: UnsafeRawPointer { UnsafeRawPointer(buffer.contents()).advanced(by: offset) }
+    var gpuAddress: UInt64 { buffer.gpuAddress + UInt64(offset) }
+    var pointer: UnsafeRawPointer { UnsafeRawPointer(buffer.contents()).advanced(by: offset) }
 
     func expect(_ dtype: TensorDType, _ shape: [Int]) throws -> TensorRef {
         guard self.dtype == dtype, self.shape == shape else {
@@ -38,13 +40,13 @@ public struct TensorRef: Sendable {
 
 /// All shards of a safetensors checkpoint, memory-mapped and wrapped as Metal
 /// buffers without copying.
-public final class SafeTensorsStore: @unchecked Sendable {
-    public let directory: URL
-    public private(set) var shards: [MTLBuffer] = []
+final class SafeTensorsStore: @unchecked Sendable {
+    let directory: URL
+    private(set) var shards: [MTLBuffer] = []
     private var tensors: [String: TensorRef] = [:]
     private var mappings: [(UnsafeMutableRawPointer, Int)] = []
 
-    public init(directory: URL, device: MTLDevice) throws {
+    init(directory: URL, device: MTLDevice) throws {
         self.directory = directory
         let indexURL = directory.appendingPathComponent("model.safetensors.index.json")
         let index = try JSONSerialization.jsonObject(with: Data(contentsOf: indexURL)) as? [String: Any]
@@ -61,13 +63,13 @@ public final class SafeTensorsStore: @unchecked Sendable {
         for (pointer, length) in mappings { munmap(pointer, length) }
     }
 
-    public func tensor(_ name: String) throws -> TensorRef {
+    func tensor(_ name: String) throws -> TensorRef {
         guard let t = tensors[name] else { throw EngineError.badModel("missing tensor \(name)") }
         return t
     }
 
-    public func has(_ name: String) -> Bool { tensors[name] != nil }
-    public var tensorNames: [String] { Array(tensors.keys) }
+    func has(_ name: String) -> Bool { tensors[name] != nil }
+    var tensorNames: [String] { Array(tensors.keys) }
 
     /// Tensors closer than this share one pinned run.
     static let pinnedRunGap = 1 << 20
@@ -78,7 +80,7 @@ public final class SafeTensorsStore: @unchecked Sendable {
     /// buffers, in the given order, plus the runs. Metal wires a buffer in full
     /// the first time a command buffer binds it, so what a quantized mode keeps
     /// in place must be bound as runs and never as the 41 GB of shards.
-    public func pinned(_ refs: [TensorRef], device: MTLDevice) throws -> (refs: [TensorRef], runs: [MTLBuffer]) {
+    func pinned(_ refs: [TensorRef], device: MTLDevice) throws -> (refs: [TensorRef], runs: [MTLBuffer]) {
         let pageSize = Int(getpagesize())
         var runs: [MTLBuffer] = []
         var repointed = [TensorRef?](repeating: nil, count: refs.count)

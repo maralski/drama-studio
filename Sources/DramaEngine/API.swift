@@ -10,12 +10,12 @@ public enum ModelConstants {
     public static let codebookSize = 4096
     public static let residualCodebookSize = 1024
     public static let semanticStart: Int32 = 248_099
-    public static let semanticEnd: Int32 = 252_194
-    public static let eos: Int32 = 248_046
+    package static let semanticEnd: Int32 = 252_194
+    package static let eos: Int32 = 248_046
     public static let sampleRate = 44_100
     public static let samplesPerFrame = 2048
     public static let maxSpeakerID = 15
-    public static let hiddenSize = 2048
+    package static let hiddenSize = 2048
 }
 
 public struct GenerationConfig: Sendable, Codable, Equatable {
@@ -25,7 +25,7 @@ public struct GenerationConfig: Sendable, Codable, Equatable {
     /// The most frames one chunk may run.
     public var frameCap: FrameCap = .fromText(margin: 1.5, floorSeconds: 2.0)
     /// The CLI's `--max-frames`: setting it pins `frameCap` to `.fixed`.
-    public var maxNewFrames: Int {
+    package var maxNewFrames: Int {
         get {
             switch frameCap {
             case .fixed(let frames): frames
@@ -167,7 +167,7 @@ public struct VoiceDesign: Sendable, Codable, Hashable {
     }
 
     /// The system message text that replaces the usual instruction.
-    public var systemPrompt: String {
+    package var systemPrompt: String {
         var lines: [String] = []
         if let scene = scene.map(UnicodeWhitespace.strip), !scene.isEmpty { lines.append("Scene: \(scene)") }
         lines.append("Characters:")
@@ -177,7 +177,7 @@ public struct VoiceDesign: Sendable, Codable, Hashable {
     }
 
     /// A user turn spoken by this character.
-    public func turn(_ text: String) -> String { "\(UnicodeWhitespace.strip(name)): \(text)" }
+    package func turn(_ text: String) -> String { "\(UnicodeWhitespace.strip(name)): \(text)" }
 }
 
 public struct SpeechRequest: Sendable {
