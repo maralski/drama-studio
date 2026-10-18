@@ -84,12 +84,16 @@ what it is for.
 | Results | ``SpeechEvent``, ``SpeechResult``, ``SpokenSentence``, ``SpeechTimings``, ``StreamedAudio``, ``GenerationEstimate`` |
 | Text | ``Drama3Chunking``, ``Drama3Prompt``, ``PronunciationDictionary``, ``PronunciationRule`` |
 | Codec | ``DramaCodec`` |
-| Constants and errors | ``Frame``, ``ModelConstants``, ``DramaEngineVersion``, ``PromptError``, ``CodecError``, ``EngineError``, ``DramaSetupError`` |
+| Constants and errors | ``Frame``, ``ModelConstants``, `DramaEngineVersion`, ``PromptError``, ``CodecError``, ``EngineError``, ``TokenizerError``, ``DramaSetupError`` |
 
 Every value type is `Sendable`. ``DramaSynthesizer``, ``MockSynthesizer`` and
 ``DramaCodec`` are actors, so you can share one instance across tasks.
 ``DramaSynthesizer`` runs one request at a time. A second request waits for the
 first to finish.
+
+`DramaEngineVersion.string` is the library's semantic version, `"1.0.0"`
+for this release. `CHANGELOG.md` at the repository root lists what each
+release changed.
 
 ## Topics
 
@@ -111,14 +115,14 @@ first to finish.
 - ``GenerationConfig``
 - ``FrameCap``
 
-### Voices
+### Voices and takes
 
 - <doc:Voices>
 - ``ReferenceVoice``
 - ``VoiceDesign``
 - ``Take``
 
-### Streaming
+### Streaming audio
 
 - <doc:Streaming>
 - ``StreamingMode``
@@ -144,7 +148,7 @@ first to finish.
 
 - ``Frame``
 - ``ModelConstants``
-- ``DramaEngineVersion``
 - ``PromptError``
 - ``CodecError``
 - ``EngineError``
+- ``TokenizerError``
