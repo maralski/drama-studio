@@ -2,15 +2,15 @@ import Foundation
 import Metal
 
 /// Loaded weights plus the two transformer stacks. One per process.
-public final class DramaModel: @unchecked Sendable {
-    public let ctx: MetalContext
-    public let config: ModelConfig
-    public let location: ModelLocation
-    public let precision: Precision
-    public let capacity: Int
+package final class DramaModel: @unchecked Sendable {
+    package let ctx: MetalContext
+    package let config: ModelConfig
+    package let location: ModelLocation
+    package let precision: Precision
+    package let capacity: Int
     /// The kernel schedule both stacks run with; `apply` replaces it.
-    public private(set) var schedule: KernelSchedule
-    public enum ScheduleSource: Equatable, Sendable {
+    package private(set) var schedule: KernelSchedule
+    package enum ScheduleSource: Equatable, Sendable {
         /// Loaded from, or saved to, this tuning cache file.
         case cache(URL)
         /// No cache for this key; `Autotune.tune` would fill it.
@@ -18,8 +18,8 @@ public final class DramaModel: @unchecked Sendable {
         /// Passed in by the caller.
         case given
     }
-    public internal(set) var scheduleSource: ScheduleSource
-    public let tuningKey: TuningKey
+    package internal(set) var scheduleSource: ScheduleSource
+    package let tuningKey: TuningKey
     let store: SafeTensorsStore
     let weights: ModelWeights
     let backbone: Backbone
@@ -29,10 +29,10 @@ public final class DramaModel: @unchecked Sendable {
     /// session waits for it before it touches the shared buffers.
     private(set) var inFlight: MTLCommandBuffer?
 
-    public static let defaultCapacity = 8192 + 2048
+    package static let defaultCapacity = 8192 + 2048
     /// Rows per prefill command buffer. Every chunk walks all 30 GB of expert
     /// weights once, so a 10 s reference clip (about 300 rows) should fit in one.
-    public static let prefillChunkRows = 512
+    package static let prefillChunkRows = 512
 
     /// States after the shared system prefix of the last request, so the next
     /// chunk with the same prefix skips that part of the prefill. The KV caches
@@ -42,11 +42,11 @@ public final class DramaModel: @unchecked Sendable {
         var states: Backbone.StateSnapshot
     }
     var prefixCache: PrefixCache?
-    public func clearPrefixCache() { prefixCache = nil }
+    package func clearPrefixCache() { prefixCache = nil }
 
     /// `schedule` nil means the tuning cache's schedule for this device and
     /// model when there is one, else the default; a value is used as given.
-    public init(location: ModelLocation, precision: Precision = .exact, capacity: Int = DramaModel.defaultCapacity,
+    package init(location: ModelLocation, precision: Precision = .exact, capacity: Int = DramaModel.defaultCapacity,
                 schedule: KernelSchedule? = nil, tuningDirectory: URL = TuningCache.defaultDirectory) throws {
         ctx = try MetalContext()
         self.location = location
@@ -75,7 +75,7 @@ public final class DramaModel: @unchecked Sendable {
     }
 
     /// Switches both stacks to `schedule` once the GPU is idle.
-    public func apply(_ schedule: KernelSchedule) throws {
+    package func apply(_ schedule: KernelSchedule) throws {
         try schedule.validate()
         drain()
         self.schedule = schedule
@@ -94,7 +94,7 @@ public final class DramaModel: @unchecked Sendable {
     }
 
     /// GPU seconds for one backbone forward of `rows` rows at position 0.
-    public func benchBackbone(rows: Int, skip: Set<String>) throws -> Double {
+    package func benchBackbone(rows: Int, skip: Set<String>) throws -> Double {
         backbone.skipStages = skip
         defer { backbone.skipStages = [] }
         for r in 0..<rows { let p = backbone.frames.ints + r * 11; p[0] = 1000 + Int32(r); for i in 1..<11 { p[i] = 0 } }
@@ -129,20 +129,20 @@ public final class DramaModel: @unchecked Sendable {
     }
 
     /// The final-norm output of the probe forward, for comparing schedules.
-    public func probeHidden(rows: Int) throws -> [Float] {
+    package func probeHidden(rows: Int) throws -> [Float] {
         try probeForward(rows: rows)
         return backbone.hiddenOut.read(rows * config.hiddenSize)
     }
 
     /// The last layer's MoE input after the probe forward: its post-attention
     /// norm output, `rows` x `hiddenSize`, which the real router routes unevenly.
-    public func probeMoEInput(rows: Int) throws -> [Float] {
+    package func probeMoEInput(rows: Int) throws -> [Float] {
         try probeForward(rows: rows)
         return backbone.h.read(rows * config.hiddenSize)
     }
 
     /// GPU seconds for one tower prefill of `rows` rows.
-    public func benchTower(rows: Int) throws -> Double {
+    package func benchTower(rows: Int) throws -> Double {
         var fake: [Frame] = []
         for r in 0..<rows {
             var f: Frame = [config.semanticStart + Int32(r)]
@@ -159,12 +159,12 @@ public final class DramaModel: @unchecked Sendable {
     }
 
     /// Per-kernel-group GPU milliseconds for one backbone forward of `rows` rows.
-    public func profileBackbone(rows: Int) throws -> [(String, Double)] {
+    package func profileBackbone(rows: Int) throws -> [(String, Double)] {
         _ = try benchBackbone(rows: rows, skip: [])
         return try backbone.profile(rows: rows, makeCommandBuffer: commandBuffer)
     }
 
-    public func benchWarmUp() -> Double {
+    package func benchWarmUp() -> Double {
         let t0 = Date(); warmUp(); return Date().timeIntervalSince(t0)
     }
 
@@ -180,7 +180,7 @@ public final class DramaModel: @unchecked Sendable {
     /// for none of them (the GPU wires the 41 GB on its first use). Shards are
     /// walked on parallel threads. Returns bytes walked.
     @discardableResult
-    public func warmUp() -> Int {
+    package func warmUp() -> Int {
         ctx.warmPipelines()
         let shards = store.shards
         defer {
@@ -210,9 +210,9 @@ public final class DramaModel: @unchecked Sendable {
 
 /// Per-step logits the evaluation suite compares. Both arrays are empty in the
 /// pipelined path (`trace == false`), where the logits never leave the GPU.
-public struct StepTrace {
-    public var candidateLogits: [Float]
-    public var towerLogits: [[Float]]   // 9 x 4096
+package struct StepTrace {
+    package var candidateLogits: [Float]
+    package var towerLogits: [[Float]]   // 9 x 4096
 }
 
 /// One sequence: a prompt, then frames appended one at a time. Owns the
@@ -223,16 +223,16 @@ public struct StepTrace {
 /// `trace == false` the next frame's command buffer is committed before the
 /// current one is waited for, so consecutive `step` calls must pass the same
 /// settings and the sampler the previous call returned.
-public final class GenerationSession {
-    public let model: DramaModel
-    public private(set) var frames: [Frame] = []
-    public let promptRows: Int
+package final class GenerationSession {
+    package let model: DramaModel
+    package private(set) var frames: [Frame] = []
+    package let promptRows: Int
     private var lastHiddenRow = 0
-    public var trace = false
-    public private(set) var layerOutStep0: [[Float]] = []
-    public private(set) var towerHiddenStep0: [[Float]] = []
+    package var trace = false
+    package private(set) var layerOutStep0: [[Float]] = []
+    package private(set) var towerHiddenStep0: [[Float]] = []
     /// GPU time of the completed frame command buffers.
-    public private(set) var gpuSeconds: Double = 0
+    package private(set) var gpuSeconds: Double = 0
 
     /// A committed frame command buffer. It samples the frame for `position`,
     /// writes it to frame row `position + 1`, and leaves the sampler's
@@ -255,7 +255,7 @@ public final class GenerationSession {
 
     /// `prefixRows` leading rows are the shared system prefix: their states are
     /// reused when the previous session had the same prefix, and saved otherwise.
-    public init(model: DramaModel, prompt: [Frame], prefixRows: Int = 0, trace: Bool = false) throws {
+    package init(model: DramaModel, prompt: [Frame], prefixRows: Int = 0, trace: Bool = false) throws {
         self.model = model
         self.promptRows = prompt.count
         self.trace = trace
@@ -315,7 +315,7 @@ public final class GenerationSession {
     /// which every call returns nil without touching the GPU. In trace mode the
     /// trace holds the candidate logits, and the head logits when a frame was
     /// produced.
-    public func step(temperature: Double, topK: Int, topP: Double, sampler: inout Sampler) throws -> (frame: Frame?, trace: StepTrace) {
+    package func step(temperature: Double, topK: Int, topP: Double, sampler: inout Sampler) throws -> (frame: Frame?, trace: StepTrace) {
         guard !finished else { return (nil, StepTrace(candidateLogits: [], towerLogits: [])) }
         let params = SamplingParams(temperature: temperature, topK: topK, topP: topP)
         var cand: [Float] = []
@@ -406,7 +406,7 @@ public final class GenerationSession {
 
     /// Teacher forcing: feeds `frame` as the next frame and returns the logits
     /// the model produced for it. Not available while a pipelined frame is in flight.
-    public func force(_ frame: Frame) throws -> StepTrace {
+    package func force(_ frame: Frame) throws -> StepTrace {
         guard inFlight == nil else { throw EngineError.badModel("force after a pipelined step") }
         let p = position
         let cand = model.backbone.readCandidateLogits()
@@ -427,12 +427,12 @@ public final class GenerationSession {
     /// The backbone's final-norm output and the candidate logits for the GPU's
     /// current position: the CPU's position, or one frame ahead while a
     /// pipelined frame is in flight.
-    public var lastHidden: [Float] {
+    package var lastHidden: [Float] {
         model.drain()
         return model.backbone.hiddenOut.read(config.hiddenSize, offset: lastHiddenRow * config.hiddenSize)
     }
 
-    public var currentCandidateLogits: [Float] {
+    package var currentCandidateLogits: [Float] {
         model.drain()
         return model.backbone.readCandidateLogits()
     }

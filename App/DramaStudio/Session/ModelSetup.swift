@@ -35,8 +35,12 @@ enum ModelSetup {
         customPath.isEmpty ? .huggingFaceCache() : ModelLocation(directory: URL(filePath: customPath, directoryHint: .isDirectory))
     }
 
+    /// The download's state from the engine's own check. The codec models and
+    /// the tuning are left out: the load reports the first and builds the second.
     static func status(customPath: String) -> Status {
         guard let location = location(customPath: customPath) else { return .missing }
-        return location.isComplete ? .ready(location.directory) : .incomplete(location.directory)
+        let report = DramaSetup.check(location: location)
+        let downloaded: [SetupItem.Component] = [.weights, .tokenizer, .codecCheckpoint]
+        return downloaded.contains { report[$0].isMissing } ? .incomplete(location.directory) : .ready(location.directory)
     }
 }

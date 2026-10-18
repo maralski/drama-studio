@@ -2,21 +2,21 @@ import Foundation
 
 /// One codec model call: frames `start ..< end` go in, and the audio of
 /// frames `keep ..< end` is kept. The frames before `keep` are left context.
-public struct DecodeWindow: Equatable, Sendable {
-    public let start: Int
-    public let keep: Int
-    public let end: Int
+package struct DecodeWindow: Equatable, Sendable {
+    package let start: Int
+    package let keep: Int
+    package let end: Int
 
-    public init(start: Int, keep: Int, end: Int) {
+    package init(start: Int, keep: Int, end: Int) {
         self.start = start
         self.keep = keep
         self.end = end
     }
 
-    public var kept: Range<Int> { keep ..< end }
+    package var kept: Range<Int> { keep ..< end }
 
     /// The calls of a full decode of `frames` frames.
-    public static func windows(frames: Int) -> [DecodeWindow] {
+    package static func windows(frames: Int) -> [DecodeWindow] {
         var out: [DecodeWindow] = []
         var keep = 0
         while keep < frames {
@@ -31,7 +31,7 @@ public struct DecodeWindow: Equatable, Sendable {
     /// The calls that produce frames `range` with the same left context a full
     /// decode of the chunk gives them. A call costs the same however few of
     /// its frames are real, so this is no dearer than a bare 256-frame context.
-    public static func covering(_ range: Range<Int>) -> [DecodeWindow] {
+    package static func covering(_ range: Range<Int>) -> [DecodeWindow] {
         windows(frames: range.upperBound).compactMap { w in
             w.end > range.lowerBound ? DecodeWindow(start: w.start, keep: max(w.keep, range.lowerBound), end: w.end) : nil
         }

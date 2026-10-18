@@ -45,10 +45,10 @@ struct SeededGenerator: RandomNumberGenerator {
 
 /// The reference sampler: sort, drop everything past top-k or past the top-p
 /// mass (keeping the best), softmax, then argmax of probability / exponential noise.
-public struct Sampler {
+package struct Sampler {
     var rng: SeededGenerator
 
-    public init(seed: UInt64) { rng = SeededGenerator(seed: seed) }
+    package init(seed: UInt64) { rng = SeededGenerator(seed: seed) }
     init(state: SIMD4<UInt64>) { rng = SeededGenerator(state: state) }
 
     var state: SIMD4<UInt64> {
@@ -57,7 +57,7 @@ public struct Sampler {
     }
 
     /// Returns the index into `logits`.
-    public mutating func sample(_ logits: [Float], temperature: Double, topK: Int, topP: Double) -> Int {
+    package mutating func sample(_ logits: [Float], temperature: Double, topK: Int, topP: Double) -> Int {
         let t = max(temperature, 1e-5)
         let n = logits.count
         var order = Array(0..<n)
@@ -93,13 +93,13 @@ public struct Sampler {
 /// cycle of 17 or more: on the reliability study's two laughter loops the last
 /// 48 main tokens matched the tokens 17 or 34 frames earlier exactly, while no
 /// speech run matched above 0.75 at any lag from 17 to 40.
-public enum MainTokenLoop {
-    public static let windowFrames = 48
-    public static let lags = 17...40
-    public static let threshold = 0.9
+package enum MainTokenLoop {
+    package static let windowFrames = 48
+    package static let lags = 17...40
+    package static let threshold = 0.9
 
     /// Whether the end of `mainTokens` repeats itself at some lag.
-    public static func cycles(_ mainTokens: [Int32]) -> Bool {
+    package static func cycles(_ mainTokens: [Int32]) -> Bool {
         let n = mainTokens.count
         guard n >= windowFrames + lags.lowerBound else { return false }
         for lag in lags where n >= windowFrames + lag {

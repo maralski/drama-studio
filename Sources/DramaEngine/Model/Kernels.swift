@@ -3,14 +3,14 @@ import Metal
 
 /// Numerics switches the evaluation suite drives. Off means fp32 everywhere
 /// after the bf16 weights are widened.
-public struct Precision: Sendable, Equatable {
+package struct Precision: Sendable, Equatable {
     /// Round linear outputs and the residual stream to bf16 where the reference does.
-    public var mimicBF16: Bool = false
+    package var mimicBF16: Bool = false
     /// Round dequantized FP8 expert weights to bf16 (the reference's CPU path does).
-    public var roundExpertWeights: Bool = false
-    public init() {}
-    public static let exact = Precision()
-    public static var reference: Precision { var p = Precision(); p.mimicBF16 = true; p.roundExpertWeights = true; return p }
+    package var roundExpertWeights: Bool = false
+    package init() {}
+    package static let exact = Precision()
+    package static var reference: Precision { var p = Precision(); p.mimicBF16 = true; p.roundExpertWeights = true; return p }
 }
 
 struct HeadView {

@@ -1,19 +1,39 @@
 import Foundation
 import Synchronization
 
-/// The real engine behind the app: Metal backbone and tower, Core ML codec,
-/// Swift tokenizer. Requests run one at a time on a serial queue.
+/// The Drama 3 engine: the Metal backbone and tower, the Core ML codec, and
+/// the Swift tokenizer.
+///
+/// Create one per app and share it; it is an actor. Requests run one at a
+/// time: a second ``synthesize(_:)`` waits until the first finishes. Loading
+/// maps the 39.6 GB of weights without copying them and leaves the process
+/// about 40 GB resident. On an M3 Max a warm load takes about 5 s, a decode
+/// frame about 24 ms of GPU time, and generation runs at about 1.8 times
+/// real time.
 public actor DramaSynthesizer: SpeechSynthesizer {
+    /// The snapshot the engine loads.
     public nonisolated let location: ModelLocation
+    /// Where the Core ML codec models live.
     public let codecDirectory: URL
-    /// Where the kernel tuning cache lives; tests point it at a temp directory.
+    /// Where tuned kernel schedules live, one JSON file per Mac, macOS
+    /// version, kernel source and snapshot.
     public let tuningDirectory: URL
+    /// `~/Library/Application Support/DramaStudio/Tuning`.
+    public static var defaultTuningDirectory: URL { TuningCache.defaultDirectory }
     private var model: DramaModel?
     private var tokenizer: Tokenizer?
     private var codec: DramaCodec?
     private var loading: Task<Void, Error>?
 
-    public init(location: ModelLocation, codecDirectory: URL, tuningDirectory: URL = TuningCache.defaultDirectory) {
+    /// Creates an engine. Nothing loads until ``load(onPhase:)`` or the first
+    /// request.
+    ///
+    /// - Parameters:
+    ///   - location: The snapshot, usually ``ModelLocation/huggingFaceCache(repo:)``.
+    ///   - codecDirectory: Where the Core ML codec models live, usually
+    ///     ``DramaCodec/defaultDirectory``.
+    ///   - tuningDirectory: Where tuned kernel schedules live.
+    public init(location: ModelLocation, codecDirectory: URL, tuningDirectory: URL = DramaSynthesizer.defaultTuningDirectory) {
         self.location = location
         self.codecDirectory = codecDirectory
         self.tuningDirectory = tuningDirectory
@@ -24,12 +44,26 @@ public actor DramaSynthesizer: SpeechSynthesizer {
     /// model loads, then whether its schedule came from the tuning cache.
     private nonisolated let tuned = Mutex<Bool?>(nil)
 
+    /// Whether the model is loaded. Readable while a request runs.
     public nonisolated var isLoaded: Bool { tuned.withLock { $0 != nil } }
+    /// Nil until the model loads; then true when the kernel schedule came
+    /// from the tuning cache, including one this load just tuned, and false
+    /// when tuning failed and the default schedule runs. A tuned schedule makes a one-row forward about 20
+    /// percent faster on an M3 Max.
     public nonisolated var isTuned: Bool? { tuned.withLock { $0 } }
 
-    /// The first load on a Mac also tunes the kernel schedule and caches it,
-    /// so later loads find the cache and skip the step. A tuning failure
-    /// leaves the default schedule in place; it never fails the load.
+    /// Loads the codec, the tokenizer and the weights, and compiles the
+    /// kernels. Requests call it themselves, so calling it first only moves
+    /// the cost. Concurrent calls share one load.
+    ///
+    /// The first load on a Mac also tunes the kernel schedule and caches it
+    /// (about 30 s on an M3 Max), so later loads find the cache and skip the
+    /// step. A tuning failure leaves the default schedule in place; it never
+    /// fails the load.
+    ///
+    /// - Throws: ``CodecError`` when the codec models are missing,
+    ///   ``TokenizerError`` for a bad `tokenizer.json`, ``EngineError`` for a
+    ///   bad snapshot or no Metal device.
     public func load(onPhase: @escaping @Sendable (String) -> Void) async throws {
         if isLoaded { return }
         if let loading { return try await loading.value }
@@ -61,6 +95,10 @@ public actor DramaSynthesizer: SpeechSynthesizer {
         tuned.withLock { $0 = fromCache }
     }
 
+    /// Clones a voice from a clip: loads the engine if needed, reads the
+    /// clip (any format AVFoundation opens), mixes it to mono at 44.1 kHz, and
+    /// encodes it. A 10 s clip takes about 2.1 s in the encoder on an M3 Max.
+    /// `transcript` must say what the clip says.
     public func encodeReference(audioURL: URL, transcript: String, name: String) async throws -> ReferenceVoice {
         try await load()
         let samples = try DramaCodec.loadAudio(url: audioURL)
@@ -68,6 +106,9 @@ public actor DramaSynthesizer: SpeechSynthesizer {
         return ReferenceVoice(name: name, transcript: transcript, codes: codes, sourceFileName: audioURL.lastPathComponent)
     }
 
+    /// Decodes frames to 44.1 kHz mono samples, 2048 per frame, loading the
+    /// engine if needed. The decoder takes about 1.5 s per 512-frame window
+    /// (23.8 s of audio) on an M3 Max.
     public func decode(frames: [Frame]) async throws -> [Float] {
         try await load()
         let codes = (0..<ModelConstants.numCodebooks).map { c in frames.map { $0[1 + c] } }
@@ -75,7 +116,7 @@ public actor DramaSynthesizer: SpeechSynthesizer {
     }
 
     /// Seconds of trailing audio whose 2048-sample frames all stay under an RMS of 0.01.
-    public nonisolated static func trailingSilenceSeconds(_ samples: [Float]) -> Double {
+    package nonisolated static func trailingSilenceSeconds(_ samples: [Float]) -> Double {
         let n = ModelConstants.samplesPerFrame
         var silentFrames = 0
         var end = samples.count / n * n
@@ -90,11 +131,11 @@ public actor DramaSynthesizer: SpeechSynthesizer {
     }
 
     /// Runs a codec decode from synchronous generator code.
-    public nonisolated static func decodeBlocking(_ codec: DramaCodec, codes: [[Int32]]) throws -> [Float] {
+    package nonisolated static func decodeBlocking(_ codec: DramaCodec, codes: [[Int32]]) throws -> [Float] {
         try blocking { try await codec.decode(codes: codes) }
     }
 
-    public nonisolated static func decodeBlocking(_ codec: DramaCodec, codes: [[Int32]], window: DecodeWindow) throws -> [Float] {
+    package nonisolated static func decodeBlocking(_ codec: DramaCodec, codes: [[Int32]], window: DecodeWindow) throws -> [Float] {
         try blocking { try await codec.decode(codes: codes, window: window) }
     }
 
@@ -110,6 +151,12 @@ public actor DramaSynthesizer: SpeechSynthesizer {
         return try result.get()
     }
 
+    /// Speaks `request`, streaming ``SpeechEvent``s that end with
+    /// ``SpeechEvent/finished(_:)``. Loads the engine first if needed, which
+    /// shows as ``SpeechEvent/loadingModel(progress:detail:)`` events.
+    /// Cancelling the task that consumes the stream stops the generation.
+    /// The stream throws ``PromptError`` for a request the prompt builder
+    /// rejects.
     public nonisolated func synthesize(_ request: SpeechRequest) -> AsyncThrowingStream<SpeechEvent, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {

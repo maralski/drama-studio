@@ -1,13 +1,23 @@
 import Foundation
 
+/// Why the prompt builder rejected a request. The `String` payloads name the
+/// part of the request, such as `"text"` or `"reference 1"`.
 public enum PromptError: Error, CustomStringConvertible, Equatable {
+    /// The part is empty or white space.
     case emptyText(String)
+    /// The part contains a token only the prompt builder may write, such as
+    /// `<|im_start|>`; the second string names it.
     case structuralToken(String, String)
+    /// A speaker tag is not `<|speaker:0|>` to `<|speaker:15|>`.
     case badSpeakerTag(String)
+    /// Codes are not 10 codebooks of at least one frame with values under 4096.
     case badCodes(String)
+    /// The prompt has this many rows, over ``Drama3Prompt/maxRows``.
     case tooLong(Int)
+    /// The request has both a designed voice and reference voices.
     case voiceConflict
 
+    /// A message for a person.
     public var description: String {
         switch self {
         case .voiceConflict: return "a designed character and reference voices can't be combined"
@@ -38,13 +48,18 @@ enum UnicodeWhitespace {
     }
 }
 
-/// `build_drama3_prompt` from the reference: frame rows ending in the open
-/// assistant voice turn.
-public enum Drama3Prompt {
-    public static let ttsInstruction = "convert the provided text to speech"
-    public static let referenceInstruction = "convert the provided text to speech reference to the following:"
-    public static let messageEnd = "<|im_end|>\n"
-    public static let generationStart = "<|im_start|>assistant\n<|voice|>"
+/// The Drama 3 prompt layout, `build_drama3_prompt` from the reference.
+///
+/// The public entry is ``render(text:references:character:history:)``, which
+/// shows the prompt one chunk would get, for previews and debugging. The
+/// engine builds the token rows itself.
+public enum Drama3Prompt: Sendable {
+    package static let ttsInstruction = "convert the provided text to speech"
+    package static let referenceInstruction = "convert the provided text to speech reference to the following:"
+    package static let messageEnd = "<|im_end|>\n"
+    package static let generationStart = "<|im_start|>assistant\n<|voice|>"
+    /// The most rows a prompt may have. Each text token and each reference
+    /// or history frame is one row.
     public static let maxRows = 8192
     static let structuralTokens = ["<|im_start|>", "<|im_end|>", "<|voice|>", "<|text|>", "<|interleave|>", "<|semantic:"]
     static let speakerTag = try! NSRegularExpression(pattern: "<\\|speaker:([0-9]+)\\|>")
@@ -52,13 +67,20 @@ public enum Drama3Prompt {
     /// Token 252196; the design instruction names it between consecutive lines.
     public static let audioSeparator = "<|audio_separator|>"
 
+    /// A voice reference as the prompt holds it.
     public struct Reference: Sendable, Equatable {
+        /// What the clip says.
         public var transcript: String
+        /// `[10][T]` codec codes.
         public var codes: [[Int32]]
+        /// Creates a reference. `ReferenceVoice` converts as
+        /// `Reference(transcript: voice.transcript, codes: voice.codes)`.
         public init(transcript: String, codes: [[Int32]]) { self.transcript = transcript; self.codes = codes }
     }
 
+    /// An earlier turn fed back as history.
     public typealias HistoryTurn = Take
+    /// A designed voice, which replaces the instruction with its description.
     public typealias Character = VoiceDesign
 
     static func validate(_ character: Character) throws {
@@ -87,7 +109,7 @@ public enum Drama3Prompt {
     }
 
     /// Prefix `<|speaker:0|> ` unless a tag already leads the text after white space.
-    public static func withSpeakerTag(_ text: String) -> String {
+    package static func withSpeakerTag(_ text: String) -> String {
         let body = UnicodeWhitespace.stripLeading(text)
         if speakerTag.firstMatch(in: body, options: .anchored, range: NSRange(location: 0, length: (body as NSString).length)) != nil { return text }
         return "<|speaker:0|> " + text
@@ -105,14 +127,23 @@ public enum Drama3Prompt {
         (0..<codes[0].count).map { t in [codes[0][t] + ModelConstants.semanticStart] + codes.map { $0[t] } }
     }
 
-    public static func build(text: String, tokenizer: Tokenizer, references: [Reference] = [], character: Character? = nil, history: [HistoryTurn] = []) throws -> [Frame] {
+    package static func build(text: String, tokenizer: Tokenizer, references: [Reference] = [], character: Character? = nil, history: [HistoryTurn] = []) throws -> [Frame] {
         try buildWithPrefix(text: text, tokenizer: tokenizer, references: references, character: character, history: history).rows
     }
 
     enum Segment: Equatable { case text(String), codes([[Int32]]) }
 
-    /// The prompt as text with each code block shown as `<codes:frames>`.
-    static func render(text: String, references: [Reference] = [], character: Character? = nil, history: [HistoryTurn] = []) throws -> String {
+    /// The prompt for one chunk as text, with each block of codes shown as
+    /// `<codes:N>` for N frames. The engine tokenizes exactly these pieces.
+    ///
+    /// - Parameters:
+    ///   - text: One chunk's user turn. A missing speaker tag becomes
+    ///     `<|speaker:0|>`.
+    ///   - references: Voice references, in speaker order.
+    ///   - character: A designed voice; mutually exclusive with `references`.
+    ///   - history: Earlier turns, oldest first.
+    /// - Throws: ``PromptError`` for text or codes the builder rejects.
+    public static func render(text: String, references: [Reference] = [], character: Character? = nil, history: [HistoryTurn] = []) throws -> String {
         try layout(text: text, references: references, character: character, history: history).segments.map { segment in
             switch segment {
             case .text(let s): s
@@ -125,7 +156,7 @@ public enum Drama3Prompt {
     /// (instruction and references), which every chunk of a request shares.
     /// A `character` replaces the instruction with its design prompt and
     /// speaks every turn as `Name: text` instead of a speaker tag.
-    public static func buildWithPrefix(text: String, tokenizer: Tokenizer, references: [Reference] = [], character: Character? = nil,
+    package static func buildWithPrefix(text: String, tokenizer: Tokenizer, references: [Reference] = [], character: Character? = nil,
                                        history: [HistoryTurn] = []) throws -> (rows: [Frame], prefixRows: Int) {
         let (segments, systemSegments) = try layout(text: text, references: references, character: character, history: history)
         var rows: [Frame] = []

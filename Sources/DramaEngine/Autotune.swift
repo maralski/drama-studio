@@ -7,18 +7,18 @@ import Metal
 /// timed interleaved round by round, and the fastest one that beats the
 /// default by `minGainPercent` wins. The result is one `KernelSchedule`,
 /// cached per `TuningKey`.
-public enum Autotune {
-    public struct Options: Sendable {
-        public var rounds = 5
-        public var budgetSeconds = 60.0
+package enum Autotune {
+    package struct Options: Sendable {
+        package var rounds = 5
+        package var budgetSeconds = 60.0
         /// Largest relative L2 against the default a candidate may show.
-        public var tolerance = 1e-5
+        package var tolerance = 1e-5
         /// A candidate replaces the default only when it is at least this much
         /// faster; run-to-run noise on one kernel is a few percent, and a pick
         /// inside the noise is cached for good.
-        public var minGainPercent = 5.0
-        public var progress: (@Sendable (String) -> Void)? = nil
-        public init() {}
+        package var minGainPercent = 5.0
+        package var progress: (@Sendable (String) -> Void)? = nil
+        package init() {}
     }
 
     struct Candidate {
@@ -50,7 +50,7 @@ public enum Autotune {
     }
 
     /// Relative L2 of `b` against `a`: sqrt(sum (a-b)^2 / sum a^2).
-    public static func relL2(_ a: [Float], _ b: [Float]) -> Double {
+    package static func relL2(_ a: [Float], _ b: [Float]) -> Double {
         var num = 0.0, den = 0.0
         for (x, y) in zip(a, b) { num += Double(x - y) * Double(x - y); den += Double(x) * Double(x) }
         return (num / max(den, 1e-30)).squareRoot()
@@ -180,7 +180,7 @@ public enum Autotune {
     /// generation session: the workloads overwrite the scratch buffers, KV
     /// caches and recurrent states.
     @discardableResult
-    public static func tune(model: DramaModel, options: Options = Options(), cacheDirectory: URL = TuningCache.defaultDirectory) throws -> TuningReport {
+    package static func tune(model: DramaModel, options: Options = Options(), cacheDirectory: URL = TuningCache.defaultDirectory) throws -> TuningReport {
         let start = Date()
         let entries = try census(model: model)
         var report = try run(entries: entries, ctx: model.ctx, precision: model.precision, key: model.tuningKey,

@@ -25,7 +25,7 @@ import numpy as np
 import soundfile as sf
 import torch
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "Sources/DramaEngine/CodecConversion"))
 from convert_codec import CONTEXT_FRAMES, DEFAULT_OUT, WINDOW_FRAMES  # noqa: E402
 from dac_reference import load_dac  # noqa: E402
 from dac_reference.exportable import SAMPLES_PER_FRAME, CodecDecoder, CodecEncoder, make_exportable  # noqa: E402

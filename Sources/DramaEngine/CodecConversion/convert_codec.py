@@ -1,6 +1,6 @@
 """Export the Drama 3 DAC codec to Core ML.
 
-    tools/.venv/bin/python -I tools/convert_codec.py [--out DIR] [--only encoder|decoder]
+    tools/.venv/bin/python -I Sources/DramaEngine/CodecConversion/convert_codec.py [--codec PATH] [--out DIR] [--only encoder|decoder]
 
 Writes DramaCodecEncoder.mlpackage (fp32) and DramaCodecDecoder.mlpackage (fp16), both
 mlprogram for macOS 15 with one static shape of WINDOW_FRAMES frames. Callers pad
@@ -73,12 +73,13 @@ def convert_decoder(model) -> ct.models.MLModel:
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--codec", type=Path, default=CODEC_PATH, help="codec.pth from the Drama 3 snapshot")
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
     ap.add_argument("--only", choices=["encoder", "decoder"])
     args = ap.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
 
-    model = make_exportable(load_dac(), max_frames=WINDOW_FRAMES)
+    model = make_exportable(load_dac(args.codec), max_frames=WINDOW_FRAMES)
     jobs = {"encoder": (convert_encoder, "DramaCodecEncoder"), "decoder": (convert_decoder, "DramaCodecDecoder")}
     for key, (fn, name) in jobs.items():
         if args.only and args.only != key:

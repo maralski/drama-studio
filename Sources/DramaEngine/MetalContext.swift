@@ -6,31 +6,36 @@ import Metal
 ///
 /// The kernels ship as `.metal` sources in the bundle and are compiled once at
 /// startup; SwiftPM does not build a metallib from the command line.
-public final class MetalContext {
-    public let device: MTLDevice
-    public let queue: MTLCommandQueue
-    public let library: MTLLibrary
+package final class MetalContext {
+    package let device: MTLDevice
+    package let queue: MTLCommandQueue
+    package let library: MTLLibrary
     /// SHA-256 hex of the exact source string the library was compiled from.
-    public let kernelDigest: String
+    package let kernelDigest: String
     private var pipelines: [String: MTLComputePipelineState] = [:]
     private let lock = NSLock()
 
-    public init() throws {
+    package init() throws {
         guard let device = MTLCreateSystemDefaultDevice() else { throw EngineError.noMetalDevice }
         self.device = device
         guard let queue = device.makeCommandQueue() else { throw EngineError.noMetalDevice }
         self.queue = queue
         let source = try Self.kernelSources()
-        kernelDigest = SHA256.hash(data: Data(source.utf8)).map { String(format: "%02x", $0) }.joined()
+        kernelDigest = Self.digest(source)
         self.library = try Self.compileKernels(source: source, device: device)
     }
 
     /// The resource bundle: inside a packaged .app it sits in Contents/Resources,
     /// where SwiftPM's generated accessor does not look.
+    static let resourceBundleName = "DramaStudio_DramaEngine.bundle"
+
     static func resourceBundle() -> Bundle {
-        let name = "DramaStudio_DramaEngine.bundle"
-        if let url = Bundle.main.resourceURL?.appendingPathComponent(name), let b = Bundle(url: url) { return b }
+        if let url = Bundle.main.resourceURL?.appendingPathComponent(resourceBundleName), let b = Bundle(url: url) { return b }
         return Bundle.module
+    }
+
+    static func digest(_ source: String) -> String {
+        SHA256.hash(data: Data(source.utf8)).map { String(format: "%02x", $0) }.joined()
     }
 
     static func kernelSources() throws -> String {
@@ -69,7 +74,7 @@ public final class MetalContext {
 
     /// Builds every kernel's pipeline state up front, in parallel, so the first
     /// request does not pay for them one dispatch at a time.
-    public func warmPipelines() {
+    package func warmPipelines() {
         let names = library.functionNames
         DispatchQueue.concurrentPerform(iterations: names.count) { i in
             guard let fn = library.makeFunction(name: names[i]), let p = try? device.makeComputePipelineState(function: fn) else { return }
@@ -77,7 +82,7 @@ public final class MetalContext {
         }
     }
 
-    public func pipeline(_ name: String) throws -> MTLComputePipelineState {
+    package func pipeline(_ name: String) throws -> MTLComputePipelineState {
         lock.lock(); defer { lock.unlock() }
         if let p = pipelines[name] { return p }
         guard let fn = library.makeFunction(name: name) else { throw EngineError.missingKernel(name) }
@@ -87,12 +92,18 @@ public final class MetalContext {
     }
 }
 
+/// Why the engine could not load or run.
 public enum EngineError: Error, CustomStringConvertible {
+    /// The Mac has no Metal device the engine can use.
     case noMetalDevice
+    /// A kernel, or the resource bundle that holds the kernel sources, is missing.
     case missingKernel(String)
+    /// The snapshot's files do not match what the engine expects.
     case badModel(String)
+    /// A cached kernel schedule failed validation.
     case badSchedule(String)
 
+    /// A message for a person.
     public var description: String {
         switch self {
         case .noMetalDevice: return "no Metal device"

@@ -1,7 +1,9 @@
 # DAC reference (vendored)
 
-The PyTorch oracle for the Core ML codec. `tools/convert_codec.py` and
-`tools/verify_codec.py` import it; nothing in the app does.
+The PyTorch oracle for the Core ML codec. `convert_codec.py` beside it and
+`tools/verify_codec.py` import it; nothing in the app does. Both live in
+`Sources/DramaEngine/CodecConversion/`, which ships in DramaEngine's resource
+bundle, so `DramaSetup.prepare` can run the conversion with a Python you name.
 
 ## Origin
 

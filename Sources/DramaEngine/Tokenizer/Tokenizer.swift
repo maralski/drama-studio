@@ -1,19 +1,21 @@
 import Foundation
 
+/// Why `tokenizer.json` could not be read.
 public enum TokenizerError: Error, Sendable {
+    /// The file is missing a part the tokenizer needs; the string names it.
     case invalidFile(String)
 }
 
-public final class Tokenizer: Sendable {
+package final class Tokenizer: Sendable {
     private let idForToken: [String: Int32]
     private let tokenForId: [String?]
     private let addedTokens: AddedTokens
     private let splitter: NSRegularExpression
     private let bpe: BPE
 
-    public var vocabularySize: Int { tokenForId.count }
+    package var vocabularySize: Int { tokenForId.count }
 
-    public init(url: URL) throws {
+    package init(url: URL) throws {
         let file = try TokenizerFile(url: url)
         idForToken = file.vocab.merging(file.added) { _, added in added }
         tokenForId = Self.invert(idForToken)
@@ -22,11 +24,11 @@ public final class Tokenizer: Sendable {
         bpe = BPE(idForByte: try file.idsForBytes(), merges: try file.mergeTable())
     }
 
-    public func id(forToken token: String) -> Int32? {
+    package func id(forToken token: String) -> Int32? {
         idForToken[token]
     }
 
-    public func encode(_ text: String) -> [Int32] {
+    package func encode(_ text: String) -> [Int32] {
         var ids: [Int32] = []
         for segment in addedTokens.split(Array(text.utf8)) {
             switch segment {
@@ -37,7 +39,7 @@ public final class Tokenizer: Sendable {
         return ids
     }
 
-    public func decode(_ ids: [Int32]) -> String {
+    package func decode(_ ids: [Int32]) -> String {
         var bytes: [UInt8] = []
         for id in ids {
             guard tokenForId.indices.contains(Int(id)), let token = tokenForId[Int(id)] else { continue }

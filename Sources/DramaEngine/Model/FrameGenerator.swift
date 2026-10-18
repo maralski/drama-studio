@@ -3,36 +3,36 @@ import Foundation
 /// Text in, codec frames out, chunk by chunk, following the reference's
 /// long-text loop: each chunk is generated with the pinned first chunk and the
 /// latest chunk as history.
-public final class FrameGenerator {
-    public let model: DramaModel
-    public let tokenizer: Tokenizer
+package final class FrameGenerator {
+    package let model: DramaModel
+    package let tokenizer: Tokenizer
 
-    public struct ChunkResult: Sendable {
-        public var index: Int
-        public var count: Int
-        public var text: String
-        public var frames: [Frame]
-        public var promptRows: Int
-        public var finishedByEOS: Bool
+    package struct ChunkResult: Sendable {
+        package var index: Int
+        package var count: Int
+        package var text: String
+        package var frames: [Frame]
+        package var promptRows: Int
+        package var finishedByEOS: Bool
         /// The loop guard ended the chunk.
-        public var stoppedByLoop: Bool = false
+        package var stoppedByLoop: Bool = false
         /// The most frames this chunk could run.
-        public var frameBudget: Int = 0
-        public var prefillSeconds: Double
-        public var decodeSeconds: Double
+        package var frameBudget: Int = 0
+        package var prefillSeconds: Double
+        package var decodeSeconds: Double
         /// GPU time of the decode command buffers.
-        public var gpuSeconds: Double
-        public var spokenSeconds: Double
-        public var attempts: Int
+        package var gpuSeconds: Double
+        package var spokenSeconds: Double
+        package var attempts: Int
         /// The chunk's decoded audio; empty without a `codec`.
-        public var samples: [Float]
-        public var codecSeconds: Double
-        public var durationSeconds: Double { Double(frames.count) * Double(ModelConstants.samplesPerFrame) / Double(ModelConstants.sampleRate) }
+        package var samples: [Float]
+        package var codecSeconds: Double
+        package var durationSeconds: Double { Double(frames.count) * Double(ModelConstants.samplesPerFrame) / Double(ModelConstants.sampleRate) }
         /// `[10][T]` codes, the shape the codec and history take.
-        public var codes: [[Int32]] { (0..<ModelConstants.numCodebooks).map { c in frames.map { $0[1 + c] } } }
+        package var codes: [[Int32]] { (0..<ModelConstants.numCodebooks).map { c in frames.map { $0[1 + c] } } }
     }
 
-    public enum Event: Sendable {
+    package enum Event: Sendable {
         case chunkStarted(index: Int, count: Int, text: String)
         case prefilled(rows: Int)
         case frame(index: Int, maxFrames: Int)
@@ -47,12 +47,12 @@ public final class FrameGenerator {
     /// audio, `.lowLatency` streams it, and `ChunkResult.samples` carries it.
     /// Without it, the early stop is off and the spoken-duration check falls
     /// back to the frame count.
-    public var codec: ((_ codes: [[Int32]], _ window: DecodeWindow) throws -> [Float])?
+    package var codec: ((_ codes: [[Int32]], _ window: DecodeWindow) throws -> [Float])?
     static let silenceProbeEveryFrames = 16
 
     static let charactersPerSecond = 16.0
 
-    public static func expectedSeconds(for text: String) -> Double {
+    package static func expectedSeconds(for text: String) -> Double {
         let plain = text.replacingOccurrences(of: #"<\|[^|]*\|>|\[[^\]]*\]"#, with: "", options: .regularExpression)
         let chars = plain.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ").count
         return Double(chars) / charactersPerSecond
@@ -65,7 +65,7 @@ public final class FrameGenerator {
         return a.spokenSeconds > b.spokenSeconds
     }
 
-    public init(model: DramaModel, tokenizer: Tokenizer) {
+    package init(model: DramaModel, tokenizer: Tokenizer) {
         self.model = model
         self.tokenizer = tokenizer
     }
@@ -84,14 +84,14 @@ public final class FrameGenerator {
 
     /// Generates every chunk of the plan. `onEvent` runs on the calling
     /// thread; return false from `shouldContinue` to stop early.
-    public func generate(text: String, references: [Drama3Prompt.Reference], character: VoiceDesign? = nil, previousTakes: [Take] = [],
+    package func generate(text: String, references: [Drama3Prompt.Reference], character: VoiceDesign? = nil, previousTakes: [Take] = [],
                          note: String? = nil, config: GenerationConfig,
                          shouldContinue: () -> Bool = { true }, onEvent: (Event) -> Void) throws -> [ChunkResult] {
         try generate(plan: GenerationPlan(text: text, references: references, character: character, previousTakes: previousTakes, note: note, config: config),
                      config: config, shouldContinue: shouldContinue, onEvent: onEvent)
     }
 
-    public func generate(plan: GenerationPlan, config: GenerationConfig,
+    package func generate(plan: GenerationPlan, config: GenerationConfig,
                          shouldContinue: () -> Bool = { true }, onEvent: (Event) -> Void) throws -> [ChunkResult] {
         let chunks = plan.chunks
         for chunk in chunks {

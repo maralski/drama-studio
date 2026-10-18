@@ -21,5 +21,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 The Fish Audio Drama 3 model weights and the vendored reference code under
-eval/oracle and tools/dac_reference are not covered by this license; see
-eval/oracle/LICENSE_NOTE.md and tools/dac_reference/.
+eval/oracle and Sources/DramaEngine/CodecConversion/dac_reference are not
+covered by this license; see eval/oracle/LICENSE_NOTE.md and
+Sources/DramaEngine/CodecConversion/dac_reference/.

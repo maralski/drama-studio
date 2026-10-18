@@ -137,7 +137,7 @@ func bench(_ args: Args) throws {
 
 /// Decodes frames with the Core ML codec and writes a 44.1 kHz float WAV.
 func writeWav(frames: [Frame], to wavPath: String) throws {
-    guard DramaCodec.modelsExist() else { fail("the Core ML codec models are missing; run tools/convert_codec.py") }
+    guard DramaCodec.modelsExist() else { fail("the Core ML codec models are missing; run Sources/DramaEngine/CodecConversion/convert_codec.py") }
     let codec = try awaitBlocking { try await DramaCodec(directory: DramaCodec.defaultDirectory) }
     let t0 = Date()
     let codes = (0..<ModelConstants.numCodebooks).map { c in frames.map { $0[1 + c] } }
@@ -336,7 +336,7 @@ func serve(_ args: Args) throws -> Never {
         guard let location = args["model"].map({ ModelLocation(directory: URL(fileURLWithPath: $0)) }) ?? ModelLocation.huggingFaceCache(), location.isComplete else {
             fail("no complete model found; pass --model <dir> or run: hf download fishaudio/drama-3")
         }
-        guard DramaCodec.modelsExist() else { fail("the Core ML codec models are missing; run tools/convert_codec.py") }
+        guard DramaCodec.modelsExist() else { fail("the Core ML codec models are missing; run Sources/DramaEngine/CodecConversion/convert_codec.py") }
         synthesizer = DramaSynthesizer(location: location, codecDirectory: DramaCodec.defaultDirectory)
     }
     let token = args.flags.contains("no-token") ? nil : try APIToken.loadOrCreate()

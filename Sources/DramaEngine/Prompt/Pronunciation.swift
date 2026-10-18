@@ -1,11 +1,18 @@
 import Foundation
 
+/// One rewrite: wherever `match` appears, the model hears `sayAs` instead.
 public struct PronunciationRule: Codable, Sendable, Equatable, Hashable {
+    /// The text to find. An empty match never applies.
     public var match: String
+    /// What the model should say instead, spelled as it sounds.
     public var sayAs: String
+    /// Match only where no letter, digit, or underscore touches either end.
+    /// Default true.
     public var wholeWord: Bool
+    /// Match case exactly. Default false.
     public var caseSensitive: Bool
 
+    /// Creates a rule.
     public init(match: String, sayAs: String, wholeWord: Bool = true, caseSensitive: Bool = false) {
         self.match = match
         self.sayAs = sayAs
@@ -14,23 +21,38 @@ public struct PronunciationRule: Codable, Sendable, Equatable, Hashable {
     }
 }
 
+/// Rules that rewrite words before the model hears them, as the app's
+/// Settings and the HTTP API apply them. Apply it to ``SpeechRequest/text``
+/// yourself; the engine does not.
+///
+/// ```swift
+/// let rules = PronunciationDictionary(rules: [PronunciationRule(match: "Nguyen", sayAs: "Win")])
+/// let request = SpeechRequest(text: rules.apply(to: "Ms Nguyen is here."))
+/// ```
 public struct PronunciationDictionary: Codable, Sendable, Equatable {
+    /// The rules. When two could match at one place, the longer match wins,
+    /// then the earlier rule.
     public var rules: [PronunciationRule]
 
+    /// Creates a dictionary.
     public init(rules: [PronunciationRule] = []) {
         self.rules = rules
     }
 
+    /// `~/Library/Application Support/DramaStudio/pronunciation.json`, the
+    /// file the app and `drama serve` share.
     public static var defaultURL: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appending(path: "DramaStudio/pronunciation.json")
     }
 
+    /// Reads a dictionary from JSON; an empty one when the file does not exist.
     public static func load(from url: URL = defaultURL) throws -> PronunciationDictionary {
         guard FileManager.default.fileExists(atPath: url.path) else { return PronunciationDictionary() }
         return try JSONDecoder().decode(PronunciationDictionary.self, from: Data(contentsOf: url))
     }
 
+    /// Writes the dictionary as pretty-printed JSON, creating the folder.
     public func save(to url: URL = defaultURL) throws {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let encoder = JSONEncoder()
@@ -38,7 +60,9 @@ public struct PronunciationDictionary: Codable, Sendable, Equatable {
         try encoder.encode(self).write(to: url, options: .atomic)
     }
 
-    /// One left-to-right pass, so a replacement is never rewritten by another rule.
+    /// `text` with every rule applied in one left-to-right pass, so a
+    /// replacement is never rewritten by another rule. Speaker tags,
+    /// `[cues]`, and `<tags>` are left as they are.
     public func apply(to text: String) -> String {
         guard let matcher else { return text }
         let ns = text as NSString

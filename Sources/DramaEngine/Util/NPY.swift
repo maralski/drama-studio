@@ -2,30 +2,30 @@ import Foundation
 import zlib
 
 /// Minimal NumPy `.npy` reading and writing, plus uncompressed `.npz`.
-public enum NPY {
-    public enum DType: String { case int64 = "<i8", int32 = "<i4", float32 = "<f4", float64 = "<f8", uint8 = "|u1" }
+package enum NPY {
+    package enum DType: String { case int64 = "<i8", int32 = "<i4", float32 = "<f4", float64 = "<f8", uint8 = "|u1" }
 
-    public struct Array {
-        public var dtype: DType
-        public var shape: [Int]
-        public var data: Data
-        public init(dtype: DType, shape: [Int], data: Data) { self.dtype = dtype; self.shape = shape; self.data = data }
+    package struct Array {
+        package var dtype: DType
+        package var shape: [Int]
+        package var data: Data
+        package init(dtype: DType, shape: [Int], data: Data) { self.dtype = dtype; self.shape = shape; self.data = data }
 
-        public static func int64(_ values: [Int64], shape: [Int]) -> Array {
+        package static func int64(_ values: [Int64], shape: [Int]) -> Array {
             Array(dtype: .int64, shape: shape, data: values.withUnsafeBufferPointer { Data(buffer: $0) })
         }
-        public static func float32(_ values: [Float], shape: [Int]) -> Array {
+        package static func float32(_ values: [Float], shape: [Int]) -> Array {
             Array(dtype: .float32, shape: shape, data: values.withUnsafeBufferPointer { Data(buffer: $0) })
         }
-        public var count: Int { shape.reduce(1, *) }
-        public var int64Values: [Int64] {
+        package var count: Int { shape.reduce(1, *) }
+        package var int64Values: [Int64] {
             switch dtype {
             case .int64: return data.withUnsafeBytes { Swift.Array($0.bindMemory(to: Int64.self)) }
             case .int32: return data.withUnsafeBytes { $0.bindMemory(to: Int32.self).map(Int64.init) }
             default: return []
             }
         }
-        public var float32Values: [Float] {
+        package var float32Values: [Float] {
             switch dtype {
             case .float32: return data.withUnsafeBytes { Swift.Array($0.bindMemory(to: Float.self)) }
             case .float64: return data.withUnsafeBytes { $0.bindMemory(to: Double.self).map(Float.init) }
@@ -34,7 +34,7 @@ public enum NPY {
         }
     }
 
-    public static func read(url: URL) throws -> Array {
+    package static func read(url: URL) throws -> Array {
         try parse(Data(contentsOf: url))
     }
 
@@ -67,7 +67,7 @@ public enum NPY {
 
     /// Reads an uncompressed `.npz` (NumPy's default `savez`, and `writeNPZ`),
     /// keyed by member name without the `.npy` suffix.
-    public static func readNPZ(url: URL) throws -> [String: Array] {
+    package static func readNPZ(url: URL) throws -> [String: Array] {
         let d = try Data(contentsOf: url)
         func u16(_ at: Int) -> Int { Int(d[at]) | Int(d[at + 1]) << 8 }
         func u32(_ at: Int) -> Int { u16(at) | u16(at + 2) << 16 }
@@ -97,12 +97,12 @@ public enum NPY {
         return out
     }
 
-    public static func write(_ a: Array, to url: URL) throws {
+    package static func write(_ a: Array, to url: URL) throws {
         try serialize(a).write(to: url)
     }
 
     /// Writes an uncompressed zip with one `.npy` member per entry.
-    public static func writeNPZ(_ entries: [(String, Array)], to url: URL) throws {
+    package static func writeNPZ(_ entries: [(String, Array)], to url: URL) throws {
         var out = Data()
         var central = Data()
         var count: UInt16 = 0

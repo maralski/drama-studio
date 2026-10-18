@@ -57,7 +57,7 @@ uvx --from huggingface_hub hf download fishaudio/drama-3
 
 ```bash
 cd tools && uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python "torch==2.7.1" coremltools numpy einops soundfile
-.venv/bin/python convert_codec.py
+.venv/bin/python -I ../Sources/DramaEngine/CodecConversion/convert_codec.py
 ```
 
   They land in `~/Library/Application Support/DramaStudio/Codec/` (encoder
@@ -376,6 +376,59 @@ Or with Claude Desktop, in `~/Library/Application Support/Claude/claude_desktop_
   }
 }
 ```
+
+## Using the engine in your own app
+
+`DramaEngine` is a Swift library, version 1.0.0 (`DramaEngineVersion.string`,
+`CHANGELOG.md`). Add this repository as a package dependency and the
+`DramaEngine` product to a target; the app, the server and the CLI are not
+needed. The public surface is `ModelLocation` and `DramaSetup` for the
+install, `DramaSynthesizer` (an actor) behind the `SpeechSynthesizer`
+protocol, `SpeechRequest` with `ReferenceVoice`, `VoiceDesign`, `Take` and
+`GenerationConfig`, the streamed `SpeechEvent`s with `StreamedAudio` and
+`GenerationEstimate`, `PronunciationDictionary`, `DramaCodec` for standalone
+encode and decode, and `MockSynthesizer` for previews and tests. Everything
+else in `Sources/DramaEngine` is `package`: the repository's targets use it,
+other packages cannot.
+
+```swift
+import DramaEngine
+
+let report = DramaSetup.check(location: .huggingFaceCache())
+guard let location = report.location, report.isReady else { fatalError(report.fixes.joined(separator: "\n")) }
+let engine = DramaSynthesizer(location: location, codecDirectory: DramaCodec.defaultDirectory)
+let voice = try await engine.encodeReference(audioURL: clip, transcript: "What the clip says.", name: "Narrator")
+var request = SpeechRequest(text: "Hello there.", references: [voice])
+request.config.streaming = .defaultLowLatency
+var audio = StreamedAudio()
+for try await event in engine.synthesize(request) {
+    play(audio.newSamples(from: event))
+}
+```
+
+- `DramaSetup.check` reads files only and names what is missing: a weight
+  shard, the tokenizer, `codec.pth`, the Core ML codec models, or a tuned
+  kernel schedule for this Mac, each with a fix. `DramaSetup.prepare` builds
+  the codec models with the `convert_codec.py` that ships in the engine's
+  resource bundle, through a Python you name (it throws the exact commands
+  when you name none and never downloads Python), and loads the model once to
+  tune the kernels.
+- `Examples/SpeakCLI` is a separate package that depends on this one by path,
+  clones a voice from a clip, streams progress, and writes a WAV in 67 lines.
+  `Examples/README.md` has the Xcode steps and the entitlements: none beyond
+  the app's own, plus the microphone only to record clips.
+- The DocC catalog (`Sources/DramaEngine/DramaEngine.docc`) has the landing
+  page and the articles "Getting the model", "Voices" and "Streaming". Build
+  it with `xcodebuild docbuild -scheme DramaEngine -destination
+  'generic/platform=macOS' -derivedDataPath .build/docbuild`; no DocC plugin
+  is needed. `swift test --filter SDKUsageTests` runs the landing page's
+  example on `MockSynthesizer` and fails if the page's copy drifts.
+- `tools/api_audit.py` (after `swift package dump-symbol-graph
+  --minimum-access-level public`) lists the public symbols and fails on one
+  without a doc comment or a public value type that is not `Sendable`.
+- `tools/make_xcframework.sh` builds `dist/DramaEngine.xcframework` for macOS
+  on Apple silicon, with the Metal kernel sources and the conversion script
+  inside the framework, then builds and runs `SpeakCLI` against it.
 
 ## How it is built
 
