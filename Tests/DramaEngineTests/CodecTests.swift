@@ -24,7 +24,7 @@ final class CodecTests: XCTestCase {
     private func makeCodec() async throws -> DramaCodec {
         let dir = DramaCodec.defaultDirectory
         try XCTSkipUnless(DramaCodec.modelsExist(in: dir),
-                          "Core ML codec models not found in \(dir.path); run tools/convert_codec.py to create them")
+                          "Core ML codec models not found in \(dir.path); run Sources/DramaEngine/CodecConversion/convert_codec.py to create them")
         return try await DramaCodec(directory: dir)
     }
 

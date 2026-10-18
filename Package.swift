@@ -15,7 +15,7 @@ let package = Package(
         .target(
             name: "DramaEngine",
             path: "Sources/DramaEngine",
-            resources: [.copy("Kernels")]
+            resources: [.copy("Kernels"), .copy("CodecConversion")]
         ),
         .target(name: "DramaServer", dependencies: ["DramaEngine"], path: "Sources/DramaServer"),
         .target(name: "DramaMCP", path: "Sources/DramaMCP"),

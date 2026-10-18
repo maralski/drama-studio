@@ -60,7 +60,7 @@ uvx --from huggingface_hub hf download fishaudio/drama-3
 
 ```bash
 cd tools && uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python "torch==2.7.1" coremltools numpy einops soundfile
-.venv/bin/python convert_codec.py
+.venv/bin/python -I ../Sources/DramaEngine/CodecConversion/convert_codec.py
 ```
 
   They land in `~/Library/Application Support/DramaStudio/Codec/` (encoder

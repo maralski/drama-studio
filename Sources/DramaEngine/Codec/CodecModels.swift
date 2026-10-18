@@ -10,7 +10,7 @@ public enum CodecError: Error, CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .missingModel(let url): return "codec model not found at \(url.path); run tools/convert_codec.py"
+        case .missingModel(let url): return "codec model not found at \(url.path); run Sources/DramaEngine/CodecConversion/convert_codec.py"
         case .badCodes(let m): return "bad codec codes: \(m)"
         case .unexpectedOutput(let m): return "unexpected codec output: \(m)"
         case .audio(let m): return "audio: \(m)"

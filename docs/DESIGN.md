@@ -79,7 +79,7 @@ Sources/DramaEngine/Kernels/*.metal
 Sources/drama              CLI: generate, dump (for the eval suite), bench, tune, profile, kbench, decode
 App/DramaStudio            SwiftUI app target (SwiftPM executable, bundled by tools/make_app.sh)
 eval/                      Python oracle (vendored fish-speech modules) and the faithfulness suite
-tools/convert_codec.py     coremltools export of the DAC encoder and decoder
+Sources/DramaEngine/CodecConversion   coremltools export of the DAC encoder and decoder (convert_codec.py, dac_reference), shipped as an engine resource
 ```
 
 ## Data shapes (decided before any logic)
