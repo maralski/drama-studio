@@ -62,6 +62,18 @@ package final class FrameGenerator {
         return Double(chars) / charactersPerSecond
     }
 
+    /// The most frames a chunk of `line` may run, before the model's capacity
+    /// clamps it: the configured cap, plus ``GenerationConfig/capSecondsPerCue``
+    /// for each bracket cue when the cap follows the text.
+    package static func frameBudget(for line: String, config: GenerationConfig) -> Int {
+        let frames = config.frameCap.frames(expectedSeconds: expectedSeconds(for: line))
+        guard case .fromText = config.frameCap else { return frames }
+        let cues = line.matches(of: #/\[[^\[\]]*\]/#).count
+        let seconds = Double(cues) * config.capSecondsPerCue
+        let allowance = Int((seconds * Double(ModelConstants.sampleRate) / Double(ModelConstants.samplesPerFrame)).rounded(.up))
+        return min(FrameCap.maximumFrames, frames + allowance)
+    }
+
     /// Whether an attempt that ended at `end` after `spokenSeconds` of speech
     /// should be generated again.
     package static func shouldRetry(end: ChunkEnd, spokenSeconds: Double, expectedSeconds: Double, config: GenerationConfig) -> Bool {
@@ -149,12 +161,7 @@ package final class FrameGenerator {
             onEvent(.chunkStarted(index: index, count: chunks.count, text: chunk.line))
             let (prompt, prefixRows) = try chunkPrompt(text: chunk.turn, plan: plan, history: history)
             let expected = Self.expectedSeconds(for: chunk.line)
-            let slow = chunk.line.range(of: #"slow|whisper|drawn[- ]out|unhurried|long pause"#, options: [.regularExpression, .caseInsensitive]) != nil
-            let capSeconds = expected * (slow ? config.slowCapMultiplier : 1)
-            func frames(_ seconds: Double) -> Int { Int((seconds * Double(ModelConstants.sampleRate) / Double(ModelConstants.samplesPerFrame)).rounded(.up)) }
-            let cues = chunk.line.components(separatedBy: "[").count - 1
-            let textCap = config.frameCap.frames(expectedSeconds: capSeconds) + frames(Double(cues) * config.capSecondsPerCue)
-            let budget = min(max(textCap, frames(config.capMinimumSeconds)), model.capacity - prompt.count - 1)
+            let budget = min(Self.frameBudget(for: chunk.line, config: config), model.capacity - prompt.count - 1)
             guard budget >= 1 else { throw PromptError.tooLong(prompt.count) }
             var best: ChunkResult?
             for attempt in 0...maxRetries {

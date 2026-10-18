@@ -94,17 +94,17 @@ public struct GenerationConfig: Sendable, Codable, Equatable {
     /// trailing `[sighs]` that never reaches the end of speech, spoke 1.19 to
     /// 1.5 of it. 0 leaves the ``minSpokenRatio`` rule alone.
     public var retryWithoutEOSBelow: Double = 1.0
+    /// Seconds added to a text-derived ``frameCap`` for each bracket cue in a
+    /// chunk, since a `[laugh]`, a `[pause]` or a `[sigh]` takes time the
+    /// characters do not count. Default 1.5. Without it, slow cue chunks were
+    /// cut at the cap with words missing; with it, the two lines that had been
+    /// cut kept every sentence in 5 of 5 runs each, and loops cost no more,
+    /// since the loop guard ends them.
+    /// A ``FrameCap/fixed(_:)`` cap gets no allowance.
+    public var capSecondsPerCue: Double = 1.5
     // Experiment knobs of the performance-cue investigation (eval/cues); package-only until one ships.
     /// Where a sentence-mode chunk boundary falls around a bracket cue.
     package var cueFold: Drama3Chunking.CueFold = .startsChunk
-    /// A text-derived frame cap is never shorter than this many seconds.
-    package var capMinimumSeconds: Double = 0
-    /// Seconds added to a text-derived frame cap for every `[cue]` in the chunk,
-    /// since a laugh, a sigh or a pause takes time that the words do not count.
-    package var capSecondsPerCue: Double = 0
-    /// The expected duration of a chunk with a slow direction (`slow`, `whisper`,
-    /// `drawn-out`, `long pause`) is multiplied by this before the cap is set.
-    package var slowCapMultiplier: Double = 1
     /// When decoded audio leaves the engine. Default ``StreamingMode/sentence``.
     public var streaming: StreamingMode = .sentence
     /// The measured defaults.

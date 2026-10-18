@@ -76,4 +76,37 @@ final class CueGuardTests: XCTestCase {
         XCTAssertTrue(FrameGenerator.better(attempt(.eos, spoken: 2.5), than: attempt(.eos, spoken: 2)))
         XCTAssertFalse(FrameGenerator.better(attempt(.eos, spoken: 2), than: attempt(.eos, spoken: 2.5)))
     }
+
+    private let plain = "The quick brown fox jumps over the lazy dog now."
+    private let cued = "[laughs] The quick brown fox jumps over [pause] the lazy dog now."
+
+    func testEachBracketCueAddsCapTimeToATextCap() {
+        XCTAssertEqual(FrameGenerator.expectedSeconds(for: plain), 3)
+        XCTAssertEqual(FrameGenerator.expectedSeconds(for: cued), 3, "cues take no reading time")
+        let config = GenerationConfig()
+        XCTAssertEqual(FrameGenerator.frameBudget(for: plain, config: config), 140)
+        XCTAssertEqual(FrameGenerator.frameBudget(for: cued, config: config), 205, "140 + ceil(2 * 1.5 s * 44100 / 2048 = 64.6)")
+    }
+
+    func testNoAllowanceWhenOff() {
+        var config = GenerationConfig()
+        config.capSecondsPerCue = 0
+        XCTAssertEqual(FrameGenerator.frameBudget(for: cued, config: config), 140)
+    }
+
+    func testAFixedCapGetsNoAllowance() {
+        var config = GenerationConfig()
+        config.frameCap = .fixed(600)
+        XCTAssertEqual(FrameGenerator.frameBudget(for: cued, config: config), 600)
+        config.frameCap = .fixed(100)
+        XCTAssertEqual(FrameGenerator.frameBudget(for: cued, config: config), 100)
+    }
+
+    func testTheAllowanceNeverPassesTheMaximumCap() {
+        let words = String(repeating: "Sixteen letters.", count: 15)
+        let config = GenerationConfig()
+        XCTAssertEqual(FrameGenerator.expectedSeconds(for: words), 15)
+        XCTAssertEqual(FrameGenerator.frameBudget(for: words, config: config), 528, "under the maximum before cues")
+        XCTAssertEqual(FrameGenerator.frameBudget(for: "[sighs] [laughs] [pause] [sighs] " + words, config: config), FrameCap.maximumFrames)
+    }
 }

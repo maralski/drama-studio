@@ -185,9 +185,7 @@ func generate(_ args: Args) throws {
     }
     config.retryWithoutEOSBelow = args.flags.contains("eos-retry") ? .infinity : args.double("eos-retry-below", config.retryWithoutEOSBelow)
     config.stopOnLoop = !args.flags.contains("no-loop-guard")
-    config.capMinimumSeconds = args.double("cap-min", 0)
-    config.capSecondsPerCue = args.double("cap-per-cue", 0)
-    config.slowCapMultiplier = args.double("slow-cap", 1)
+    config.capSecondsPerCue = args.double("cap-per-cue", config.capSecondsPerCue)
     if let s = args["seed"].flatMap(UInt64.init) { config.seed = s }
     if args.flags.contains("warm") { model.warmUp() }
     let gen = FrameGenerator(model: model, tokenizer: tokenizer)
