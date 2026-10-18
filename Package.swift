@@ -13,6 +13,7 @@ let package = Package(
         .executable(name: "drama", targets: ["drama"]),
         .executable(name: "DramaStudio", targets: ["DramaStudio"]),
         .executable(name: "drama-mcp", targets: ["drama-mcp"]),
+        .executable(name: "drama-say", targets: ["drama-say"]),
     ],
     targets: [
         .target(
@@ -23,6 +24,7 @@ let package = Package(
         .target(name: "DramaServer", dependencies: ["DramaEngine"], path: "Sources/DramaServer"),
         .target(name: "DramaMCP", path: "Sources/DramaMCP"),
         .executableTarget(name: "drama-mcp", dependencies: ["DramaMCP"], path: "Sources/drama-mcp"),
+        .executableTarget(name: "drama-say", dependencies: ["DramaMCP"], path: "Sources/drama-say"),
         .executableTarget(name: "drama", dependencies: ["DramaEngine", "DramaServer"], path: "Sources/drama"),
         .executableTarget(name: "DramaStudio", dependencies: ["DramaEngine", "DramaServer"], path: "App/DramaStudio"),
         .testTarget(name: "DramaEngineTests", dependencies: ["DramaEngine"], path: "Tests/DramaEngineTests"),
