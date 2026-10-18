@@ -176,3 +176,120 @@ that reaches eos.
 The balanced mode was removed from the engine after this study, and compact
 was never offered, so `reliability.py` now runs the one precision and its
 rows carry no mode; the summary reads such rows as `full`.
+
+## Silence probe latency
+
+Question: the investigation above measured that the 2 s silence stop fires 50
+to 180 frames late, because each reading is one 512-frame Core ML decode, and
+that short cue chunks reach their frame cap first. Can the reading be made
+cheap enough for the stop to fire within about 16 frames of the audio going
+silent, without losing content?
+
+Instrument. Each chunk line the `drama` CLI logs now ends in `end=<why>` and
+`silence_at=<frame>`, the frame at which the chunk's full decode first held
+2 s of silence (`ChunkResult.silenceStopFrame`, a pure function with unit
+tests). From it and `spoken=`, `eval/cues/probe_latency.py` reads how many
+frames a chunk ran past the point at which its trailing silence reached 2 s:
+for a chunk the stop ended, how late the stop fired; for one that eos or the
+cap ended, how long the stop had already failed to act. A chunk whose audio
+held 2 s of silence and then spoke again paused mid-line; the stop firing
+there is the designed behaviour, and the retry rule covers it.
+
+Candidates, measured with `drama codec-bench` (the codec alone, no Drama
+model) on six generated clips of 70 to 600 frames, 1546 frames in all, under
+a load average of 7 to 15 from other sessions' jobs:
+
+| decoder shape | context | ms per call, median (range), 5 interleaved calls | silent-flag disagreements with the full decode |
+| --- | --- | --- | --- |
+| 512 (shipped decoder) | 256 | 1636 (1622 to 1653) | reference |
+| 128 | 64 | 381 (374 to 404) | 0 of 1546 |
+| 64 | 48 | 190 (187 to 205) | 0 of 1546 |
+| 64 | 32 | 199 (187 to 211) | 2 of 1546, both at the 0.01 RMS edge (0.0096 against 0.0101) |
+| 32 | 16 | 98 (96 to 127) | 3 of 1546, all at the edge |
+
+The cost is linear in the frames decoded (about 3 ms a frame; the transformer
+is 128 frames wide and the convolutions dominate), so the choice is how much
+context a reading needs. 48 frames of context reproduce the full decode's
+silent flags exactly on every clip, and the stop frame a reading every 16
+frames would give is the first multiple of 16 at or after the full decode's in
+every clip. Code-space proxies were not pursued: the investigation above
+measured that the main tokens settle about 140 frames after the audio goes
+silent. Core ML's enumerated shapes still crash the CPU backend (the 512
+export's history), so the probe is a second export of the same fp16 decoder
+at 64 frames, `DramaCodecProbe.mlpackage` (353 MB), which `convert_codec.py`
+writes beside the other two and `DramaCodec` loads with them, checking the
+frame count each file records. (The conversion venv recipe pins
+`numpy<2.4`: numpy 2.5 turned a deprecation inside coremltools 9.0's `int`
+cast into an error, so a fresh venv could not build any of the models.)
+
+Shipped. `SilenceProbe` decodes only the frames not yet classified, 16 new
+after 48 of context through the 64-frame shape every 16 frames, on its own
+queue, and keeps the count of silent frames at the tail; the audio is dropped.
+The chunk's audio is decoded once, in full windows, at the end of the attempt
+(sentence mode) or as streamed partials (low latency), where before the probe
+re-decoded a 512-frame window every 16 frames whenever the queue was free. A
+reading costs 190 ms, about 7 frames at 38 frames/s, so a stop fires 7 to 23
+frames after the audio holds 2 s of silence: the cadence rounds up to the
+next multiple of 16, then the reading lands.
+
+Measured on the cue harness, variant he2 (the shipped defaults), eight lines,
+seeds 1 to 5, each binary the only engine process, load average 3 to 11 from
+other sessions (`eval/out/cues-before`, `eval/out/cues-after`;
+`eval/cues/probe_latency.py` prints the table):
+
+| | before (`f55dfb4` plus the instrument) | after |
+| --- | --- | --- |
+| all sentences present | 38 of 40 | 39 of 40 |
+| chunks ended by the silence stop | 0 of 60 | 4 of 60 |
+| chunks that ended with 2 s of trailing silence | 2: eos 26 frames past the mark, cap 45 frames past | 4, all by the stop |
+| frames late, stop-ended chunks | the stop never fired | 9, 17, 18, 21 (median 18) |
+| chunks that paused 2 s and spoke again | 7 | 3 |
+| eos reached | 38 | 36 |
+| retries | 11 | 17 |
+| mean audio | 5.71 s | 5.50 s |
+
+The two before chunks that sat in 2 s of silence are the failure the
+investigation described: cue-end seed 3 ran to its cap of 192 frames with
+the last 89 silent, and cue-end seed 2 reached eos 70 silent frames in. After,
+every chunk that ended in 2 s of silence was ended by the stop, 9 to 21
+frames late, inside the 7 to 23 the reading's cost predicts. The one line
+still missing a sentence, cue-span seed 3, missed the same sentence before
+(runaway to the cap of 209 frames) and after (three attempts, the last ended
+by the stop at 153 frames); the extra retries are stops at a mid-line pause
+that the retry rule sent back, as designed. The gain of one line
+(cue-style seed 3, garbled before) is a seed-path difference, not a claim.
+Wall time is not a benchmark here (10.7 s a run before, 9.2 s after, under
+different loads), but sentence mode now runs one full-window decode per
+attempt instead of one per 16 frames, so the codec CPU per chunk falls.
+
+Variant a (the pre-study defaults: no loop guard, no eos retry, no cap per
+cue) at the same five seeds:
+
+| | before | after |
+| --- | --- | --- |
+| all sentences present | 33 of 40 | 34 of 40 |
+| chunks ended by the silence stop | 3 of 60 | 6 of 60 |
+| frames late, stop-ended chunks | 86, 96; the third stop-ended chunk (cue-span seed 3) was cut by a stale reading, its audio having resumed speech with no trailing silence left when the stop landed | 10, 14, 17, 20, 22, 22 (median 18) |
+| chunks that reached the cap already in 2 s of silence | 6, by 0 to 45 frames (median 28) | 2, by 0 and 12 frames |
+| eos reached | 28 | 29 |
+
+Without the cue guards the stop matters more, and the two numbers the
+investigation measured by hand both move: the stop that fired 86 and 96
+frames late now fires 10 to 22 frames late, and the chunks cut at their cap
+while already silent fall from six to two, both with the cap inside the
+reading's 7 to 23 frame window (one at the very frame the silence reached
+2 s). The stale stop is a third failure the slow reading caused: a 512-frame
+decode of a snapshot landed seconds later and ended a chunk that had paused
+and spoken again in the meantime. A reading is now at most about 7 frames
+old when it lands. Per line the two columns trade seeds (cue-start 4 to 3, cue-span 2 to
+4), a seed-path difference again.
+
+Not done: the machine was not idle for any of these runs (other sessions'
+jobs held the load average between 3 and 15), so the 190 ms reading and the
+9 to 22 frame lateness are upper bounds for an idle Mac, and the 512-frame
+figure of 1.6 s is the under-load one. A reading every 8 frames would cut the
+expected lateness to 7 to 15 frames at twice the probe CPU (a reading takes
+190 of every 210 ms); the measured median of 18 met the brief, so the cadence
+stays at 16. Chunks longer than 512 frames now decode in two full windows at
+the end of the attempt instead of overlapping generation; no cue or prose
+line reaches that length.
