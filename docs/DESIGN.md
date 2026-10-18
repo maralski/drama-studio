@@ -98,41 +98,18 @@ tools/convert_codec.py     coremltools export of the DAC encoder and decoder
 - `Precision` knob: fp32 activations everywhere, with an optional `mimicBF16`
   mode that rounds at the points where the reference rounds (Linear outputs,
   residual stream). The eval suite decides which mode ships.
-- `ModelPrecisionMode` (`full`, `balanced`, `compact`): which storage format
-  each projection matrix and each layer's experts take, as one table keyed by
-  a `MatrixRole` (backbone, tower, narrow). A projection is a `WeightMatrix`
-  (format, rows, cols, buffer, weight offset, param offset); a layer's experts
-  are an `ExpertTable` (the address table plus its format). `ModelWeights`
-  keeps its one ordered tensor list and asks a `WeightSource` for every item:
-  `InPlaceSource` for `full` (today's addresses), a `LayoutRecorder` that
-  assigns each item a 256-byte aligned place in the cache file, and a
-  `CacheSource` that reads the file. Formats: bf16 as released; int8 per row
-  with an fp16 scale per 128 columns; int4 per row with an fp16 scale and
-  fp16 bias per 64 columns, `w = s * q + b`. The experts re-quantize from FP8
-  to the same int4. The cache file lives at
-  `~/Library/Application Support/DramaStudio/Quantized/<snapshot>-<mode>.bin`
-  with a 4096-byte header (magic, version, mode, model id, layout digest,
-  payload bytes, item count) written last into a `.partial` that is renamed
-  into place. Metal wires every buffer a command buffer binds, in full, so a
-  quantized mode never binds the shards: embeddings and (in `balanced`) the
-  FP8 experts are pinned as page-aligned run buffers over the shard mappings
-  (`SafeTensorsStore.pinned`), and the command buffer declares the cache
-  file plus those runs.
 
 ## Kernel list
 
 Elementwise and norms: `rmsnorm_zc` (also per-head for q/k), `gated_rmsnorm`,
 `silu_mul`, `sigmoid_gate_mul`, `residual_add`, `embed_mix`.
-Projections: `gemv_<fmt>_t<tile>` for one row (and for outputs of 64 columns or
-fewer at any row count), `gemm_<fmt>_<bm>x<bn>x<bk>` for two rows or more: a
-simdgroup-matrix GEMM with one output tile per threadgroup, the weights
-widened to fp32 in threadgroup memory. `<fmt>` is `bf16`, `i8` or `i4`; one
-body is templated over a format tag whose per-lane loader dequantizes 8 (GEMV)
-or 4 (GEMM staging) weights, and the bf16 loader is the original code. Both
-kernels form the same fp32 products; only the summation order differs, and a
-row's result never depends on which chunk it is in (one tile shape for every
-M keeps it so). The token tile, the rows per threadgroup and the GEMM tile
-are fields of the `KernelSchedule` below and apply to every format.
+Projections: `gemv_bf16_t<tile>` for one row (and for outputs of 64 columns or
+fewer at any row count), `gemm_bf16_<bm>x<bn>x<bk>` for two rows or more: a
+simdgroup-matrix GEMM with one output tile per threadgroup, the bf16 weights
+widened to fp32 in threadgroup memory. Both form the same fp32 products; only
+the summation order differs, and a row's result never depends on which chunk
+it is in (one tile shape for every M keeps it so). The token tile, the rows
+per threadgroup and the GEMM tile are fields of the `KernelSchedule` below.
 Attention: `rope_neox`, `rope_interleaved`, `attention` (GQA over the KV cache,
 online softmax, one threadgroup per query row and head, the keys split over 4,
 8 or 16 simdgroups by the schedule).
@@ -142,16 +119,13 @@ state column, the two per-token dot products combined from `parts` partial
 sums in a fixed order; the recurrence runs token by token and is
 chunk-invariant; parts is 1, 2, 4 or 8 by the schedule).
 MoE: `moe_router` (softmax, top-8, renormalize), `moe_bucket` (per-expert row
-lists and the active-expert list), `moe_gate_up_<fmt>` and `moe_down_<fmt>` for
-one row (expert-major, one simdgroup per output row; for `fp8` the byte is
-widened through a 256-entry constant table and multiplied by its block scale,
-for `i4` the nibble goes through the dense int4 dequant), and for two rows
-or more `moe_gate_up_<fmt>_tiled_<bn>x<rows>x<bk>` and
-`moe_down_<fmt>_tiled_<bn>x<rows>x<bk>`: one threadgroup per (active expert, bn
+lists and the active-expert list), `moe_gate_up_fp8` and `moe_down_fp8` for one
+row (expert-major, one simdgroup per output row, the FP8 byte widened through a
+256-entry constant table and multiplied by its block scale), and for two rows
+or more `moe_gate_up_fp8_tiled_<bn>x<rows>x<bk>` and
+`moe_down_fp8_tiled_<bn>x<rows>x<bk>`: one threadgroup per (active expert, bn
 output columns), the expert's rows gathered in blocks of 8 through simdgroup
 matrices, each weight tile dequantized once per pass of up to `rows` rows.
-Quantizers (`Quantize.metal`): `quantize_bf16_i8`, `quantize_bf16_i4` and
-`quantize_fp8_i4`, one thread per row group, run once by the cache builder.
 Every tile accumulates an output in the same 8-wide order over K, so the
 tiles are bit-identical with each other. At 128 rows nearly every expert is active, so a
 prefill chunk reads all 30 GB of expert weights once; the prefill chunk is 512
@@ -231,17 +205,3 @@ CPU (oracle). Levels:
   template instantiations are searched; every fp32 product stays the same and
   only the summation order may change, so the tuned engine is held to the same
   faithfulness table as the default one.
-- Weight precision modes quantize at load time on the GPU into one cache
-  file per (snapshot, mode) instead of shipping converted weights: the
-  released checkpoint stays the only download, and `full` keeps reading it in
-  place. Scales are fp16 because their rounding (2^-11 relative) is an eighth
-  of the int8 step at half the bytes of fp32. int4 groups are 64 wide (4.5
-  bits per weight against 5 for groups of 32) because decode is bound by
-  weight bytes. The router and the other matrices with 256 rows or fewer stay
-  bf16 in every mode: they are about one percent of the bytes and gate the
-  routing and the GDN recurrence. lm_head is stored as its 4097 candidate rows.
-  KV caches stay fp32 in every mode: at 1000 positions they are under 3
-  percent of a decode frame's bytes and under 5 percent of `compact`'s wired
-  memory, so an fp16 cache would not show in the measurements. The tuning
-  key carries the mode, so each mode tunes its own schedule. Which modes ship
-  is decided by the measurements in the README's "Model precision" section.
