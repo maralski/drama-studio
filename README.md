@@ -153,6 +153,24 @@ Reproduce with `eval/reliability.py` (slices under `eval/reliability/slices/`).
 The `balanced` mode was removed after this study, so the engine has one
 precision, `full`; the column stays as the record of why.
 
+The cue dropouts were then investigated on eight cue lines, five seeds each,
+eleven variants (`eval/cues/`, section "Performance cues: investigation" of
+the report). The model stops at a cue that follows a sentence end, whatever
+the chunking; longer chunks lose more. Three guards now ship: a laughter loop
+is detected in the code stream (the main tokens cycle with a period of 17 or
+more, which the 16-frame repetition redraw forces) and the chunk is
+regenerated; a chunk that stops without eos is regenerated when it spoke
+under its expected duration; and the frame cap grows by 1.5 s per `[cue]` so
+a laugh or a pause is not cut off. Every sentence present went from 44 of 55
+runs to 38 of 40 on the cue lines; on six prose lines at five seeds the
+old and new rules score 30 of 30 and 29 of 30, the one difference being a
+line that both rules retry and where the new rule's random path lost. The Space's sampling (temperature 1.0, top-p 0.9,
+top-k off) scored 39 of 40 but speaks more slowly and was not measured on
+prose; it is available per request through `GenerationConfig` and the API's
+`temperature`, `topP` and `topK` fields, and is not the default. The Insert
+Cue menu says what remains: about one take in twenty still drops the clause
+after a cue, so listen before exporting.
+
 ## Agents and programs
 
 While Drama Studio is open, including when only its menu bar icon is left, it
