@@ -1,6 +1,8 @@
 import Foundation
 
+/// Why `tokenizer.json` could not be read.
 public enum TokenizerError: Error, Sendable {
+    /// The file is missing a part the tokenizer needs; the string names it.
     case invalidFile(String)
 }
 

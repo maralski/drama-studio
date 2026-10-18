@@ -5,8 +5,14 @@ import Foundation
 ///
 /// remaining = (expected frames of unfinished chunks - frames of the current
 /// chunk) / frames per second + prefill seconds * chunks not yet prefilled,
-/// counted down from the last event.
+/// counted down from the last event. A chunk's expected frames come from its
+/// text at 16 characters per second, times 21.53 frames per second. Frames
+/// per second is a 3 s moving average that starts at 35.
+///
+/// Feed it every event with ``apply(_:at:)``, then read ``label(at:)`` or
+/// ``remainingSeconds(at:)`` as often as the display needs.
 public struct GenerationEstimate: Sendable, Equatable {
+    /// Frames per second of audio: 44,100 / 2048, about 21.53.
     public static let audioFramesPerSecond = Double(ModelConstants.sampleRate) / Double(ModelConstants.samplesPerFrame)
     /// What the engine typically generates, until the run measures its own.
     public static let typicalFramesPerSecond = 35.0
@@ -16,7 +22,9 @@ public struct GenerationEstimate: Sendable, Equatable {
     static let smoothingSeconds = 3.0
     static let sampleSeconds = 0.5
 
+    /// Whether the estimate still means anything.
     public enum Phase: Sendable, Equatable {
+        /// The frame counts predict the end.
         case estimating
         /// The last chunk is past its expected length, in its silence tail.
         case finishing
@@ -24,11 +32,14 @@ public struct GenerationEstimate: Sendable, Equatable {
         case retrying
     }
 
+    /// Expected frames of each chunk, in order.
     public let expectedFrames: [Int]
     package private(set) var chunk = 0
     package private(set) var chunkPrefilled = false
     package private(set) var framesInChunk = 0
+    /// Frames generated so far, including frames a retry threw away.
     public private(set) var framesDone = 0
+    /// The smoothed generation rate, ``typicalFramesPerSecond`` until measured.
     public private(set) var framesPerSecond = typicalFramesPerSecond
     package private(set) var prefillSeconds = typicalPrefillSeconds
     package private(set) var retrying = false
@@ -38,7 +49,8 @@ public struct GenerationEstimate: Sendable, Equatable {
     private var sampleSeconds: Double?
     private var sampleFrames = 0
 
-    /// `lines` are the script text of each chunk, as `GenerationPlan` cuts them.
+    /// An estimate for a request whose chunks speak `lines`. Under the default
+    /// chunking, ``Drama3Chunking/splitSentencesTagged(_:)`` gives them.
     public init(lines: [String]) {
         expectedFrames = lines.map { Int((FrameGenerator.expectedSeconds(for: $0) * Self.audioFramesPerSecond).rounded()) }
     }
@@ -47,7 +59,10 @@ public struct GenerationEstimate: Sendable, Equatable {
         self.init(lines: plan.chunks.map(\.line))
     }
 
+    /// Expected frames of the whole request.
     public var framesExpected: Int { expectedFrames.reduce(0, +) }
+
+    /// The current phase.
 
     public var phase: Phase {
         if retrying { return .retrying }
@@ -56,6 +71,8 @@ public struct GenerationEstimate: Sendable, Equatable {
         return .estimating
     }
 
+    /// Updates the estimate with `event`, which arrived `seconds` after the
+    /// request started.
     public mutating func apply(_ event: SpeechEvent, at seconds: Double) {
         lastEventSeconds = seconds
         switch event {

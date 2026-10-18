@@ -1,9 +1,15 @@
 import Foundation
 
-/// Long-text chunking from the reference (`chunking.py`): about 300 UTF-8
+/// How the engine cuts text into generation turns.
+///
+/// The public entry is ``splitSentencesTagged(_:)``, the cut the default
+/// ``GenerationConfig/Chunking/sentences`` makes. Use it to preview the
+/// chunks a request will produce, for captions, highlights, or a
+/// ``GenerationEstimate``. The reference's long-text chunking (about 300 UTF-8
 /// bytes per chunk, at most 3 speakers, cut at sentence ends, then clause
-/// marks, then spaces. Operates on Unicode scalars like Python's `str`.
-public enum Drama3Chunking {
+/// marks, then spaces) stays inside the package. Both operate on Unicode
+/// scalars like Python's `str`.
+public enum Drama3Chunking: Sendable {
     package static let chunkBytes = 300
     package static let maxSpeakers = 3
     package static let chunkMaxNewFrames = 600
@@ -109,8 +115,14 @@ public enum Drama3Chunking {
         return chunks.map { UnicodeWhitespace.strip(string($0)) }.filter { !$0.isEmpty }
     }
 
-    /// Sentence mode with speaker tags: each tagged segment is split into
-    /// sentences and every chunk keeps its tag.
+    /// The chunks of `text` under the default sentence chunking, in order.
+    ///
+    /// Text is cut at sentence ends (`.`, `!`, `?`, `;`, `…`, a newline, or a
+    /// CJK one). Decimals such as 3.14, `[cues]`, `<tags>…</tags>`, and
+    /// `<|special|>` tokens are never cut, and a fragment shorter than 24
+    /// UTF-8 bytes joins its neighbour. With `<|speaker:N|>` tags each tagged
+    /// segment is split on its own and every chunk keeps its tag; text before
+    /// the first tag is speaker 0.
     public static func splitSentencesTagged(_ text: String) -> [String] {
         let ns = text as NSString
         if Drama3Prompt.speakerTag.firstMatch(in: text, range: NSRange(location: 0, length: ns.length)) == nil { return splitSentences(text) }

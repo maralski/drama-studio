@@ -129,7 +129,7 @@ public enum DramaSetupError: Error, CustomStringConvertible {
 /// never loads the model. ``prepare(location:codecDirectory:python:tuningDirectory:progress:)``
 /// builds what is missing and can be built: the codec models, through a
 /// Python you name, and the kernel tuning, through one model load.
-public enum DramaSetup {
+public enum DramaSetup: Sendable {
     /// The shell command that downloads the model into the Hugging Face cache.
     public static let downloadCommand = "uvx --from huggingface_hub hf download fishaudio/drama-3"
 

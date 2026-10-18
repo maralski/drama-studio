@@ -2,15 +2,21 @@
 import CoreML
 import Foundation
 
+/// Why a codec call failed.
 public enum CodecError: Error, CustomStringConvertible {
+    /// No `.mlpackage` or `.mlmodelc` at the URL. ``DramaSetup`` builds them.
     case missingModel(URL)
+    /// The codes do not have 10 codebooks of one length, or a window does not fit.
     case badCodes(String)
+    /// A Core ML model returned something other than the expected array.
     case unexpectedOutput(String)
+    /// The audio file could not be read or resampled.
     case audio(String)
 
+    /// A message for a person.
     public var description: String {
         switch self {
-        case .missingModel(let url): return "codec model not found at \(url.path); run Sources/DramaEngine/CodecConversion/convert_codec.py"
+        case .missingModel(let url): return "codec model not found at \(url.path); build it with DramaSetup.prepare or Sources/DramaEngine/CodecConversion/convert_codec.py"
         case .badCodes(let m): return "bad codec codes: \(m)"
         case .unexpectedOutput(let m): return "unexpected codec output: \(m)"
         case .audio(let m): return "audio: \(m)"
@@ -20,6 +26,13 @@ public enum CodecError: Error, CustomStringConvertible {
 
 /// The Drama 3 DAC codec on Core ML: 10 codebooks per 2048-sample frame at 44.1 kHz.
 ///
+/// Use it on its own to encode audio to codes or decode codes to audio
+/// without loading the 39.6 GB model; it needs only the two codec models,
+/// about 1.2 GB. Both run on the CPU: the encoder in fp32 matches PyTorch's
+/// codes exactly and takes about 2.1 s for a 10 s clip on an M3 Max; the
+/// fp16 decoder is 35 to 39 dB from the fp32 reference and takes about 1.5 s
+/// per 512-frame window (23.8 s of audio).
+///
 /// Both models take one static window of `windowFrames` frames so the Neural Engine
 /// sees a fixed shape. Shorter inputs are right-padded and trimmed; the codec is
 /// causal, so padding never changes the frames that are kept. Longer inputs run in
@@ -27,16 +40,25 @@ public enum CodecError: Error, CustomStringConvertible {
 /// With 256 frames of context the windowed decode stays within 0.006 of a full
 /// decode (53 dB) and the windowed encode keeps 99.8% of codebook 0.
 public actor DramaCodec {
+    /// Sample rate in Hz of every buffer in and out.
     public static let sampleRate = 44_100
+    /// Samples per frame.
     public static let samplesPerFrame = 2048
+    /// Codebooks per frame.
     public static let numCodebooks = 10
+    /// Frames per model call, about 23.8 s of audio.
     public static let windowFrames = 512
+    /// Frames of left context a window carries when the input is longer than one window.
     public static let contextFrames = 256
     /// The frame counts the models accept.
     package static let frameSizes = [windowFrames]
+    /// The encoder's file name without extension, `.mlpackage` or `.mlmodelc`.
     public static let encoderName = "DramaCodecEncoder"
+    /// The decoder's file name without extension, `.mlpackage` or `.mlmodelc`.
     public static let decoderName = "DramaCodecDecoder"
 
+    /// `~/Library/Application Support/DramaStudio/Codec`, where
+    /// `convert_codec.py` writes the models by default.
     public static var defaultDirectory: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("DramaStudio/Codec", isDirectory: true)
@@ -59,6 +81,7 @@ public actor DramaCodec {
         decoder = try await MLModel.load(contentsOf: Self.compiledModel(named: Self.decoderName, in: directory), configuration: decoderConfig)
     }
 
+    /// Whether both models are in `directory`, as packages or compiled.
     public static func modelsExist(in directory: URL = DramaCodec.defaultDirectory) -> Bool {
         [encoderName, decoderName].allSatisfy { name in
             ["mlpackage", "mlmodelc"].contains { ext in

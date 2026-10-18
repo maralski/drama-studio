@@ -1,37 +1,51 @@
 import AVFoundation
 import Foundation
 
-/// A stand-in engine for previews, tests, and the app until the Metal engine
-/// lands. It streams the same event sequence as the real one, with a sine
-/// sweep per chunk as the audio.
+/// A stand-in engine for previews, tests, and working on an app without the
+/// weights. It streams the same event sequence as ``DramaSynthesizer``, cut
+/// into the same chunks, with a sine sweep per chunk as the audio. It needs
+/// no model files, no Metal, and almost no memory.
 public actor MockSynthesizer: SpeechSynthesizer {
+    /// How fast the mock pretends to work.
     public struct Pace: Sendable {
+        /// Seconds the pretend load takes.
         public var loadSeconds: Double
+        /// Frames generated per second; 0 generates as fast as possible.
         public var framesPerSecond: Double
+        /// Creates a pace.
         public init(loadSeconds: Double, framesPerSecond: Double) {
             self.loadSeconds = loadSeconds
             self.framesPerSecond = framesPerSecond
         }
+        /// A 2 s load and 60 frames per second, close to the real engine's feel.
         public static let realistic = Pace(loadSeconds: 2, framesPerSecond: 60)
+        /// No waiting, for tests.
         public static let instant = Pace(loadSeconds: 0, framesPerSecond: 0)
     }
 
+    /// Why the mock refused a request.
     public enum MockError: Error, CustomStringConvertible {
+        /// The request's text is empty or white space.
         case emptyText
+        /// A message for a person.
         public var description: String { "There is no text to speak." }
     }
 
     private let pace: Pace
     private var loaded = false
 
+    /// Creates a mock that works at `pace`.
     public init(pace: Pace = .realistic) { self.pace = pace }
 
+    /// Whether the pretend load has finished.
     public var isLoaded: Bool { loaded }
 
+    /// Waits ``Pace/loadSeconds``, reporting ten pretend phases.
     public func load(onPhase: @escaping @Sendable (String) -> Void) async throws {
         try await load { _, detail in onPhase(detail) }
     }
 
+    /// Reads the clip's length and returns made-up codes of that length.
     public func encodeReference(audioURL: URL, transcript: String, name: String) async throws -> ReferenceVoice {
         let file = try AVAudioFile(forReading: audioURL)
         let seconds = Double(file.length) / file.processingFormat.sampleRate
@@ -43,10 +57,14 @@ public actor MockSynthesizer: SpeechSynthesizer {
         return ReferenceVoice(name: name, transcript: transcript, codes: codes, sourceFileName: audioURL.lastPathComponent)
     }
 
+    /// A sine sweep, 2048 samples per frame at 44.1 kHz.
     public func decode(frames: [Frame]) async throws -> [Float] {
         Self.sweep(frameCount: frames.count, pitch: 1)
     }
 
+    /// Streams the real engine's event sequence for `request`, with a sweep
+    /// per chunk. Partials follow ``GenerationConfig/streaming`` as in the
+    /// real engine. Throws ``MockError/emptyText`` for empty text.
     public nonisolated func synthesize(_ request: SpeechRequest) -> AsyncThrowingStream<SpeechEvent, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {

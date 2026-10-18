@@ -92,12 +92,18 @@ package final class MetalContext {
     }
 }
 
+/// Why the engine could not load or run.
 public enum EngineError: Error, CustomStringConvertible {
+    /// The Mac has no Metal device the engine can use.
     case noMetalDevice
+    /// A kernel, or the resource bundle that holds the kernel sources, is missing.
     case missingKernel(String)
+    /// The snapshot's files do not match what the engine expects.
     case badModel(String)
+    /// A cached kernel schedule failed validation.
     case badSchedule(String)
 
+    /// A message for a person.
     public var description: String {
         switch self {
         case .noMetalDevice: return "no Metal device"
