@@ -24,7 +24,7 @@ Cloning a real person's voice without their consent is not permitted.
 
 ### Speak a sentence in a minute
 
-Add the package, then check the setup, load the engine, clone a voice, and speak:
+Add the package, check the install, and create the engine:
 
 ```swift
 import DramaEngine
@@ -32,32 +32,40 @@ import DramaEngine
 let location = ModelLocation.huggingFaceCache()
 let report = DramaSetup.check(location: location)
 guard let location, report.isReady else {
-	report.items.forEach { print($0.summary) }
-	exit(1)
+    report.fixes.forEach { print($0) }
+    exit(1)
 }
-
 let engine = DramaSynthesizer(location: location, codecDirectory: DramaCodec.defaultDirectory)
-try await engine.load { phase in print(phase) }
-
-let voice = try await engine.encodeReference(
-	audioURL: URL(filePath: "clip.wav"),
-	transcript: "What the clip says, word for word.",
-	name: "Narrator")
-
-var request = SpeechRequest(text: "Hello there. Good to see you.", references: [voice])
-request.config.streaming = .defaultLowLatency
-
-var audio = StreamedAudio()
-for try await event in engine.synthesize(request) {
-	switch event {
-	case .frame(let index, let maxFrames): print("frame \(index + 1) of at most \(maxFrames)")
-	case .finished(let result): print("\(result.take.durationSeconds) s of audio")
-	default: break
-	}
-	let samples = audio.newSamples(from: event)
-	// Play or store `samples`: 44.1 kHz mono Float.
-}
 ```
+
+Then clone a voice from a clip and speak, streaming the audio as it is
+decoded. The function takes any ``SpeechSynthesizer``, so the same code runs
+against ``MockSynthesizer`` in previews and tests:
+
+```swift
+func speak(_ text: String, cloning clip: URL, transcript: String,
+           with engine: some SpeechSynthesizer) async throws -> (result: SpeechResult, streamed: [Float]) {
+    try await engine.load { phase in print(phase) }
+    let voice = try await engine.encodeReference(audioURL: clip, transcript: transcript, name: "Narrator")
+    var request = SpeechRequest(text: text, references: [voice])
+    request.config.streaming = .defaultLowLatency
+    var audio = StreamedAudio()
+    var streamed: [Float] = []
+    for try await event in engine.synthesize(request) {
+        streamed += audio.newSamples(from: event)
+        if case .finished(let result) = event { return (result, streamed) }
+    }
+    throw CancellationError()
+}
+
+let (result, _) = try await speak("Hello there. Good to see you.", cloning: URL(filePath: "clip.wav"),
+                                  transcript: "What the clip says, word for word.", with: engine)
+print("\(result.take.durationSeconds) s of audio")
+```
+
+`streamed` grows by about 3 s of 44.1 kHz mono audio at a time while the
+model generates. In a player, schedule each `newSamples(from:)` result as it
+arrives instead of collecting them.
 
 The first load on a Mac also tunes the kernel schedule for that Mac, about 30 s,
 and caches the result. Run ``DramaSetup/prepare(location:codecDirectory:python:tuningDirectory:progress:)``
