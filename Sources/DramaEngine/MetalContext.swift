@@ -21,16 +21,21 @@ package final class MetalContext {
         guard let queue = device.makeCommandQueue() else { throw EngineError.noMetalDevice }
         self.queue = queue
         let source = try Self.kernelSources()
-        kernelDigest = SHA256.hash(data: Data(source.utf8)).map { String(format: "%02x", $0) }.joined()
+        kernelDigest = Self.digest(source)
         self.library = try Self.compileKernels(source: source, device: device)
     }
 
     /// The resource bundle: inside a packaged .app it sits in Contents/Resources,
     /// where SwiftPM's generated accessor does not look.
+    static let resourceBundleName = "DramaStudio_DramaEngine.bundle"
+
     static func resourceBundle() -> Bundle {
-        let name = "DramaStudio_DramaEngine.bundle"
-        if let url = Bundle.main.resourceURL?.appendingPathComponent(name), let b = Bundle(url: url) { return b }
+        if let url = Bundle.main.resourceURL?.appendingPathComponent(resourceBundleName), let b = Bundle(url: url) { return b }
         return Bundle.module
+    }
+
+    static func digest(_ source: String) -> String {
+        SHA256.hash(data: Data(source.utf8)).map { String(format: "%02x", $0) }.joined()
     }
 
     static func kernelSources() throws -> String {

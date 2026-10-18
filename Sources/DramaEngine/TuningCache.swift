@@ -28,11 +28,16 @@ package struct TuningKey: Codable, Equatable, Sendable {
     }
 
     package init(ctx: MetalContext, location: ModelLocation) throws {
+        try self.init(chip: ctx.device.name, kernelDigest: ctx.kernelDigest, location: location)
+    }
+
+    /// The key a model loaded from `location` on `chip` would look up, without compiling the kernels.
+    package init(chip: String, kernelDigest: String, location: ModelLocation) throws {
         let v = ProcessInfo.processInfo.operatingSystemVersion
         let index = try Data(contentsOf: location.directory.appendingPathComponent("model.safetensors.index.json"))
-        self.init(chip: ctx.device.name,
+        self.init(chip: chip,
                   os: "\(v.majorVersion).\(v.minorVersion).\(v.patchVersion)",
-                  kernels: ctx.kernelDigest,
+                  kernels: kernelDigest,
                   model: location.directory.lastPathComponent + "-" + Self.hex(SHA256.hash(data: index)).prefix(16))
     }
 
