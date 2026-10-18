@@ -18,7 +18,8 @@ cloning a real person's voice without their consent is not permitted.
 - **Takes**: a New Take button that generates the script again with a fresh
   seed, a Quick preview toggle that skips retries and tightens the frame cap
   for faster rough takes, an Expressiveness slider under Advanced (one control
-  over temperature and top-p, with the vendor's defaults in the middle), and an
+  over temperature, top-p and top-k, with the vendor's defaults in the middle
+  and the Hugging Face Space's sampling at the top), and an
   insert menu for performance cues such as `[laughs]`, `[sighs]` and
   `<whisper>…</whisper>`. Each chunk's frame cap follows the length of its text.
 - **Document narration**: a PowerPoint deck, a PDF or an EPUB opens as
@@ -164,12 +165,17 @@ under its expected duration; and the frame cap grows by 1.5 s per `[cue]` so
 a laugh or a pause is not cut off. Every sentence present went from 44 of 55
 runs to 38 of 40 on the cue lines; on six prose lines at five seeds the
 old and new rules score 30 of 30 and 29 of 30, the one difference being a
-line that both rules retry and where the new rule's random path lost. The Space's sampling (temperature 1.0, top-p 0.9,
-top-k off) scored 39 of 40 but speaks more slowly and was not measured on
-prose; it is available per request through `GenerationConfig` and the API's
-`temperature`, `topP` and `topK` fields, and is not the default. The Insert
-Cue menu says what remains: about one take in twenty still drops the clause
-after a cue, so listen before exporting.
+line that both rules retry and where the new rule's random path lost. The
+Space's sampling (temperature 1.0, top-p 0.9, top-k off) was then run over
+the whole study (section "The Space's sampling on prose"): no prose row
+lost in 130, every sentence of the 20 cue lines, 5 retries instead of 19,
+the two-sentence line reaching the end of speech on its first attempt with
+retries off in 5 of 5, and 0.007 more word error rate on prose (standard
+error 0.004), mostly abbreviations and a few slurred words. It is the top of
+the Expressiveness slider and the API's `expressiveness: 1`; the vendor's
+sampling stays the default. The Insert Cue menu says what remains: about one
+take in twenty still drops the clause after a cue, so listen before
+exporting.
 
 ## Agents and programs
 
@@ -218,7 +224,7 @@ The speech body takes these fields:
 | `speaker_voices` | Library voices per speaker for a multi-speaker script: `{"0": "Narrator", "1": "<id>"}`, with no gaps from speaker 0. |
 | `response_format` | `wav` (default, 16-bit), `pcm` (raw 16-bit little-endian), or `m4a`. |
 | `stream` | `true` streams PCM about every 3 s of generated audio, while each sentence is still generating. |
-| `expressiveness` | 0 to 1, default 0.5: the app's Expressiveness slider. |
+| `expressiveness` | 0 to 1, default 0.5: the app's Expressiveness slider. 0.5 is the vendor's sampling, 1 the Hugging Face Space's. |
 | `quick_preview` | `true` skips retries and tightens the length cap. |
 | `seed` | A fixed sampler seed, for repeatable takes. |
 | `character` | A voice designed from a description instead of a clip: `{name, description, scene?}`. |

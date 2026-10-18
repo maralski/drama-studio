@@ -8,8 +8,13 @@ several workers can run disjoint slices in parallel and the summary joins them.
 
   eval/.venv/bin/python -u eval/reliability.py --slice eval/reliability/slices/a.json --seeds 1 2 3 4 5
   eval/.venv/bin/python eval/reliability.py --summary eval/out/reliability
+
+A variant of the defaults runs with `--drama-flags` (appended after the
+condition's own flags, so they win) and a `--mode` label into its own `--out`
+directory; `--summary` over both directories, with `--modes` naming the two
+labels, pairs the rows by condition and seed.
 """
-import argparse, json, re, subprocess, sys, time
+import argparse, json, os, re, shlex, subprocess, sys, time
 from pathlib import Path
 import numpy as np, soundfile as sf
 
@@ -29,19 +34,23 @@ def spoken_text(text):
     return re.sub(r"\s+", " ", text).strip()
 
 
-def run_one(drama, item, seed, out_dir, codec, asr):
+def run_one(drama, item, seed, out_dir, codec, asr, extra_flags=(), mode=None):
     name = f"{item['id']}__s{seed}"
     frames_path = out_dir / f"{name}.npy"
     cmd = [str(drama), "generate", "--seed", str(seed), "--text", item["text"],
            "--chunking", item.get("chunking", "sentences"), "--out", str(frames_path)]
     for flag, value in item.get("flags", {}).items():
         cmd += [f"--{flag}"] + ([str(value)] if value != "" else [])
+    cmd += list(extra_flags)
     if item.get("ref"):
         cmd += ["--ref", str(HERE / "data/clip_codes.npy"), "--ref-text", REF_TEXT]
+    load = os.getloadavg()[0]
     t0 = time.time()
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=900)
     wall = time.time() - t0
-    row = {"name": name, "id": item["id"], "category": item.get("category", ""), "seed": seed, "wall_seconds": round(wall, 2)}
+    row = {"name": name, "id": item["id"], "category": item.get("category", ""), "seed": seed, "wall_seconds": round(wall, 2), "load": round(load, 2)}
+    if mode:
+        row["mode"] = mode
     if proc.returncode != 0 or not frames_path.exists():
         row.update(verdict="error", returncode=proc.returncode, error=proc.stderr[-400:])
         return row
@@ -78,8 +87,10 @@ def run_one(drama, item, seed, out_dir, codec, asr):
     return row
 
 
-def summary(out_dir):
-    rows = [json.loads(line) for p in Path(out_dir).glob("*.jsonl") for line in p.read_text().splitlines() if line.strip()]
+def summary(out_dirs, only_modes=None):
+    rows = [json.loads(line) for out_dir in out_dirs for p in Path(out_dir).glob("*.jsonl") for line in p.read_text().splitlines() if line.strip()]
+    if only_modes:
+        rows = [r for r in rows if r.get("mode", "full") in only_modes]
     if not rows:
         print("no rows"); return
     modes = sorted({r.get("mode", "full") for r in rows})
@@ -116,10 +127,13 @@ def main():
     ap.add_argument("--seeds", type=int, nargs="+", default=[1, 2, 3, 4, 5])
     ap.add_argument("--out", type=Path, default=HERE / "out/reliability")
     ap.add_argument("--drama", type=Path, default=ROOT / ".build/release/drama")
-    ap.add_argument("--summary", type=Path)
+    ap.add_argument("--drama-flags", default="", help="extra drama generate flags, after the condition's own")
+    ap.add_argument("--mode", help="label written into each row, for the paired summary")
+    ap.add_argument("--summary", type=Path, nargs="+")
+    ap.add_argument("--modes", nargs="+", help="with --summary: keep only rows with these mode labels")
     a = ap.parse_args()
     if a.summary:
-        summary(a.summary); return
+        summary(a.summary, a.modes); return
     a.out.mkdir(parents=True, exist_ok=True)
     items = json.loads(a.slice.read_text())
     import whisper
@@ -132,7 +146,7 @@ def main():
         for item in items:
             for seed in a.seeds:
                 if f"{item['id']}__s{seed}" in done: continue
-                row = run_one(a.drama, item, seed, a.out, codec, asr)
+                row = run_one(a.drama, item, seed, a.out, codec, asr, shlex.split(a.drama_flags), a.mode)
                 f.write(json.dumps(row) + "\n"); f.flush()
                 print(f"{row['name']:40s} {row.get('verdict'):8s} wer={row.get('wer', 'n/a')} retries={row.get('retries', 0)} {str(row.get('hyp', ''))[:60]}", flush=True)
 

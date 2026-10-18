@@ -147,7 +147,8 @@ cue-three). The Space's sampling (d) is the single largest effect on content,
 rate is a little higher (Whisper writes the laughs it now performs as "Ha
 ha", and one "Oh, stop it" became "I'll stop it"), it speaks more slowly into
 the cap, and its effect on the 130-row prose baseline was not measured here,
-so it is documented as a per-request option and not made the default. Cue
+so it is documented as a per-request option and not made the default (the
+prose measurement follows in "The Space's sampling on prose"). Cue
 normalisation (f) has nothing to normalise to, because bracket cues are free
 text by design (REVIEW.md); the five-seed probe of `[excited]` is suggestive
 only.
@@ -176,3 +177,105 @@ that reaches eos.
 The balanced mode was removed from the engine after this study, and compact
 was never offered, so `reliability.py` now runs the one precision and its
 rows carry no mode; the summary reads such rows as `full`.
+
+## The Space's sampling on prose
+
+Question: the cue investigation found the Hugging Face Space's sampling
+(temperature 1.0, top-p 0.9, top-k off) the single largest effect on cue
+lines, 39 of 40 against 38 of 40, but did not measure it on prose. Does it
+lose a prose row, what does it do to the word error rate and to speed, and
+should it be the default, the top of the Expressiveness slider, or a
+per-request option only?
+
+Method. The 33 conditions of slices `a`, `b` and `c`, five seeds, through
+`reliability.py` with `--drama-flags "--temperature 1.0 --top-p 0.9 --top-k
+4097"` (4097 is the candidate count, so top-k keeps everything) appended after
+each condition's own flags, so the four expressiveness-slider conditions ran
+under the Space's sampling too; everything else as the study ran it: sentence
+chunking, the CLI's fixed 600-frame cap, the Core ML silence stop, the
+duration retry. Binary built from this branch (main at f55dfb4 plus the
+harness flag), so the three cue guards shipped after the study (loop guard,
+eos-gated retry, cap per cue) were on; the rows they are compared with ran
+before those guards, which matters for the cue and control rows and is
+checked below for prose. One engine process at a time, slices one after
+another (16:11 to 16:58, 47 minutes), on a machine with a load of 5 to 28
+from other sessions' work and the app open but idle, so wall times are not a
+benchmark. Non-English rows rescored with the multilingual model as before.
+Rows: `eval/out/reliability-space/rescored/*.jsonl`, paired by condition and
+seed against `eval/out/reliability/rescored/*__full.jsonl` with
+`eval/.venv/bin/python -I eval/sampling_compare.py eval/out/reliability/rescored eval/out/reliability-space/rescored`.
+"All sentences" is the cue study's check (every sentence within a third of
+its words in edits of some window of the transcript).
+
+| rows, paired by seed | shipped sampling | the Space's sampling |
+| --- | --- | --- |
+| prose, 130: ok | 130 | 130 (none lost, none won) |
+| prose: all sentences | 130 | 128 |
+| prose: mean WER | 0.018 | 0.025, paired shift +0.007 (standard error 0.004); 12 rows worse, 6 better |
+| prose: retries | 19 | 5 |
+| prose: spoken s / expected s | 1.26 | 1.16, shift -0.101 (standard error 0.029) |
+| prose: frames per row | 158 | 150 (-5%) |
+| prose, the 110 rows without the slider conditions: ok, WER | 110, 0.021 | 110, 0.029, shift +0.008 (standard error 0.004) |
+| cue lines, 20: ok | 16 | 18 (1 lost, 3 won) |
+| cue lines: all sentences | 17 | 20 |
+| cue lines: eos, frames per row | 17, 210 | 20, 121 |
+| controls, 15 (retries off, reference chunking): ok | 8 | 15 |
+| every row, 165: ok, mean WER | 154, 0.051 | 163, 0.023 (shift -0.028, standard error 0.011) |
+
+No prose row is lost. The two prose rows that fail the all-sentences check
+are the abbreviation line at seeds 2 and 4, where Whisper wrote "10am" and
+"US" for "10 a.m." and "U.S." (word error rates 0.29 and 0.19 under that
+condition's 0.3 threshold); the words are there. The word error rate rises
+by 0.007, about two standard errors, and the rows behind it are of two kinds.
+Transcript spelling: "10am", "US", "rest rooms", "weekend", "40" for
+"forty", "gray" for "grey", "Alright"; these go both ways (the lighthouse
+line is worse at one seed and better at three). Spoken slips: "Warming" for
+"WARNING" at two seeds, "pack" for "peck" at two seeds, "room 2 or 7" for
+"room 207", and the invoice amount at one seed; the shipped sampling has two
+such rows ("on 21 March" for "on the 21st of March", a merged "Not me, don't
+look"). So the Space's sampling slurs a word in about 6 rows of 110 against
+2, every one under the verdict threshold, which is the "more risk of slurred
+words" the Expressiveness help already describes for the top of the slider.
+
+What it gains. Retries fall from 19 to 5 on prose, all five of them the
+duration rule on a chunk that spoke under 1.3 s (none the eos-gated rule, so
+the guards do not explain the drop), which is 14 fewer chunk regenerations in
+130 rows. The two-sentence weather line, which the shipped sampling stops
+after its first sentence in most attempts (four of five seeds retry it), came
+out whole on its first attempt at every seed, and so did the retries-off
+control: 5 of 5 with eos on the first attempt against 1 of 5, and the
+reference-chunking control 10 of 10 against 7. On the cue lines every
+sentence is present in 20 of 20; two of the three rows won are the
+cue-style line's two runaways, which the loop guard and the eos-gated retry
+also address, so that gain is shared with the guards; the one row lost is the cloned cue line at seed 2,
+where Whisper wrote the performed laugh as "Ha ha" and the word error rate
+landed at 0.154 against a 0.15 threshold, with every word present.
+
+Speed. The Space's sampling does not speak more slowly: spoken audio per
+expected second falls from 1.26 to 1.16 on prose (standard error 0.029), and
+frames per row fall 5% on prose and 43% on the cue lines, where the loops are
+gone. Wall time per row went from 39.9 s to 13.3 s, but the earlier rows ran
+on a machine shared by three workers and these at a load of 12, with the GPU
+at 36.7 ms per frame against 25.6 to 27 ms idle, so the comparable figure is
+the frame count. The text-derived cap is a separate matter: estimated at row
+level (1.5 x expected plus 2 s per chunk), the number lines run close to it
+under both samplings (two shipped rows over it, three Space rows, all
+numbers or a long paragraph), because "$1,249.99" and "1987" take longer to
+say than their characters predict.
+
+Recommendation: the top of the Expressiveness slider, not the default.
+The default's job is exported narration, where the shipped sampling has the
+lowest word error rate and no reliability gap to close (130 of 130 both
+ways), and a default change would move every API and MCP caller that never
+sets `expressiveness`. The Space's sampling earns the top of the slider: it
+keeps every sentence of cue lines, retries a quarter as often, and reads
+more varied, at a cost of a slurred word in a few rows in a hundred. Done
+on this branch: `GenerationConfig.make` runs from steady (0) through the
+vendor's sampling (0.5, unchanged, still the default) to the Space's at 1,
+temperature and top-p linear between, top-k 30 up to the middle and off
+above it; the help, the API table, the MCP tool and the changelog say so;
+unit tests pin the five points, the top end, and that temperature and top-p
+are monotone and continuous across the range. The old top (0.9, 0.9, top-k
+30) was measured fine in this study (15 of 15 at 0.008) and the Space's
+point replaces it on the strength of 165 rows; the points between 0.5 and 1
+are interpolated, not measured.
