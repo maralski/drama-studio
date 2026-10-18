@@ -184,7 +184,7 @@ func generate(_ args: Args) throws {
         config.cueFold = cueFold
     }
     config.retryWithoutEOSBelow = args.flags.contains("eos-retry") ? .infinity : args.double("eos-retry-below", 0)
-    config.stopOnLoop = args.flags.contains("loop-guard")
+    config.stopOnLoop = !args.flags.contains("no-loop-guard")
     config.capMinimumSeconds = args.double("cap-min", 0)
     config.capSecondsPerCue = args.double("cap-per-cue", 0)
     config.slowCapMultiplier = args.double("slow-cap", 1)
@@ -209,7 +209,7 @@ func generate(_ args: Args) throws {
         case .chunkFinished(let r):
             all += r.frames
             audio += r.samples
-            FileHandle.standardError.write(String(format: "  %d rows prefilled in %.2fs; %d frames in %.2fs (%.1f frames/s, GPU %.1f ms/frame) eos=%@ attempts=%d loop=%@ spoken=%.2fs cap=%d\n", r.promptRows, r.prefillSeconds, r.frames.count, r.decodeSeconds, Double(r.frames.count) / max(r.decodeSeconds, 1e-9), r.gpuSeconds * 1000 / Double(max(r.frames.count, 1)), r.finishedByEOS ? "yes" : "no", r.attempts, r.stoppedByLoop ? "yes" : "no", r.spokenSeconds, r.frameBudget).data(using: .utf8)!)
+            FileHandle.standardError.write(String(format: "  %d rows prefilled in %.2fs; %d frames in %.2fs (%.1f frames/s, GPU %.1f ms/frame) eos=%@ attempts=%d loop=%@ spoken=%.2fs cap=%d\n", r.promptRows, r.prefillSeconds, r.frames.count, r.decodeSeconds, Double(r.frames.count) / max(r.decodeSeconds, 1e-9), r.gpuSeconds * 1000 / Double(max(r.frames.count, 1)), r.finishedByEOS ? "yes" : "no", r.attempts, r.end == .loopGuard ? "yes" : "no", r.spokenSeconds, r.frameBudget).data(using: .utf8)!)
         default: break
         }
     }

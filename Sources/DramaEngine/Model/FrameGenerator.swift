@@ -7,17 +7,21 @@ package final class FrameGenerator {
     package let model: DramaModel
     package let tokenizer: Tokenizer
 
+    /// Why an attempt at a chunk stopped.
+    package enum ChunkEnd: Sendable {
+        case eos, loopGuard, silence, frameCap, cancelled
+    }
+
     package struct ChunkResult: Sendable {
         package var index: Int
         package var count: Int
         package var text: String
         package var frames: [Frame]
         package var promptRows: Int
-        package var finishedByEOS: Bool
-        /// The loop guard ended the chunk.
-        package var stoppedByLoop: Bool = false
+        package var end: ChunkEnd
+        package var finishedByEOS: Bool { end == .eos }
         /// The most frames this chunk could run.
-        package var frameBudget: Int = 0
+        package var frameBudget: Int
         package var prefillSeconds: Double
         package var decodeSeconds: Double
         /// GPU time of the decode command buffers.
@@ -147,21 +151,20 @@ package final class FrameGenerator {
                 let prefillSeconds = Date().timeIntervalSince(t0)
                 if attempt == 0 { onEvent(.prefilled(rows: prompt.count)) }
                 var frames: [Frame] = []
-                var eos = false
-                var looped = false
+                var end = ChunkEnd.frameCap
                 let t1 = Date()
                 let silenceFrames = config.stopAfterSilenceSeconds.map { Int(($0 * Double(ModelConstants.sampleRate) / Double(ModelConstants.samplesPerFrame)).rounded(.up)) }
                 let decoder = codec.map(ChunkDecoder.init)
                 let probe = decoder.map { decoder in SilenceProbe { try decoder.advance(to: $0) } }
                 var offered = 0
                 for step in 0..<budget {
-                    guard shouldContinue() else { break }
+                    guard shouldContinue() else { end = .cancelled; break }
                     let r = try session.step(temperature: config.temperature, topK: config.topK, topP: config.topP, sampler: &sampler)
-                    guard let frame = r.frame else { eos = true; break }
+                    guard let frame = r.frame else { end = .eos; break }
                     frames.append(frame)
                     onEvent(.frame(index: step, maxFrames: budget))
                     try deliver(current: (index, decoder))
-                    if config.stopOnLoop, frames.count % Self.silenceProbeEveryFrames == 0, MainTokenLoop.cycles(frames.map { $0[0] }) { looped = true; break }
+                    if config.stopOnLoop, frames.count % Self.silenceProbeEveryFrames == 0, MainTokenLoop.cycles(frames.map { $0[0] }) { end = .loopGuard; break }
                     guard let probe else { continue }
                     let probing = silenceFrames.map { frames.count > $0 } ?? false
                     let due = if let streamStep, decoder != nil { frames.count - offered >= streamStep }
@@ -169,13 +172,11 @@ package final class FrameGenerator {
                     let snapshot = frames
                     if due, runner.offer({ probe.measure(snapshot) }) { offered = frames.count }
                     if due, ProcessInfo.processInfo.environment["DRAMA_PROBE_LOG"] != nil { FileHandle.standardError.write("    probe at \(frames.count): latest \(probe.latest) offered \(offered)\n".data(using: .utf8)!) }
-                    if probing, let limit = config.stopAfterSilenceSeconds, probe.latest >= limit { break }
+                    if probing, let limit = config.stopAfterSilenceSeconds, probe.latest >= limit { end = .silence; break }
                 }
                 var result = ChunkResult(index: index, count: chunks.count, text: chunk.turn, frames: frames, promptRows: prompt.count,
-                                         finishedByEOS: eos, prefillSeconds: prefillSeconds, decodeSeconds: Date().timeIntervalSince(t1),
+                                         end: end, frameBudget: budget, prefillSeconds: prefillSeconds, decodeSeconds: Date().timeIntervalSince(t1),
                                          gpuSeconds: session.gpuSeconds, spokenSeconds: 0, attempts: attempt + 1, samples: [], codecSeconds: 0)
-                result.stoppedByLoop = looped
-                result.frameBudget = budget
                 if streamStep != nil, let decoder, let probe, !frames.isEmpty {
                     // No retry can follow, so the GPU moves on while the CPU decodes the last frames.
                     let snapshot = frames
@@ -193,7 +194,7 @@ package final class FrameGenerator {
                 result.codecSeconds = decoder?.codecSeconds ?? 0
                 if best == nil || Self.better(result, than: best!, preferEOS: config.retryWithoutEOSBelow > 0) { best = result }
                 let enough = result.spokenSeconds >= config.minSpokenRatio * expected
-                let finished = eos || looped == false && result.spokenSeconds >= config.retryWithoutEOSBelow * expected
+                let finished = end == .eos || end != .loopGuard && result.spokenSeconds >= config.retryWithoutEOSBelow * expected
                 if config.minSpokenRatio <= 0 || (enough && finished) || attempt == maxRetries { break }
                 onEvent(.retry(index: index, attempt: attempt + 1, spokenSeconds: result.spokenSeconds, expectedSeconds: expected))
             }

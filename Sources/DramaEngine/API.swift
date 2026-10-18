@@ -79,14 +79,18 @@ public struct GenerationConfig: Sendable, Codable, Equatable {
     public var minSpokenRatio: Double = 0.6
     /// The most times one chunk is generated again. Default 2.
     public var maxRetries: Int = 2
+    /// Stop a chunk once its main tokens settle into a repeating cycle, the
+    /// shape of a laughter loop. Default true. On the reliability study's two
+    /// laughter loops the last 48 main tokens repeated the tokens 17 or 34
+    /// frames earlier exactly, while no speech run among 267 matched above
+    /// 0.75 at any lag from 17 to 40 frames.
+    public var stopOnLoop: Bool = true
     // Experiment knobs of the performance-cue investigation (eval/cues); package-only until one ships.
     /// Also regenerate a chunk that stopped without eos (the silence stop, the
     /// frame cap or the loop guard ended it) when its spoken audio is shorter
     /// than this fraction of the expected duration. 0 leaves the duration rule
     /// alone to decide; `.infinity` regenerates every chunk that misses eos.
     package var retryWithoutEOSBelow: Double = 0
-    /// Stop a chunk whose main tokens have settled into a cycle (a laughter loop).
-    package var stopOnLoop: Bool = false
     /// Where a sentence-mode chunk boundary falls around a bracket cue.
     package var cueFold: Drama3Chunking.CueFold = .startsChunk
     /// A text-derived frame cap is never shorter than this many seconds.

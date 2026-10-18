@@ -14,6 +14,12 @@ final class AppSettingHelpTests: XCTestCase {
         "stopAfterSilenceSeconds": "Fixed by measurement: with the retry it took the mean quiet tail from 30 frames to 2.",
         "minSpokenRatio": "Fixed by measurement at 0.6; Quick preview sets it to 0.",
         "maxRetries": "Fixed at 2 alongside the retry threshold.",
+        "stopOnLoop": "Fixed by measurement: it ends laughter loops and no speech run tripped it.",
+        "retryWithoutEOSBelow": "A package-only knob of the eval/cues experiment.",
+        "cueFold": "A package-only knob of the eval/cues experiment.",
+        "capMinimumSeconds": "A package-only knob of the eval/cues experiment.",
+        "capSecondsPerCue": "A package-only knob of the eval/cues experiment.",
+        "slowCapMultiplier": "A package-only knob of the eval/cues experiment.",
     ]
 
     func testEveryGenerationConfigFieldIsExplainedOrDeliberatelyHidden() {
