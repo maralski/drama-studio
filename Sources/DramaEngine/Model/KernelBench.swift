@@ -15,19 +15,19 @@ public enum KernelBench {
         return (cb.gpuEndTime - cb.gpuStartTime) / Double(iterations)
     }
 
-    static func bf16Weights(_ device: MTLDevice, rows: Int, cols: Int) -> WeightMatrix {
+    static func bf16Weights(_ device: MTLDevice, rows: Int, cols: Int) -> TensorRef {
         let buf = device.makeBuffer(length: rows * cols * 2, options: .storageModeShared)!
         let p = buf.contents().assumingMemoryBound(to: UInt16.self)
         var rng = SeededGenerator(seed: 3)
         for i in 0..<(rows * cols) { p[i] = UInt16(truncatingIfNeeded: Float(rng.uniformOpenZero() * 2 - 1).bitPattern >> 16) }
-        return WeightMatrix(name: "w", format: .bf16, rows: rows, cols: cols, buffer: buf, offset: 0, paramOffset: 0)
+        return TensorRef(name: "w", dtype: .bf16, shape: [rows, cols], buffer: buf, offset: 0)
     }
 
     /// Random FP8 experts with block scales, laid out like the model's, plus a
     /// routing of `rows` tokens over them.
     struct SyntheticMoE {
         let config: ModelConfig
-        let table: ExpertTable
+        let table: MTLBuffer
         let buffers: [MTLBuffer]
         let x: Buf, ids: Buf, rw: Buf, counts: Buf, lists: Buf, active: Buf, act: Buf, slotOut: Buf
         let rows: Int, experts: Int, capacity: Int
@@ -64,13 +64,13 @@ public enum KernelBench {
                 defer { cursor += count * 4 }
                 return cursor
             }
-            var addresses = [UInt64](repeating: 0, count: config.numExperts * 6)
+            var table = [UInt64](repeating: 0, count: config.numExperts * 6)
             for e in 0..<experts {
                 let offsets = [fp8(inter * hidden), scales(rb * cb), fp8(inter * hidden), scales(rb * cb), fp8(hidden * inter), scales(cb * rb)]
-                for (j, o) in offsets.enumerated() { addresses[e * 6 + j] = pool.gpuAddress + UInt64(o) }
+                for (j, o) in offsets.enumerated() { table[e * 6 + j] = pool.gpuAddress + UInt64(o) }
             }
             buffers = [pool]
-            table = ExpertTable(table: d.makeBuffer(bytes: addresses, length: addresses.count * 8, options: .storageModeShared)!, format: .fp8BlockScaled)
+            self.table = d.makeBuffer(bytes: table, length: table.count * 8, options: .storageModeShared)!
             x = Buf(d, floats: rows * hidden, label: "x")
             for i in 0..<(rows * hidden) { x.floats[i] = Float(rng.uniformOpenZero()) * 2 - 1 }
             ids = Buf(d, floats: rows * topK, label: "ids"); rw = Buf(d, floats: rows * topK, label: "rw")
@@ -100,49 +100,6 @@ public enum KernelBench {
             active = Buf(d, floats: config.numExperts, label: "active")
             act = Buf(d, floats: rows * topK * config.moeIntermediate, label: "act")
             slotOut = Buf(d, floats: rows * topK * hidden, label: "slotOut")
-        }
-
-        private init(_ other: SyntheticMoE, table: ExpertTable, buffers: [MTLBuffer]) {
-            config = other.config; rows = other.rows; experts = other.experts; capacity = other.capacity
-            x = other.x; ids = other.ids; rw = other.rw; counts = other.counts; lists = other.lists; active = other.active
-            act = other.act; slotOut = other.slotOut
-            self.table = table
-            self.buffers = buffers
-        }
-
-        /// The same tokens, routing and experts with the experts quantized to
-        /// int4 by the engine's quantizer, expert-major per matrix kind as the
-        /// cache file lays them out.
-        func quantizedInt4(_ ctx: MetalContext) throws -> SyntheticMoE {
-            precondition(table.format == .fp8BlockScaled)
-            func aligned(_ n: Int) -> Int { (n + 255) / 256 * 256 }
-            var slots: [(kind: ExpertMatrix, weights: Int, params: Int)] = []
-            var total = 0
-            for kind in ExpertMatrix.allCases {
-                let (rows, cols) = kind.shape(config)
-                let weights = total
-                total += aligned(experts * WeightFormat.int4.weightBytes(rows: rows, cols: cols))
-                let params = total
-                total += aligned(experts * WeightFormat.int4.paramBytes(rows: rows, cols: cols))
-                slots.append((kind, weights, params))
-            }
-            let pool = ctx.device.makeBuffer(length: total, options: .storageModeShared)!
-            var addresses = [UInt64](repeating: 0, count: config.numExperts * 6)
-            let k = Kernels(ctx: ctx, precision: .exact)
-            _ = try gpuSeconds(ctx, iterations: 1) { enc in
-                enc.useResources(buffers, usage: .read)
-                for slot in slots {
-                    let (rows, cols) = slot.kind.shape(config)
-                    try k.quantizeExpertsInt4(enc, experts: table, kind: slot.kind, count: experts, rows: rows, cols: cols,
-                                              into: QuantizedSlot(buffer: pool, offset: slot.weights, paramOffset: slot.params))
-                    for e in 0..<experts {
-                        addresses[e * 6 + slot.kind.rawValue * 2] = pool.gpuAddress + UInt64(slot.weights + e * WeightFormat.int4.weightBytes(rows: rows, cols: cols))
-                        addresses[e * 6 + slot.kind.rawValue * 2 + 1] = pool.gpuAddress + UInt64(slot.params + e * WeightFormat.int4.paramBytes(rows: rows, cols: cols))
-                    }
-                }
-            }
-            let int4Table = ExpertTable(table: ctx.device.makeBuffer(bytes: addresses, length: addresses.count * 8, options: .storageModeShared)!, format: .int4)
-            return SyntheticMoE(self, table: int4Table, buffers: [pool])
         }
 
         var maxActive: Int { min(rows * config.topK, config.numExperts) }

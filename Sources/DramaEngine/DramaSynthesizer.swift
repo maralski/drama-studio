@@ -6,23 +6,17 @@ import Synchronization
 public actor DramaSynthesizer: SpeechSynthesizer {
     public nonisolated let location: ModelLocation
     public let codecDirectory: URL
-    public let mode: ModelPrecisionMode
     /// Where the kernel tuning cache lives; tests point it at a temp directory.
     public let tuningDirectory: URL
-    /// Where a quantized mode's weight cache lives.
-    public let quantizedDirectory: URL
     private var model: DramaModel?
     private var tokenizer: Tokenizer?
     private var codec: DramaCodec?
     private var loading: Task<Void, Error>?
 
-    public init(location: ModelLocation, codecDirectory: URL, mode: ModelPrecisionMode = .full,
-                tuningDirectory: URL = TuningCache.defaultDirectory, quantizedDirectory: URL = QuantizedWeightFile.defaultDirectory) {
+    public init(location: ModelLocation, codecDirectory: URL, tuningDirectory: URL = TuningCache.defaultDirectory) {
         self.location = location
         self.codecDirectory = codecDirectory
-        self.mode = mode
         self.tuningDirectory = tuningDirectory
-        self.quantizedDirectory = quantizedDirectory
     }
 
     /// Generation runs synchronously on this actor, so status reads go
@@ -33,21 +27,16 @@ public actor DramaSynthesizer: SpeechSynthesizer {
     public nonisolated var isLoaded: Bool { tuned.withLock { $0 != nil } }
     public nonisolated var isTuned: Bool? { tuned.withLock { $0 } }
 
-    /// The first load of a quantized mode builds its weight cache, and the
-    /// first load on a Mac also tunes the kernel schedule and caches it, so
-    /// later loads find both and skip the steps. A tuning failure leaves the
-    /// default schedule in place; it never fails the load.
+    /// The first load on a Mac also tunes the kernel schedule and caches it,
+    /// so later loads find the cache and skip the step. A tuning failure
+    /// leaves the default schedule in place; it never fails the load.
     public func load(onPhase: @escaping @Sendable (String) -> Void) async throws {
         if isLoaded { return }
         if let loading { return try await loading.value }
-        let task = Task { [location, codecDirectory, mode, tuningDirectory, quantizedDirectory] in
+        let task = Task { [location, codecDirectory, tuningDirectory] in
             let codec = try await DramaCodec(directory: codecDirectory)
             let tokenizer = try Tokenizer(url: location.directory.appendingPathComponent("tokenizer.json"))
-            let cacheURL = QuantizedWeightFile.url(snapshot: location.directory.lastPathComponent, mode: mode, directory: quantizedDirectory)
-            if mode != .full, !FileManager.default.fileExists(atPath: cacheURL.path) {
-                onPhase("Quantizing weights for the \(mode.rawValue) mode (first load only)")
-            }
-            let model = try DramaModel(location: location, mode: mode, tuningDirectory: tuningDirectory, quantizedDirectory: quantizedDirectory)
+            let model = try DramaModel(location: location, tuningDirectory: tuningDirectory)
             model.warmUp()
             if model.scheduleSource == .default {
                 onPhase("Tuning kernels for this Mac, about a minute")
