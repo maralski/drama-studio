@@ -16,7 +16,6 @@ final class AppSettingHelpTests: XCTestCase {
         "maxRetries": "Fixed at 2 alongside the retry threshold.",
         "stopOnLoop": "Fixed by measurement: it ends laughter loops and no speech run tripped it.",
         "retryWithoutEOSBelow": "Fixed by measurement at 1.0 alongside the retry threshold; Quick preview turns retries off.",
-        "cueFold": "A package-only knob of the eval/cues experiment.",
         "capSecondsPerCue": "Fixed by measurement at 1.5 s, so a cue's time does not cut its words off at the cap.",
     ]
 

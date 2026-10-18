@@ -102,9 +102,6 @@ public struct GenerationConfig: Sendable, Codable, Equatable {
     /// since the loop guard ends them.
     /// A ``FrameCap/fixed(_:)`` cap gets no allowance.
     public var capSecondsPerCue: Double = 1.5
-    // Experiment knobs of the performance-cue investigation (eval/cues); package-only until one ships.
-    /// Where a sentence-mode chunk boundary falls around a bracket cue.
-    package var cueFold: Drama3Chunking.CueFold = .startsChunk
     /// When decoded audio leaves the engine. Default ``StreamingMode/sentence``.
     public var streaming: StreamingMode = .sentence
     /// The measured defaults.

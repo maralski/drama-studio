@@ -191,7 +191,6 @@ package final class FrameGenerator {
                               else { probing && frames.count % Self.silenceProbeEveryFrames == 0 }
                     let snapshot = frames
                     if due, runner.offer({ probe.measure(snapshot) }) { offered = frames.count }
-                    if due, ProcessInfo.processInfo.environment["DRAMA_PROBE_LOG"] != nil { FileHandle.standardError.write("    probe at \(frames.count): latest \(probe.latest) offered \(offered)\n".data(using: .utf8)!) }
                     if probing, let limit = config.stopAfterSilenceSeconds, probe.latest >= limit { end = .silence; break }
                 }
                 var result = ChunkResult(index: index, count: chunks.count, text: chunk.turn, frames: frames, promptRows: prompt.count,

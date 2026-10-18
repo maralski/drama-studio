@@ -1,14 +1,10 @@
 {
- "a": {"note": "today's behaviour under the app's configuration: sentence chunking, text-derived frame cap, codec silence stop, duration retry"},
- "b": {"note": "a chunk never opens with a bracket cue: the cue and its sentence join the previous chunk", "flags": {"cue-fold": "joinsPrevious"}},
- "b2": {"note": "a chunk never opens with a bracket cue: the cue ends the previous chunk, its sentence opens the next", "flags": {"cue-fold": "endsPrevious"}},
- "c": {"note": "the whole line as one chunk (the reference's 300-byte chunking)", "chunking": "reference"},
- "d": {"note": "the Space's sampling on today's chunking: temperature 1.0, top-p 0.9, top-k off", "flags": {"temperature": 1.0, "top-p": 0.9, "top-k": 4097}},
- "e": {"note": "retry a chunk that stopped without eos, and stop a chunk whose main tokens cycle", "flags": {"eos-retry": "", "loop-guard": ""}},
- "f": {"note": "cue text normalised: lowercase, no spaces inside brackets, opening styles mapped to the official tag list", "normalise": true},
- "g": {"note": "a cap floor like the Space's: every chunk may run at least 8 s, and a slow or whisper direction multiplies the expected duration by 1.6", "flags": {"cap-min": 8, "slow-cap": 1.6}},
- "e2": {"note": "e narrowed: retry a chunk that missed eos only when it spoke under 1.0 of its expected seconds, or when the loop guard stopped it", "flags": {"eos-retry-below": 1.0, "loop-guard": ""}},
- "ge2": {"note": "g plus e2: the cap floor with the narrowed eos retry and the loop guard", "flags": {"cap-min": 8, "slow-cap": 1.6, "eos-retry-below": 1.0, "loop-guard": ""}},
- "he2": {"note": "e2 plus 1.5 s of cap per bracket cue instead of a floor", "flags": {"cap-per-cue": 1.5, "eos-retry-below": 1.0, "loop-guard": ""}},
- "dhe2": {"note": "the Space's sampling with he2: temperature 1.0, top-p 0.9, top-k off, cap per cue, narrowed eos retry, loop guard", "flags": {"temperature": 1.0, "top-p": 0.9, "top-k": 4097, "cap-per-cue": 1.5, "eos-retry-below": 1.0, "loop-guard": ""}}
+ "a": {"note": "the behaviour before the cue study under the app's configuration: sentence chunking, text-derived frame cap with no cue allowance, codec silence stop, duration retry only, no loop guard", "flags": {"eos-retry-below": 0, "no-loop-guard": "", "cap-per-cue": 0}},
+ "c": {"note": "a with the whole line as one chunk (the reference's 300-byte chunking)", "chunking": "reference", "flags": {"eos-retry-below": 0, "no-loop-guard": "", "cap-per-cue": 0}},
+ "d": {"note": "a with the Space's sampling: temperature 1.0, top-p 0.9, top-k off", "flags": {"temperature": 1.0, "top-p": 0.9, "top-k": 4097, "eos-retry-below": 0, "no-loop-guard": "", "cap-per-cue": 0}},
+ "e": {"note": "retry a chunk that stopped without eos, and stop a chunk whose main tokens cycle", "flags": {"eos-retry-below": 1e9, "cap-per-cue": 0}},
+ "f": {"note": "a with cue text normalised: lowercase, no spaces inside brackets, opening styles mapped to the official tag list", "normalise": true, "flags": {"eos-retry-below": 0, "no-loop-guard": "", "cap-per-cue": 0}},
+ "e2": {"note": "e narrowed: retry a chunk that missed eos only when it spoke under 1.0 of its expected seconds, or when the loop guard stopped it", "flags": {"eos-retry-below": 1.0, "cap-per-cue": 0}},
+ "he2": {"note": "e2 plus 1.5 s of cap per bracket cue: the shipped defaults", "flags": {"cap-per-cue": 1.5, "eos-retry-below": 1.0}},
+ "dhe2": {"note": "the Space's sampling with he2: temperature 1.0, top-p 0.9, top-k off, cap per cue, narrowed eos retry, loop guard", "flags": {"temperature": 1.0, "top-p": 0.9, "top-k": 4097, "cap-per-cue": 1.5, "eos-retry-below": 1.0}}
 }

@@ -46,7 +46,7 @@ package struct GenerationPlan: Sendable, Equatable {
             var pieces: [String]
             switch config.chunking {
             case .reference: pieces = Drama3Chunking.split(text, maxBytes: config.chunkBytes)
-            case .sentences: pieces = Drama3Chunking.splitSentencesTagged(text, cueFold: config.cueFold)
+            case .sentences: pieces = Drama3Chunking.splitSentencesTagged(text)
             }
             if pieces.isEmpty { pieces = [text] }
             chunks = pieces.map { Chunk(turn: turn($0), line: $0) }

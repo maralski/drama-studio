@@ -179,11 +179,7 @@ func generate(_ args: Args) throws {
     // --text-cap keeps the app's text-derived frame cap; otherwise a fixed cap, 600 frames unless --max-frames.
     if args["max-frames"] != nil || !args.flags.contains("text-cap") { config.maxNewFrames = args.int("max-frames", 600) }
     config.chunking = args["chunking"].flatMap(GenerationConfig.Chunking.init(rawValue:)) ?? .reference
-    if let fold = args["cue-fold"] {
-        guard let cueFold = Drama3Chunking.CueFold(rawValue: fold) else { fail("--cue-fold must be one of " + Drama3Chunking.CueFold.allCases.map(\.rawValue).joined(separator: ", ")) }
-        config.cueFold = cueFold
-    }
-    config.retryWithoutEOSBelow = args.flags.contains("eos-retry") ? .infinity : args.double("eos-retry-below", config.retryWithoutEOSBelow)
+    config.retryWithoutEOSBelow = args.double("eos-retry-below", config.retryWithoutEOSBelow)
     config.stopOnLoop = !args.flags.contains("no-loop-guard")
     config.capSecondsPerCue = args.double("cap-per-cue", config.capSecondsPerCue)
     if let s = args["seed"].flatMap(UInt64.init) { config.seed = s }
