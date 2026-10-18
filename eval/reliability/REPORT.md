@@ -66,3 +66,7 @@ to the same study before it can be offered. Performance cues are the one
 area where both modes drop content a few times in twenty; that is a model
 behaviour the app should warn about next to the cue palette until a better
 guard exists.
+
+The balanced mode was removed from the engine after this study, and compact
+was never offered, so `reliability.py` now runs the one precision and its
+rows carry no mode; the summary reads such rows as `full`.

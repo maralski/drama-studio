@@ -48,10 +48,6 @@ final class SessionModel {
     /// The last line tried in the design sheet.
     private(set) var audition: Audition?
     private(set) var recentProjects = RecentProjects.load()
-    /// The precision the next Generate loads the model at.
-    var modelPrecision: ModelPrecisionMode {
-        didSet { UserDefaults.standard.set(modelPrecision.rawValue, forKey: ModelSetup.precisionKey) }
-    }
     var playbackRate: Double {
         didSet {
             player.rate = Float(playbackRate)
@@ -59,14 +55,9 @@ final class SessionModel {
         }
     }
     @ObservationIgnored var playsWhileGenerating = true
-    /// Set by the API server controller: a swap of the synthesizer waits while an API job runs.
-    @ObservationIgnored var engineBusyElsewhere: () -> Bool = { false }
-    @ObservationIgnored var synthesizerReplaced: () -> Void = {}
 
     let library: VoiceLibrary
-    private(set) var synthesizer: any SpeechSynthesizer
-    @ObservationIgnored private var synthesizerMode: ModelPrecisionMode
-    @ObservationIgnored private let makeSynthesizer: (ModelPrecisionMode) -> any SpeechSynthesizer
+    let synthesizer: any SpeechSynthesizer
     @ObservationIgnored private let pronunciationURL: URL
     @ObservationIgnored private let player = StreamingPlayer()
     @ObservationIgnored private let previewPlayer = StreamingPlayer()
@@ -88,15 +79,10 @@ final class SessionModel {
     static let plainSegmentID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
 
     init(synthesizer: any SpeechSynthesizer, library: VoiceLibrary,
-         pronunciationURL: URL = PronunciationDictionary.defaultURL,
-         makeSynthesizer: @escaping (ModelPrecisionMode) -> any SpeechSynthesizer = { ModelSetup.makeSynthesizer(mode: $0) }) {
+         pronunciationURL: URL = PronunciationDictionary.defaultURL) {
         self.synthesizer = synthesizer
         self.library = library
         self.pronunciationURL = pronunciationURL
-        self.makeSynthesizer = makeSynthesizer
-        let precision = ModelSetup.storedPrecision
-        modelPrecision = precision
-        synthesizerMode = precision
         let rate = UserDefaults.standard.double(forKey: Self.playbackRateKey)
         playbackRate = Self.playbackRates.contains(rate) ? rate : 1
         player.rate = Float(playbackRate)
@@ -432,8 +418,8 @@ final class SessionModel {
         setVoice(.designed(preset.design), forSpeaker: 0)
     }
 
-    /// Every request leaves through here: the pronunciation dictionary
-    /// rewrites its text, and a changed precision rebuilds the synthesizer first.
+    /// Every request leaves through here, so the pronunciation dictionary
+    /// rewrites every text.
     private func start(_ request: SpeechRequest, as job: Job) {
         stopPreview()
         var request = request
@@ -457,25 +443,6 @@ final class SessionModel {
         run += 1
         self.job = job
         let current = run
-        if modelPrecision == synthesizerMode {
-            begin(request, run: current)
-        } else if !engineBusyElsewhere() {
-            replaceSynthesizer()
-            begin(request, run: current)
-        } else {
-            state = .loading(progress: 0, detail: "Switching to the \(modelPrecision.rawValue) model", playing: state.isPlaying)
-            generation = Task { [weak self] in
-                while let self, self.run == current, self.engineBusyElsewhere() {
-                    try? await Task.sleep(for: .milliseconds(100))
-                }
-                guard let self, self.run == current else { return }
-                self.replaceSynthesizer()
-                self.begin(request, run: current)
-            }
-        }
-    }
-
-    private func begin(_ request: SpeechRequest, run current: Int) {
         let stream = synthesizer.synthesize(request)
         generation = Task { [weak self] in
             do {
@@ -490,12 +457,6 @@ final class SessionModel {
         }
     }
 
-    private func replaceSynthesizer() {
-        synthesizer = makeSynthesizer(modelPrecision)
-        synthesizerMode = modelPrecision
-        modelLoaded = false
-        synthesizerReplaced()
-    }
 
     func stopGeneration() {
         guard state.isGenerating else { return }

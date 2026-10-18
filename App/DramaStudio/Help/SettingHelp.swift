@@ -23,7 +23,6 @@ enum SettingHelp: String, CaseIterable, Identifiable {
     case expressiveness
     case playbackSpeed
     case streaming
-    case modelPrecision
     case modelLocation
     case license
 
@@ -44,7 +43,7 @@ enum SettingHelp: String, CaseIterable, Identifiable {
         case .screenplayMode, .speakerVoice, .performanceCues, .examples, .sections, .pronunciation, .projects: .script
         case .surpriseMe, .voiceDesign, .referenceClip, .voiceTranscript, .voiceConsent: .voices
         case .newTake, .directorsNote, .keepTake, .quickPreview, .expressiveness, .playbackSpeed: .takes
-        case .modelLocation, .streaming, .modelPrecision: .model
+        case .modelLocation, .streaming: .model
         case .license: .about
         }
     }
@@ -81,7 +80,6 @@ enum SettingHelp: String, CaseIterable, Identifiable {
         case .expressiveness: "Expressiveness"
         case .playbackSpeed: "Playback Speed"
         case .streaming: "Streaming"
-        case .modelPrecision: "Model Precision"
         case .modelLocation: "Model Location"
         case .license: "License and Consent"
         }
@@ -129,8 +127,6 @@ enum SettingHelp: String, CaseIterable, Identifiable {
             "Plays the audio faster or slower without changing its pitch, from 0.75x to 1.5x. It changes playback only: exports, captions, and projects keep the original timing. The scrubber and the sentence highlight follow the audio at every speed, and the setting is remembered."
         case .streaming:
             "Plays a take about three seconds after you click Generate, instead of after its first sentence is generated. The audio is decoded on the CPU every few seconds while the GPU generates, so it keeps several CPU cores busy during generation. A sentence that comes out too short is kept rather than generated again, because you may already be hearing it. Turn it off to hear each sentence once it is finished and let the retry fix short sentences."
-        case .modelPrecision:
-            "Balanced holds the dense and tower matrices as int8 and leaves the experts as released, so a decode frame takes 26 percent less GPU time (17.4 ms against 23.6 ms) and the process uses 9 percent less memory. In a 330-run reliability study it spoke plain prose correctly in 126 of 130 runs against 130 of 130 for Full, with every difference in Full's favour, so keep Full for narration you export. Full is the model as released, bit for bit, and is the default. The change applies at the next Generate, and the first use of Balanced builds a 2.5 GB cache."
         case .modelLocation:
             "Where Drama Studio looks for the Drama 3 weights, about 41.5 GB. By default it uses the Hugging Face cache, where \u{201C}hf download fishaudio/drama-3\u{201D} puts them. Choose a folder only if you keep the model somewhere else, such as an external drive. Restart Drama Studio after changing it."
         case .license:
