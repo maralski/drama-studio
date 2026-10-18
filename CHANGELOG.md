@@ -5,6 +5,19 @@ DramaEngine follows [semantic versioning](https://semver.org). The version is
 release removes a public symbol or changes what one means, a minor release
 adds one, and a patch release changes neither.
 
+## Unreleased
+
+- `GenerationConfig` adds three defaults for lines with performance cues.
+  `stopOnLoop` (true) stops a chunk whose main tokens repeat in a cycle, as
+  a laughter loop does. `retryWithoutEOSBelow` (1.0) generates a chunk
+  again when the loop guard stopped it, or when it stopped before the end
+  of speech with less audio than its text expects. `capSecondsPerCue` (1.5)
+  gives a text-derived frame cap 1.5 s for each bracket cue. On 8 cue lines
+  every sentence came out in 95% of 40 runs, against 80% of 55 runs
+  before. Set the three to false, 0 and 0 for the earlier behaviour.
+- Of two attempts at a chunk, the engine now keeps one that reached the
+  end of speech over one that did not, then the one with more speech.
+
 ## 1.0.0
 
 The first release of DramaEngine as a library for other macOS apps.
