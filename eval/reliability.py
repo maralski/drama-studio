@@ -43,12 +43,13 @@ def run_one(drama, item, mode, seed, out_dir, codec, asr):
     wall = time.time() - t0
     row = {"name": name, "id": item["id"], "category": item.get("category", ""), "mode": mode, "seed": seed, "wall_seconds": round(wall, 2)}
     if proc.returncode != 0 or not frames_path.exists():
-        row.update(verdict="error", error=proc.stderr[-400:])
+        row.update(verdict="error", returncode=proc.returncode, error=proc.stderr[-400:])
         return row
     stderr = proc.stderr
     row["retries"] = stderr.count("retry ")
     row["eos"] = all("eos=yes" in line for line in stderr.splitlines() if "eos=" in line)
     row["chunks"] = sum(1 for line in stderr.splitlines() if "eos=" in line)
+    row["chunk_log"] = [line.strip() for line in stderr.splitlines() if "eos=" in line or "retry " in line]
     frames = np.load(frames_path)
     import torch
     codes = torch.from_numpy(np.ascontiguousarray(frames[:, 1:].T)).long()[None]

@@ -129,7 +129,9 @@ final class SilenceProbe: @unchecked Sendable {
 
     /// A reading taken while frames still land; a failure reads as no silence.
     func measure(_ frames: [Frame]) {
+        let t0 = Date()
         let silence = (try? reading(frames)) ?? 0
+        if ProcessInfo.processInfo.environment["DRAMA_PROBE_LOG"] != nil { FileHandle.standardError.write("    measure(\(frames.count)) -> \(silence) in \(Date().timeIntervalSince(t0))s on \(Thread.current)\n".data(using: .utf8)!) }
         lock.withLock { last = silence }
     }
 

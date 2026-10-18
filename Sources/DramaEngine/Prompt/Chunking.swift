@@ -90,9 +90,21 @@ public enum Drama3Chunking {
         return chunks.map { UnicodeWhitespace.strip(string($0)) }.filter { !$0.isEmpty }
     }
 
+    /// Where a chunk boundary falls when the next sentence opens with a `[cue]`.
+    public enum CueFold: String, Sendable, Codable, CaseIterable {
+        /// The cue opens the next chunk.
+        case startsChunk
+        /// The cue and its sentence join the previous chunk.
+        case joinsPrevious
+        /// The cue ends the previous chunk; its sentence opens the next.
+        case endsPrevious
+    }
+
+    static let leadingCue = try! NSRegularExpression(pattern: "^\\[[^\\[\\]]*\\]")
+
     /// One chunk per sentence: cut at sentence ends only, keep protected spans
     /// whole, and fold fragments shorter than `minBytes` into their neighbour.
-    public static func splitSentences(_ text: String, minBytes: Int = 24) -> [String] {
+    public static func splitSentences(_ text: String, minBytes: Int = 24, cueFold: CueFold = .startsChunk) -> [String] {
         if UnicodeWhitespace.strip(text).isEmpty { return [] }
         let pieces = breakAtMarks(protectedPieces(text), 0, sentenceEnds)
         var chunks: [[Unicode.Scalar]] = []
@@ -106,17 +118,38 @@ public enum Drama3Chunking {
             if let last = chunks.last, utf8Len(Array(UnicodeWhitespace.strip(string(current)).unicodeScalars)) < minBytes { chunks[chunks.count - 1] = last + current }
             else { chunks.append(current) }
         }
-        return chunks.map { UnicodeWhitespace.strip(string($0)) }.filter { !$0.isEmpty }
+        let stripped = chunks.map { UnicodeWhitespace.strip(string($0)) }.filter { !$0.isEmpty }
+        return cueFold == .startsChunk ? stripped : foldCues(stripped, cueFold)
+    }
+
+    /// Moves every chunk-opening cue after the first chunk per `fold`.
+    static func foldCues(_ chunks: [String], _ fold: CueFold) -> [String] {
+        var out: [String] = []
+        for chunk in chunks {
+            let ns = chunk as NSString
+            guard !out.isEmpty, let cue = leadingCue.firstMatch(in: chunk, range: NSRange(location: 0, length: ns.length)) else { out.append(chunk); continue }
+            switch fold {
+            case .startsChunk:
+                out.append(chunk)
+            case .joinsPrevious:
+                out[out.count - 1] += " " + chunk
+            case .endsPrevious:
+                let rest = UnicodeWhitespace.strip(ns.substring(from: cue.range.length))
+                out[out.count - 1] += " " + ns.substring(with: cue.range)
+                if !rest.isEmpty { out.append(rest) }
+            }
+        }
+        return out
     }
 
     /// Sentence mode with speaker tags: each tagged segment is split into
     /// sentences and every chunk keeps its tag.
-    public static func splitSentencesTagged(_ text: String) -> [String] {
+    public static func splitSentencesTagged(_ text: String, cueFold: CueFold = .startsChunk) -> [String] {
         let ns = text as NSString
-        if Drama3Prompt.speakerTag.firstMatch(in: text, range: NSRange(location: 0, length: ns.length)) == nil { return splitSentences(text) }
+        if Drama3Prompt.speakerTag.firstMatch(in: text, range: NSRange(location: 0, length: ns.length)) == nil { return splitSentences(text, cueFold: cueFold) }
         var out: [String] = []
         for (speaker, body) in parseSpeakerSegments(text) {
-            for piece in splitSentences(body) { out.append("<|speaker:\(speaker)|> \(piece)") }
+            for piece in splitSentences(body, cueFold: cueFold) { out.append("<|speaker:\(speaker)|> \(piece)") }
         }
         return out
     }

@@ -197,8 +197,17 @@ func generate(_ args: Args) throws {
     }
     var config = GenerationConfig()
     config.temperature = args.double("temperature", 0.7); config.topK = args.int("top-k", 30); config.topP = args.double("top-p", 0.7)
-    config.maxNewFrames = args.int("max-frames", 600)
+    // --text-cap keeps the app's text-derived frame cap; otherwise a fixed cap, 600 frames unless --max-frames.
+    if args["max-frames"] != nil || !args.flags.contains("text-cap") { config.maxNewFrames = args.int("max-frames", 600) }
     config.chunking = args["chunking"].flatMap(GenerationConfig.Chunking.init(rawValue:)) ?? .reference
+    if let fold = args["cue-fold"] {
+        guard let cueFold = Drama3Chunking.CueFold(rawValue: fold) else { fail("--cue-fold must be one of " + Drama3Chunking.CueFold.allCases.map(\.rawValue).joined(separator: ", ")) }
+        config.cueFold = cueFold
+    }
+    config.retryWithoutEOS = args.flags.contains("eos-retry")
+    config.stopOnLoop = args.flags.contains("loop-guard")
+    config.capMinimumSeconds = args.double("cap-min", 0)
+    config.slowCapMultiplier = args.double("slow-cap", 1)
     if let s = args["seed"].flatMap(UInt64.init) { config.seed = s }
     if args.flags.contains("warm") { model.warmUp() }
     let gen = FrameGenerator(model: model, tokenizer: tokenizer)
@@ -220,7 +229,7 @@ func generate(_ args: Args) throws {
         case .chunkFinished(let r):
             all += r.frames
             audio += r.samples
-            FileHandle.standardError.write(String(format: "  %d rows prefilled in %.2fs; %d frames in %.2fs (%.1f frames/s, GPU %.1f ms/frame) eos=%@ attempts=%d\n", r.promptRows, r.prefillSeconds, r.frames.count, r.decodeSeconds, Double(r.frames.count) / max(r.decodeSeconds, 1e-9), r.gpuSeconds * 1000 / Double(max(r.frames.count, 1)), r.finishedByEOS ? "yes" : "no", r.attempts).data(using: .utf8)!)
+            FileHandle.standardError.write(String(format: "  %d rows prefilled in %.2fs; %d frames in %.2fs (%.1f frames/s, GPU %.1f ms/frame) eos=%@ attempts=%d loop=%@ spoken=%.2fs cap=%d\n", r.promptRows, r.prefillSeconds, r.frames.count, r.decodeSeconds, Double(r.frames.count) / max(r.decodeSeconds, 1e-9), r.gpuSeconds * 1000 / Double(max(r.frames.count, 1)), r.finishedByEOS ? "yes" : "no", r.attempts, r.stoppedByLoop ? "yes" : "no", r.spokenSeconds, r.frameBudget).data(using: .utf8)!)
         default: break
         }
     }

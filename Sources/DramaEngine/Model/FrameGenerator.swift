@@ -14,6 +14,10 @@ public final class FrameGenerator {
         public var frames: [Frame]
         public var promptRows: Int
         public var finishedByEOS: Bool
+        /// The loop guard ended the chunk.
+        public var stoppedByLoop: Bool = false
+        /// The most frames this chunk could run.
+        public var frameBudget: Int = 0
         public var prefillSeconds: Double
         public var decodeSeconds: Double
         /// GPU time of the decode command buffers.
@@ -52,6 +56,13 @@ public final class FrameGenerator {
         let plain = text.replacingOccurrences(of: #"<\|[^|]*\|>|\[[^\]]*\]"#, with: "", options: .regularExpression)
         let chars = plain.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ").count
         return Double(chars) / charactersPerSecond
+    }
+
+    /// Which of two attempts at a chunk to keep: with `preferEOS`, one that
+    /// reached eos over one that did not, then the one that spoke longer.
+    static func better(_ a: ChunkResult, than b: ChunkResult, preferEOS: Bool) -> Bool {
+        if preferEOS && a.finishedByEOS != b.finishedByEOS { return a.finishedByEOS }
+        return a.spokenSeconds > b.spokenSeconds
     }
 
     public init(model: DramaModel, tokenizer: Tokenizer) {
@@ -121,7 +132,10 @@ public final class FrameGenerator {
             onEvent(.chunkStarted(index: index, count: chunks.count, text: chunk.line))
             let (prompt, prefixRows) = try chunkPrompt(text: chunk.turn, plan: plan, history: history)
             let expected = Self.expectedSeconds(for: chunk.line)
-            let budget = min(config.frameCap.frames(expectedSeconds: expected), model.capacity - prompt.count - 1)
+            let slow = chunk.line.range(of: #"slow|whisper|drawn[- ]out|unhurried|long pause"#, options: [.regularExpression, .caseInsensitive]) != nil
+            let capSeconds = expected * (slow ? config.slowCapMultiplier : 1)
+            let minimumFrames = Int((config.capMinimumSeconds * Double(ModelConstants.sampleRate) / Double(ModelConstants.samplesPerFrame)).rounded(.up))
+            let budget = min(max(config.frameCap.frames(expectedSeconds: capSeconds), minimumFrames), model.capacity - prompt.count - 1)
             guard budget >= 1 else { throw PromptError.tooLong(prompt.count) }
             var best: ChunkResult?
             for attempt in 0...maxRetries {
@@ -132,6 +146,7 @@ public final class FrameGenerator {
                 if attempt == 0 { onEvent(.prefilled(rows: prompt.count)) }
                 var frames: [Frame] = []
                 var eos = false
+                var looped = false
                 let t1 = Date()
                 let silenceFrames = config.stopAfterSilenceSeconds.map { Int(($0 * Double(ModelConstants.sampleRate) / Double(ModelConstants.samplesPerFrame)).rounded(.up)) }
                 let decoder = codec.map(ChunkDecoder.init)
@@ -144,17 +159,21 @@ public final class FrameGenerator {
                     frames.append(frame)
                     onEvent(.frame(index: step, maxFrames: budget))
                     try deliver(current: (index, decoder))
+                    if config.stopOnLoop, frames.count % Self.silenceProbeEveryFrames == 0, MainTokenLoop.cycles(frames.map { $0[0] }) { looped = true; break }
                     guard let probe else { continue }
                     let probing = silenceFrames.map { frames.count > $0 } ?? false
                     let due = if let streamStep, decoder != nil { frames.count - offered >= streamStep }
                               else { probing && frames.count % Self.silenceProbeEveryFrames == 0 }
                     let snapshot = frames
                     if due, runner.offer({ probe.measure(snapshot) }) { offered = frames.count }
+                    if due, ProcessInfo.processInfo.environment["DRAMA_PROBE_LOG"] != nil { FileHandle.standardError.write("    probe at \(frames.count): latest \(probe.latest) offered \(offered)\n".data(using: .utf8)!) }
                     if probing, let limit = config.stopAfterSilenceSeconds, probe.latest >= limit { break }
                 }
                 var result = ChunkResult(index: index, count: chunks.count, text: chunk.turn, frames: frames, promptRows: prompt.count,
                                          finishedByEOS: eos, prefillSeconds: prefillSeconds, decodeSeconds: Date().timeIntervalSince(t1),
                                          gpuSeconds: session.gpuSeconds, spokenSeconds: 0, attempts: attempt + 1, samples: [], codecSeconds: 0)
+                result.stoppedByLoop = looped
+                result.frameBudget = budget
                 if streamStep != nil, let decoder, let probe, !frames.isEmpty {
                     // No retry can follow, so the GPU moves on while the CPU decodes the last frames.
                     let snapshot = frames
@@ -170,8 +189,9 @@ public final class FrameGenerator {
                 result.spokenSeconds = max(0, result.durationSeconds - trailingSilence)
                 result.samples = decoder?.samples ?? []
                 result.codecSeconds = decoder?.codecSeconds ?? 0
-                if best == nil || result.spokenSeconds > best!.spokenSeconds { best = result }
-                if config.minSpokenRatio <= 0 || result.spokenSeconds >= config.minSpokenRatio * expected || attempt == maxRetries { break }
+                if best == nil || Self.better(result, than: best!, preferEOS: config.retryWithoutEOS) { best = result }
+                let finished = eos || !config.retryWithoutEOS
+                if config.minSpokenRatio <= 0 || (finished && result.spokenSeconds >= config.minSpokenRatio * expected) || attempt == maxRetries { break }
                 onEvent(.retry(index: index, attempt: attempt + 1, spokenSeconds: result.spokenSeconds, expectedSeconds: expected))
             }
             guard let result = best else { break }

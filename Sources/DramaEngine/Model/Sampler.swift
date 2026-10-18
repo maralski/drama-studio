@@ -88,6 +88,29 @@ public struct Sampler {
     }
 }
 
+/// A laughter loop in the code stream. The repetition-aware redraw forbids a
+/// main token that repeats within 16 frames, so a stuck model settles into a
+/// cycle of 17 or more: on the reliability study's two laughter loops the last
+/// 48 main tokens matched the tokens 17 or 34 frames earlier exactly, while no
+/// speech run matched above 0.75 at any lag from 17 to 40.
+public enum MainTokenLoop {
+    public static let windowFrames = 48
+    public static let lags = 17...40
+    public static let threshold = 0.9
+
+    /// Whether the end of `mainTokens` repeats itself at some lag.
+    public static func cycles(_ mainTokens: [Int32]) -> Bool {
+        let n = mainTokens.count
+        guard n >= windowFrames + lags.lowerBound else { return false }
+        for lag in lags where n >= windowFrames + lag {
+            var matches = 0
+            for i in (n - windowFrames)..<n where mainTokens[i] == mainTokens[i - lag] { matches += 1 }
+            if Double(matches) >= threshold * Double(windowFrames) { return true }
+        }
+        return false
+    }
+}
+
 /// Main-token sampling over the candidates with repetition-aware resampling.
 struct MainTokenSampler {
     static let windowFrames = 16

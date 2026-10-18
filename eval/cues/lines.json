@@ -1,0 +1,35 @@
+[
+ {
+  "id": "cue-style",
+  "text": "[with bright eager excitement] We won! We actually won! [laughs] I can't believe it!"
+ },
+ {
+  "id": "clone-cues",
+  "ref": true,
+  "text": "[sighs] Fine. If we miss the train, it's on you. [laughs] Well, maybe that's fair."
+ },
+ {
+  "id": "cue-whisper",
+  "text": "Promise me <whisper>you won't tell her</whisper>. [pause] Not a word. Not even a hint."
+ },
+ {
+  "id": "cue-start",
+  "text": "[gasps] Someone has been in this room, and they left in a hurry."
+ },
+ {
+  "id": "cue-middle",
+  "text": "I told you it would work. [chuckles] You never listen to me, do you?"
+ },
+ {
+  "id": "cue-end",
+  "text": "Well, that went about as badly as it possibly could have. [sighs]"
+ },
+ {
+  "id": "cue-span",
+  "text": "<whisper>Don't move. It's right behind you.</whisper> Now run, as fast as you can!"
+ },
+ {
+  "id": "cue-three",
+  "text": "[laughs] Oh, stop it."
+ }
+]

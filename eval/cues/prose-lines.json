@@ -1,0 +1,26 @@
+[
+ {
+  "id": "short-yes",
+  "text": "Yes."
+ },
+ {
+  "id": "short-hello",
+  "text": "Hello there, how are you today?"
+ },
+ {
+  "id": "short-exclaim",
+  "text": "We did it! I can't believe we actually did it!"
+ },
+ {
+  "id": "two-fox",
+  "text": "The quick brown fox jumps over the lazy dog. She sells sea shells by the sea shore."
+ },
+ {
+  "id": "two-weather",
+  "text": "It rained all morning. By noon the clouds had cleared and the valley was glowing."
+ },
+ {
+  "id": "two-question",
+  "text": "Have you ever wondered why the sky turns red at sunset? It's all about how light scatters."
+ }
+]

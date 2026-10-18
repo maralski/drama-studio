@@ -1,0 +1,11 @@
+{
+ "a": {"note": "today's behaviour under the app's configuration: sentence chunking, text-derived frame cap, codec silence stop, duration retry"},
+ "b": {"note": "a chunk never opens with a bracket cue: the cue and its sentence join the previous chunk", "flags": {"cue-fold": "joinsPrevious"}},
+ "b2": {"note": "a chunk never opens with a bracket cue: the cue ends the previous chunk, its sentence opens the next", "flags": {"cue-fold": "endsPrevious"}},
+ "c": {"note": "the whole line as one chunk (the reference's 300-byte chunking)", "chunking": "reference"},
+ "d": {"note": "the Space's sampling on today's chunking: temperature 1.0, top-p 0.9, top-k off", "flags": {"temperature": 1.0, "top-p": 0.9, "top-k": 4097}},
+ "e": {"note": "retry a chunk that stopped without eos, and stop a chunk whose main tokens cycle", "flags": {"eos-retry": "", "loop-guard": ""}},
+ "f": {"note": "cue text normalised: lowercase, no spaces inside brackets, opening styles mapped to the official tag list", "normalise": true},
+ "g": {"note": "a cap floor like the Space's: every chunk may run at least 8 s, and a slow or whisper direction multiplies the expected duration by 1.6", "flags": {"cap-min": 8, "slow-cap": 1.6}},
+ "ge": {"note": "g plus e: the cap floor with the eos retry and the loop guard", "flags": {"cap-min": 8, "slow-cap": 1.6, "eos-retry": "", "loop-guard": ""}}
+}
