@@ -183,7 +183,7 @@ func generate(_ args: Args) throws {
         guard let cueFold = Drama3Chunking.CueFold(rawValue: fold) else { fail("--cue-fold must be one of " + Drama3Chunking.CueFold.allCases.map(\.rawValue).joined(separator: ", ")) }
         config.cueFold = cueFold
     }
-    config.retryWithoutEOSBelow = args.flags.contains("eos-retry") ? .infinity : args.double("eos-retry-below", 0)
+    config.retryWithoutEOSBelow = args.flags.contains("eos-retry") ? .infinity : args.double("eos-retry-below", config.retryWithoutEOSBelow)
     config.stopOnLoop = !args.flags.contains("no-loop-guard")
     config.capMinimumSeconds = args.double("cap-min", 0)
     config.capSecondsPerCue = args.double("cap-per-cue", 0)

@@ -62,10 +62,23 @@ package final class FrameGenerator {
         return Double(chars) / charactersPerSecond
     }
 
-    /// Which of two attempts at a chunk to keep: with `preferEOS`, one that
-    /// reached eos over one that did not, then the one that spoke longer.
-    static func better(_ a: ChunkResult, than b: ChunkResult, preferEOS: Bool) -> Bool {
-        if preferEOS && a.finishedByEOS != b.finishedByEOS { return a.finishedByEOS }
+    /// Whether an attempt that ended at `end` after `spokenSeconds` of speech
+    /// should be generated again.
+    package static func shouldRetry(end: ChunkEnd, spokenSeconds: Double, expectedSeconds: Double, config: GenerationConfig) -> Bool {
+        guard config.minSpokenRatio > 0 else { return false }
+        let short = spokenSeconds < config.minSpokenRatio * expectedSeconds
+        switch end {
+        case .cancelled: return false
+        case .loopGuard: return true
+        case .eos: return short
+        case .silence, .frameCap: return short || spokenSeconds < config.retryWithoutEOSBelow * expectedSeconds
+        }
+    }
+
+    /// Which of two attempts at a chunk to keep: one that reached eos over one
+    /// that did not, then the one that spoke longer.
+    package static func better(_ a: ChunkResult, than b: ChunkResult) -> Bool {
+        if a.finishedByEOS != b.finishedByEOS { return a.finishedByEOS }
         return a.spokenSeconds > b.spokenSeconds
     }
 
@@ -192,10 +205,8 @@ package final class FrameGenerator {
                 result.spokenSeconds = max(0, result.durationSeconds - trailingSilence)
                 result.samples = decoder?.samples ?? []
                 result.codecSeconds = decoder?.codecSeconds ?? 0
-                if best == nil || Self.better(result, than: best!, preferEOS: config.retryWithoutEOSBelow > 0) { best = result }
-                let enough = result.spokenSeconds >= config.minSpokenRatio * expected
-                let finished = end == .eos || end != .loopGuard && result.spokenSeconds >= config.retryWithoutEOSBelow * expected
-                if config.minSpokenRatio <= 0 || (enough && finished) || attempt == maxRetries { break }
+                if best == nil || Self.better(result, than: best!) { best = result }
+                if attempt == maxRetries || !Self.shouldRetry(end: end, spokenSeconds: result.spokenSeconds, expectedSeconds: expected, config: config) { break }
                 onEvent(.retry(index: index, attempt: attempt + 1, spokenSeconds: result.spokenSeconds, expectedSeconds: expected))
             }
             guard let result = best else { break }

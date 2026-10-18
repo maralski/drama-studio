@@ -85,12 +85,16 @@ public struct GenerationConfig: Sendable, Codable, Equatable {
     /// frames earlier exactly, while no speech run among 267 matched above
     /// 0.75 at any lag from 17 to 40 frames.
     public var stopOnLoop: Bool = true
+    /// Also generate a chunk again when the silence stop or the frame cap
+    /// ended it before the end of speech and its spoken audio is shorter than
+    /// this fraction of the expected duration. A chunk the loop guard stopped
+    /// is always generated again. Default 1.0. In the performance-cue study
+    /// every such attempt that lost a sentence spoke 0.64 to 0.90 of its
+    /// expected duration, while those that spoke every word, often with a
+    /// trailing `[sighs]` that never reaches the end of speech, spoke 1.19 to
+    /// 1.5 of it. 0 leaves the ``minSpokenRatio`` rule alone.
+    public var retryWithoutEOSBelow: Double = 1.0
     // Experiment knobs of the performance-cue investigation (eval/cues); package-only until one ships.
-    /// Also regenerate a chunk that stopped without eos (the silence stop, the
-    /// frame cap or the loop guard ended it) when its spoken audio is shorter
-    /// than this fraction of the expected duration. 0 leaves the duration rule
-    /// alone to decide; `.infinity` regenerates every chunk that misses eos.
-    package var retryWithoutEOSBelow: Double = 0
     /// Where a sentence-mode chunk boundary falls around a bracket cue.
     package var cueFold: Drama3Chunking.CueFold = .startsChunk
     /// A text-derived frame cap is never shorter than this many seconds.

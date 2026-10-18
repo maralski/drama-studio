@@ -37,4 +37,43 @@ final class CueGuardTests: XCTestCase {
         XCTAssertTrue(MainTokenLoop.cycles(perturbed(4)), "44 of 48 = 0.917")
         XCTAssertFalse(MainTokenLoop.cycles(perturbed(6)), "42 of 48 = 0.875")
     }
+
+    func testRetryRuleFollowsTheCueStudyEvidence() {
+        let expected = 3.0
+        let config = GenerationConfig()
+        let cases: [(FrameGenerator.ChunkEnd, Double, Bool, String)] = [
+            (.eos, 0.62, false, "reached eos and spoke past minSpokenRatio"),
+            (.eos, 0.5, true, "reached eos but spoke under minSpokenRatio"),
+            (.frameCap, 0.9, true, "cut at the cap with words missing"),
+            (.frameCap, 1.19, false, "a trailing cue that never reaches eos, every word spoken"),
+            (.silence, 0.7, true, "the silence stop ended it early"),
+            (.silence, 1.5, false, "the silence stop after every word"),
+            (.loopGuard, 2.9, true, "a laughter loop speaks long and still lost the line"),
+            (.cancelled, 0.1, false, "the caller stopped generation"),
+        ]
+        for (end, ratio, retry, why) in cases {
+            XCTAssertEqual(FrameGenerator.shouldRetry(end: end, spokenSeconds: ratio * expected, expectedSeconds: expected, config: config), retry, why)
+        }
+    }
+
+    func testRetriesOffNeverRetryEvenALoop() {
+        let preview = GenerationConfig.make(expressiveness: 0.5, quickPreview: true)
+        XCTAssertFalse(FrameGenerator.shouldRetry(end: .loopGuard, spokenSeconds: 9, expectedSeconds: 3, config: preview))
+        XCTAssertFalse(FrameGenerator.shouldRetry(end: .frameCap, spokenSeconds: 0.3, expectedSeconds: 3, config: preview))
+    }
+
+    private func attempt(_ end: FrameGenerator.ChunkEnd, spoken: Double) -> FrameGenerator.ChunkResult {
+        FrameGenerator.ChunkResult(index: 0, count: 1, text: "", frames: [], promptRows: 0, end: end, frameBudget: 0, prefillSeconds: 0,
+                                   decodeSeconds: 0, gpuSeconds: 0, spokenSeconds: spoken, attempts: 1, samples: [], codecSeconds: 0)
+    }
+
+    func testAnAttemptThatReachedEOSBeatsALongerOneThatDidNot() {
+        XCTAssertTrue(FrameGenerator.better(attempt(.eos, spoken: 1), than: attempt(.frameCap, spoken: 5)))
+        XCTAssertFalse(FrameGenerator.better(attempt(.loopGuard, spoken: 5), than: attempt(.eos, spoken: 1)))
+    }
+
+    func testBetweenTwoEOSAttemptsTheLongerWins() {
+        XCTAssertTrue(FrameGenerator.better(attempt(.eos, spoken: 2.5), than: attempt(.eos, spoken: 2)))
+        XCTAssertFalse(FrameGenerator.better(attempt(.eos, spoken: 2), than: attempt(.eos, spoken: 2.5)))
+    }
 }

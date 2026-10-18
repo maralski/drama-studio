@@ -15,7 +15,7 @@ final class AppSettingHelpTests: XCTestCase {
         "minSpokenRatio": "Fixed by measurement at 0.6; Quick preview sets it to 0.",
         "maxRetries": "Fixed at 2 alongside the retry threshold.",
         "stopOnLoop": "Fixed by measurement: it ends laughter loops and no speech run tripped it.",
-        "retryWithoutEOSBelow": "A package-only knob of the eval/cues experiment.",
+        "retryWithoutEOSBelow": "Fixed by measurement at 1.0 alongside the retry threshold; Quick preview turns retries off.",
         "cueFold": "A package-only knob of the eval/cues experiment.",
         "capMinimumSeconds": "A package-only knob of the eval/cues experiment.",
         "capSecondsPerCue": "A package-only knob of the eval/cues experiment.",
