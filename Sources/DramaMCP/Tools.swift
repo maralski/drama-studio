@@ -79,7 +79,7 @@ extension MCPTool {
                     "additionalProperties": false,
                 ],
                 "output_path": ["type": "string", "description": "Where to write the WAV. Defaults to ~/Library/Application Support/DramaStudio/Output/<timestamp>.wav."],
-                "expressiveness": ["type": "number", "minimum": 0, "maximum": 1, "description": "0 reads flat and steady, 1 reads lively and varied. Default 0.5."],
+                "expressiveness": ["type": "number", "minimum": 0, "maximum": 1, "description": "0 reads flat and steady, 0.5 is the vendor's sampling, 1 is the Fish Audio demo's sampling: lively, keeps every sentence of cue lines, a few more slurred words on prose. Default 0.5."],
                 "quick_preview": ["type": "boolean", "description": "Faster rough take: no retries and a tighter length cap."],
                 "play": ["type": "boolean", "description": "Play the result through the speakers."],
             ],

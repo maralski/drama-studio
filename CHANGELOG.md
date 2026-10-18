@@ -40,3 +40,9 @@ The first release of DramaEngine as a library for other macOS apps.
   before. Set the three to false, 0 and 0 for the earlier behaviour.
 - Of two attempts at a chunk, the engine now keeps one that reached the
   end of speech over one that did not, then the one with more speech.
+- `GenerationConfig.make(expressiveness:quickPreview:)` runs from steady
+  (0) through the vendor's sampling (0.5, the default) to the Hugging Face
+  Space's (1: temperature 1.0, top-p 0.9, no top-k), linear between. Above
+  the middle `topK` is 4097, every candidate. Measured over the 165-row
+  reliability study: no prose row lost, every sentence of the cue lines,
+  fewer retries, 0.007 more word error rate on prose.

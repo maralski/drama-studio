@@ -122,7 +122,7 @@ enum SettingHelp: String, CaseIterable, Identifiable {
         case .quickPreview:
             "Makes faster rough takes for checking casting, cues, and pacing. It trades a possible dropped sentence for speed, because a sentence the model cuts short is kept instead of generated again, and each sentence gets less time to run. Turn it off for the take you export."
         case .expressiveness:
-            "Sets how much the delivery varies from one take to the next. The default, in the middle, is the model vendor's own sampling, temperature 0.7 and top-p 0.7. Lower is steadier and flatter, and higher is more varied, with more risk of slurred or skipped words. No setting was measured to beat the default on word error rate, so move it for taste rather than accuracy."
+            "Sets how much the delivery varies from one take to the next. The default, in the middle, is the model vendor's own sampling, temperature 0.7 and top-p 0.7; lower is steadier and flatter. The top is the sampling of Fish Audio's own demo, which kept every sentence of the cue lines in the reliability study and needed fewer retries, at a small cost in slurred words on plain prose. Move it up for lines with cues or for livelier delivery, and leave it in the middle for narration you export."
         case .playbackSpeed:
             "Plays the audio faster or slower without changing its pitch, from 0.75x to 1.5x. It changes playback only: exports, captions, and projects keep the original timing. The scrubber and the sentence highlight follow the audio at every speed, and the setting is remembered."
         case .streaming:

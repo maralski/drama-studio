@@ -43,7 +43,8 @@ public enum ModelConstants: Sendable {
 public struct GenerationConfig: Sendable, Codable, Equatable {
     /// Sampling temperature. Default 0.7, the vendor's value.
     public var temperature: Double = 0.7
-    /// Top-k candidates kept before sampling. Default 30.
+    /// Top-k candidates kept before sampling. Default 30. 4097, the number
+    /// of candidates, keeps them all and leaves the choice to top-p.
     public var topK: Int = 30
     /// Top-p nucleus kept before sampling. Default 0.7, the vendor's value.
     public var topP: Double = 0.7
@@ -127,14 +128,32 @@ public extension GenerationConfig {
     /// other field keeps the measured value.
     ///
     /// - Parameters:
-    ///   - expressiveness: 0 to 1. Temperature and top-p are both
-    ///     `0.5 + 0.4 * expressiveness`, so 0.5 is the vendor's sampling.
+    ///   - expressiveness: 0 to 1. The middle, 0.5, is the vendor's sampling
+    ///     (temperature 0.7, top-p 0.7, top-k 30) and the top is the Hugging
+    ///     Face Space's (temperature 1.0, top-p 0.9, no top-k), with
+    ///     temperature and top-p linear between the ends and the middle:
+    ///     both `0.5 + 0.4 * expressiveness` up to the middle, then
+    ///     temperature `0.7 + 0.6 * (expressiveness - 0.5)` and top-p
+    ///     `0.7 + 0.4 * (expressiveness - 0.5)`, top-p alone bounding the
+    ///     choice above the middle. On the reliability study's 130 prose
+    ///     rows the Space's sampling lost no row, reached the end of speech
+    ///     without a retry more often, kept every sentence of the cue lines,
+    ///     and cost 0.007 of word error rate; the middle stays the default
+    ///     for that cost.
     ///   - quickPreview: Turns retries off and tightens the frame cap to the
     ///     expected duration times 1.2, plus 1 s, for faster rough takes.
     static func make(expressiveness: Double, quickPreview: Bool) -> GenerationConfig {
         var config = GenerationConfig()
-        config.temperature = 0.5 + 0.4 * expressiveness
-        config.topP = 0.5 + 0.4 * expressiveness
+        if expressiveness <= 0.5 {
+            config.temperature = 0.5 + 0.4 * expressiveness
+            config.topP = 0.5 + 0.4 * expressiveness
+        } else {
+            // Interpolated so that 1 lands on the Space's values exactly.
+            let t = (expressiveness - 0.5) * 2
+            config.temperature = 0.7 * (1 - t) + 1.0 * t
+            config.topP = 0.7 * (1 - t) + 0.9 * t
+            config.topK = 4097
+        }
         if quickPreview {
             config.minSpokenRatio = 0
             config.frameCap = .fromText(margin: 1.2, floorSeconds: 1.0)

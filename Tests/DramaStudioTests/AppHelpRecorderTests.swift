@@ -7,7 +7,7 @@ final class AppSettingHelpTests: XCTestCase {
     private let hiddenConfigFields: [String: String] = [
         "temperature": "Derived from Expressiveness.",
         "topP": "Derived from Expressiveness.",
-        "topK": "Fixed at the vendor's 30; top-p already bounds the choices.",
+        "topK": "Derived from Expressiveness: the vendor's 30 up to the middle, off above it as in the Space.",
         "maxNewFrames": "The CLI's fixed cap; the app derives frameCap from the text.",
         "chunkBytes": "Only used by reference chunking, which the app never picks.",
         "chunking": "Fixed by measurement: one sentence per turn cut mean WER from 0.141 to 0.063.",
@@ -32,12 +32,32 @@ final class AppSettingHelpTests: XCTestCase {
         XCTAssertNil(GenerationConfig.make(expressiveness: 0.5, quickPreview: false).seed, "every take draws a fresh seed")
     }
 
-    func testExpressivenessSpansTemperatureAndTopPFromHalfToNineTenths() {
-        for (value, expected) in [(0.0, 0.5), (1.0, 0.9), (0.25, 0.6)] {
+    func testExpressivenessRunsFromSteadyThroughTheVendorsSamplingToTheSpaces() {
+        for (value, temperature, topP, topK) in [(0.0, 0.5, 0.5, 30), (0.25, 0.6, 0.6, 30), (0.5, 0.7, 0.7, 30), (0.75, 0.85, 0.8, 4097), (1.0, 1.0, 0.9, 4097)] {
             let config = GenerationConfig.make(expressiveness: value, quickPreview: false)
-            XCTAssertEqual(config.temperature, expected, accuracy: 1e-12)
-            XCTAssertEqual(config.topP, expected, accuracy: 1e-12)
-            XCTAssertEqual(config.topK, 30)
+            XCTAssertEqual(config.temperature, temperature, accuracy: 1e-12, "temperature at \(value)")
+            XCTAssertEqual(config.topP, topP, accuracy: 1e-12, "top-p at \(value)")
+            XCTAssertEqual(config.topK, topK, "top-k at \(value)")
+        }
+    }
+
+    func testTheTopOfExpressivenessIsTheSpacesSamplingAndNothingElse() {
+        var space = GenerationConfig()
+        space.temperature = 1.0
+        space.topP = 0.9
+        space.topK = 4097
+        XCTAssertEqual(GenerationConfig.make(expressiveness: 1, quickPreview: false), space)
+    }
+
+    func testExpressivenessIsMonotoneAndContinuousInTemperatureAndTopP() {
+        var previous = GenerationConfig.make(expressiveness: 0, quickPreview: false)
+        for step in 1...100 {
+            let config = GenerationConfig.make(expressiveness: Double(step) / 100, quickPreview: false)
+            XCTAssertGreaterThan(config.temperature, previous.temperature)
+            XCTAssertGreaterThan(config.topP, previous.topP)
+            XCTAssertLessThan(config.temperature - previous.temperature, 0.01)
+            XCTAssertLessThan(config.topP - previous.topP, 0.01)
+            previous = config
         }
     }
 
