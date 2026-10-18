@@ -1,11 +1,14 @@
 // swift-tools-version:6.0
 import PackageDescription
 
+// tools/make_xcframework.sh sets this to archive DramaEngine as a framework.
+let engineLibraryType: Product.Library.LibraryType? = Context.environment["DRAMA_ENGINE_DYNAMIC"] == "1" ? .dynamic : nil
+
 let package = Package(
     name: "DramaStudio",
     platforms: [.macOS(.v15)],
     products: [
-        .library(name: "DramaEngine", targets: ["DramaEngine"]),
+        .library(name: "DramaEngine", type: engineLibraryType, targets: ["DramaEngine"]),
         .library(name: "DramaServer", targets: ["DramaServer"]),
         .executable(name: "drama", targets: ["drama"]),
         .executable(name: "DramaStudio", targets: ["DramaStudio"]),
