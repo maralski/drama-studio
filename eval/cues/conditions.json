@@ -9,5 +9,6 @@
  "g": {"note": "a cap floor like the Space's: every chunk may run at least 8 s, and a slow or whisper direction multiplies the expected duration by 1.6", "flags": {"cap-min": 8, "slow-cap": 1.6}},
  "e2": {"note": "e narrowed: retry a chunk that missed eos only when it spoke under 1.0 of its expected seconds, or when the loop guard stopped it", "flags": {"eos-retry-below": 1.0, "loop-guard": ""}},
  "ge2": {"note": "g plus e2: the cap floor with the narrowed eos retry and the loop guard", "flags": {"cap-min": 8, "slow-cap": 1.6, "eos-retry-below": 1.0, "loop-guard": ""}},
- "he2": {"note": "e2 plus 1.5 s of cap per bracket cue instead of a floor", "flags": {"cap-per-cue": 1.5, "eos-retry-below": 1.0, "loop-guard": ""}}
+ "he2": {"note": "e2 plus 1.5 s of cap per bracket cue instead of a floor", "flags": {"cap-per-cue": 1.5, "eos-retry-below": 1.0, "loop-guard": ""}},
+ "dhe2": {"note": "the Space's sampling with he2: temperature 1.0, top-p 0.9, top-k off, cap per cue, narrowed eos retry, loop guard", "flags": {"temperature": 1.0, "top-p": 0.9, "top-k": 4097, "cap-per-cue": 1.5, "eos-retry-below": 1.0, "loop-guard": ""}}
 }
