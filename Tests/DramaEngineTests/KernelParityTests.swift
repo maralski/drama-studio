@@ -24,31 +24,6 @@ final class KernelParityTests: XCTestCase {
             return TensorRef(name: name, dtype: .bf16, shape: [rows, cols], buffer: buf, offset: 0)
         }
 
-        mutating func bf16Matrix(rows: Int, cols: Int) -> WeightMatrix {
-            let t = bf16Tensor("w", rows: rows, cols: cols)
-            return WeightMatrix(name: t.name, format: .bf16, rows: rows, cols: cols, buffer: t.buffer, offset: 0, paramOffset: 0)
-        }
-
-        /// A random bf16 matrix in `format`, quantized by the engine's own
-        /// kernels into one buffer of weights then params.
-        mutating func matrix(_ format: WeightFormat, rows: Int, cols: Int) throws -> WeightMatrix {
-            let w = bf16Matrix(rows: rows, cols: cols)
-            if format == .bf16 { return w }
-            let src = TensorRef(name: w.name, dtype: .bf16, shape: [rows, cols], buffer: w.buffer, offset: 0)
-            let paramOffset = (format.weightBytes(rows: rows, cols: cols) + 255) / 256 * 256
-            let buf = ctx.device.makeBuffer(length: paramOffset + format.paramBytes(rows: rows, cols: cols), options: .storageModeShared)!
-            let slot = QuantizedSlot(buffer: buf, offset: 0, paramOffset: paramOffset)
-            let k = self.k
-            try run { enc in
-                switch format {
-                case .bf16: break
-                case .int8: try k.quantizeInt8(enc, src: src, rowOffset: 0, rows: rows, cols: cols, into: slot)
-                case .int4: try k.quantizeInt4(enc, src: src, rowOffset: 0, rows: rows, cols: cols, into: slot)
-                }
-            }
-            return WeightMatrix(name: w.name, format: format, rows: rows, cols: cols, buffer: buf, offset: 0, paramOffset: paramOffset)
-        }
-
         mutating func floats(_ count: Int, label: String) -> Buf {
             let b = Buf(ctx.device, floats: count, label: label)
             for i in 0..<count { b.floats[i] = uniform() }
@@ -72,52 +47,26 @@ final class KernelParityTests: XCTestCase {
         return (num / max(den, 1e-30)).squareRoot()
     }
 
-    /// The matrix as fp32, read back from its bytes by the format definition.
-    static func dequantized(_ w: WeightMatrix) -> [Float] {
-        let base = w.buffer.contents()
-        var out = [Float](repeating: 0, count: w.rows * w.cols)
-        switch w.format {
-        case .bf16:
-            let p = (base + w.offset).assumingMemoryBound(to: UInt16.self)
-            for i in out.indices { out[i] = Float(bitPattern: UInt32(p[i]) << 16) }
-        case .int8:
-            let q = (base + w.offset).assumingMemoryBound(to: Int8.self)
-            let s = (base + w.paramOffset).assumingMemoryBound(to: Float16.self)
-            for i in out.indices { out[i] = Float(q[i]) * Float(s[(i / w.cols) * (w.cols / 128) + (i % w.cols) / 128]) }
-        case .int4:
-            let q = (base + w.offset).assumingMemoryBound(to: UInt8.self)
-            let p = (base + w.paramOffset).assumingMemoryBound(to: Float16.self)
-            for i in out.indices {
-                let g = (i / w.cols) * (w.cols / 64) + (i % w.cols) / 64
-                let nibble = i % 2 == 0 ? q[i / 2] & 0xf : q[i / 2] >> 4
-                out[i] = fma(Float(nibble), Float(p[2 * g]), Float(p[2 * g + 1]))
-            }
-        }
-        return out
-    }
-
     /// The GEMM must agree with the GEMV to fp32 reordering noise for every
-    /// shape the model uses, including ragged M and tiny N, in every format.
+    /// shape the model uses, including ragged M and tiny N.
     func testGemmMatchesGemv() throws {
         var f = try Fixture()
-        for format in WeightFormat.allCases {
-            for (n, kDim, m) in [(256, 2048, 128), (8192, 2048, 44), (2048, 4096, 5), (32, 2048, 100), (1, 2048, 128), (512, 2048, 64), (2048, 512, 7)] {
-                let w = try f.matrix(format, rows: n, cols: kDim)
-                let x = f.floats(m * kDim, label: "x")
-                let yGemv = Buf(f.ctx.device, floats: m * n, label: "yGemv")
-                let yGemm = Buf(f.ctx.device, floats: m * n, label: "yGemm")
-                let k = f.k
-                try f.run { enc in
-                    for row in 0..<m {
-                        try k.gemv(enc, w, x: x, xOffset: row * kDim, y: yGemv, yOffset: row * n, m: 1)
-                    }
-                    try k.gemv(enc, w, x: x, y: yGemm, m: m)
+        for (n, kDim, m) in [(256, 2048, 128), (8192, 2048, 44), (2048, 4096, 5), (32, 2048, 100), (1, 2048, 128), (512, 2048, 64), (2048, 512, 7)] {
+            let w = f.bf16Tensor("w", rows: n, cols: kDim)
+            let x = f.floats(m * kDim, label: "x")
+            let yGemv = Buf(f.ctx.device, floats: m * n, label: "yGemv")
+            let yGemm = Buf(f.ctx.device, floats: m * n, label: "yGemm")
+            let k = f.k
+            try f.run { enc in
+                for row in 0..<m {
+                    try k.gemv(enc, w, x: x, xOffset: row * kDim, y: yGemv, yOffset: row * n, m: 1)
                 }
-                let a = yGemv.read(m * n), b = yGemm.read(m * n)
-                let err = Self.relL2(a, b)
-                XCTAssertLessThan(err, 2e-6, "\(format) n=\(n) k=\(kDim) m=\(m)")
-                XCTAssertTrue(b.allSatisfy { $0.isFinite })
+                try k.gemv(enc, w, x: x, y: yGemm, m: m)
             }
+            let a = yGemv.read(m * n), b = yGemm.read(m * n)
+            let err = Self.relL2(a, b)
+            XCTAssertLessThan(err, 2e-6, "n=\(n) k=\(kDim) m=\(m)")
+            XCTAssertTrue(b.allSatisfy { $0.isFinite })
         }
     }
 
@@ -125,164 +74,74 @@ final class KernelParityTests: XCTestCase {
     func testGemmRowsIndependentOfChunk() throws {
         var f = try Fixture()
         let n = 512, kDim = 2048, m = 70
-        for format in WeightFormat.allCases {
-            let w = try f.matrix(format, rows: n, cols: kDim)
-            let x = f.floats(m * kDim, label: "x")
-            let whole = Buf(f.ctx.device, floats: m * n, label: "whole")
-            let split = Buf(f.ctx.device, floats: m * n, label: "split")
-            let k = f.k
-            try f.run { enc in
-                try k.gemv(enc, w, x: x, y: whole, m: m)
-                try k.gemv(enc, w, x: x, y: split, m: 3)
-                try k.gemv(enc, w, x: x, xOffset: 3 * kDim, y: split, yOffset: 3 * n, m: m - 3)
-            }
-            XCTAssertEqual(whole.read(m * n), split.read(m * n), "\(format)")
+        let w = f.bf16Tensor("w", rows: n, cols: kDim)
+        let x = f.floats(m * kDim, label: "x")
+        let whole = Buf(f.ctx.device, floats: m * n, label: "whole")
+        let split = Buf(f.ctx.device, floats: m * n, label: "split")
+        let k = f.k
+        try f.run { enc in
+            try k.gemv(enc, w, x: x, y: whole, m: m)
+            try k.gemv(enc, w, x: x, y: split, m: 3)
+            try k.gemv(enc, w, x: x, xOffset: 3 * kDim, y: split, yOffset: 3 * n, m: m - 3)
         }
-    }
-
-    /// The quantized kernels must compute the dot product of the matrix the
-    /// bytes define: the GEMV at one row and the GEMM at five, against a CPU
-    /// dot product over the dequantized weights.
-    func testQuantizedGemvAndGemmMatchCpuDotProduct() throws {
-        var f = try Fixture()
-        for format in [WeightFormat.int8, .int4] {
-            for (n, kDim) in [(512, 2048), (2048, 512), (96, 256)] {
-                let w = try f.matrix(format, rows: n, cols: kDim)
-                let dense = Self.dequantized(w)
-                for m in [1, 5] {
-                    let x = f.floats(m * kDim, label: "x")
-                    let y = Buf(f.ctx.device, floats: m * n, label: "y")
-                    let k = f.k
-                    try f.run { enc in try k.gemv(enc, w, x: x, y: y, m: m) }
-                    var expected = [Float](repeating: 0, count: m * n)
-                    for row in 0..<m {
-                        for i in 0..<n {
-                            var acc = 0.0
-                            for j in 0..<kDim { acc += Double(dense[i * kDim + j]) * Double(x.floats[row * kDim + j]) }
-                            expected[row * n + i] = Float(acc)
-                        }
-                    }
-                    let err = Self.relL2(expected, y.read(m * n))
-                    XCTAssertLessThan(err, 1e-5, "\(format) n=\(n) k=\(kDim) m=\(m)")
-                    XCTAssertGreaterThan(expected.map { abs($0) }.max()!, 0.1, "the inputs must exercise the kernel")
-                }
-            }
-        }
+        XCTAssertEqual(whole.read(m * n), split.read(m * n))
     }
 }
 
 extension KernelParityTests {
-    static func moeConfig() throws -> ModelConfig {
-        guard let loc = ModelLocation.huggingFaceCache() else { throw XCTSkip("config.json of drama-3 needed for the MoE shapes") }
-        return try ModelConfig(url: loc.directory.appendingPathComponent("config.json"))
-    }
-
-    func runMoe(_ f: Fixture, _ k: Kernels, _ m: KernelBench.SyntheticMoE) throws -> ([Float], [Float]) {
-        try f.run { enc in
-            try m.bucket(enc, k)
-            try m.gateUp(enc, k)
-            try m.down(enc, k)
-        }
-        return (m.act.read(m.act.count), m.slotOut.read(m.slotOut.count))
-    }
-
-    /// Synthetic experts in both formats: the tiled prefill kernels against
-    /// the one-row kernels on a random routing of 50 rows over 16 experts.
+    /// Synthetic FP8 experts: the tiled prefill kernels against the one-row
+    /// kernels on a random routing of 50 rows over 16 experts.
     func testMoeTiledMatchesRowKernels() throws {
         let f = try Fixture()
-        let config = try Self.moeConfig()
+        guard let loc = ModelLocation.huggingFaceCache() else { throw XCTSkip("config.json of drama-3 needed for the MoE shapes") }
+        let config = try ModelConfig(url: loc.directory.appendingPathComponent("config.json"))
         let rows = 50
-        let fp8 = KernelBench.SyntheticMoE(device: f.ctx.device, config: config, rows: rows, experts: 16, maxRows: 64)
-        for format in ExpertFormat.allCases {
-            let moe = format == .fp8BlockScaled ? fp8 : try fp8.quantizedInt4(f.ctx)
-            var rowKernels = f.k
-            rowKernels.forceMoeRows = true
-            let byRows = try runMoe(f, rowKernels, moe)
-            let tiled = try runMoe(f, f.k, moe)
-            let actErr = Self.relL2(byRows.0, tiled.0)
-            let outErr = Self.relL2(byRows.1, tiled.1)
-            XCTAssertLessThan(actErr, 2e-6, "\(format)")
-            XCTAssertLessThan(outErr, 2e-6, "\(format)")
-            XCTAssertTrue(tiled.1.allSatisfy { $0.isFinite })
-            print("moe tiled parity \(format): act \(actErr) slotOut \(outErr)")
-
-            // Every tile accumulates each output in the same 8-wide order over K,
-            // so the whole domain must agree exactly.
-            for tile in KernelSchedule.moeTiles {
-                var s = KernelSchedule.default
-                s.moeTile = tile
-                let got = try runMoe(f, Kernels(ctx: f.ctx, precision: .exact, schedule: s), moe)
-                XCTAssertEqual(got.0, tiled.0, "\(format) tile \(tile.label)")
-                XCTAssertEqual(got.1, tiled.1, "\(format) tile \(tile.label)")
+        let moe = KernelBench.SyntheticMoE(device: f.ctx.device, config: config, rows: rows, experts: 16, maxRows: 64)
+        func run(_ k: Kernels, _ m: KernelBench.SyntheticMoE) throws -> ([Float], [Float]) {
+            try f.run { enc in
+                try m.bucket(enc, k)
+                try m.gateUp(enc, k)
+                try m.down(enc, k)
             }
-
-            // The one-row kernels only change which rows share a threadgroup.
-            for sg in KernelSchedule.moeRowSimdgroups {
-                var s = KernelSchedule.default
-                s.moeRowSimdgroups = sg
-                var k = Kernels(ctx: f.ctx, precision: .exact, schedule: s)
-                k.forceMoeRows = true
-                let got = try runMoe(f, k, moe)
-                XCTAssertEqual(got.0, byRows.0, "\(format) simdgroups \(sg)")
-                XCTAssertEqual(got.1, byRows.1, "\(format) simdgroups \(sg)")
-            }
-
-            // A routed row's result must not depend on which other rows share its chunk.
-            let part = KernelBench.SyntheticMoE(prefixOf: moe, rows: 11, device: f.ctx.device)
-            let partial = try runMoe(f, f.k, part)
-            XCTAssertEqual(partial.0, Array(tiled.0.prefix(part.act.count)), "\(format)")
-            XCTAssertEqual(partial.1, Array(tiled.1.prefix(part.slotOut.count)), "\(format)")
-        }
-    }
-
-    /// The int4 expert kernels must compute the experts the staged bytes
-    /// define: gate-up and down for every routed pair of a 3-row chunk against
-    /// a CPU reference over the dequantized int4 rows, through the row kernels
-    /// and the tiled kernels alike.
-    func testInt4MoeMatchesCpuReference() throws {
-        let f = try Fixture()
-        let config = try Self.moeConfig()
-        let rows = 3, topK = config.topK, H = config.hiddenSize, I = config.moeIntermediate
-        let moe = try KernelBench.SyntheticMoE(device: f.ctx.device, config: config, rows: rows, experts: 16, maxRows: 8).quantizedInt4(f.ctx)
-        let pool = moe.buffers[0]
-        let addresses = Array(UnsafeBufferPointer(start: moe.table.table.contents().assumingMemoryBound(to: UInt64.self), count: config.numExperts * 6))
-        func row(expert e: Int, slot: Int, n: Int, cols: Int) -> [Float] {
-            let w = (pool.contents() + Int(addresses[e * 6 + slot] - pool.gpuAddress)).assumingMemoryBound(to: UInt8.self) + n * (cols / 2)
-            let p = (pool.contents() + Int(addresses[e * 6 + slot + 1] - pool.gpuAddress)).assumingMemoryBound(to: Float16.self) + n * (cols / 64) * 2
-            return (0..<cols).map { k in
-                let nibble = k % 2 == 0 ? w[k / 2] & 0xf : w[k / 2] >> 4
-                return fma(Float(nibble), Float(p[2 * (k / 64)]), Float(p[2 * (k / 64) + 1]))
-            }
-        }
-        func dot(_ a: [Float], _ b: UnsafeMutablePointer<Float>) -> Float {
-            var acc = 0.0
-            for i in a.indices { acc += Double(a[i]) * Double(b[i]) }
-            return Float(acc)
-        }
-        var expectedAct = [Float](repeating: 0, count: rows * topK * I)
-        for pair in 0..<(rows * topK) {
-            let e = Int(moe.ids.ints[pair]), m = pair / topK
-            for n in 0..<I {
-                let g = dot(row(expert: e, slot: 0, n: n, cols: H), moe.x.floats + m * H)
-                let u = dot(row(expert: e, slot: 2, n: n, cols: H), moe.x.floats + m * H)
-                expectedAct[pair * I + n] = g / (1 + exp(-g)) * u
-            }
+            return (m.act.read(m.act.count), m.slotOut.read(m.slotOut.count))
         }
         var rowKernels = f.k
         rowKernels.forceMoeRows = true
-        for (label, k) in [("rows", rowKernels), ("tiled", f.k)] {
-            let (act, slotOut) = try runMoe(f, k, moe)
-            XCTAssertLessThan(Self.relL2(expectedAct, act), 1e-5, "\(label) gate-up")
-            var expectedOut = [Float](repeating: 0, count: rows * topK * H)
-            for pair in 0..<(rows * topK) {
-                let e = Int(moe.ids.ints[pair])
-                for n in 0..<H {
-                    expectedOut[pair * H + n] = dot(row(expert: e, slot: 4, n: n, cols: I), moe.act.floats + pair * I) * moe.rw.floats[pair]
-                }
-            }
-            XCTAssertLessThan(Self.relL2(expectedOut, slotOut), 1e-5, "\(label) down")
-            XCTAssertGreaterThan(act.map { abs($0) }.max()!, 0.1)
+        let byRows = try run(rowKernels, moe)
+        let tiled = try run(f.k, moe)
+        let actErr = Self.relL2(byRows.0, tiled.0)
+        let outErr = Self.relL2(byRows.1, tiled.1)
+        XCTAssertLessThan(actErr, 2e-6)
+        XCTAssertLessThan(outErr, 2e-6)
+        XCTAssertTrue(tiled.1.allSatisfy { $0.isFinite })
+        print("moe tiled parity: act \(actErr) slotOut \(outErr)")
+
+        // Every tile accumulates each output in the same 8-wide order over K,
+        // so the whole domain must agree exactly.
+        for tile in KernelSchedule.moeTiles {
+            var s = KernelSchedule.default
+            s.moeTile = tile
+            let got = try run(Kernels(ctx: f.ctx, precision: .exact, schedule: s), moe)
+            XCTAssertEqual(got.0, tiled.0, "tile \(tile.label)")
+            XCTAssertEqual(got.1, tiled.1, "tile \(tile.label)")
         }
+
+        // The one-row kernels only change which rows share a threadgroup.
+        for sg in KernelSchedule.moeRowSimdgroups {
+            var s = KernelSchedule.default
+            s.moeRowSimdgroups = sg
+            var k = Kernels(ctx: f.ctx, precision: .exact, schedule: s)
+            k.forceMoeRows = true
+            let got = try run(k, moe)
+            XCTAssertEqual(got.0, byRows.0, "simdgroups \(sg)")
+            XCTAssertEqual(got.1, byRows.1, "simdgroups \(sg)")
+        }
+
+        // A routed row's result must not depend on which other rows share its chunk.
+        let part = KernelBench.SyntheticMoE(prefixOf: moe, rows: 11, device: f.ctx.device)
+        let partial = try run(f.k, part)
+        XCTAssertEqual(partial.0, Array(tiled.0.prefix(part.act.count)))
+        XCTAssertEqual(partial.1, Array(tiled.1.prefix(part.slotOut.count)))
     }
 }
 

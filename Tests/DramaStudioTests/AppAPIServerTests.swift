@@ -47,8 +47,8 @@ final class AppAPIServerTests: XCTestCase {
         XCTAssertEqual(MenuBarStatus.job(session: .idle, job: job), "API request: Generating chunk 2 of 5")
         XCTAssertEqual(MenuBarStatus.job(session: .generating(chunk: 1, of: 3, playing: true), job: nil), "Generating chunk 1 of 3")
         XCTAssertEqual(MenuBarStatus.job(session: .ready, job: nil), "No generation running")
-        XCTAssertEqual(MenuBarStatus.job(session: .loading(progress: 0, detail: "Quantizing weights for the balanced mode (first load only)"), job: nil),
-                       "Loading model: Quantizing weights for the balanced mode (first load only)", "the load phase shows in the menu bar")
+        XCTAssertEqual(MenuBarStatus.job(session: .loading(progress: 0, detail: "Tuning kernels for this Mac, about a minute"), job: nil),
+                       "Loading model: Tuning kernels for this Mac, about a minute", "the load phase shows in the menu bar")
         XCTAssertEqual(MenuBarStatus.model(preview: false, loaded: false, session: .idle, job: nil), "Drama 3 on Metal: not loaded yet")
         XCTAssertEqual(MenuBarStatus.model(preview: true, loaded: true, session: .ready, job: nil), "Preview engine: loaded")
         XCTAssertEqual(MenuBarStatus.model(preview: false, loaded: false, session: .idle, job: SpeechJob(id: UUID(), progress: .loadingModel("Mapping weights"))), "Drama 3 on Metal: loading, Mapping weights")

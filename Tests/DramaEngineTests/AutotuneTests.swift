@@ -3,7 +3,7 @@ import XCTest
 @testable import DramaEngine
 
 final class AutotuneTests: XCTestCase {
-    static let key = TuningKey(chip: "Apple M3 Max", os: "26.5.2", kernels: String(repeating: "ab", count: 32), model: "snap-0123456789abcdef", mode: "full", schema: 2)
+    static let key = TuningKey(chip: "Apple M3 Max", os: "26.5.2", kernels: String(repeating: "ab", count: 32), model: "snap-0123456789abcdef", schema: 2)
 
     func tempDirectory() throws -> URL {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("drama-tuning-\(UUID().uuidString)")
@@ -28,7 +28,6 @@ final class AutotuneTests: XCTestCase {
         k = base; k.os = "26.5.3"; variants.append(k)
         k = base; k.kernels = String(repeating: "ba", count: 32); variants.append(k)
         k = base; k.model = "snap-fedcba9876543210"; variants.append(k)
-        k = base; k.mode = "balanced"; variants.append(k)
         k = base; k.schema = 3; variants.append(k)
         for v in variants { XCTAssertNotEqual(v.fileName, base.fileName, "\(v)") }
         XCTAssertEqual(Set(variants.map(\.fileName)).count, variants.count)

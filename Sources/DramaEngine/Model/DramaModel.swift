@@ -6,9 +6,6 @@ package final class DramaModel: @unchecked Sendable {
     package let ctx: MetalContext
     package let config: ModelConfig
     package let location: ModelLocation
-    package let mode: ModelPrecisionMode
-    /// The cache file a quantized mode read; nil in mode full.
-    package let quantizedCache: QuantizedCacheInfo?
     package let precision: Precision
     package let capacity: Int
     /// The kernel schedule both stacks run with; `apply` replaces it.
@@ -24,8 +21,6 @@ package final class DramaModel: @unchecked Sendable {
     package internal(set) var scheduleSource: ScheduleSource
     package let tuningKey: TuningKey
     let store: SafeTensorsStore
-    /// Owns the cache file's mapping for as long as its buffer is in use.
-    private let quantizedFile: QuantizedWeightFile?
     let weights: ModelWeights
     let backbone: Backbone
     let tower: Tower
@@ -49,42 +44,18 @@ package final class DramaModel: @unchecked Sendable {
     var prefixCache: PrefixCache?
     package func clearPrefixCache() { prefixCache = nil }
 
-    /// `schedule` nil means the tuning cache's schedule for this device, model
-    /// and mode when there is one, else the default; a value is used as given.
-    /// A quantized mode opens its cache file under `quantizedDirectory`, or
-    /// builds it first.
-    package init(location: ModelLocation, mode: ModelPrecisionMode = .full, precision: Precision = .exact, capacity: Int = DramaModel.defaultCapacity,
-                schedule: KernelSchedule? = nil, tuningDirectory: URL = TuningCache.defaultDirectory,
-                quantizedDirectory: URL = QuantizedWeightFile.defaultDirectory) throws {
+    /// `schedule` nil means the tuning cache's schedule for this device and
+    /// model when there is one, else the default; a value is used as given.
+    package init(location: ModelLocation, precision: Precision = .exact, capacity: Int = DramaModel.defaultCapacity,
+                schedule: KernelSchedule? = nil, tuningDirectory: URL = TuningCache.defaultDirectory) throws {
         ctx = try MetalContext()
         self.location = location
-        self.mode = mode
         self.precision = precision
         self.capacity = capacity
         config = try ModelConfig(url: location.directory.appendingPathComponent("config.json"))
-        tuningKey = try TuningKey(ctx: ctx, location: location, mode: mode)
+        tuningKey = try TuningKey(ctx: ctx, location: location)
         store = try SafeTensorsStore(directory: location.directory, device: ctx.device)
-        let inPlace = InPlaceSource(store: store, config: config, device: ctx.device)
-        if mode == .full {
-            quantizedFile = nil
-            quantizedCache = nil
-            weights = try ModelWeights(source: inPlace, config: config)
-        } else {
-            let recorder = LayoutRecorder(inPlace: inPlace, mode: mode)
-            _ = try ModelWeights(source: recorder, config: config)
-            let plan = recorder.plan
-            let url = QuantizedWeightFile.url(snapshot: location.directory.lastPathComponent, mode: mode, directory: quantizedDirectory)
-            var buildSeconds: Double?
-            var file = QuantizedWeightFile.open(url: url, layout: plan.layout, modelId: tuningKey.model, mode: mode, device: ctx.device)
-            if file == nil {
-                buildSeconds = try QuantizedWeightFile.build(plan: plan, store: store, mode: mode, modelId: tuningKey.model, ctx: ctx, to: url).seconds
-                file = QuantizedWeightFile.open(url: url, layout: plan.layout, modelId: tuningKey.model, mode: mode, device: ctx.device)
-            }
-            guard let file else { throw EngineError.badModel("the quantized cache at \(url.path) did not verify after being built") }
-            quantizedFile = file
-            quantizedCache = QuantizedCacheInfo(url: url, bytes: file.bytes, buildSeconds: buildSeconds)
-            weights = try ModelWeights(source: try CacheSource(file: file, plan: plan, mode: mode, inPlace: inPlace), config: config)
-        }
+        weights = try ModelWeights(store: store, config: config, device: ctx.device)
         let chosen: KernelSchedule
         if let schedule {
             try schedule.validate()
@@ -200,18 +171,18 @@ package final class DramaModel: @unchecked Sendable {
     func commandBuffer() -> (MTLCommandBuffer, MTLComputeCommandEncoder) {
         let cb = ctx.queue.makeCommandBuffer()!
         let enc = cb.makeComputeCommandEncoder()!
-        enc.useResources(weights.declaredBuffers, usage: .read)
+        enc.useResources(store.shards, usage: .read)
         return (cb, enc)
     }
 
     /// Touches every weight page once, builds every pipeline state, and runs
-    /// one command buffer that declares the weight buffers, so the first
-    /// request pays for none of them (the GPU wires each buffer on its first
-    /// use). Buffers are walked on parallel threads. Returns bytes walked.
+    /// one command buffer that declares the shards, so the first request pays
+    /// for none of them (the GPU wires the 41 GB on its first use). Shards are
+    /// walked on parallel threads. Returns bytes walked.
     @discardableResult
     package func warmUp() -> Int {
         ctx.warmPipelines()
-        let buffers = weights.declaredBuffers
+        let shards = store.shards
         defer {
             let (cb, enc) = commandBuffer()
             try? backbone.k.zero(enc, backbone.counts)
@@ -219,16 +190,16 @@ package final class DramaModel: @unchecked Sendable {
             cb.commit(); cb.waitUntilCompleted()
         }
         var total = 0
-        DispatchQueue.concurrentPerform(iterations: buffers.count) { i in
-            let buffer = buffers[i]
-            madvise(buffer.contents(), buffer.length, MADV_WILLNEED)
-            let p = buffer.contents().assumingMemoryBound(to: UInt64.self)
+        DispatchQueue.concurrentPerform(iterations: shards.count) { i in
+            let shard = shards[i]
+            madvise(shard.contents(), shard.length, MADV_WILLNEED)
+            let p = shard.contents().assumingMemoryBound(to: UInt64.self)
             var sink: UInt64 = 0
             var j = 0
             let stride = 16384 / 8
-            while j * 8 < buffer.length { sink &+= p[j]; j += stride }
+            while j * 8 < shard.length { sink &+= p[j]; j += stride }
             withExtendedLifetime(sink) {}
-            Self.sinkLock.lock(); Self.sinkSum &+= sink; total += buffer.length; Self.sinkLock.unlock()
+            Self.sinkLock.lock(); Self.sinkSum &+= sink; total += shard.length; Self.sinkLock.unlock()
         }
         return total
     }

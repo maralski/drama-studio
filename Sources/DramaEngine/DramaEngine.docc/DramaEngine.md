@@ -17,8 +17,7 @@ Cloning a real person's voice without their consent is not permitted.
 ### Requirements
 
 - An Apple silicon Mac with a lot of unified memory. The weights are 41.5 GB and are
-  memory-mapped, not copied. A loaded engine is about 40 GB resident in the `full`
-  precision mode. Only a 128 GB M3 Max has been tested.
+  memory-mapped, not copied, plus about 2 GB of state and codec. Only a 128 GB M3 Max has been tested.
 - macOS 15 or later, and Xcode 26 or its command line tools.
 - The model in the Hugging Face cache and the Core ML codec models built once from
   it. See <doc:GettingTheModel>.
@@ -61,7 +60,7 @@ for try await event in engine.synthesize(request) {
 ```
 
 The first load on a Mac also tunes the kernel schedule for that Mac, about 30 s,
-and caches the result. Run ``DramaSetup/prepare(location:codecDirectory:python:mode:tuningDirectory:quantizedDirectory:progress:)``
+and caches the result. Run ``DramaSetup/prepare(location:codecDirectory:python:tuningDirectory:progress:)``
 ahead of time to move that cost out of the first request.
 
 ### What the package exposes
@@ -73,7 +72,7 @@ what it is for.
 | --- | --- |
 | Setup | ``ModelLocation``, ``DramaSetup``, ``SetupReport``, ``SetupItem`` |
 | Engines | ``SpeechSynthesizer``, ``DramaSynthesizer``, ``MockSynthesizer`` |
-| Requests | ``SpeechRequest``, ``ReferenceVoice``, ``VoiceDesign``, ``Take``, ``GenerationConfig``, ``StreamingMode``, ``FrameCap``, ``ModelPrecisionMode`` |
+| Requests | ``SpeechRequest``, ``ReferenceVoice``, ``VoiceDesign``, ``Take``, ``GenerationConfig``, ``StreamingMode``, ``FrameCap`` |
 | Results | ``SpeechEvent``, ``SpeechResult``, ``SpokenSentence``, ``SpeechTimings``, ``StreamedAudio``, ``GenerationEstimate`` |
 | Text | ``Drama3Chunking``, ``Drama3Prompt``, ``PronunciationDictionary``, ``PronunciationRule`` |
 | Codec | ``DramaCodec`` |
@@ -121,11 +120,6 @@ first to finish.
 - ``SpeechTimings``
 - ``StreamedAudio``
 - ``GenerationEstimate``
-
-### Precision
-
-- <doc:PrecisionModes>
-- ``ModelPrecisionMode``
 
 ### Text
 

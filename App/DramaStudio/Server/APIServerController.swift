@@ -17,13 +17,9 @@ final class APIServerController {
         DispatchQueue.main.async { MainActor.assumeIsolated { self.jobChanged(job) } }
     }
 
-    /// The service holds the synthesizer it was started with, so a precision
-    /// swap in the session restarts it; the session waits for a running API job first.
     init(session: SessionModel) {
         self.session = session
         UserDefaults.standard.register(defaults: [Self.startsWithAppKey: true, Self.portKey: Int(APIService.defaultPort)])
-        session.engineBusyElsewhere = { [unowned self] in job != nil }
-        session.synthesizerReplaced = { [unowned self] in if isRunning { restart() } }
     }
 
     var port: UInt16 { UInt16(exactly: UserDefaults.standard.integer(forKey: Self.portKey)) ?? APIService.defaultPort }

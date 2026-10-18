@@ -55,11 +55,8 @@ fails.
 
 A fixed sentence set (`eval/sentences.json`), with and without a reference
 voice, three seeds each. `--extra name=value` pairs become `drama generate`
-flags, so `--extra chunking=sentences precision-mode=balanced` runs the suite
-on a weight precision mode (`eval/precision_e2e.sh` runs it per mode;
-`eval/precision_faithfulness.sh`, `eval/precision_ab.sh` and
-`eval/precision_memory.sh` are the other three measurements of the README's
-"Model precision" section). For each run: engine frames via the `drama` CLI,
+flags, as in `--extra chunking=sentences`. For each run: engine frames via
+the `drama` CLI,
 audio via the reference PyTorch codec on the CPU (`eval/decode_codes.py`),
 Whisper small.en transcription and word error rate against the input text,
 eos reached or not, trailing silent frames, and (`eval/speaker_similarity.py`)
