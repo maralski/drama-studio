@@ -14,8 +14,8 @@ public struct SetupItem: Sendable, Equatable {
         /// `codec.pth` in the snapshot, the source of the Core ML codec models.
         /// Needed only until the codec models are built.
         case codecCheckpoint
-        /// `DramaCodecEncoder` and `DramaCodecDecoder` in the codec directory,
-        /// as `.mlpackage` or compiled `.mlmodelc`: 809 MB and 353 MB.
+        /// `DramaCodecEncoder`, `DramaCodecDecoder` and `DramaCodecProbe` in the codec directory,
+        /// as `.mlpackage` or compiled `.mlmodelc`: 809 MB, 353 MB and 353 MB.
         case codecModels
         /// The kernel schedule tuned for this Mac, kept as one JSON file in
         /// the tuning directory.
@@ -144,7 +144,7 @@ public enum DramaSetup: Sendable {
     public static var pythonSetupCommand: String {
         let venv = suggestedPythonEnvironment
         let python = venv.appending(path: "bin/python")
-        return "uv venv --python 3.12 \(shellQuoted(venv.path)) && uv pip install --python \(shellQuoted(python.path)) \"torch==2.7.1\" coremltools numpy einops soundfile"
+        return "uv venv --python 3.12 \(shellQuoted(venv.path)) && uv pip install --python \(shellQuoted(python.path)) \"torch==2.7.1\" coremltools \"numpy<2.4\" einops soundfile"
     }
 
     /// `convert_codec.py` inside DramaEngine's resource bundle; nil when the

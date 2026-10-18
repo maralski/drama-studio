@@ -115,15 +115,22 @@ public actor DramaSynthesizer: SpeechSynthesizer {
         return try await codec!.decode(codes: codes)
     }
 
-    /// Seconds of trailing audio whose 2048-sample frames all stay under an RMS of 0.01.
+    /// A 2048-sample frame whose RMS is under this is silent.
+    package nonisolated static let silenceThreshold: Float = 0.01
+
+    /// Whether one frame of samples is silent: its RMS is under ``silenceThreshold``.
+    package nonisolated static func isSilent(_ frame: ArraySlice<Float>) -> Bool {
+        var energy: Float = 0
+        for x in frame { energy += x * x }
+        return (energy / Float(frame.count)).squareRoot() < silenceThreshold
+    }
+
+    /// Seconds of trailing audio whose frames are all silent.
     package nonisolated static func trailingSilenceSeconds(_ samples: [Float]) -> Double {
         let n = ModelConstants.samplesPerFrame
         var silentFrames = 0
         var end = samples.count / n * n
-        while end >= n {
-            var energy: Float = 0
-            for i in (end - n)..<end { energy += samples[i] * samples[i] }
-            if (energy / Float(n)).squareRoot() >= 0.01 { break }
+        while end >= n, isSilent(samples[(end - n) ..< end]) {
             silentFrames += 1
             end -= n
         }

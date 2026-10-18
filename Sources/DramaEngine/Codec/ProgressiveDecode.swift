@@ -36,11 +36,27 @@ package struct DecodeWindow: Equatable, Sendable {
             w.end > range.lowerBound ? DecodeWindow(start: w.start, keep: max(w.keep, range.lowerBound), end: w.end) : nil
         }
     }
+
+    /// The probe calls that classify frames `pending`: windows of at most
+    /// `shape` frames, each keeping the frames after up to `context` frames
+    /// of left context, fewer only at the start of the chunk.
+    package static func probing(_ pending: Range<Int>, shape: Int = DramaCodec.probeFrames, context: Int = DramaCodec.probeContext) -> [DecodeWindow] {
+        precondition(context < shape, "a probe window must keep at least one frame")
+        var out: [DecodeWindow] = []
+        var keep = pending.lowerBound
+        while keep < pending.upperBound {
+            let start = max(0, keep - context)
+            let end = min(pending.upperBound, start + shape)
+            out.append(DecodeWindow(start: start, keep: keep, end: end))
+            keep = end
+        }
+        return out
+    }
 }
 
-/// One chunk's audio, decoded as its frames land. The silence probe and the
-/// streamed partials read this one decode, and the pieces join into exactly
-/// the full decode of the chunk.
+/// One chunk's audio, decoded as its frames land in the windows a full decode
+/// would run. The streamed partials read this one decode, and the pieces join
+/// into exactly the full decode of the chunk.
 final class ChunkDecoder: @unchecked Sendable {
     typealias Decode = (_ codes: [[Int32]], _ window: DecodeWindow) throws -> [Float]
 
@@ -54,6 +70,8 @@ final class ChunkDecoder: @unchecked Sendable {
     private var decoded: [Float] = []
     private var undelivered: [Piece] = []
     private var seconds = 0.0
+    private var finalReading: Result<Double, Error>?
+    private let finalTaken = DispatchSemaphore(value: 0)
 
     init(_ decode: @escaping Decode) { self.decode = decode }
 
@@ -86,6 +104,22 @@ final class ChunkDecoder: @unchecked Sendable {
             return undelivered
         }
     }
+
+    /// Decodes every frame of the attempt and keeps the trailing silence of
+    /// the whole for `finalSilence()`.
+    func measureFinal(_ frames: [Frame]) {
+        let silence = Result { try advance(to: frames) }
+        lock.withLock { finalReading = silence }
+        finalTaken.signal()
+    }
+
+    /// Nil until `measureFinal` has run.
+    func finalSilence() throws -> Double? { try lock.withLock { finalReading }?.get() }
+
+    func waitForFinal() {
+        finalTaken.wait()
+        finalTaken.signal()
+    }
 }
 
 /// Runs codec work off the generation thread, one job at a time and in the
@@ -115,38 +149,59 @@ final class DecodeRunner: @unchecked Sendable {
     func drain() { queue.sync {} }
 }
 
-/// One attempt's readings of the silence that ends its audio.
-final class SilenceProbe: @unchecked Sendable {
-    private let reading: ([Frame]) throws -> Double
+/// The silence that ends an attempt's audio, read from short decodes of its
+/// newest frames. Each call decodes the frames not yet classified in probe
+/// windows (`DecodeWindow.probing`, the small decoder shape) and extends the
+/// run of silent frames at the tail. The audio is dropped: the chunk's audio
+/// comes from `ChunkDecoder`, which decodes each window once at the end.
+package final class SilenceProbe: @unchecked Sendable {
+    package typealias Decode = (_ codes: [[Int32]], _ window: DecodeWindow) throws -> [Float]
+
+    private let decode: Decode
+    private let shape: Int
+    private let context: Int
     private let lock = NSLock()
-    private var last = 0.0
-    private var finalReading: Result<Double, Error>?
-    private let finalTaken = DispatchSemaphore(value: 0)
+    private var classified = 0
+    private var trailingSilentFrames = 0
+    private var seconds = 0.0
 
-    init(_ reading: @escaping ([Frame]) throws -> Double) { self.reading = reading }
-
-    var latest: Double { lock.withLock { last } }
-
-    /// A reading taken while frames still land; a failure reads as no silence.
-    func measure(_ frames: [Frame]) {
-        let silence = (try? reading(frames)) ?? 0
-        lock.withLock { last = silence }
+    package init(shape: Int = DramaCodec.probeFrames, context: Int = DramaCodec.probeContext, _ decode: @escaping Decode) {
+        self.decode = decode
+        self.shape = shape
+        self.context = context
     }
 
-    func measureNow(_ frames: [Frame]) throws -> Double { try reading(frames) }
-
-    /// The reading over every frame of the attempt, kept for `final()`.
-    func measureFinal(_ frames: [Frame]) {
-        let silence = Result { try reading(frames) }
-        lock.withLock { finalReading = silence }
-        finalTaken.signal()
+    /// Seconds of silence at the end of the frames classified so far.
+    package var latest: Double {
+        lock.withLock { Double(trailingSilentFrames * ModelConstants.samplesPerFrame) / Double(ModelConstants.sampleRate) }
     }
+    /// How many frames of the attempt have been classified.
+    package var classifiedFrames: Int { lock.withLock { classified } }
+    /// Codec time spent in probe calls.
+    package var codecSeconds: Double { lock.withLock { seconds } }
 
-    /// Nil until `measureFinal` has run.
-    func final() throws -> Double? { try lock.withLock { finalReading }?.get() }
-
-    func waitForFinal() {
-        finalTaken.wait()
-        finalTaken.signal()
+    /// Classifies the frames not yet classified. A failed decode leaves the
+    /// reading where it was. Calls must not overlap.
+    package func measure(_ frames: [Frame]) {
+        let (done, run0) = lock.withLock { (classified, trailingSilentFrames) }
+        guard frames.count > done else { return }
+        let codes = (0..<ModelConstants.numCodebooks).map { c in frames.map { $0[1 + c] } }
+        let t0 = Date()
+        var run = run0
+        var classifiedTo = done
+        for w in DecodeWindow.probing(done ..< frames.count, shape: shape, context: context) {
+            guard let audio = try? decode(codes, w) else { break }
+            let n = ModelConstants.samplesPerFrame
+            for f in 0 ..< w.kept.count {
+                run = DramaSynthesizer.isSilent(audio[f * n ..< (f + 1) * n]) ? run + 1 : 0
+            }
+            classifiedTo = w.end
+        }
+        let elapsed = Date().timeIntervalSince(t0)
+        lock.withLock {
+            classified = classifiedTo
+            trailingSilentFrames = run
+            seconds += elapsed
+        }
     }
 }

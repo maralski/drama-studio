@@ -46,3 +46,12 @@ The first release of DramaEngine as a library for other macOS apps.
   the middle `topK` is 4097, every candidate. Measured over the 165-row
   reliability study: no prose row lost, every sentence of the cue lines,
   fewer retries, 0.007 more word error rate on prose.
+- The silence stop reads the newest frames through a third Core ML model,
+  `DramaCodecProbe`, the fp16 decoder exported at 64 frames (353 MB):
+  `DramaCodec.probeFrames`, `probeContext`, `probeName` and `modelNames`,
+  and `CodecError.wrongShape` for a model file built at another frame count.
+  A reading costs 190 ms instead of a 1.6 s 512-frame decode, so the stop
+  fires 9 to 21 frames after the audio holds 2 s of silence where before it
+  never fired on the cue lines; `convert_codec.py` writes the probe beside
+  the other two models, `DramaSetup` requires it, and the conversion venv
+  recipe pins `numpy<2.4`.
