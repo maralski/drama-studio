@@ -130,6 +130,7 @@ struct CueMenuItems: View {
                 }
             }
         }
+        Section { Text(PerformanceCue.reliabilityNote) }
     }
 }
 
