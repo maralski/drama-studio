@@ -183,9 +183,10 @@ func generate(_ args: Args) throws {
         guard let cueFold = Drama3Chunking.CueFold(rawValue: fold) else { fail("--cue-fold must be one of " + Drama3Chunking.CueFold.allCases.map(\.rawValue).joined(separator: ", ")) }
         config.cueFold = cueFold
     }
-    config.retryWithoutEOS = args.flags.contains("eos-retry")
+    config.retryWithoutEOSBelow = args.flags.contains("eos-retry") ? .infinity : args.double("eos-retry-below", 0)
     config.stopOnLoop = args.flags.contains("loop-guard")
     config.capMinimumSeconds = args.double("cap-min", 0)
+    config.capSecondsPerCue = args.double("cap-per-cue", 0)
     config.slowCapMultiplier = args.double("slow-cap", 1)
     if let s = args["seed"].flatMap(UInt64.init) { config.seed = s }
     if args.flags.contains("warm") { model.warmUp() }

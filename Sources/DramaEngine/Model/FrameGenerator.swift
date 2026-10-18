@@ -134,8 +134,10 @@ public final class FrameGenerator {
             let expected = Self.expectedSeconds(for: chunk.line)
             let slow = chunk.line.range(of: #"slow|whisper|drawn[- ]out|unhurried|long pause"#, options: [.regularExpression, .caseInsensitive]) != nil
             let capSeconds = expected * (slow ? config.slowCapMultiplier : 1)
-            let minimumFrames = Int((config.capMinimumSeconds * Double(ModelConstants.sampleRate) / Double(ModelConstants.samplesPerFrame)).rounded(.up))
-            let budget = min(max(config.frameCap.frames(expectedSeconds: capSeconds), minimumFrames), model.capacity - prompt.count - 1)
+            func frames(_ seconds: Double) -> Int { Int((seconds * Double(ModelConstants.sampleRate) / Double(ModelConstants.samplesPerFrame)).rounded(.up)) }
+            let cues = chunk.line.components(separatedBy: "[").count - 1
+            let textCap = config.frameCap.frames(expectedSeconds: capSeconds) + frames(Double(cues) * config.capSecondsPerCue)
+            let budget = min(max(textCap, frames(config.capMinimumSeconds)), model.capacity - prompt.count - 1)
             guard budget >= 1 else { throw PromptError.tooLong(prompt.count) }
             var best: ChunkResult?
             for attempt in 0...maxRetries {
@@ -189,9 +191,10 @@ public final class FrameGenerator {
                 result.spokenSeconds = max(0, result.durationSeconds - trailingSilence)
                 result.samples = decoder?.samples ?? []
                 result.codecSeconds = decoder?.codecSeconds ?? 0
-                if best == nil || Self.better(result, than: best!, preferEOS: config.retryWithoutEOS) { best = result }
-                let finished = eos || !config.retryWithoutEOS
-                if config.minSpokenRatio <= 0 || (finished && result.spokenSeconds >= config.minSpokenRatio * expected) || attempt == maxRetries { break }
+                if best == nil || Self.better(result, than: best!, preferEOS: config.retryWithoutEOSBelow > 0) { best = result }
+                let enough = result.spokenSeconds >= config.minSpokenRatio * expected
+                let finished = eos || looped == false && result.spokenSeconds >= config.retryWithoutEOSBelow * expected
+                if config.minSpokenRatio <= 0 || (enough && finished) || attempt == maxRetries { break }
                 onEvent(.retry(index: index, attempt: attempt + 1, spokenSeconds: result.spokenSeconds, expectedSeconds: expected))
             }
             guard let result = best else { break }

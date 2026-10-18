@@ -99,15 +99,16 @@ def summary(out_dir, lines_path):
         capped = sum(r.get("capped", 0) for r in sel)
         retries = sum(r.get("retries", 0) for r in sel)
         print(f"{v:10s} {n:4d} {alls:6d} ({alls / n:4.0%}) {good:4d} ({good / n:4.0%}) {eos:5d} {runaway:8d} {loops:5d} {capped:6d} {retries:7d} {np.mean([r['seconds'] for r in sel]):7.2f} {np.mean([r['wall_seconds'] for r in sel]):7.1f}")
-    print("\nall sentences present, per line:")
     ids = [i for i in lines if any(r["line"] == i for r in rows)]
-    print(f"{'line':12s} " + " ".join(f"{v:>7s}" for v in variants))
-    for i in ids:
-        cells = []
-        for v in variants:
-            sel = [r for r in rows if r["variant"] == v and r["line"] == i and "wer" in r]
-            cells.append(f"{sum(1 for r in sel if r['all_sentences']):3d}/{len(sel):<3d}" if sel else "      -")
-        print(f"{i:12s} " + " ".join(cells))
+    for title, good in (("all sentences present, per line:", lambda r: r["all_sentences"]), ("ok (WER under threshold and eos), per line:", lambda r: r["verdict"] == "ok")):
+        print(f"\n{title}")
+        print(f"{'line':12s} " + " ".join(f"{v:>7s}" for v in variants))
+        for i in ids:
+            cells = []
+            for v in variants:
+                sel = [r for r in rows if r["variant"] == v and r["line"] == i and "wer" in r]
+                cells.append(f"{sum(1 for r in sel if good(r)):3d}/{len(sel):<3d}" if sel else "      -")
+            print(f"{i:12s} " + " ".join(cells))
     bad = [r for r in rows if "wer" in r and not r["all_sentences"]]
     if bad:
         print("\nruns missing a sentence:")
@@ -134,7 +135,8 @@ def main():
     from decode_codes import load_codec
     asr = whisper.load_model("small.en")
     codec = load_codec(next(Path.home().glob(".cache/huggingface/hub/models--fishaudio--drama-3/snapshots/*/")) / "codec.pth")
-    done = {json.loads(l)["name"] for p in a.out.glob("*.jsonl") for l in p.read_text().splitlines() if l.strip()}
+    # Rows from before the precision modes were removed are named id__full__sN.
+    done = {json.loads(l)["name"].replace("__full__", "__") for p in a.out.glob("*.jsonl") for l in p.read_text().splitlines() if l.strip()}
     log = a.out / f"{'-'.join(a.variants)}__s{min(a.seeds)}-{max(a.seeds)}.jsonl"
     with log.open("a") as f:
         for variant in a.variants:
@@ -143,9 +145,9 @@ def main():
                 if item["text"] == line["text"] and conditions[variant].get("normalise"):
                     continue
                 for seed in a.seeds:
-                    name = f"{item['id']}__full__s{seed}"
+                    name = f"{item['id']}__s{seed}"
                     if name in done: continue
-                    row = run_one(a.drama, item, "full", seed, a.out, codec, asr)
+                    row = run_one(a.drama, item, seed, a.out, codec, asr)
                     row.update(variant=variant, line=line["id"], text=item["text"])
                     if "hyp" in row:
                         row["sentences"] = sentences_present(item["text"], row["hyp"])

@@ -51,14 +51,19 @@ public struct GenerationConfig: Sendable, Codable, Equatable {
     public var minSpokenRatio: Double = 0.6
     public var maxRetries: Int = 2
     /// Also regenerate a chunk that stopped without eos (the silence stop, the
-    /// frame cap or the loop guard ended it). Off, the duration rule alone decides.
-    public var retryWithoutEOS: Bool = false
+    /// frame cap or the loop guard ended it) when its spoken audio is shorter
+    /// than this fraction of the expected duration. 0 leaves the duration rule
+    /// alone to decide; `.infinity` regenerates every chunk that misses eos.
+    public var retryWithoutEOSBelow: Double = 0
     /// Stop a chunk whose main tokens have settled into a cycle (a laughter loop).
     public var stopOnLoop: Bool = false
     /// Where a sentence-mode chunk boundary falls around a bracket cue.
     public var cueFold: Drama3Chunking.CueFold = .startsChunk
     /// A text-derived frame cap is never shorter than this many seconds.
     public var capMinimumSeconds: Double = 0
+    /// Seconds added to a text-derived frame cap for every `[cue]` in the chunk,
+    /// since a laugh, a sigh or a pause takes time that the words do not count.
+    public var capSecondsPerCue: Double = 0
     /// The expected duration of a chunk with a slow direction (`slow`, `whisper`,
     /// `drawn-out`, `long pause`) is multiplied by this before the cap is set.
     public var slowCapMultiplier: Double = 1
