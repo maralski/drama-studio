@@ -68,7 +68,7 @@ cd tools && uv venv --python 3.12 .venv && uv pip install --python .venv/bin/pyt
 
 ```bash
 swift build -c release
-tools/make_app.sh            # assembles dist/DramaStudio.app, with drama-mcp in Contents/MacOS
+tools/make_app.sh            # assembles dist/DramaStudio.app, with drama-mcp and drama-say in Contents/MacOS
 open dist/DramaStudio.app
 ```
 
@@ -79,6 +79,7 @@ Command line:
 .build/release/drama generate --text "Hello there." --out frames.npy
 .build/release/drama bench                     # add --untuned to compare against the hand-written schedule
 .build/release/drama serve                     # the HTTP API without the app; --port 8780, --no-token
+.build/release/drama-say "Hello there."         # speaks through the running app, like say; see From the terminal
 ```
 
 `DRAMA_PREVIEW_ENGINE=1` runs the app or `drama serve` on a mock engine that
@@ -400,6 +401,32 @@ Or with Claude Desktop, in `~/Library/Application Support/Claude/claude_desktop_
   }
 }
 ```
+
+### From the terminal
+
+`drama-say` speaks through the running app the way `/usr/bin/say` speaks
+through macOS. It sends `POST /v1/audio/speech`, finds and opens the app the
+way `drama-mcp` does, and loads no model of its own. `tools/make_app.sh` puts
+it at `DramaStudio.app/Contents/MacOS/drama-say`.
+
+```bash
+drama-say "Hello there. [laughs] Good to see you."
+drama-say -v Narrator -o hello.wav -f chapter.txt
+drama-say --character "Captain: gravelly old male voice" --verbose "Pray ye never find out."
+drama-say --retake "$TAKE" --note "softer and warmer"
+```
+
+With no `-o`, it plays the line as it generates: it sends `stream: true` and
+plays each chunk when it arrives, so the first words sound about 2.5 seconds
+after the command starts. `-o FILE` writes a WAV, M4A or PCM file, chosen by
+the extension, and `-o -` writes raw PCM to standard output. With no text and
+no `-f`, it reads the text from standard input. `-v '?'` lists the voice
+library. `--verbose` prints the take id that `--retake` takes. `drama-say
+--help` lists every option.
+
+It prints nothing on success. It exits with 64 on a bad command line, 75 when
+the studio is busy with another generation, after printing the `Retry-After`
+wait, and 1 on any other error, after printing the server's message.
 
 ## Using the engine in your own app
 
