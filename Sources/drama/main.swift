@@ -155,6 +155,83 @@ func writeWav(samples: [Float], to wavPath: String) throws {
     try file.write(from: buffer)
 }
 
+/// drama codec-bench --frames a.npy[,b.npy] [--codec-dir DIR] [--probe-frames 64] [--context 48] [--calls 5]
+///
+/// Times one call of the probe shape and of the full shape, interleaved, then
+/// checks the probe's silence reading against the full decode of each frames
+/// file: the silent-frame flags, the trailing silence, and the frame at which
+/// the 2 s stop would fire with a reading every 16 frames and no latency.
+/// Loads no Drama model, only the codec.
+func codecBench(_ args: Args) throws {
+    guard let list = args["frames"] else { fail("usage: drama codec-bench --frames a.npy[,b.npy] [--codec-dir DIR] [--probe-frames 64] [--context 48] [--calls 5]") }
+    let dir = args["codec-dir"].map { URL(fileURLWithPath: $0) } ?? DramaCodec.defaultDirectory
+    let probeFrames = args.int("probe-frames", DramaCodec.probeFrames)
+    let context = args.int("context", DramaCodec.probeContext)
+    let calls = args.int("calls", 5)
+    let codec = try awaitBlocking {
+        try await DramaCodec(directory: dir, decoders: [DramaCodec.decoderName: DramaCodec.windowFrames, DramaCodec.probeName: probeFrames])
+    }
+    let decode: SilenceProbe.Decode = { codes, window in try DramaSynthesizer.decodeBlocking(codec, codes: codes, window: window) }
+    func codes(_ frames: [Frame]) -> [[Int32]] { (0..<ModelConstants.numCodebooks).map { c in frames.map { $0[1 + c] } } }
+    let n = ModelConstants.samplesPerFrame
+    func frameRMS(_ audio: [Float], frame: Int) -> Float {
+        var energy: Float = 0
+        for x in audio[frame * n ..< (frame + 1) * n] { energy += x * x }
+        return (energy / Float(n)).squareRoot()
+    }
+    let clips = try list.split(separator: ",").map { (String($0), try readFrames(String($0))) }
+    let silenceFrames = FrameGenerator.silenceFrames(for: 2.0)
+
+    let base = clips[0].1
+    let long = codes((0..<DramaCodec.windowFrames).map { base[$0 % base.count] })
+    var times: [Int: [Double]] = [:]
+    for _ in 0..<calls {
+        for shape in [probeFrames, DramaCodec.windowFrames] {
+            let t0 = Date()
+            _ = try decode(long, DecodeWindow(start: 0, keep: 0, end: shape))
+            times[shape, default: []].append(Date().timeIntervalSince(t0))
+        }
+    }
+    for shape in [probeFrames, DramaCodec.windowFrames] {
+        let t = times[shape]!.sorted()
+        print(String(format: "shape %d: median %.0f ms, range %.0f to %.0f ms, first call %.0f ms, %d calls interleaved", shape, t[t.count / 2] * 1000, t[0] * 1000, t[t.count - 1] * 1000, times[shape]![0] * 1000, calls))
+    }
+
+    for (path, frames) in clips {
+        let c = codes(frames)
+        var full: [Float] = []
+        for w in DecodeWindow.windows(frames: frames.count) { full += try decode(c, w) }
+        let fullRMS = (0..<frames.count).map { frameRMS(full, frame: $0) }
+
+        let probe = SilenceProbe(shape: probeFrames, context: context, decode)
+        var probeRMS = [Float](repeating: 0, count: frames.count)
+        var probeCalls = 0
+        var probeStop: Int?
+        var landed = 0
+        while landed < frames.count {
+            let next = min(frames.count, landed + FrameGenerator.silenceProbeEveryFrames)
+            for w in DecodeWindow.probing(landed ..< next, shape: probeFrames, context: context) {
+                let audio = try decode(c, w)
+                for (i, f) in w.kept.enumerated() { probeRMS[f] = frameRMS(audio, frame: i) }
+                probeCalls += 1
+            }
+            probe.measure(Array(frames.prefix(next)))
+            if probeStop == nil, probe.latest >= 2.0 { probeStop = next }
+            landed = next
+        }
+        let threshold = DramaSynthesizer.silenceThreshold
+        let disagreements = (0..<frames.count).filter { (fullRMS[$0] < threshold) != (probeRMS[$0] < threshold) }
+        let maxDiff = zip(fullRMS, probeRMS).map { abs($0 - $1) }.max() ?? 0
+        let fullStop = FrameGenerator.silenceStopFrame(samples: full, silenceFrames: silenceFrames)
+        print(String(format: "%@: %d frames; trailing silence full %.2fs probe %.2fs; stop frame full %@ probe %@; silent-flag disagreements %d of %d%@; max RMS difference %.4f; probe %.0f ms per call over %d calls",
+                     path, frames.count, DramaSynthesizer.trailingSilenceSeconds(full), probe.latest,
+                     fullStop.map(String.init) ?? "-", probeStop.map(String.init) ?? "-",
+                     disagreements.count, frames.count,
+                     disagreements.isEmpty ? "" : " at " + disagreements.prefix(8).map { String(format: "%d(%.4f/%.4f)", $0, fullRMS[$0], probeRMS[$0]) }.joined(separator: " "),
+                     maxDiff, probe.codecSeconds * 1000 / Double(max(probeCalls, 1)), probeCalls))
+    }
+}
+
 /// drama decode --frames frames.npy --wav out.wav
 func decodeCommand(_ args: Args) throws {
     guard let framesPath = args["frames"], let wavPath = args["wav"] else { fail("usage: drama decode --frames frames.npy --wav out.wav") }
@@ -203,7 +280,8 @@ func generate(_ args: Args) throws {
         case .chunkFinished(let r):
             all += r.frames
             audio += r.samples
-            FileHandle.standardError.write(String(format: "  %d rows prefilled in %.2fs; %d frames in %.2fs (%.1f frames/s, GPU %.1f ms/frame) eos=%@ attempts=%d loop=%@ spoken=%.2fs cap=%d\n", r.promptRows, r.prefillSeconds, r.frames.count, r.decodeSeconds, Double(r.frames.count) / max(r.decodeSeconds, 1e-9), r.gpuSeconds * 1000 / Double(max(r.frames.count, 1)), r.finishedByEOS ? "yes" : "no", r.attempts, r.end == .loopGuard ? "yes" : "no", r.spokenSeconds, r.frameBudget).data(using: .utf8)!)
+            let silenceAt = config.stopAfterSilenceSeconds.flatMap(r.silenceStopFrame).map(String.init) ?? "-"
+            FileHandle.standardError.write(String(format: "  %d rows prefilled in %.2fs; %d frames in %.2fs (%.1f frames/s, GPU %.1f ms/frame) eos=%@ attempts=%d loop=%@ spoken=%.2fs cap=%d end=%@ silence_at=%@\n", r.promptRows, r.prefillSeconds, r.frames.count, r.decodeSeconds, Double(r.frames.count) / max(r.decodeSeconds, 1e-9), r.gpuSeconds * 1000 / Double(max(r.frames.count, 1)), r.finishedByEOS ? "yes" : "no", r.attempts, r.end == .loopGuard ? "yes" : "no", r.spokenSeconds, r.frameBudget, "\(r.end)", silenceAt).data(using: .utf8)!)
         default: break
         }
     }
@@ -369,6 +447,7 @@ case "tune": try tune(args)
 case "schedule-ab": try scheduleAB(args)
 case "generate": try generate(args)
 case "decode": try decodeCommand(args)
+case "codec-bench": try codecBench(args)
 case "serve": try serve(args)
-default: fail("usage: drama <dump|bench|kbench|profile|tune|schedule-ab|generate|decode|serve> [options]")
+default: fail("usage: drama <dump|bench|kbench|profile|tune|schedule-ab|generate|decode|codec-bench|serve> [options]")
 }

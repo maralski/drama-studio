@@ -40,3 +40,12 @@ The first release of DramaEngine as a library for other macOS apps.
   before. Set the three to false, 0 and 0 for the earlier behaviour.
 - Of two attempts at a chunk, the engine now keeps one that reached the
   end of speech over one that did not, then the one with more speech.
+- The silence stop reads the newest frames through a third Core ML model,
+  `DramaCodecProbe`, the fp16 decoder exported at 64 frames (353 MB):
+  `DramaCodec.probeFrames`, `probeContext`, `probeName` and `modelNames`,
+  and `CodecError.wrongShape` for a model file built at another frame count.
+  A reading costs 190 ms instead of a 1.6 s 512-frame decode, so the stop
+  fires 9 to 21 frames after the audio holds 2 s of silence where before it
+  never fired on the cue lines; `convert_codec.py` writes the probe beside
+  the other two models, `DramaSetup` requires it, and the conversion venv
+  recipe pins `numpy<2.4`.

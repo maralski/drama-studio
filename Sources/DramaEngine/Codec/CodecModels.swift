@@ -12,6 +12,9 @@ public enum CodecError: Error, CustomStringConvertible {
     case unexpectedOutput(String)
     /// The audio file could not be read or resampled.
     case audio(String)
+    /// A model file takes another frame count than its name promises; it was
+    /// built by an older `convert_codec.py`.
+    case wrongShape(URL, String)
 
     /// A message for a person.
     public var description: String {
@@ -20,6 +23,7 @@ public enum CodecError: Error, CustomStringConvertible {
         case .badCodes(let m): return "bad codec codes: \(m)"
         case .unexpectedOutput(let m): return "unexpected codec output: \(m)"
         case .audio(let m): return "audio: \(m)"
+        case .wrongShape(let url, let m): return "codec model \(url.lastPathComponent) \(m); rebuild it with DramaSetup.prepare or Sources/DramaEngine/CodecConversion/convert_codec.py"
         }
     }
 }
@@ -33,12 +37,15 @@ public enum CodecError: Error, CustomStringConvertible {
 /// fp16 decoder is 35 to 39 dB from the fp32 reference and takes about 1.5 s
 /// per 512-frame window (23.8 s of audio).
 ///
-/// Both models take one static window of `windowFrames` frames so the Neural Engine
-/// sees a fixed shape. Shorter inputs are right-padded and trimmed; the codec is
-/// causal, so padding never changes the frames that are kept. Longer inputs run in
-/// windows that carry `contextFrames` of left context and keep only the new frames.
-/// With 256 frames of context the windowed decode stays within 0.006 of a full
-/// decode (53 dB) and the windowed encode keeps 99.8% of codebook 0.
+/// Each model takes one static window of frames, because Core ML's enumerated
+/// shapes crash the CPU backend here. The encoder and the decoder take
+/// `windowFrames`; a second copy of the decoder, the probe, takes `probeFrames`
+/// and serves the generator's silence stop, which reads only the newest frames.
+/// Shorter inputs are right-padded and trimmed; the codec is causal, so padding
+/// never changes the frames that are kept. Longer inputs run in windows that
+/// carry `contextFrames` of left context and keep only the new frames. With 256
+/// frames of context the windowed decode stays within 0.006 of a full decode
+/// (53 dB) and the windowed encode keeps 99.8% of codebook 0.
 public actor DramaCodec {
     /// Sample rate in Hz of every buffer in and out.
     public static let sampleRate = 44_100
@@ -50,12 +57,19 @@ public actor DramaCodec {
     public static let windowFrames = 512
     /// Frames of left context a window carries when the input is longer than one window.
     public static let contextFrames = 256
-    /// The frame counts the models accept.
-    package static let frameSizes = [windowFrames]
+    /// Frames per probe call: the shape ``probeName`` takes.
+    public static let probeFrames = 64
+    /// Frames of left context a probe window carries. The generator probes every
+    /// 16 frames, so a probe call usually classifies 16 new frames after 48 of context.
+    public static let probeContext = 48
     /// The encoder's file name without extension, `.mlpackage` or `.mlmodelc`.
     public static let encoderName = "DramaCodecEncoder"
     /// The decoder's file name without extension, `.mlpackage` or `.mlmodelc`.
     public static let decoderName = "DramaCodecDecoder"
+    /// The probe decoder's file name without extension, `.mlpackage` or `.mlmodelc`.
+    public static let probeName = "DramaCodecProbe"
+    /// Every model a codec directory must hold.
+    public static let modelNames = [encoderName, decoderName, probeName]
 
     /// `~/Library/Application Support/DramaStudio/Codec`, where
     /// `convert_codec.py` writes the models by default.
@@ -65,25 +79,45 @@ public actor DramaCodec {
     }
 
     private let encoder: MLModel
-    private let decoder: MLModel
+    /// The decoders by the frame count each takes, smallest first.
+    private let decoders: [(frames: Int, model: MLModel)]
 
-    /// Loads both models from `directory`, compiling each `.mlpackage` to a cached
+    /// The frame counts the loaded decoders take, smallest first.
+    package var decoderFrames: [Int] { decoders.map(\.frames) }
+
+    /// Loads the three models from `directory`, compiling each `.mlpackage` to a cached
     /// `.mlmodelc` beside it the first time (and again whenever the package is newer).
-    /// `computeUnits` applies to the decoder; the GPU returns wrong audio for it, so
+    /// `computeUnits` applies to the decoders; the GPU returns wrong audio for them, so
     /// keep it to `.cpuOnly` or `.cpuAndNeuralEngine`. The fp32 encoder always runs on
     /// the CPU.
     public init(directory: URL = DramaCodec.defaultDirectory, computeUnits: MLComputeUnits = .cpuOnly) async throws {
+        try await self.init(directory: directory, decoders: [Self.decoderName: Self.windowFrames, Self.probeName: Self.probeFrames], computeUnits: computeUnits)
+    }
+
+    /// Loads the encoder and the named decoders, each checked against the frame
+    /// count its file records.
+    package init(directory: URL, decoders names: [String: Int], computeUnits: MLComputeUnits = .cpuOnly) async throws {
         let encoderConfig = MLModelConfiguration()
         encoderConfig.computeUnits = .cpuOnly
         let decoderConfig = MLModelConfiguration()
         decoderConfig.computeUnits = computeUnits
         encoder = try await MLModel.load(contentsOf: Self.compiledModel(named: Self.encoderName, in: directory), configuration: encoderConfig)
-        decoder = try await MLModel.load(contentsOf: Self.compiledModel(named: Self.decoderName, in: directory), configuration: decoderConfig)
+        var loaded: [(frames: Int, model: MLModel)] = []
+        for (name, frames) in names.sorted(by: { $0.value < $1.value }) {
+            let url = try await Self.compiledModel(named: name, in: directory)
+            let model = try await MLModel.load(contentsOf: url, configuration: decoderConfig)
+            let recorded = (model.modelDescription.metadata[.creatorDefinedKey] as? [String: String])?["window_frames"].flatMap(Int.init)
+            guard recorded == frames else {
+                throw CodecError.wrongShape(url, "takes \(recorded.map(String.init) ?? "an unrecorded number of") frames, not \(frames)")
+            }
+            loaded.append((frames, model))
+        }
+        decoders = loaded
     }
 
-    /// Whether both models are in `directory`, as packages or compiled.
+    /// Whether every model is in `directory`, as a package or compiled.
     public static func modelsExist(in directory: URL = DramaCodec.defaultDirectory) -> Bool {
-        [encoderName, decoderName].allSatisfy { name in
+        modelNames.allSatisfy { name in
             ["mlpackage", "mlmodelc"].contains { ext in
                 FileManager.default.fileExists(atPath: directory.appendingPathComponent("\(name).\(ext)").path)
             }
@@ -100,17 +134,18 @@ public actor DramaCodec {
         return audio
     }
 
-    /// The samples of frames `window.keep ..< window.end`, from one model call
-    /// over `window.start ..< window.end` of `codes`.
+    /// The samples of frames `window.keep ..< window.end`, from one call of the
+    /// smallest decoder that fits `window.start ..< window.end` of `codes`.
     package func decode(codes: [[Int32]], window w: DecodeWindow) async throws -> [Float] {
         guard codes.count == Self.numCodebooks else {
             throw CodecError.badCodes("expected \(Self.numCodebooks) codebooks, got \(codes.count)")
         }
         let frames = codes[0].count
         guard codes.allSatisfy({ $0.count == frames }) else { throw CodecError.badCodes("codebooks differ in length") }
-        guard w.end <= frames, w.end - w.start <= Self.windowFrames else { throw CodecError.badCodes("window \(w) does not fit \(frames) frames") }
+        guard w.end <= frames, let (width, decoder) = decoders.first(where: { $0.frames >= w.end - w.start }) else {
+            throw CodecError.badCodes("window \(w) does not fit \(frames) frames or any decoder shape \(decoderFrames)")
+        }
 
-        let width = Self.windowFrames
         var flat = [Int32](repeating: 0, count: Self.numCodebooks * width)
         for (book, row) in codes.enumerated() {
             flat.replaceSubrange(book * width ..< book * width + (w.end - w.start), with: row[w.start ..< w.end])

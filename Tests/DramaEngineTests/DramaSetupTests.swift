@@ -55,7 +55,7 @@ final class DramaSetupTests: XCTestCase {
 
     func testCodecCheckpointIsNotNeededOnceTheModelsExist() throws {
         let location = try snapshot(shards: ["a.safetensors"], present: ["config.json", "tokenizer.json", "a.safetensors"])
-        for name in ["DramaCodecEncoder.mlmodelc", "DramaCodecDecoder.mlmodelc"] {
+        for name in ["DramaCodecEncoder.mlmodelc", "DramaCodecDecoder.mlmodelc", "DramaCodecProbe.mlmodelc"] {
             try FileManager.default.createDirectory(at: codecDirectory.appending(path: name), withIntermediateDirectories: true)
         }
         let report = DramaSetup.check(location: location, codecDirectory: codecDirectory, tuningDirectory: tuningDirectory)

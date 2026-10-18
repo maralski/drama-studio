@@ -13,7 +13,7 @@ each one and builds the last two.
 | What | Where | Size | Who makes it |
 | --- | --- | --- | --- |
 | Snapshot: 8 weight shards, `config.json`, `tokenizer.json`, `codec.pth` | `~/.cache/huggingface/hub/models--fishaudio--drama-3/snapshots/<id>/` | 41.5 GB (shards 39.6 GB) | `hf download` |
-| `DramaCodecEncoder.mlpackage` (fp32), `DramaCodecDecoder.mlpackage` (fp16) | ``DramaCodec/defaultDirectory``, `~/Library/Application Support/DramaStudio/Codec/` | 809 MB and 353 MB | `convert_codec.py`, once |
+| `DramaCodecEncoder.mlpackage` (fp32), `DramaCodecDecoder.mlpackage` (fp16), `DramaCodecProbe.mlpackage` (the decoder at 64 frames, for the silence stop) | ``DramaCodec/defaultDirectory``, `~/Library/Application Support/DramaStudio/Codec/` | 809 MB, 353 MB and 353 MB | `convert_codec.py`, once |
 | Compiled `.mlmodelc` beside each package | the same folder | about the same | ``DramaCodec`` on its first load |
 | Tuned kernel schedule, one JSON file | ``DramaSynthesizer/defaultTuningDirectory``, `~/Library/Application Support/DramaStudio/Tuning/` | about 4 KB | the engine's first load on a Mac, about 30 s |
 
@@ -47,7 +47,7 @@ bundle. ``DramaSetup/conversionScript`` is its location.
 
    ```bash
    uv venv --python 3.12 ~/.cache/drama-codec-venv
-   uv pip install --python ~/.cache/drama-codec-venv/bin/python "torch==2.7.1" coremltools numpy einops soundfile
+   uv pip install --python ~/.cache/drama-codec-venv/bin/python "torch==2.7.1" coremltools "numpy<2.4" einops soundfile
    ```
 
 2. Run the conversion through ``DramaSetup``:

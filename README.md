@@ -56,7 +56,7 @@ uvx --from huggingface_hub hf download fishaudio/drama-3
 - The Core ML codec models, built once from `codec.pth`:
 
 ```bash
-cd tools && uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python "torch==2.7.1" coremltools numpy einops soundfile
+cd tools && uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python "torch==2.7.1" coremltools "numpy<2.4" einops soundfile
 .venv/bin/python -I ../Sources/DramaEngine/CodecConversion/convert_codec.py
 ```
 
@@ -476,7 +476,8 @@ for try await event in engine.synthesize(request) {
   Hugging Face `tokenizers` on a 661-case corpus.
 - `Sources/DramaEngine/Codec`: Core ML wrappers for the DAC encoder (reference
   clips to codes) and decoder (codes to 44.1 kHz audio), both exported at one
-  static 512-frame shape and run in windows with 256 frames of left context.
+  static 512-frame shape and run in windows with 256 frames of left context,
+  plus the same decoder at a 64-frame shape for the silence stop's probe.
 - `Sources/DramaServer`: the HTTP API on `Network.framework`. Request parsing
   and routing are pure functions from an `HTTPRequest` to an `APIRequest`;
   `APIService` answers them against any `SpeechSynthesizer` and `VoiceStore`,
@@ -649,10 +650,15 @@ The decode reuses the windows a full decode of the chunk would run
 On the Core ML codec, 600 frames decoded in 64-frame steps differ from one
 full decode by a maximum absolute error of 0
 (`DRAMA_CODEC_SEAM=1 swift test --filter testSeamOnTheRealCodec`); decoding
-each step with a bare 256-frame left context instead differs by 0.027. The
-silence probe reads the same decode, so each window is decoded once. All codec
-work of a run goes through one serial queue: a low-latency chunk's last frames
-decode while the next chunk prefills and generates.
+each step with a bare 256-frame left context instead differs by 0.027. All
+full-window codec work of a run goes through one serial queue: a low-latency
+chunk's last frames decode while the next chunk prefills and generates. The
+silence stop does not wait for that queue: every 16 frames it decodes the
+newest 16 frames, after 48 of context, through the 64-frame probe shape on a
+second queue (190 ms a reading against 1.6 s for a 512-frame window), and
+drops the audio. In sentence mode the chunk's audio is decoded once, at the
+end of the attempt; see `eval/reliability/REPORT.md` for how late the stop
+fired before and after.
 
 Measured on the M3 Max (16 cores, 12 performance), with the same two-sentence
 line, 9.4 s of audio in 202 frames, seed 7, in every run. The machine was not
