@@ -689,14 +689,14 @@ with exact round trip. The kernel that unpacks it is compute-bound at about
 What shipped, every step with a byte-identical dump and the faithfulness
 table unchanged (hidden 1.2e-6 relative L2 at most, top-1 1.0):
 
-| step | change | frame (bench rows 1, backbone + tower) |
-| --- | --- | --- |
-| baseline | | 21.1 ms |
-| MoE layer | one decode row's mixture of experts as three dispatches (bf16 router and shared pass, routing plus routed gate-up, routed down plus shared down plus combine), FP8 decoded with integer ops instead of the lookup table | 20.2 |
-| encoder | a concurrent compute encoder with a barrier before every dispatch except the later members of a sibling group (the four GDN input projections, q k v, w1 and w3, and so on); q/k norm, rope and the KV writes in one dispatch | 19.7 |
-| samplers | 256-thread sampling kernels in place of one 1024-thread threadgroup; no change on a quiet GPU, and 47 to 22 ms per frame when another GPU client is active, which is what a user with an animating window sees | 19.7 |
-| tower | embedding plus both concat norms in one dispatch, attention split over 8 threadgroups with an in-order combine and the gate folded in, the residual adds folded into wo and w2, w1 and w3 as one dispatch with the SiLU | 19.6 |
-| packed weights | eight weight families (GDN qkv and z, attention q, the semantic lm-head slice, tower wqkv, heads, w1 and w3) read from an exponent-coded copy at one row, 0.94 GB fewer bytes per frame | 18.2 |
+| step | change | frame (bench rows 1, backbone + tower), under load | quiet GPU, 2026-10-23 |
+| --- | --- | --- | --- |
+| baseline | | 21.1 ms | 21.0 ms (15.0 + 6.0) |
+| MoE layer | one decode row's mixture of experts as three dispatches (bf16 router and shared pass, routing plus routed gate-up, routed down plus shared down plus combine), FP8 decoded with integer ops instead of the lookup table | 20.2 | 20.1 |
+| encoder | a concurrent compute encoder with a barrier before every dispatch except the later members of a sibling group (the four GDN input projections, q k v, w1 and w3, and so on); q/k norm, rope and the KV writes in one dispatch | 19.7 | 19.5 |
+| samplers | 256-thread sampling kernels in place of one 1024-thread threadgroup; no change on a quiet GPU, and 47 to 22 ms per frame when another GPU client is active, which is what a user with an animating window sees; on a quiet GPU the kernels cost 0.67 ms per frame, about 0.2 ms more than the old shape, and the old shape stalls under the window server alone | 19.7 | not re-benched |
+| tower | embedding plus both concat norms in one dispatch, attention split over 8 threadgroups with an in-order combine and the gate folded in, the residual adds folded into wo and w2, w1 and w3 as one dispatch with the SiLU | 19.6 | not re-benched |
+| packed weights | eight weight families (GDN qkv and z, attention q, the semantic lm-head slice, tower wqkv, heads, w1 and w3) read from an exponent-coded copy at one row, 0.94 GB fewer bytes per frame | 18.2 | 18.1 (12.9 + 5.2) |
 
 Reverted: a multi-matrix GEMV that grouped sibling projections into one
 dispatch (within noise once the concurrent encoder had taken the same gaps),
@@ -713,16 +713,33 @@ to build or load falls back to bf16 with the reason logged, and
 and the prefix cache never touch it: every path with more than one row reads
 the bf16 shards as before.
 
-Caveats. Every number in this round was taken while another process held
-the GPU (the window server and a virtual machine, device utilization 100
-percent for the whole run), so the medians are usable but the ranges carry
-stalls and no end-to-end frames-per-second figure from this round is quoted;
-the shipped tune should be redone on a quiet GPU. Two steps were kept on the
-0.1 ms noise floor of the bench line (the concurrent encoder, which also
-showed a stall tail under that load that a quiet session has yet to settle,
-and the tower fusions, whose attention gain only shows at later positions).
-The remaining ideas are small: the MoE down kernel's prologue, and the w2
-and 4096x2048 families in the packed path.
+Caveats, and what a quiet session settled (2026-10-23). Every number in the
+hillclimb was taken while another process held the GPU (the window server
+and a virtual machine), so the ranges carried stalls and no end-to-end figure
+was quoted. A second session rechecked the round with the virtual machine
+stopped and the app quit, one job at a time. The `ioreg` utilization counter
+reads 100 percent under the window server alone and is no gate; the gate was
+the sampler stages of a traced 120-frame generation (`eval/quiet_label.sh`),
+0.7 ms per frame when the GPU is free, taken before and inside every batch.
+The tune was redone there: the decode GEMV moved to 8 simdgroups, the narrow
+GEMV kept its tile this time, the MoE prefill tile went to 32x32x32, and the
+128-row forward went from 233 to 189 ms. The quiet column above is a
+10-round interleaved bench per pair except the baseline, 5 rounds. The
+concurrent encoder stays: against a serial-encoder build of the same code it
+is 0.5 ms shorter on the bench line and 0.0 to 1.2 ms shorter per frame over
+three interleaved 300-frame traces, with a fatter tail (p99 39 to 41 ms
+against 33 to 35), which playback's 64-frame buffer absorbs. The parked
+multi-matrix GEMV was rebased (branch `hill/step3-gemv-decode-quiet`) and
+measured again: 0.1 ms, inside the A/A gap of the bench, so it stays parked.
+End to end, `eval/perf_ab.sh` over five 425-frame generations: 35.1 frames
+per second [31.7..36.4] against 20.7 for the baseline, whose 1024-thread
+samplers stall under the window server alone. Short runs after idle reach
+48 to 50 frames per second (19.2 to 19.7 ms per frame); the sustained figure
+is lower because this Mac slows bandwidth-bound work by 20 to 40 percent
+after minutes of GPU load and recovers over minutes of idle, so absolute
+decode numbers depend on the GPU's recent history while interleaved A/B
+deltas hold. The remaining ideas are small: the MoE down kernel's prologue,
+and the w2 and 4096x2048 families in the packed path.
 
 ## Streaming
 
