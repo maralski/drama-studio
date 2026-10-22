@@ -44,9 +44,33 @@ final class Buf {
     func readInts(_ n: Int, offset: Int = 0) -> [Int32] { Array(UnsafeBufferPointer(start: ints + offset, count: n)) }
 }
 
+/// Dispatch counts by kernel name.
+package final class DispatchTally {
+    package init() {}
+    package private(set) var counts: [String: Int] = [:]
+    func add(_ name: String) { counts[name, default: 0] += 1 }
+    package var total: Int { counts.values.reduce(0, +) }
+}
+
+/// Whether the dispatches being encoded on a concurrent encoder belong to a
+/// group that may overlap.
+final class FenceState {
+    var inGroup = false
+    var groupStarted = false
+    private(set) var barriers = 0
+    func barrier(_ enc: MTLComputeCommandEncoder) {
+        enc.memoryBarrier(scope: .buffers)
+        barriers += 1
+    }
+}
+
 /// Thin encoders around each kernel. Every call appends one dispatch. The
 /// schedule chooses each family's instantiation and dispatch shape; path
 /// choice between families depends on M == 1 against M > 1 and on N only.
+///
+/// The engine's encoders are concurrent: a dispatch waits for every earlier
+/// one through a barrier, except the later members of a `parallel` group,
+/// which only wait for the dispatches before the group.
 struct Kernels {
     let ctx: MetalContext
     let precision: Precision
@@ -55,6 +79,8 @@ struct Kernels {
     var forceGemv = false
     /// Dev benches only: run the one-row expert kernels for every M.
     var forceMoeRows = false
+    var tally: DispatchTally?
+    let fence = FenceState()
 
     init(ctx: MetalContext, precision: Precision, schedule: KernelSchedule = .default) {
         self.ctx = ctx
@@ -67,12 +93,32 @@ struct Kernels {
         enc.setBytes(&v, length: MemoryLayout<T>.stride, index: index)
     }
 
+    private func fenceBefore(_ enc: MTLComputeCommandEncoder, _ name: String) {
+        tally?.add(name)
+        guard enc.dispatchType == .concurrent else { return }
+        if fence.inGroup && fence.groupStarted { return }
+        fence.barrier(enc)
+        if fence.inGroup { fence.groupStarted = true }
+    }
+
+    /// Encodes `body`, whose dispatches neither read nor write what another
+    /// of them writes, so a concurrent encoder may overlap them.
+    func parallel(_ enc: MTLComputeCommandEncoder, _ body: () throws -> Void) rethrows {
+        precondition(!fence.inGroup)
+        fence.inGroup = true
+        fence.groupStarted = false
+        defer { fence.inGroup = false }
+        try body()
+    }
+
     private func dispatch(_ enc: MTLComputeCommandEncoder, _ name: String, grid: MTLSize, group: MTLSize) throws {
+        fenceBefore(enc, name)
         enc.setComputePipelineState(try ctx.pipeline(name))
         enc.dispatchThreads(grid, threadsPerThreadgroup: group)
     }
 
     func dispatchGroups(_ enc: MTLComputeCommandEncoder, _ name: String, groups: MTLSize, group: MTLSize) throws {
+        fenceBefore(enc, name)
         enc.setComputePipelineState(try ctx.pipeline(name))
         enc.dispatchThreadgroups(groups, threadsPerThreadgroup: group)
     }
@@ -197,6 +243,36 @@ struct Kernels {
         try dispatch(enc, "kv_write", grid: MTLSize(width: 256, height: rows * kvHeads, depth: 1), group: MTLSize(width: 256, height: 1, depth: 1))
     }
 
+    struct NormRopeKV {
+        var q: Buf, qOffset: Int, qView: HeadView, qNorm: TensorRef
+        var k: Buf, kOffset: Int, kView: HeadView, kNorm: TensorRef
+        var v: Buf, vOffset: Int, vView: HeadView
+        var qOut: Buf, kcache: Buf, vcache: Buf
+        var heads: Int, kvHeads: Int, rotaryDim: Int, theta: Double, eps: Float, interleaved: Bool
+    }
+
+    /// Both per-head norms, both ropes, and both cache writes of an attention
+    /// block in one dispatch, bit-identical to the six (exact precision only:
+    /// the reference rounds between the norm and the rope).
+    func normRopeKV(_ enc: MTLComputeCommandEncoder, _ a: NormRopeKV, rows: Int, pos0: Int) throws {
+        struct P {
+            var heads: UInt32; var kvHeads: UInt32; var pos0: UInt32; var rotaryDim: UInt32; var theta: Float; var eps: Float; var interleaved: UInt32
+            var q: HeadView; var k: HeadView; var v: HeadView
+        }
+        precondition(!precision.mimicBF16)
+        enc.setBuffer(a.qOut.buffer, offset: a.qOut.byteOffset, index: 0)
+        enc.setBuffer(a.kcache.buffer, offset: a.kcache.byteOffset, index: 1)
+        enc.setBuffer(a.vcache.buffer, offset: a.vcache.byteOffset, index: 2)
+        enc.setBuffer(a.q.buffer, offset: a.q.byteOffset + a.qOffset * 4, index: 3)
+        enc.setBuffer(a.k.buffer, offset: a.k.byteOffset + a.kOffset * 4, index: 4)
+        enc.setBuffer(a.v.buffer, offset: a.v.byteOffset + a.vOffset * 4, index: 5)
+        enc.setBuffer(a.qNorm.buffer, offset: a.qNorm.offset, index: 6)
+        enc.setBuffer(a.kNorm.buffer, offset: a.kNorm.offset, index: 7)
+        set(enc, P(heads: UInt32(a.heads), kvHeads: UInt32(a.kvHeads), pos0: UInt32(pos0), rotaryDim: UInt32(a.rotaryDim), theta: Float(a.theta), eps: a.eps,
+                   interleaved: a.interleaved ? 1 : 0, q: a.qView, k: a.kView, v: a.vView), index: 8)
+        try dispatchGroups(enc, "norm_rope_kv", groups: MTLSize(width: a.heads + 2 * a.kvHeads, height: rows, depth: 1), group: MTLSize(width: 256, height: 1, depth: 1))
+    }
+
     func attention(_ enc: MTLComputeCommandEncoder, out: Buf, q: Buf, kcache: Buf, vcache: Buf, heads: Int, kvHeads: Int, rows: Int, pos0: Int) throws {
         struct P { var heads: UInt32; var kvHeads: UInt32; var pos0: UInt32; var scale: Float }
         enc.setBuffer(out.buffer, offset: out.byteOffset + (0), index: 0)
@@ -209,7 +285,8 @@ struct Kernels {
         try dispatchGroups(enc, "attention", groups: MTLSize(width: heads, height: rows, depth: 1), group: MTLSize(width: 32 * split, height: 1, depth: 1))
     }
 
-    func gdnConv(_ enc: MTLComputeCommandEncoder, out: Buf, mixed: Buf, state: Buf, w: TensorRef, channels: Int, rows: Int) throws {
+    /// The causal conv and silu; reads the state that `gdnConvStateUpdate` then advances.
+    func gdnConvSilu(_ enc: MTLComputeCommandEncoder, out: Buf, mixed: Buf, state: Buf, w: TensorRef, channels: Int, rows: Int) throws {
         struct P { var C: UInt32; var M: UInt32 }
         enc.setBuffer(out.buffer, offset: out.byteOffset + (0), index: 0)
         enc.setBuffer(mixed.buffer, offset: mixed.byteOffset + (0), index: 1)
@@ -217,6 +294,10 @@ struct Kernels {
         enc.setBuffer(w.buffer, offset: w.offset, index: 3)
         set(enc, P(C: UInt32(channels), M: UInt32(rows)), index: 4)
         try dispatch(enc, "gdn_conv_silu", grid: MTLSize(width: channels, height: rows, depth: 1), group: MTLSize(width: 256, height: 1, depth: 1))
+    }
+
+    func gdnConvStateUpdate(_ enc: MTLComputeCommandEncoder, mixed: Buf, state: Buf, channels: Int, rows: Int) throws {
+        struct P { var C: UInt32; var M: UInt32 }
         enc.setBuffer(state.buffer, offset: state.byteOffset + (0), index: 0)
         enc.setBuffer(mixed.buffer, offset: mixed.byteOffset + (0), index: 1)
         set(enc, P(C: UInt32(channels), M: UInt32(rows)), index: 2)

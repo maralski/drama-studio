@@ -49,9 +49,10 @@ private func median(_ v: [Double]) -> Double {
 /// backbone step for the new row and the lm-head candidates. Each dispatch
 /// runs in a compute pass of its own (Apple GPUs sample timestamps only at
 /// encoder boundaries), so the frame is also timed untraced, and the cost of
-/// a near-empty dispatch is measured in one serial encoder, in one concurrent
-/// encoder and one pass each; serial minus concurrent, times the dispatch
-/// count, estimates the untraced frame's idle time between dispatches. A round times a frame on an
+/// a near-empty dispatch is measured in the engine's encoder (a barrier
+/// before each), in a concurrent encoder without barriers, and one pass
+/// each; barriered minus unordered, times the dispatch count, estimates the
+/// untraced frame's idle time between dispatches. A round times a frame on an
 /// idle GPU, then an untraced and a traced frame each behind `--heat` GEMVs
 /// that bring the GPU to the clock pipelined decode keeps it at; each
 /// dispatch reports its median over the rounds. A pipelined run of
@@ -93,7 +94,7 @@ func trace(_ args: Args) throws {
         try model.heat(dispatches: heat)
         floorSerial.append(try model.dispatchFloor(count: 1000))
         try model.heat(dispatches: heat)
-        floorConcurrent.append(try model.dispatchFloor(count: 1000, concurrent: true))
+        floorConcurrent.append(try model.dispatchFloor(count: 1000, unordered: true))
         try model.heat(dispatches: heat)
         model.tracer = try DispatchTracer(ctx: model.ctx)
         floorSplit.append(try model.dispatchFloor(count: 1000))
@@ -139,8 +140,8 @@ func trace(_ args: Args) throws {
     print(String(format: "sum of median dispatch times:  %.2f ms", dispatchSum))
     print(String(format: "sum of median gaps, traced:    %.2f ms between consecutive passes", gapSum))
     print(String(format: "dispatches under 20 us:        %d, %.2f ms", small.count, smallMs))
-    print("near-empty dispatch, us each:  one encoder " + range(floorSerial) + "; concurrent encoder " + range(floorConcurrent) + "; one pass each " + range(floorSplit))
-    print(String(format: "idle between dispatches, untraced, estimated: %.2f ms (%d dispatches x (serial - concurrent near-empty cost))", idleMs, first.count))
+    print("near-empty dispatch, us each:  barrier before each " + range(floorSerial) + "; no barriers " + range(floorConcurrent) + "; one pass each " + range(floorSplit))
+    print(String(format: "idle between dispatches, untraced, estimated: %.2f ms (%d dispatches x (barriered - unordered near-empty cost))", idleMs, first.count))
     print(String(format: "untraced frame minus dispatch sum: %.2f ms", median(normalMs) - dispatchSum))
 
     struct Bucket { var count = 0; var us = 0.0; var maxUs = 0.0; var bytes = 0 }

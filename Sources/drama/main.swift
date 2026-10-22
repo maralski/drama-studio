@@ -41,8 +41,12 @@ func loadModel(_ args: Args) throws -> DramaModel {
     var precision = Precision.exact
     if args["precision"] == "reference" { precision = .reference }
     let t0 = Date()
-    let model = try DramaModel(location: loc, precision: precision, capacity: args.int("capacity", DramaModel.defaultCapacity),
-                               schedule: args.flags.contains("untuned") ? .default : nil)
+    var schedule: KernelSchedule? = args.flags.contains("untuned") ? .default : nil
+    if let path = args["schedule-file"] {
+        struct File: Decodable { let schedule: KernelSchedule }
+        schedule = try JSONDecoder().decode(File.self, from: Data(contentsOf: URL(fileURLWithPath: path))).schedule
+    }
+    let model = try DramaModel(location: loc, precision: precision, capacity: args.int("capacity", DramaModel.defaultCapacity), schedule: schedule)
     FileHandle.standardError.write("loaded \(loc.directory.lastPathComponent) in \(String(format: "%.2f", Date().timeIntervalSince(t0)))s\n".data(using: .utf8)!)
     return model
 }
@@ -399,6 +403,73 @@ func kbench(_ args: Args) throws {
     try KernelBench.denseMatmul(n: args.int("n", 8192), k: args.int("k", 2048), ms: ms, iterations: args.int("iterations", 5))
 }
 
+/// drama dbench [--counts 100,400,1200] [--repeats 7]: dispatch tax per encoder kind.
+/// drama dbench --blocks [--copies 16] [--repeats 7] [--gemv-simdgroups 4]: fused
+/// against separate decode blocks, serial against concurrent.
+func dbench(_ args: Args) throws {
+    if args.flags.contains("blocks") {
+        var schedule = KernelSchedule.default
+        schedule.gemvDecode = .init(tokenTile: 1, simdgroups: args.int("gemv-simdgroups", 4))
+        try DispatchBench.blocks(copies: args.int("copies", 16), repeats: args.int("repeats", 7), schedule: schedule)
+        return
+    }
+    let counts = (args["counts"] ?? "100,400,1200").split(separator: ",").compactMap { Int($0) }
+    try DispatchBench.tax(counts: counts, repeats: args.int("repeats", 7))
+}
+
+/// drama fbench --rows prompt_rows.npy [--warm] [--steps 48] [--repeats 3] [--seed 0] [--parts]
+/// GPU time per pipelined decode frame (the spacing of the frames' GPU end
+/// times) with the dispatch count per frame; --parts instead times the parts
+/// of one frame (samplers, tower, backbone) in separate command buffers.
+func fbench(_ args: Args) throws {
+    guard let rowsPath = args["rows"] else { fail("usage: drama fbench --rows prompt_rows.npy [--steps 48] [--repeats 3] [--parts]") }
+    let model = try loadModel(args)
+    print(scheduleLine(model, args: args))
+    if args.flags.contains("warm") { print(String(format: "warm-up walk: %.2fs", model.benchWarmUp())) }
+    let prompt = try readFrames(rowsPath)
+    let steps = args.int("steps", 48), repeats = args.int("repeats", 3), seed = UInt64(args.int("seed", 0))
+    if args.flags.contains("parts") {
+        let session = try GenerationSession(model: model, prompt: prompt)
+        var sampler = Sampler(seed: seed)
+        for _ in 0..<steps { _ = try session.step(temperature: 0.7, topK: 30, topP: 0.7, sampler: &sampler) }
+        _ = session.lastHidden
+        for (part, ms) in try model.profileFrameParts(position: prompt.count + steps, repeats: repeats) {
+            let t = ms.sorted()
+            print(String(format: "part %@: median %.3f ms [%.3f .. %.3f], %d repeats", part, t[t.count / 2], t.first!, t.last!, t.count))
+        }
+        return
+    }
+    var times: [Double] = [], spans: [Double] = []
+    var reference: [Frame]?
+    for r in 0...repeats {
+        let session = try GenerationSession(model: model, prompt: prompt)
+        let tally = DispatchTally()
+        model.tally = tally
+        var sampler = Sampler(seed: seed)
+        var frames: [Frame] = []
+        for _ in 0..<steps {
+            guard let f = try session.step(temperature: 0.7, topK: 30, topP: 0.7, sampler: &sampler).frame else { break }
+            frames.append(f)
+        }
+        model.tally = nil
+        let ends = session.gpuEndTimes
+        if r > 0 {
+            times.append((ends.last! - ends.first!) / Double(ends.count - 1) * 1000)
+            spans.append(session.gpuSeconds / Double(frames.count) * 1000)
+        }
+        if reference == nil {
+            reference = frames
+            let top = tally.counts.sorted { $0.value > $1.value }.map { "\($0.key) \(String(format: "%.0f", Double($0.value) / Double(frames.count + 1)))" }
+            print("\(String(format: "%.1f", Double(tally.total) / Double(frames.count + 1))) dispatches per frame over \(frames.count) frames; \(top.joined(separator: ", "))")
+        } else if frames != reference! {
+            print("frames DIFFER in repeat \(r)")
+        }
+    }
+    let t = times.sorted(), c = spans.sorted()
+    print(String(format: "median %.3f ms per frame [%.3f .. %.3f] (GPU end spacing); command buffer span %.3f; %d repeats of %d frames",
+                 t[t.count / 2], t.first!, t.last!, c[c.count / 2], t.count, steps))
+}
+
 /// drama serve [--port 8780] [--no-token]: the app's HTTP API, headless.
 /// DRAMA_PREVIEW_ENGINE=1 serves the mock engine, as in the app.
 func serve(_ args: Args) throws -> Never {
@@ -444,6 +515,8 @@ switch args.positional.first {
 case "dump": try dump(args)
 case "bench": try bench(args)
 case "kbench": try kbench(args)
+case "dbench": try dbench(args)
+case "fbench": try fbench(args)
 case "profile": try profile(args)
 case "trace": try trace(args)
 case "tune": try tune(args)
@@ -452,5 +525,5 @@ case "generate": try generate(args)
 case "decode": try decodeCommand(args)
 case "codec-bench": try codecBench(args)
 case "serve": try serve(args)
-default: fail("usage: drama <dump|bench|kbench|profile|trace|tune|schedule-ab|generate|decode|codec-bench|serve> [options]")
+default: fail("usage: drama <dump|bench|kbench|dbench|fbench|profile|trace|tune|schedule-ab|generate|decode|codec-bench|serve> [options]")
 }

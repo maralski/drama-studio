@@ -104,7 +104,7 @@ final class Backbone {
         precondition(M >= 1 && M <= maxRows)
         let H = config.hiddenSize
         let c = config
-        if captureLayers { for buf in layerCapture { try k.zero(enc, buf) } }
+        if captureLayers { try k.parallel(enc) { for buf in layerCapture { try k.zero(enc, buf) } } }
         try k.embedMix(enc, out: x, frames: framesView(pos0), embed: weights.embed, codebooks: codebooks, rows: M, config: c)
         try k.roundIfMimic(enc, x: x, count: M * H)
         for (i, layer) in weights.layers.enumerated() {
@@ -155,7 +155,6 @@ final class Backbone {
         let capacityPairs = maxRows * c.topK
         let maxActive = min(M * c.topK, c.numExperts)
         let heads = c.numHeads, kvHeads = c.numKVHeads
-        let kvView = HeadView(heads: UInt32(kvHeads), groupStride: UInt32(kvHeads * 256), headStride: 256)
         try group("norms+residual", layers: c.numLayers) { enc in
             try k.rmsnorm(enc, out: h, outStride: H, x: x, view: .contiguous(H), rows: M, dim: H, w: layer.inputNorm, eps: c.rmsNormEps)
             try k.residualAdd(enc, x: x, y: mixOut, count: M * H)
@@ -167,25 +166,17 @@ final class Backbone {
             try k.gemv(enc, lw.inProjA, x: h, y: a, m: M)
             try k.gemv(enc, lw.inProjB, x: h, y: b, m: M)
         }
-        try group("linear.conv", layers: linearCount) { enc in try k.gdnConv(enc, out: convOut, mixed: big, state: convState[li]!, w: lw.conv, channels: 8192, rows: M) }
+        try group("linear.conv", layers: linearCount) { enc in try k.gdnConvSilu(enc, out: convOut, mixed: big, state: convState[li]!, w: lw.conv, channels: 8192, rows: M) }
         try group("linear.recurrent", layers: linearCount) { enc in
-            try k.gdnRecurrent(enc, core: core, convOut: convOut, a: a, b: b, state: recState[li]!, aLog: lw.aLog, dtBias: lw.dtBias, rows: M, config: c)
+            try k.parallel(enc) {
+                try k.gdnConvStateUpdate(enc, mixed: big, state: convState[li]!, channels: 8192, rows: M)
+                try k.gdnRecurrent(enc, core: core, convOut: convOut, a: a, b: b, state: recState[li]!, aLog: lw.aLog, dtBias: lw.dtBias, rows: M, config: c)
+            }
         }
         try group("linear.gatednorm", layers: linearCount) { enc in try k.gatedRMSNorm(enc, out: normed, x: core, z: z, w: lw.norm, rows: M * c.linearValueHeads, eps: c.rmsNormEps) }
         try group("linear.gemm.out", layers: linearCount) { enc in try k.gemv(enc, lw.outProj, x: normed, y: mixOut, m: M) }
-        try group("full.gemm.qkv", layers: fullCount) { enc in
-            try k.gemv(enc, fw.qProj, x: h, y: big, m: M)
-            try k.gemv(enc, fw.kProj, x: h, y: kbuf, m: M)
-            try k.gemv(enc, fw.vProj, x: h, y: vbuf, m: M)
-        }
-        try group("full.norm.rope.kv", layers: fullCount) { enc in
-            try k.rmsnorm(enc, out: qn, outStride: 256, x: big, view: HeadView(heads: UInt32(heads), groupStride: UInt32(heads * 512), headStride: 512), rows: M * heads, dim: 256, w: fw.qNorm, eps: c.rmsNormEps)
-            try k.rmsnorm(enc, out: kn, outStride: 256, x: kbuf, view: kvView, rows: M * kvHeads, dim: 256, w: fw.kNorm, eps: c.rmsNormEps)
-            try k.rope(enc, interleaved: false, x: qn, heads: heads, rows: M * heads, pos0: 0, rotaryDim: c.rotaryDim, theta: c.ropeTheta)
-            try k.rope(enc, interleaved: false, x: kn, heads: kvHeads, rows: M * kvHeads, pos0: 0, rotaryDim: c.rotaryDim, theta: c.ropeTheta)
-            try k.kvWrite(enc, cache: kcache[fi]!, src: kn, srcOffset: 0, view: kvView, kvHeads: kvHeads, rows: M, pos0: 0)
-            try k.kvWrite(enc, cache: vcache[fi]!, src: vbuf, srcOffset: 0, view: kvView, kvHeads: kvHeads, rows: M, pos0: 0)
-        }
+        try group("full.gemm.qkv", layers: fullCount) { enc in try projectQKV(enc, fw, rows: M) }
+        try group("full.norm.rope.kv", layers: fullCount) { enc in try normRopeKV(enc, fw, layer: fi, rows: M, pos0: 0) }
         try group("full.attention", layers: fullCount) { enc in
             try k.attention(enc, out: attnOut, q: qn, kcache: kcache[fi]!, vcache: vcache[fi]!, heads: heads, kvHeads: kvHeads, rows: M, pos0: 0)
         }
@@ -240,14 +231,19 @@ final class Backbone {
     func framesView(_ pos0: Int) -> Buf { Buf(view: frames, byteOffset: pos0 * 11 * 4) }
 
     private func linearAttention(_ enc: MTLComputeCommandEncoder, _ w: LinearAttentionWeights, layer: Int, rows M: Int) throws {
-        try k.gemv(enc, w.inProjQKV, x: h, y: big, m: M)
-        try k.gemv(enc, w.inProjZ, x: h, y: z, m: M)
-        try k.gemv(enc, w.inProjA, x: h, y: a, m: M)
-        try k.gemv(enc, w.inProjB, x: h, y: b, m: M)
+        try k.parallel(enc) {
+            try k.gemv(enc, w.inProjQKV, x: h, y: big, m: M)
+            try k.gemv(enc, w.inProjZ, x: h, y: z, m: M)
+            try k.gemv(enc, w.inProjA, x: h, y: a, m: M)
+            try k.gemv(enc, w.inProjB, x: h, y: b, m: M)
+        }
         if !skipStages.contains("gdn") {
-            try k.gdnConv(enc, out: convOut, mixed: big, state: convState[layer]!, w: w.conv, channels: 8192, rows: M)
+            try k.gdnConvSilu(enc, out: convOut, mixed: big, state: convState[layer]!, w: w.conv, channels: 8192, rows: M)
             try k.roundIfMimic(enc, x: convOut, count: M * 8192)
-            try k.gdnRecurrent(enc, core: core, convOut: convOut, a: a, b: b, state: recState[layer]!, aLog: w.aLog, dtBias: w.dtBias, rows: M, config: config)
+            try k.parallel(enc) {
+                try k.gdnConvStateUpdate(enc, mixed: big, state: convState[layer]!, channels: 8192, rows: M)
+                try k.gdnRecurrent(enc, core: core, convOut: convOut, a: a, b: b, state: recState[layer]!, aLog: w.aLog, dtBias: w.dtBias, rows: M, config: config)
+            }
             try k.roundIfMimic(enc, x: core, count: M * 4096)
         }
         try k.gatedRMSNorm(enc, out: normed, x: core, z: z, w: w.norm, rows: M * config.linearValueHeads, eps: config.rmsNormEps)
@@ -255,24 +251,48 @@ final class Backbone {
         try k.gemv(enc, w.outProj, x: normed, y: mixOut, m: M)
     }
 
+    private func projectQKV(_ enc: MTLComputeCommandEncoder, _ w: FullAttentionWeights, rows M: Int) throws {
+        try k.parallel(enc) {
+            try k.gemv(enc, w.qProj, x: h, y: big, m: M)
+            try k.gemv(enc, w.kProj, x: h, y: kbuf, m: M)
+            try k.gemv(enc, w.vProj, x: h, y: vbuf, m: M)
+        }
+    }
+
+    /// The q and k norms, both ropes and both cache writes: one dispatch in
+    /// exact precision, the separate dispatches when the reference rounds
+    /// between the norm and the rope.
+    private func normRopeKV(_ enc: MTLComputeCommandEncoder, _ w: FullAttentionWeights, layer: Int, rows M: Int, pos0: Int) throws {
+        let heads = config.numHeads, kvHeads = config.numKVHeads
+        let qView = HeadView(heads: UInt32(heads), groupStride: UInt32(heads * 512), headStride: 512)
+        let kvView = HeadView(heads: UInt32(kvHeads), groupStride: UInt32(kvHeads * 256), headStride: 256)
+        if !k.precision.mimicBF16 {
+            try k.normRopeKV(enc, .init(q: big, qOffset: 0, qView: qView, qNorm: w.qNorm, k: kbuf, kOffset: 0, kView: kvView, kNorm: w.kNorm,
+                                        v: vbuf, vOffset: 0, vView: kvView, qOut: qn, kcache: kcache[layer]!, vcache: vcache[layer]!,
+                                        heads: heads, kvHeads: kvHeads, rotaryDim: config.rotaryDim, theta: config.ropeTheta, eps: config.rmsNormEps, interleaved: false),
+                             rows: M, pos0: pos0)
+            return
+        }
+        try k.parallel(enc) {
+            try k.rmsnorm(enc, out: qn, outStride: 256, x: big, view: qView, rows: M * heads, dim: 256, w: w.qNorm, eps: config.rmsNormEps)
+            try k.rmsnorm(enc, out: kn, outStride: 256, x: kbuf, view: kvView, rows: M * kvHeads, dim: 256, w: w.kNorm, eps: config.rmsNormEps)
+            try k.kvWrite(enc, cache: vcache[layer]!, src: vbuf, srcOffset: 0, view: kvView, kvHeads: kvHeads, rows: M, pos0: pos0)
+        }
+        try k.roundIfMimic(enc, x: qn, count: M * heads * 256)
+        try k.roundIfMimic(enc, x: kn, count: M * kvHeads * 256)
+        try k.parallel(enc) {
+            try k.rope(enc, interleaved: false, x: qn, heads: heads, rows: M * heads, pos0: pos0, rotaryDim: config.rotaryDim, theta: config.ropeTheta)
+            try k.rope(enc, interleaved: false, x: kn, heads: kvHeads, rows: M * kvHeads, pos0: pos0, rotaryDim: config.rotaryDim, theta: config.ropeTheta)
+        }
+        try k.roundIfMimic(enc, x: qn, count: M * heads * 256)
+        try k.roundIfMimic(enc, x: kn, count: M * kvHeads * 256)
+        try k.kvWrite(enc, cache: kcache[layer]!, src: kn, srcOffset: 0, view: kvView, kvHeads: kvHeads, rows: M, pos0: pos0)
+    }
+
     private func fullAttention(_ enc: MTLComputeCommandEncoder, _ w: FullAttentionWeights, layer: Int, rows M: Int, pos0: Int) throws {
         let heads = config.numHeads, kvHeads = config.numKVHeads
-        try k.gemv(enc, w.qProj, x: h, y: big, m: M)
-        try k.gemv(enc, w.kProj, x: h, y: kbuf, m: M)
-        try k.gemv(enc, w.vProj, x: h, y: vbuf, m: M)
-        try k.rmsnorm(enc, out: qn, outStride: 256, x: big, view: HeadView(heads: UInt32(heads), groupStride: UInt32(heads * 512), headStride: 512),
-                      rows: M * heads, dim: 256, w: w.qNorm, eps: config.rmsNormEps)
-        try k.rmsnorm(enc, out: kn, outStride: 256, x: kbuf, view: HeadView(heads: UInt32(kvHeads), groupStride: UInt32(kvHeads * 256), headStride: 256),
-                      rows: M * kvHeads, dim: 256, w: w.kNorm, eps: config.rmsNormEps)
-        try k.roundIfMimic(enc, x: qn, count: M * heads * 256)
-        try k.roundIfMimic(enc, x: kn, count: M * kvHeads * 256)
-        try k.rope(enc, interleaved: false, x: qn, heads: heads, rows: M * heads, pos0: pos0, rotaryDim: config.rotaryDim, theta: config.ropeTheta)
-        try k.rope(enc, interleaved: false, x: kn, heads: kvHeads, rows: M * kvHeads, pos0: pos0, rotaryDim: config.rotaryDim, theta: config.ropeTheta)
-        try k.roundIfMimic(enc, x: qn, count: M * heads * 256)
-        try k.roundIfMimic(enc, x: kn, count: M * kvHeads * 256)
-        let kvView = HeadView(heads: UInt32(kvHeads), groupStride: UInt32(kvHeads * 256), headStride: 256)
-        try k.kvWrite(enc, cache: kcache[layer]!, src: kn, srcOffset: 0, view: kvView, kvHeads: kvHeads, rows: M, pos0: pos0)
-        try k.kvWrite(enc, cache: vcache[layer]!, src: vbuf, srcOffset: 0, view: kvView, kvHeads: kvHeads, rows: M, pos0: pos0)
+        try projectQKV(enc, w, rows: M)
+        try normRopeKV(enc, w, layer: layer, rows: M, pos0: pos0)
         if !skipStages.contains("attn") {
             try k.attention(enc, out: attnOut, q: qn, kcache: kcache[layer]!, vcache: vcache[layer]!, heads: heads, kvHeads: kvHeads, rows: M, pos0: pos0)
         }
@@ -291,22 +311,29 @@ final class Backbone {
             return
         }
         let capacityPairs = maxRows * config.topK
-        try k.gemv(enc, w.router, x: h, y: routerLogits, m: M)
-        try k.moeRouter(enc, ids: ids, weights: rw, logits: routerLogits, rows: M, config: config)
-        try k.zero(enc, counts)
         let maxActive = min(M * config.topK, config.numExperts)
-        try k.moeBucket(enc, counts: counts, lists: lists, ids: ids, active: active, pairs: M * config.topK, capacity: capacityPairs)
+        let shared = !skipStages.contains("shared")
+        try k.parallel(enc) {
+            try k.gemv(enc, w.router, x: h, y: routerLogits, m: M)
+            try k.zero(enc, counts)
+            if shared {
+                try k.gemv(enc, w.sharedGate, x: h, y: sharedG, m: M)
+                try k.gemv(enc, w.sharedUp, x: h, y: sharedU, m: M)
+                try k.gemv(enc, w.sharedExpertGate, x: h, y: sharedGate, m: M)
+            }
+        }
+        try k.parallel(enc) {
+            try k.moeRouter(enc, ids: ids, weights: rw, logits: routerLogits, rows: M, config: config)
+            if shared { try k.siluMul(enc, out: sharedAct, a: sharedG, b: sharedU, count: M * 512) }
+        }
+        if shared { try k.roundIfMimic(enc, x: sharedAct, count: M * 512) }
+        try k.parallel(enc) {
+            try k.moeBucket(enc, counts: counts, lists: lists, ids: ids, active: active, pairs: M * config.topK, capacity: capacityPairs)
+            if shared { try k.gemv(enc, w.sharedDown, x: sharedAct, y: sharedOut, m: M) }
+        }
         if !skipStages.contains("experts") {
             try k.moeGateUp(enc, act: act, x: h, experts: w.experts, counts: counts, lists: lists, active: active, maxActive: maxActive, capacity: capacityPairs, rows: M, config: config)
             try k.moeDown(enc, slotOut: slotOut, act: act, weights: rw, experts: w.experts, counts: counts, lists: lists, active: active, maxActive: maxActive, capacity: capacityPairs, rows: M, config: config)
-        }
-        if !skipStages.contains("shared") {
-            try k.gemv(enc, w.sharedGate, x: h, y: sharedG, m: M)
-            try k.gemv(enc, w.sharedUp, x: h, y: sharedU, m: M)
-            try k.siluMul(enc, out: sharedAct, a: sharedG, b: sharedU, count: M * 512)
-            try k.roundIfMimic(enc, x: sharedAct, count: M * 512)
-            try k.gemv(enc, w.sharedDown, x: sharedAct, y: sharedOut, m: M)
-            try k.gemv(enc, w.sharedExpertGate, x: h, y: sharedGate, m: M)
         }
         try k.moeCombine(enc, x: x, slotOut: slotOut, sharedOut: sharedOut, sharedGate: sharedGate, rows: M, config: config)
     }

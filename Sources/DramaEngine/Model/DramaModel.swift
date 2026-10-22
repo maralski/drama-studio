@@ -168,11 +168,11 @@ package final class DramaModel: @unchecked Sendable {
 
     /// GPU microseconds per dispatch of a 257-word zero_u32 run `count` times
     /// in one command buffer: the cost of a dispatch that does almost nothing.
-    /// A concurrent encoder drops the wait for each dispatch to finish before
-    /// the next starts, which leaves the launch cost alone.
-    package func dispatchFloor(count: Int, concurrent: Bool = false) throws -> Double {
+    /// The engine's encoder places a barrier before each; `unordered` drops
+    /// the barriers, which leaves the launch cost alone.
+    package func dispatchFloor(count: Int, unordered: Bool = false) throws -> Double {
         let (cb, enc): (MTLCommandBuffer, MTLComputeCommandEncoder)
-        if concurrent {
+        if unordered {
             let b = ctx.queue.makeCommandBuffer()!
             (cb, enc) = (b, b.makeComputeCommandEncoder(dispatchType: .concurrent)!)
         } else {
@@ -204,11 +204,63 @@ package final class DramaModel: @unchecked Sendable {
         let t0 = Date(); warmUp(); return Date().timeIntervalSince(t0)
     }
 
+    /// A command buffer with a concurrent encoder, ordered by the barriers the
+    /// kernels place (`Kernels.parallel`); the tracer's split passes when it is set.
     func commandBuffer() -> (MTLCommandBuffer, MTLComputeCommandEncoder) {
         let cb = ctx.queue.makeCommandBuffer()!
-        let enc = tracer?.encoder(for: cb) ?? cb.makeComputeCommandEncoder()!
+        let enc = tracer?.encoder(for: cb) ?? cb.makeComputeCommandEncoder(dispatchType: .concurrent)!
         enc.useResources(store.shards, usage: .read)
         return (cb, enc)
+    }
+
+    /// Counts every dispatch both stacks encode while set.
+    package var tally: DispatchTally? {
+        get { backbone.k.tally }
+        set { backbone.k.tally = newValue; tower.k.tally = newValue }
+    }
+
+    /// GPU milliseconds of the parts of one decode frame at `position`, each in
+    /// its own command buffer, on whatever the last session left in the buffers.
+    package func profileFrameParts(position p: Int, repeats: Int) throws -> [(String, [Double])] {
+        let params = SamplingParams(temperature: 0.7, topK: 30, topP: 0.7)
+        let k = tower.k, codebooks = weights.tower.codebookEmbeddings
+        func kp(n: Int, head: Int) -> SamplerKernelParams {
+            SamplerKernelParams(params, n: n, rngIn: 0, rngOut: 0, position: p, head: head, eos: config.eos, semanticStart: config.semanticStart, codebookSize: config.codebookSize)
+        }
+        let saved = backbone.frames.readInts(22, offset: p * 11)
+        defer { for i in 0..<22 { backbone.frames.ints[p * 11 + i] = saved[i] } }
+        let parts: [(String, (MTLComputeCommandEncoder) throws -> Void)] = [
+            ("sample_main", { enc in
+                try k.sampleMain(enc, logits: self.backbone.cand, rng: self.sampler.rng, frames: self.backbone.frames, code0: self.tower.codes[0],
+                                 semantic: self.tower.semantic, status: self.sampler.status, params: kp(n: self.config.codebookSize + 1, head: 0))
+            }),
+            ("tower layers and heads", { enc in
+                try self.tower.decodeShared(enc, hidden: self.backbone.hiddenOut, hiddenRow: 0, frames: self.backbone.framesView(p), pos: p, codebooks: codebooks)
+                for i in 1..<(self.config.numCodebooks - 1) { try self.tower.residualStep(enc, i, frames: self.backbone.framesView(p), pos: p, codebooks: codebooks) }
+            }),
+            ("sample_tower x9", { enc in
+                for head in 0..<(self.config.numCodebooks - 1) {
+                    try k.sampleTower(enc, logits: self.tower.headLogits, logitsOffset: head * self.config.codebookSize, rng: self.sampler.rng, frames: self.backbone.frames,
+                                      codeOut: self.tower.codes[head + 1], status: self.sampler.status, params: kp(n: self.config.codebookSize, head: head))
+                }
+            }),
+            ("backbone step and candidate logits", { enc in
+                try self.backbone.forward(enc, rows: 1, pos0: p + 1)
+                try self.backbone.candidateLogits(enc, row0: 0, rows: 1)
+            }),
+        ]
+        var out: [(String, [Double])] = parts.map { ($0.0, []) }
+        for _ in 0..<repeats {
+            for (i, part) in parts.enumerated() {
+                let (cb, enc) = commandBuffer()
+                try part.1(enc)
+                enc.endEncoding()
+                cb.commit(); cb.waitUntilCompleted()
+                if let e = cb.error { throw EngineError.badModel("\(e)") }
+                out[i].1.append((cb.gpuEndTime - cb.gpuStartTime) * 1000)
+            }
+        }
+        return out
     }
 
     /// Touches every weight page once, builds every pipeline state, and runs
@@ -269,6 +321,10 @@ package final class GenerationSession {
     package private(set) var towerHiddenStep0: [[Float]] = []
     /// GPU time of the completed frame command buffers.
     package private(set) var gpuSeconds: Double = 0
+    /// GPU end times of the completed frame command buffers. Pipelined frames
+    /// overlap in their start and end stamps, so the steady frame time is
+    /// the spacing of the end times.
+    package private(set) var gpuEndTimes: [Double] = []
 
     /// A committed frame command buffer. It samples the frame for `position`,
     /// writes it to frame row `position + 1`, and leaves the sampler's
@@ -370,6 +426,7 @@ package final class GenerationSession {
         job.commandBuffer.waitUntilCompleted()
         if let e = job.commandBuffer.error { throw EngineError.badModel("GPU error in decode: \(e)") }
         gpuSeconds += job.commandBuffer.gpuEndTime - job.commandBuffer.gpuStartTime
+        gpuEndTimes.append(job.commandBuffer.gpuEndTime)
         sampler.state = model.sampler.state(slot: job.rngSlot)
         inFlight?.startState = sampler.state
         guard model.sampler.statusWord(slot: job.rngSlot) == 0 else { throw EngineError.badModel("non-finite logits at position \(job.position)") }

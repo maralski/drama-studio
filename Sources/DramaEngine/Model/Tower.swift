@@ -73,28 +73,20 @@ final class Tower {
         let H = config.hiddenSize, I = config.towerIntermediate
         let heads = config.towerHeads, kvHeads = config.towerKVHeads
         let out = index % 2 == 0 ? hiddenA : hiddenB
-        try k.towerEmbed(enc, out: e, codes: codeBuf, semanticNext: semantic, table: w.embedding, frames: frames, framesOffset: 0,
-                         codebooks: codebooks, addUnseen: addUnseen, rows: M, config: config)
+        try k.parallel(enc) {
+            try k.towerEmbed(enc, out: e, codes: codeBuf, semanticNext: semantic, table: w.embedding, frames: frames, framesOffset: 0,
+                             codebooks: codebooks, addUnseen: addUnseen, rows: M, config: config)
+            try k.rmsnorm(enc, out: cat, outOffset: H, outStride: 2 * H, x: hidden, xOffset: hiddenOffset * H, view: .contiguous(H), rows: M, dim: H, w: w.hnorm, eps: config.towerNormEps)
+        }
         try k.roundIfMimic(enc, x: e, count: M * H)
         try k.rmsnorm(enc, out: cat, outStride: 2 * H, x: e, view: .contiguous(H), rows: M, dim: H, w: w.enorm, eps: config.towerNormEps)
-        try k.rmsnorm(enc, out: cat, outOffset: H, outStride: 2 * H, x: hidden, xOffset: hiddenOffset * H, view: .contiguous(H), rows: M, dim: H, w: w.hnorm, eps: config.towerNormEps)
         try k.roundIfMimic(enc, x: cat, count: M * 2 * H)
         try k.gemv(enc, w.ehProj, x: cat, y: mixed, m: M)
         try k.rmsnorm(enc, out: th, outStride: H, x: mixed, view: .contiguous(H), rows: M, dim: H, w: w.attentionNorm, eps: config.towerNormEps)
         try k.roundIfMimic(enc, x: th, count: M * H)
         try k.gemv(enc, w.wqkv, x: th, y: tqkv, m: M)
         let qView = HeadView(heads: UInt32(heads), groupStride: 9216, headStride: 256)
-        let kvView = HeadView(heads: UInt32(kvHeads), groupStride: 9216, headStride: 256)
-        try k.rmsnorm(enc, out: tqn, outStride: 256, x: tqkv, view: qView, rows: M * heads, dim: 256, w: w.qNorm, eps: config.towerNormEps)
-        try k.rmsnorm(enc, out: tkn, outStride: 256, x: tqkv, xOffset: 2 * heads * 256, view: kvView, rows: M * kvHeads, dim: 256, w: w.kNorm, eps: config.towerNormEps)
-        try k.roundIfMimic(enc, x: tqn, count: M * heads * 256)
-        try k.roundIfMimic(enc, x: tkn, count: M * kvHeads * 256)
-        try k.rope(enc, interleaved: true, x: tqn, heads: heads, rows: M * heads, pos0: pos0, rotaryDim: config.towerRotaryDim, theta: config.towerRopeBase)
-        try k.rope(enc, interleaved: true, x: tkn, heads: kvHeads, rows: M * kvHeads, pos0: pos0, rotaryDim: config.towerRotaryDim, theta: config.towerRopeBase)
-        try k.roundIfMimic(enc, x: tqn, count: M * heads * 256)
-        try k.roundIfMimic(enc, x: tkn, count: M * kvHeads * 256)
-        try k.kvWrite(enc, cache: kcache[index], src: tkn, srcOffset: 0, view: HeadView(heads: UInt32(kvHeads), groupStride: UInt32(kvHeads * 256), headStride: 256), kvHeads: kvHeads, rows: M, pos0: pos0)
-        try k.kvWrite(enc, cache: vcache[index], src: tqkv, srcOffset: 2 * heads * 256 + kvHeads * 256, view: kvView, kvHeads: kvHeads, rows: M, pos0: pos0)
+        try normRopeKV(enc, w, index: index, rows: M, pos0: pos0)
         try k.attention(enc, out: attnOut, q: tqn, kcache: kcache[index], vcache: vcache[index], heads: heads, kvHeads: kvHeads, rows: M, pos0: pos0)
         try k.roundIfMimic(enc, x: attnOut, count: M * heads * 256)
         try k.sigmoidGateMul(enc, out: gated, attn: attnOut, gate: tqkv, gateOffset: heads * 256, view: qView, rows: M * heads)
@@ -104,8 +96,10 @@ final class Tower {
         try k.roundIfMimic(enc, x: mixed, count: M * H)
         try k.rmsnorm(enc, out: th, outStride: H, x: mixed, view: .contiguous(H), rows: M, dim: H, w: w.ffnNorm, eps: config.towerNormEps)
         try k.roundIfMimic(enc, x: th, count: M * H)
-        try k.gemv(enc, w.w1, x: th, y: w1o, m: M)
-        try k.gemv(enc, w.w3, x: th, y: w3o, m: M)
+        try k.parallel(enc) {
+            try k.gemv(enc, w.w1, x: th, y: w1o, m: M)
+            try k.gemv(enc, w.w3, x: th, y: w3o, m: M)
+        }
         try k.siluMul(enc, out: ffAct, a: w1o, b: w3o, count: M * I)
         try k.roundIfMimic(enc, x: ffAct, count: M * I)
         try k.gemv(enc, w.w2, x: ffAct, y: ffOut, m: M)
@@ -118,6 +112,37 @@ final class Tower {
             try k.residualAdd(enc, x: layerCapture[index], y: out, count: H)
         }
         return out
+    }
+
+    /// The q and k norms, both ropes and both cache writes of layer `index`:
+    /// one dispatch in exact precision, the separate dispatches when the
+    /// reference rounds between the norm and the rope.
+    private func normRopeKV(_ enc: MTLComputeCommandEncoder, _ w: TowerLayerWeights, index: Int, rows M: Int, pos0: Int) throws {
+        let heads = config.towerHeads, kvHeads = config.towerKVHeads, eps = config.towerNormEps
+        let qView = HeadView(heads: UInt32(heads), groupStride: 9216, headStride: 256)
+        let kvView = HeadView(heads: UInt32(kvHeads), groupStride: 9216, headStride: 256)
+        let kOffset = 2 * heads * 256, vOffset = 2 * heads * 256 + kvHeads * 256
+        if !k.precision.mimicBF16 {
+            try k.normRopeKV(enc, .init(q: tqkv, qOffset: 0, qView: qView, qNorm: w.qNorm, k: tqkv, kOffset: kOffset, kView: kvView, kNorm: w.kNorm,
+                                        v: tqkv, vOffset: vOffset, vView: kvView, qOut: tqn, kcache: kcache[index], vcache: vcache[index],
+                                        heads: heads, kvHeads: kvHeads, rotaryDim: config.towerRotaryDim, theta: config.towerRopeBase, eps: eps, interleaved: true),
+                             rows: M, pos0: pos0)
+            return
+        }
+        try k.parallel(enc) {
+            try k.rmsnorm(enc, out: tqn, outStride: 256, x: tqkv, view: qView, rows: M * heads, dim: 256, w: w.qNorm, eps: eps)
+            try k.rmsnorm(enc, out: tkn, outStride: 256, x: tqkv, xOffset: kOffset, view: kvView, rows: M * kvHeads, dim: 256, w: w.kNorm, eps: eps)
+            try k.kvWrite(enc, cache: vcache[index], src: tqkv, srcOffset: vOffset, view: kvView, kvHeads: kvHeads, rows: M, pos0: pos0)
+        }
+        try k.roundIfMimic(enc, x: tqn, count: M * heads * 256)
+        try k.roundIfMimic(enc, x: tkn, count: M * kvHeads * 256)
+        try k.parallel(enc) {
+            try k.rope(enc, interleaved: true, x: tqn, heads: heads, rows: M * heads, pos0: pos0, rotaryDim: config.towerRotaryDim, theta: config.towerRopeBase)
+            try k.rope(enc, interleaved: true, x: tkn, heads: kvHeads, rows: M * kvHeads, pos0: pos0, rotaryDim: config.towerRotaryDim, theta: config.towerRopeBase)
+        }
+        try k.roundIfMimic(enc, x: tqn, count: M * heads * 256)
+        try k.roundIfMimic(enc, x: tkn, count: M * kvHeads * 256)
+        try k.kvWrite(enc, cache: kcache[index], src: tkn, srcOffset: 0, view: HeadView(heads: UInt32(kvHeads), groupStride: UInt32(kvHeads * 256), headStride: 256), kvHeads: kvHeads, rows: M, pos0: pos0)
     }
 
     /// Teacher-forces rows [pos0, pos0 + M): row p is labelled with frame p + 1.
