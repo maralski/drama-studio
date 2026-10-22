@@ -397,7 +397,8 @@ struct Kernels {
     }
     static let moePreRows = 256 + 2 * 512 + 1
     private static let moePreSimdgroups = 8
-    private static let moePostSimdgroups = 16
+    /// Simdgroups per moe_post_fp8 threadgroup: 2048 output columns, 2 per simdgroup, so 2048 / (2 * simdgroups) threadgroups.
+    var moePostSimdgroups = 16
     private static let moeDecodeRowsPerSimdgroup = 2
 
     func moePre(_ enc: MTLComputeCommandEncoder, pre: Buf, h: Buf, w: MoEWeights) throws {
@@ -436,7 +437,7 @@ struct Kernels {
         enc.setBuffer(pre.buffer, offset: pre.byteOffset, index: 5)
         enc.setBuffer(sharedDown.buffer, offset: sharedDown.offset, index: 6)
         set(enc, moeDecodeParams, index: 7)
-        let sg = Self.moePostSimdgroups
+        let sg = moePostSimdgroups
         try dispatchGroups(enc, "moe_post_fp8", groups: MTLSize(width: config.hiddenSize / (sg * Self.moeDecodeRowsPerSimdgroup), height: 1, depth: 1), group: MTLSize(width: 32 * sg, height: 1, depth: 1))
     }
 

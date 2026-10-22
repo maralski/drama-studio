@@ -140,8 +140,9 @@ package final class MoEDecodeRig {
         try k.moeCombine(enc, x: x, slotOut: slotOut, sharedOut: sharedOut, sharedGate: sharedGateOut, rows: 1, config: config)
     }
 
-    /// The decode layer: moe_pre_bf16, moe_mid_fp8, moe_post_fp8.
-    func decodeLayer(_ enc: MTLComputeCommandEncoder, _ l: Layer) throws {
+    /// The decode layer: moe_pre_bf16, moe_mid_fp8, moe_post_fp8, with `kernels` in place of the rig's own when given.
+    func decodeLayer(_ enc: MTLComputeCommandEncoder, _ l: Layer, kernels: Kernels? = nil) throws {
+        let k = kernels ?? self.k
         enc.useResource(l.pool, usage: .read)
         let w = l.weights
         try k.moePre(enc, pre: pre, h: h, w: w)
@@ -203,8 +204,13 @@ extension KernelBench {
         guard let loc = ModelLocation.huggingFaceCache() else { throw EngineError.badModel("config.json needed for the MoE shapes") }
         let config = try ModelConfig(url: loc.directory.appendingPathComponent("config.json"))
         let rig = try MoEDecodeRig(ctx: ctx, config: config, precision: .exact, copies: 8)
-        let variants: [DecodeVariant] = [("twelve dispatches", { enc, l in try rig.shippedLayer(enc, l) }),
+        var variants: [DecodeVariant] = [("twelve dispatches", { enc, l in try rig.shippedLayer(enc, l) }),
                                          ("three dispatches", { enc, l in try rig.decodeLayer(enc, l) })]
+        for sg in [32, 16, 8, 4] where sg != rig.k.moePostSimdgroups {
+            var k = rig.k
+            k.moePostSimdgroups = sg
+            variants.append(("post x\(sg)sg, \(2048 / (2 * sg)) tg", { enc, l in try rig.decodeLayer(enc, l, kernels: k) }))
+        }
         _ = try perLayer(rig, [variants[0]], repeats: 1, layers: layers)
         let ts = try perLayer(rig, variants, repeats: repeats, layers: layers)
         print("decode MoE layer, \(layers) layers per command buffer, \(repeats) repeats (per layer; GB/s at the min; speedup = median paired ratio to the first line)")
