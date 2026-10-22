@@ -667,6 +667,63 @@ thresholds. That holds for this one prompt only; the faithfulness gate above
 runs on a single prompt and would not catch the same kind of divergence on
 another.
 
+### Decode, second pass (2026-10-22)
+
+A second round on the decode frame, run as a hillclimb: seven experiments in
+small synthetic settings first, then one change at a time into the real
+frame, each kept only when the output stayed bit-identical and the frame got
+measurably shorter. The decision log is `.audit/hillclimb.tsv`.
+
+What the experiments established before anything changed. A decode frame was
+1312 dispatches streaming 5.94 GB of weights in 21.7 ms, and its large GEMVs
+already ran at 346 to 378 GB/s against a measured read ceiling of 383 GB/s.
+At that rate the bytes alone take 15.5 ms, so the 30 percent target of this
+round (14.6 ms) sits below what any kernel change can reach; fewer bytes per
+frame were the only route, and the only route that keeps the output exact is
+lossless compression. The bf16 mantissas carry 6.97 of 7 bits and are
+incompressible; the exponents carry about 2.8 bits of 8, so a 3-bit exponent
+code with a per-tile window and byte escapes packs a weight into 11.3 bits
+with exact round trip. The kernel that unpacks it is compute-bound at about
+285 GB/s of physical reads, so it wins only on the K=2048 shapes with wide N.
+
+What shipped, every step with a byte-identical dump and the faithfulness
+table unchanged (hidden 1.2e-6 relative L2 at most, top-1 1.0):
+
+| step | change | frame (bench rows 1, backbone + tower) |
+| --- | --- | --- |
+| baseline | | 21.1 ms |
+| MoE layer | one decode row's mixture of experts as three dispatches (bf16 router and shared pass, routing plus routed gate-up, routed down plus shared down plus combine), FP8 decoded with integer ops instead of the lookup table | 20.2 |
+| encoder | a concurrent compute encoder with a barrier before every dispatch except the later members of a sibling group (the four GDN input projections, q k v, w1 and w3, and so on); q/k norm, rope and the KV writes in one dispatch | 19.7 |
+| samplers | 256-thread sampling kernels in place of one 1024-thread threadgroup; no change on a quiet GPU, and 47 to 22 ms per frame when another GPU client is active, which is what a user with an animating window sees | 19.7 |
+| tower | embedding plus both concat norms in one dispatch, attention split over 8 threadgroups with an in-order combine and the gate folded in, the residual adds folded into wo and w2, w1 and w3 as one dispatch with the SiLU | 19.6 |
+| packed weights | eight weight families (GDN qkv and z, attention q, the semantic lm-head slice, tower wqkv, heads, w1 and w3) read from an exponent-coded copy at one row, 0.94 GB fewer bytes per frame | 18.2 |
+
+Reverted: a multi-matrix GEMV that grouped sibling projections into one
+dispatch (within noise once the concurrent encoder had taken the same gaps),
+more threadgroups for the MoE down kernel (each doubling cost 3 to 9 us per
+layer in its prologue), and the load folds of norms, gates and SiLU into the
+GEMVs (no gain on the tuned schedule). The frame went from 1312 dispatches
+to 759.
+
+The packed copy lives under `~/Library/Application Support/DramaStudio/Packed/`,
+2.1 GB per checkpoint, built on the first load in about two seconds across
+all cores and verified by a full unpack before it is used; a cache that fails
+to build or load falls back to bf16 with the reason logged, and
+`DRAMA_PACKED=0` turns it off without a rebuild. Prefill, chunk invariance
+and the prefix cache never touch it: every path with more than one row reads
+the bf16 shards as before.
+
+Caveats. Every number in this round was taken while another process held
+the GPU (the window server and a virtual machine, device utilization 100
+percent for the whole run), so the medians are usable but the ranges carry
+stalls and no end-to-end frames-per-second figure from this round is quoted;
+the shipped tune should be redone on a quiet GPU. Two steps were kept on the
+0.1 ms noise floor of the bench line (the concurrent encoder, which also
+showed a stall tail under that load that a quiet session has yet to settle,
+and the tower fusions, whose attention gain only shows at later positions).
+The remaining ideas are small: the MoE down kernel's prologue, and the w2
+and 4096x2048 families in the packed path.
+
 ## Streaming
 
 `GenerationConfig.streaming` decides when decoded audio leaves the engine.
