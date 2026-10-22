@@ -91,7 +91,7 @@ Every value type is `Sendable`. ``DramaSynthesizer``, ``MockSynthesizer`` and
 ``DramaSynthesizer`` runs one request at a time. A second request waits for the
 first to finish.
 
-`DramaEngineVersion.string` is the library's semantic version, `"1.0.0"`
+`DramaEngineVersion.string` is the library's semantic version, `"1.0.1"`
 for this release. `CHANGELOG.md` at the repository root lists what each
 release changed.
 

@@ -5,6 +5,17 @@ DramaEngine follows [semantic versioning](https://semver.org). The version is
 release removes a public symbol or changes what one means, a minor release
 adds one, and a patch release changes neither.
 
+## 1.0.1
+
+- `GenerationConfig.topP` at 1 or above now applies no nucleus cut: every
+  candidate up to `topK` stays eligible. Before, the cut compared the
+  cumulative mass against 1 on rounding noise, so on peaked rows the CPU
+  reference and the GPU sampler cut at different places and their random
+  streams drifted apart from the next row on (1073 of 2000 picks differed on
+  real tower logits at topK 600; now 0 of 60,000). Top-p below 1, which is
+  the whole range of the app's Expressiveness slider, is unchanged, and the
+  default-setting parity tests still pass.
+
 ## 1.0.0
 
 The first release of DramaEngine as a library for other macOS apps.
