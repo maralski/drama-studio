@@ -82,6 +82,11 @@ package final class MetalContext {
         }
     }
 
+    package func name(of pipeline: MTLComputePipelineState) -> String? {
+        lock.lock(); defer { lock.unlock() }
+        return pipelines.first { $0.value === pipeline }?.key
+    }
+
     package func pipeline(_ name: String) throws -> MTLComputePipelineState {
         lock.lock(); defer { lock.unlock() }
         if let p = pipelines[name] { return p }

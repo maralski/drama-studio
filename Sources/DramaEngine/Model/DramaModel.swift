@@ -28,6 +28,8 @@ package final class DramaModel: @unchecked Sendable {
     /// The frame command buffer a pipelined session committed last. A new
     /// session waits for it before it touches the shared buffers.
     private(set) var inFlight: MTLCommandBuffer?
+    /// While set, every command buffer the model makes times each dispatch.
+    package var tracer: DispatchTracer?
 
     package static let defaultCapacity = 8192 + 2048
     /// Rows per prefill command buffer. Every chunk walks all 30 GB of expert
@@ -164,13 +166,47 @@ package final class DramaModel: @unchecked Sendable {
         return try backbone.profile(rows: rows, makeCommandBuffer: commandBuffer)
     }
 
+    /// GPU microseconds per dispatch of a 257-word zero_u32 run `count` times
+    /// in one command buffer: the cost of a dispatch that does almost nothing.
+    /// A concurrent encoder drops the wait for each dispatch to finish before
+    /// the next starts, which leaves the launch cost alone.
+    package func dispatchFloor(count: Int, concurrent: Bool = false) throws -> Double {
+        let (cb, enc): (MTLCommandBuffer, MTLComputeCommandEncoder)
+        if concurrent {
+            let b = ctx.queue.makeCommandBuffer()!
+            (cb, enc) = (b, b.makeComputeCommandEncoder(dispatchType: .concurrent)!)
+        } else {
+            (cb, enc) = commandBuffer()
+        }
+        for _ in 0..<count { try backbone.k.zero(enc, backbone.counts) }
+        enc.endEncoding()
+        cb.commit(); cb.waitUntilCompleted()
+        if let e = cb.error { throw EngineError.badModel("\(e)") }
+        return (cb.gpuEndTime - cb.gpuStartTime) / Double(count) * 1e6
+    }
+
+    private lazy var heatScratch = (x: Buf(ctx.device, floats: config.hiddenSize, label: "heat.x"), y: Buf(ctx.device, floats: config.codebookSize, label: "heat.y"))
+
+    /// Commits, without waiting, `dispatches` GEMVs over the lm-head band, so
+    /// the next command buffer starts on a GPU already at its working clock,
+    /// as a frame does in pipelined decode. The last dispatch clears the
+    /// sampler status words, which sample_main rewrites before reading, so
+    /// the next frame's first dispatch waits for this buffer.
+    package func heat(dispatches: Int) throws {
+        let (cb, enc) = commandBuffer()
+        for _ in 0..<dispatches { try backbone.k.gemv(enc, weights.backbone.lmHeadSemantic, x: heatScratch.x, y: heatScratch.y, m: 1) }
+        try backbone.k.zero(enc, sampler.status)
+        enc.endEncoding()
+        cb.commit()
+    }
+
     package func benchWarmUp() -> Double {
         let t0 = Date(); warmUp(); return Date().timeIntervalSince(t0)
     }
 
     func commandBuffer() -> (MTLCommandBuffer, MTLComputeCommandEncoder) {
         let cb = ctx.queue.makeCommandBuffer()!
-        let enc = cb.makeComputeCommandEncoder()!
+        let enc = tracer?.encoder(for: cb) ?? cb.makeComputeCommandEncoder()!
         enc.useResources(store.shards, usage: .read)
         return (cb, enc)
     }
