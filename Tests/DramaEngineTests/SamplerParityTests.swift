@@ -141,8 +141,12 @@ final class SamplerParityTests: XCTestCase {
             let gpu = try harness.towerPicks(rows, start: start, settings: p)
             var cpu = Sampler(state: start)
             var mismatches = 0
-            for (i, row) in rows.enumerated() where cpu.sample(row, temperature: p.temperature, topK: p.topK, topP: p.topP) != gpu.picks[i] { mismatches += 1 }
-            XCTAssertEqual(mismatches, 0, "\(label) \(p): picks differ")
+            var firstMismatch = -1
+            for (i, row) in rows.enumerated() where cpu.sample(row, temperature: p.temperature, topK: p.topK, topP: p.topP) != gpu.picks[i] {
+                mismatches += 1
+                if firstMismatch < 0 { firstMismatch = i }
+            }
+            XCTAssertEqual(mismatches, 0, "\(label) \(p): picks differ, first at row \(firstMismatch)")
             XCTAssertEqual(cpu.state, gpu.end, "\(label) \(p): generator state differs")
         }
     }
@@ -157,7 +161,7 @@ final class SamplerParityTests: XCTestCase {
 
     func testRealTowerLogits() throws {
         guard let dump = try Self.dumpRows() else { throw XCTSkip("eval/out/perf/dump_before.npz not present") }
-        try checkTower(Self.cycled(dump.tower, count: Self.samplesPerSet), seed: 13, label: "real tower")
+        try checkTower(Self.cycled(dump.tower, count: Self.samplesPerSet), seed: 13, label: "real tower", settings: Self.settings + [Self.wide])
     }
 
     /// The main-token path: candidate mapping, the retry draw and the
