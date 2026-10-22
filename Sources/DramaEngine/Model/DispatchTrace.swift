@@ -95,15 +95,16 @@ package final class DispatchTracer {
     }
 
     /// Labels a decode frame's dispatches: the samplers, tower layer n (each
-    /// starts with tower_embed), and backbone layer n (each ends with moe_combine).
+    /// starts with tower_cat_norm at one row, tower_embed otherwise), and
+    /// backbone layer n (each ends with moe_post_fp8 at one row, moe_combine otherwise).
     static func phases(_ kernels: [String]) -> [String] {
         var phase = "frame", tower = -1, layer = 0, inBackbone = false
         return kernels.map { k in
             if k.hasPrefix("sample_") { return "sampler" }
-            if k == "tower_embed" { tower += 1; phase = "tower.\(tower)" }
+            if k == "tower_embed" || k == "tower_cat_norm" { tower += 1; phase = "tower.\(tower)" }
             if k == "embed_mix" { inBackbone = true; layer = 0; phase = "backbone.0" }
             let label = phase
-            if inBackbone && k == "moe_combine" { layer += 1; phase = "backbone.\(layer)" }
+            if inBackbone && (k == "moe_combine" || k == "moe_post_fp8") { layer += 1; phase = "backbone.\(layer)" }
             return label
         }
     }
