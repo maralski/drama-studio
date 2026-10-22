@@ -256,8 +256,11 @@ struct Kernels {
     }
 
     /// The tiled expert kernels serve every M above 1 (one tile, so a routed
-    /// row's result is the same in any chunk); one row runs the row kernels.
+    /// row's result is the same in any chunk). The one-row kernels are the
+    /// reference the tiled kernels and the three-dispatch decode layer are
+    /// checked against; the decode forward runs `moePre`, `moeMid`, `moePost`.
     private func moeTiled(rows: Int) -> Bool { rows > 1 && !forceMoeRows }
+    private static let moeRowSimdgroups = 8
 
     private func moeParams(capacity: Int, config: ModelConfig) -> (UInt32, UInt32, UInt32, UInt32, UInt32, UInt32) {
         (UInt32(config.hiddenSize), UInt32(config.moeIntermediate), UInt32(config.topK), UInt32(capacity),
@@ -278,7 +281,7 @@ struct Kernels {
             let t = schedule.moeTile
             try dispatchGroups(enc, "moe_gate_up_fp8_tiled_\(t.label)", groups: MTLSize(width: maxActive, height: config.moeIntermediate / t.bn, depth: 1), group: MTLSize(width: 4 * t.bn, height: 1, depth: 1))
         } else {
-            let sg = schedule.moeRowSimdgroups
+            let sg = Self.moeRowSimdgroups
             try dispatchGroups(enc, "moe_gate_up_fp8", groups: MTLSize(width: maxActive, height: config.moeIntermediate / sg, depth: 1), group: MTLSize(width: 32 * sg, height: 1, depth: 1))
         }
     }
@@ -298,9 +301,62 @@ struct Kernels {
             let t = schedule.moeTile
             try dispatchGroups(enc, "moe_down_fp8_tiled_\(t.label)", groups: MTLSize(width: maxActive, height: config.hiddenSize / t.bn, depth: 1), group: MTLSize(width: 4 * t.bn, height: 1, depth: 1))
         } else {
-            let sg = schedule.moeRowSimdgroups
+            let sg = Self.moeRowSimdgroups
             try dispatchGroups(enc, "moe_down_fp8", groups: MTLSize(width: maxActive, height: config.hiddenSize / sg, depth: 1), group: MTLSize(width: 32 * sg, height: 1, depth: 1))
         }
+    }
+
+    // The MoE layer of one decode row in three dispatches (MoEDecode.metal),
+    // bit-identical to the twelve dispatches of the M > 1 path at one row.
+    // `pre` holds [router logits | shared gate | shared up | expert gate].
+
+    private struct MoEDecodeParams { var roundWeights: UInt32; var roundOutput: UInt32 }
+    private var moeDecodeParams: MoEDecodeParams {
+        MoEDecodeParams(roundWeights: precision.roundExpertWeights ? 1 : 0, roundOutput: precision.mimicBF16 ? 1 : 0)
+    }
+    static let moePreRows = 256 + 2 * 512 + 1
+    private static let moePreSimdgroups = 8
+    private static let moePostSimdgroups = 16
+    private static let moeDecodeRowsPerSimdgroup = 2
+
+    func moePre(_ enc: MTLComputeCommandEncoder, pre: Buf, h: Buf, w: MoEWeights) throws {
+        enc.setBuffer(pre.buffer, offset: pre.byteOffset, index: 0)
+        enc.setBuffer(h.buffer, offset: h.byteOffset, index: 1)
+        enc.setBuffer(w.router.buffer, offset: w.router.offset, index: 2)
+        enc.setBuffer(w.sharedGate.buffer, offset: w.sharedGate.offset, index: 3)
+        enc.setBuffer(w.sharedUp.buffer, offset: w.sharedUp.offset, index: 4)
+        enc.setBuffer(w.sharedExpertGate.buffer, offset: w.sharedExpertGate.offset, index: 5)
+        set(enc, moeDecodeParams, index: 6)
+        let sg = Self.moePreSimdgroups
+        try dispatchGroups(enc, "moe_pre_bf16", groups: MTLSize(width: (Self.moePreRows + sg - 1) / sg, height: 1, depth: 1), group: MTLSize(width: 32 * sg, height: 1, depth: 1))
+    }
+
+    /// Routes the row from the logits in `pre` into `ids` and `rw`, and runs
+    /// the routed gate-up into `act`, slot by slot.
+    func moeMid(_ enc: MTLComputeCommandEncoder, act: Buf, h: Buf, experts: MTLBuffer, pre: Buf, ids: Buf, rw: Buf, config: ModelConfig) throws {
+        enc.setBuffer(act.buffer, offset: act.byteOffset, index: 0)
+        enc.setBuffer(h.buffer, offset: h.byteOffset, index: 1)
+        enc.setBuffer(experts, offset: 0, index: 2)
+        enc.setBuffer(pre.buffer, offset: pre.byteOffset, index: 3)
+        enc.setBuffer(ids.buffer, offset: ids.byteOffset, index: 4)
+        enc.setBuffer(rw.buffer, offset: rw.byteOffset, index: 5)
+        set(enc, moeDecodeParams, index: 6)
+        let rowsPerGroup = 8 * Self.moeDecodeRowsPerSimdgroup
+        try dispatchGroups(enc, "moe_mid_fp8", groups: MTLSize(width: config.topK, height: config.moeIntermediate / rowsPerGroup, depth: 1), group: MTLSize(width: 256, height: 1, depth: 1))
+    }
+
+    /// x += the weighted routed down projections plus the gated shared down projection.
+    func moePost(_ enc: MTLComputeCommandEncoder, x: Buf, act: Buf, experts: MTLBuffer, ids: Buf, rw: Buf, pre: Buf, sharedDown: TensorRef, config: ModelConfig) throws {
+        enc.setBuffer(x.buffer, offset: x.byteOffset, index: 0)
+        enc.setBuffer(act.buffer, offset: act.byteOffset, index: 1)
+        enc.setBuffer(experts, offset: 0, index: 2)
+        enc.setBuffer(ids.buffer, offset: ids.byteOffset, index: 3)
+        enc.setBuffer(rw.buffer, offset: rw.byteOffset, index: 4)
+        enc.setBuffer(pre.buffer, offset: pre.byteOffset, index: 5)
+        enc.setBuffer(sharedDown.buffer, offset: sharedDown.offset, index: 6)
+        set(enc, moeDecodeParams, index: 7)
+        let sg = Self.moePostSimdgroups
+        try dispatchGroups(enc, "moe_post_fp8", groups: MTLSize(width: config.hiddenSize / (sg * Self.moeDecodeRowsPerSimdgroup), height: 1, depth: 1), group: MTLSize(width: 32 * sg, height: 1, depth: 1))
     }
 
     func moeCombine(_ enc: MTLComputeCommandEncoder, x: Buf, slotOut: Buf, sharedOut: Buf, sharedGate: Buf, rows: Int, config: ModelConfig) throws {

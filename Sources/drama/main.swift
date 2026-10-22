@@ -391,7 +391,9 @@ func scheduleAB(_ args: Args) throws {
 }
 
 /// drama kbench --n 8192 --k 2048 [--ms 2,8,32,128]
+/// drama kbench --moe-decode [--layers 40] [--repeats 20]
 func kbench(_ args: Args) throws {
+    if args.flags.contains("moe-decode") { try KernelBench.moeDecode(layers: args.int("layers", 40), repeats: args.int("repeats", 20)); return }
     let ms = (args["ms"] ?? "2,4,8,16,32,64,128").split(separator: ",").compactMap { Int($0) }
     if args.flags.contains("moe") { try KernelBench.moe(rowCounts: ms, iterations: args.int("iterations", 5)); return }
     try KernelBench.denseMatmul(n: args.int("n", 8192), k: args.int("k", 2048), ms: ms, iterations: args.int("iterations", 5))

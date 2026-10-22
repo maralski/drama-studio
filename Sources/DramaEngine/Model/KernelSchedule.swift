@@ -39,8 +39,6 @@ package struct KernelSchedule: Codable, Equatable, Sendable {
     package var gemmTile = GemmTile(bm: 32, bn: 32, bk: 16)
     /// Routed experts with M > 1; one tile for every such M.
     package var moeTile = MoETile(bn: 32, rows: 32, bk: 16)
-    /// Rows per threadgroup of the one-row expert kernels (M == 1).
-    package var moeRowSimdgroups = 8
     /// Key split of the attention kernel for one query row.
     package var attentionSplitDecode = 8
     /// Key split of the attention kernel for a chunk of rows.
@@ -69,7 +67,6 @@ package struct KernelSchedule: Codable, Equatable, Sendable {
             [16, 32].compactMap { bk in bn == 64 && rows == 64 ? nil : MoETile(bn: bn, rows: rows, bk: bk) }
         }
     }
-    package static let moeRowSimdgroups = [2, 4, 8, 16]
     package static let attentionSplits = [4, 8, 16]
     package static let gdnParts = [1, 2, 4, 8]
 
@@ -85,7 +82,6 @@ package struct KernelSchedule: Codable, Equatable, Sendable {
         }
         try check(Self.gemmTiles.contains(gemmTile), "gemmTile", gemmTile.label)
         try check(Self.moeTiles.contains(moeTile), "moeTile", moeTile.label)
-        try check(Self.moeRowSimdgroups.contains(moeRowSimdgroups), "moeRowSimdgroups", "\(moeRowSimdgroups)")
         try check(Self.attentionSplits.contains(attentionSplitDecode), "attentionSplitDecode", "\(attentionSplitDecode)")
         try check(Self.attentionSplits.contains(attentionSplitPrefill), "attentionSplitPrefill", "\(attentionSplitPrefill)")
         try check(Self.gdnParts.contains(gdnPartsDecode), "gdnPartsDecode", "\(gdnPartsDecode)")

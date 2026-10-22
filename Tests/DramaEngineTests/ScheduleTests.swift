@@ -7,7 +7,7 @@ import XCTest
 final class ScheduleTests: XCTestCase {
     func testEveryDomainValueHasAPipeline() throws {
         let ctx = try MetalContext()
-        var names: [String] = ["attention", "moe_gate_up_fp8", "moe_down_fp8"]
+        var names: [String] = ["attention", "moe_gate_up_fp8", "moe_down_fp8", "moe_pre_bf16", "moe_mid_fp8", "moe_post_fp8"]
         names += KernelSchedule.gemvTokenTiles.map { "gemv_bf16_t\($0)" }
         names += KernelSchedule.gemmTiles.map { "gemm_bf16_\($0.label)" }
         names += KernelSchedule.moeTiles.flatMap { ["moe_gate_up_fp8_tiled_\($0.label)", "moe_down_fp8_tiled_\($0.label)"] }
@@ -18,9 +18,7 @@ final class ScheduleTests: XCTestCase {
         XCTAssertEqual(KernelSchedule.moeTiles.count, 10)
         let threads = try ctx.pipeline("attention").maxTotalThreadsPerThreadgroup
         XCTAssertGreaterThanOrEqual(threads, 32 * KernelSchedule.attentionSplits.max()!)
-        for sg in KernelSchedule.moeRowSimdgroups {
-            XCTAssertLessThanOrEqual(32 * sg, try ctx.pipeline("moe_gate_up_fp8").maxTotalThreadsPerThreadgroup, "simdgroups \(sg)")
-        }
+        XCTAssertGreaterThanOrEqual(try ctx.pipeline("moe_post_fp8").maxTotalThreadsPerThreadgroup, 512)
     }
 
     func testValidateRejectsOutOfDomainValues() throws {
@@ -30,7 +28,6 @@ final class ScheduleTests: XCTestCase {
             ("gemvNarrow.simdgroups 3", { $0.gemvNarrow.simdgroups = 3 }),
             ("gemmTile 48x32x16", { $0.gemmTile = .init(bm: 48, bn: 32, bk: 16) }),
             ("moeTile 64x64x16", { $0.moeTile = .init(bn: 64, rows: 64, bk: 16) }),
-            ("moeRowSimdgroups 3", { $0.moeRowSimdgroups = 3 }),
             ("attentionSplitDecode 5", { $0.attentionSplitDecode = 5 }),
             ("attentionSplitPrefill 2", { $0.attentionSplitPrefill = 2 }),
             ("gdnPartsDecode 3", { $0.gdnPartsDecode = 3 }),

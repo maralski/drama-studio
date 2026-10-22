@@ -21,6 +21,7 @@ final class Backbone {
     let qn: Buf, kbuf: Buf, vbuf: Buf, kn: Buf, attnOut: Buf, mixOut: Buf
     let routerLogits: Buf, ids: Buf, rw: Buf, counts: Buf, lists: Buf, active: Buf, act: Buf, slotOut: Buf
     let sharedG: Buf, sharedU: Buf, sharedAct: Buf, sharedOut: Buf, sharedGate: Buf
+    let pre: Buf             // one decode row's router logits, shared gate and up, expert gate
     let hiddenOut: Buf       // [maxRows, 2048] final-norm output
     let cand: Buf            // [codebookSize + 1] candidate logits: eos, then the semantic band
     /// Residual stream after each layer for the first row (dump support).
@@ -28,7 +29,9 @@ final class Backbone {
     var captureRow: Int = 0
     /// Benchmark aid: stages named here are not encoded: "linear", "full", "moe",
     /// or within them "gdn" (conv and recurrence), "attn" (the attention core),
-    /// "experts" (the routed FP8 experts), "shared" (the shared expert).
+    /// "experts" (the routed FP8 experts), "shared" (the shared expert). At one
+    /// row the MoE layer is three dispatches, so "experts" and "shared" apply
+    /// only to chunks of more rows.
     var skipStages: Set<String> = []
     private(set) var layerCapture: [Buf] = []
 
@@ -59,6 +62,7 @@ final class Backbone {
         sharedG = Buf(d, floats: R * 512, label: "sharedG"); sharedU = Buf(d, floats: R * 512, label: "sharedU")
         sharedAct = Buf(d, floats: R * 512, label: "sharedAct"); sharedOut = Buf(d, floats: R * H, label: "sharedOut")
         sharedGate = Buf(d, floats: R, label: "sharedGate")
+        pre = Buf(d, floats: Kernels.moePreRows, label: "moePre")
         hiddenOut = Buf(d, floats: R * H, label: "hiddenOut")
         cand = Buf(d, floats: config.codebookSize + 1, label: "cand")
         for (i, type) in config.layerTypes.enumerated() {
@@ -189,6 +193,14 @@ final class Backbone {
             try k.sigmoidGateMul(enc, out: normed, attn: attnOut, gate: big, gateOffset: 256, view: HeadView(heads: UInt32(heads), groupStride: UInt32(heads * 512), headStride: 512), rows: M * heads)
             try k.gemv(enc, fw.oProj, x: normed, y: mixOut, m: M)
         }
+        if M == 1 {
+            try group("moe.pre", layers: c.numLayers) { enc in try k.moePre(enc, pre: pre, h: h, w: mw) }
+            try group("moe.mid", layers: c.numLayers) { enc in try k.moeMid(enc, act: act, h: h, experts: mw.experts, pre: pre, ids: ids, rw: rw, config: c) }
+            try group("moe.post", layers: c.numLayers) { enc in
+                try k.moePost(enc, x: x, act: act, experts: mw.experts, ids: ids, rw: rw, pre: pre, sharedDown: mw.sharedDown, config: c)
+            }
+            return out
+        }
         try group("moe.router+bucket", layers: c.numLayers) { enc in
             try k.gemv(enc, mw.router, x: h, y: routerLogits, m: M)
             try k.moeRouter(enc, ids: ids, weights: rw, logits: routerLogits, rows: M, config: c)
@@ -272,6 +284,12 @@ final class Backbone {
     }
 
     private func moe(_ enc: MTLComputeCommandEncoder, _ w: MoEWeights, rows M: Int) throws {
+        if M == 1 {
+            try k.moePre(enc, pre: pre, h: h, w: w)
+            try k.moeMid(enc, act: act, h: h, experts: w.experts, pre: pre, ids: ids, rw: rw, config: config)
+            try k.moePost(enc, x: x, act: act, experts: w.experts, ids: ids, rw: rw, pre: pre, sharedDown: w.sharedDown, config: config)
+            return
+        }
         let capacityPairs = maxRows * config.topK
         try k.gemv(enc, w.router, x: h, y: routerLogits, m: M)
         try k.moeRouter(enc, ids: ids, weights: rw, logits: routerLogits, rows: M, config: config)

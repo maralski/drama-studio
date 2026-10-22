@@ -230,7 +230,6 @@ package enum Autotune {
         Field("gemv.narrow", .prefill, \.gemvNarrow),
         Field("gemm.prefill", .prefill, \.gemmTile),
         Field("moe.tiled", .prefill, \.moeTile),
-        Field("moe.rows", .decode, \.moeRowSimdgroups),
         Field("attention.decode", .decode, \.attentionSplitDecode),
         Field("attention.prefill", .prefill, \.attentionSplitPrefill),
         Field("gdn.decode", .decode, \.gdnPartsDecode),
@@ -440,14 +439,15 @@ extension Autotune {
                 seedInputs: seed))
         }
 
-        // moe.tiled and moe.rows: the routed experts, routed by the real router
-        // on the captured hidden states (the first row for moe.rows).
-        func moeEntry(name: String, rowCounts: [Int], candidates: [Candidate]) -> Entry {
+        // moe.tiled: the routed experts, routed by the real router on the
+        // captured hidden states.
+        do {
+            let rowCounts = [300, 128, 32]
             let rows = rowCounts.max()!
             let seed = { moeInput.withUnsafeBufferPointer { _ = memcpy(bb.h.floats, $0.baseAddress!, rows * H * 4) } }
-            return Entry(
-                name: name,
-                candidates: candidates,
+            entries.append(Entry(
+                name: "moe.tiled",
+                candidates: Candidate.over(\.moeTile, KernelSchedule.moeTiles, label: \.label),
                 layers: 10,
                 encode: { enc, k, i in
                     let mw = weights.backbone.layers[i].moe
@@ -462,10 +462,8 @@ extension Autotune {
                     }
                 },
                 outputs: { bb.act.read(rows * c.topK * c.moeIntermediate) + bb.slotOut.read(rows * c.topK * H) },
-                seedInputs: seed)
+                seedInputs: seed))
         }
-        entries.append(moeEntry(name: "moe.tiled", rowCounts: [300, 128, 32], candidates: Candidate.over(\.moeTile, KernelSchedule.moeTiles, label: \.label)))
-        entries.append(moeEntry(name: "moe.rows", rowCounts: [1], candidates: Candidate.over(\.moeRowSimdgroups, KernelSchedule.moeRowSimdgroups, label: { "\($0)sg" })))
 
         // attention.decode and attention.prefill over the backbone's full
         // layers and the tower's caches, 16 heads over 2 KV heads in both.

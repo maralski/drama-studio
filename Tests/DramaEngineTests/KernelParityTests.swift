@@ -126,17 +126,6 @@ extension KernelParityTests {
             XCTAssertEqual(got.1, tiled.1, "tile \(tile.label)")
         }
 
-        // The one-row kernels only change which rows share a threadgroup.
-        for sg in KernelSchedule.moeRowSimdgroups {
-            var s = KernelSchedule.default
-            s.moeRowSimdgroups = sg
-            var k = Kernels(ctx: f.ctx, precision: .exact, schedule: s)
-            k.forceMoeRows = true
-            let got = try run(k, moe)
-            XCTAssertEqual(got.0, byRows.0, "simdgroups \(sg)")
-            XCTAssertEqual(got.1, byRows.1, "simdgroups \(sg)")
-        }
-
         // A routed row's result must not depend on which other rows share its chunk.
         let part = KernelBench.SyntheticMoE(prefixOf: moe, rows: 11, device: f.ctx.device)
         let partial = try run(f.k, part)
