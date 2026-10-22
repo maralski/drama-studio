@@ -1,0 +1,43 @@
+#!/usr/bin/env python3
+"""Runs one command while holding the machine's GPU lock, so timed GPU runs and
+model loads never overlap: one `drama` process, one benchmark, one test binary
+that loads the model, at a time.
+
+  tools/with-gpu-lock .build/release/drama bench
+  tools/with-gpu-lock swift test --filter KernelParityTests
+
+Waits for the lock (prints a line while waiting), runs the command with this
+process's stdin, stdout and stderr, and exits with the command's status. The
+lock file is ~/Library/Application Support/DramaStudio/gpu.lock."""
+import fcntl, os, subprocess, sys, time
+
+LOCK = os.path.expanduser("~/Library/Application Support/DramaStudio/gpu.lock")
+
+def main():
+    if len(sys.argv) < 2:
+        sys.exit("usage: tools/with-gpu-lock <command> [args...]")
+    os.makedirs(os.path.dirname(LOCK), exist_ok=True)
+    with open(LOCK, "a+") as lock:
+        waited = 0
+        while True:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if waited == 0:
+                    lock.seek(0)
+                    print(f"with-gpu-lock: waiting for {lock.read().strip() or 'another run'}", file=sys.stderr, flush=True)
+                time.sleep(2)
+                waited += 2
+        lock.seek(0); lock.truncate()
+        lock.write(f"pid {os.getpid()}: {' '.join(sys.argv[1:])[:200]}\n"); lock.flush()
+        if waited:
+            print(f"with-gpu-lock: acquired after {waited} s", file=sys.stderr, flush=True)
+        try:
+            status = subprocess.call(sys.argv[1:])
+        finally:
+            lock.seek(0); lock.truncate()
+        sys.exit(status)
+
+if __name__ == "__main__":
+    main()
