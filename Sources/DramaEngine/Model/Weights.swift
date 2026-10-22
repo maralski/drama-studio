@@ -1,9 +1,40 @@
 import Foundation
 import Metal
 
+/// `rows` consecutive rows of the named bf16 tensor: the identity of one
+/// matrix of an exponent-coded family, in the packed cache's manifest too.
+struct DenseMatrix: Hashable, Codable {
+    let name: String
+    let rowOffset: Int
+    let rows: Int
+    let cols: Int
+}
+
+/// A bf16 matrix of a family the decode path may read exponent-coded. One
+/// row of a `.coded` matrix runs the packed GEMV; every other call, and
+/// every M > 1, reads the bf16 tensor as before.
+enum DenseWeight {
+    case bf16(TensorRef)
+    case coded(PackedBF16, bf16: TensorRef)
+
+    var bf16: TensorRef {
+        switch self {
+        case .bf16(let t), .coded(_, bf16: let t): return t
+        }
+    }
+
+    /// Bytes one decode row streams.
+    var byteCount: Int {
+        switch self {
+        case .bf16(let t): return t.byteCount
+        case .coded(let p, _): return p.byteCount
+        }
+    }
+}
+
 struct LinearAttentionWeights {
-    let inProjQKV: TensorRef   // [8192, 2048]
-    let inProjZ: TensorRef     // [4096, 2048]
+    let inProjQKV: DenseWeight   // [8192, 2048]
+    let inProjZ: DenseWeight     // [4096, 2048]
     let inProjA: TensorRef     // [32, 2048]
     let inProjB: TensorRef     // [32, 2048]
     let conv: TensorRef           // [8192, 1, 4]
@@ -14,7 +45,7 @@ struct LinearAttentionWeights {
 }
 
 struct FullAttentionWeights {
-    let qProj: TensorRef   // [8192, 2048] rows are [q | gate] per head
+    let qProj: DenseWeight   // [8192, 2048] rows are [q | gate] per head
     let kProj: TensorRef   // [512, 2048]
     let vProj: TensorRef   // [512, 2048]
     let oProj: TensorRef   // [2048, 4096]
@@ -49,7 +80,7 @@ struct BackboneWeights {
     let finalNorm: TensorRef
     /// The only lm_head rows the engine reads: the eos row, and the semantic band.
     let lmHeadEos: TensorRef      // [1, 2048]
-    let lmHeadSemantic: TensorRef // [4096, 2048]
+    let lmHeadSemantic: DenseWeight // [4096, 2048]
     let layers: [BackboneLayerWeights]
 }
 
@@ -60,12 +91,12 @@ struct TowerLayerWeights {
     let ehProj: TensorRef   // [2048, 4096]
     let attentionNorm: TensorRef
     let ffnNorm: TensorRef
-    let wqkv: TensorRef     // [9216, 2048] rows [Q | Gate | K | V]
+    let wqkv: DenseWeight   // [9216, 2048] rows [Q | Gate | K | V]
     let wo: TensorRef       // [2048, 4096]
     let qNorm: TensorRef
     let kNorm: TensorRef
-    let w1: TensorRef       // [6144, 2048]
-    let w3: TensorRef       // [6144, 2048]
+    let w1: DenseWeight     // [6144, 2048]
+    let w3: DenseWeight     // [6144, 2048]
     let w2: TensorRef       // [2048, 6144]
     let finalNorm: TensorRef
 }
@@ -74,7 +105,7 @@ struct TowerWeights {
     let codebookEmbeddings: TensorRef  // [40960, 2048]
     let shared: [TowerLayerWeights]
     let residual: [TowerLayerWeights]
-    let heads: [TensorRef]          // 9 x [4096, 2048]
+    let heads: [DenseWeight]        // 9 x [4096, 2048]
 }
 
 /// Every weight the engine reads, in place in the mapped shards.
@@ -82,7 +113,9 @@ struct ModelWeights {
     let backbone: BackboneWeights
     let tower: TowerWeights
 
-    init(store: SafeTensorsStore, config: ModelConfig, device: MTLDevice) throws {
+    /// `coded` is asked once per matrix of the exponent-coded families, in
+    /// load order, for the packed form one decode row reads; nil keeps bf16.
+    init(store: SafeTensorsStore, config: ModelConfig, device: MTLDevice, coded: (DenseMatrix, TensorRef) -> PackedBF16? = { _, _ in nil }) throws {
         let H = config.hiddenSize
         func t(_ name: String, _ dtype: TensorDType, _ shape: [Int]) throws -> TensorRef {
             let ref = try store.tensor(name).expect(dtype, shape)
@@ -96,6 +129,10 @@ struct ModelWeights {
             }
             guard ref.offset % 8 == 0 else { throw EngineError.badModel("\(name) is not 8-byte aligned") }
             return TensorRef(name: name, dtype: .bf16, shape: [rows, cols], buffer: ref.buffer, offset: ref.offset + rowOffset * cols * 2)
+        }
+        func d(_ name: String, _ rows: Int, _ cols: Int, rowOffset: Int = 0) throws -> DenseWeight {
+            let ref = try m(name, rows, cols, rowOffset: rowOffset)
+            return coded(DenseMatrix(name: name, rowOffset: rowOffset, rows: rows, cols: cols), ref).map { .coded($0, bf16: ref) } ?? .bf16(ref)
         }
         func experts(layer: Int, prefix: String) throws -> MTLBuffer {
             let I = config.moeIntermediate
@@ -122,8 +159,8 @@ struct ModelWeights {
             switch config.layerTypes[i] {
             case .linear:
                 mixer = .linear(LinearAttentionWeights(
-                    inProjQKV: try m(p + "linear_attn.in_proj_qkv.weight", 8192, H),
-                    inProjZ: try m(p + "linear_attn.in_proj_z.weight", 4096, H),
+                    inProjQKV: try d(p + "linear_attn.in_proj_qkv.weight", 8192, H),
+                    inProjZ: try d(p + "linear_attn.in_proj_z.weight", 4096, H),
                     inProjA: try m(p + "linear_attn.in_proj_a.weight", 32, H),
                     inProjB: try m(p + "linear_attn.in_proj_b.weight", 32, H),
                     conv: try t(p + "linear_attn.conv1d.weight", .bf16, [8192, 1, 4]),
@@ -133,7 +170,7 @@ struct ModelWeights {
                     outProj: try m(p + "linear_attn.out_proj.weight", H, 4096)))
             case .full:
                 mixer = .full(FullAttentionWeights(
-                    qProj: try m(p + "self_attn.q_proj.weight", 8192, H),
+                    qProj: try d(p + "self_attn.q_proj.weight", 8192, H),
                     kProj: try m(p + "self_attn.k_proj.weight", 512, H),
                     vProj: try m(p + "self_attn.v_proj.weight", 512, H),
                     oProj: try m(p + "self_attn.o_proj.weight", H, 4096),
@@ -156,7 +193,7 @@ struct ModelWeights {
             embed: try t("model.language_model.embed_tokens.weight", .bf16, [config.vocabSize, H]),
             finalNorm: try t("model.language_model.norm.weight", .bf16, [H]),
             lmHeadEos: try m("lm_head.weight", 1, H, rowOffset: Int(config.eos)),
-            lmHeadSemantic: try m("lm_head.weight", config.codebookSize, H, rowOffset: Int(config.semanticStart)),
+            lmHeadSemantic: try d("lm_head.weight", config.codebookSize, H, rowOffset: Int(config.semanticStart)),
             layers: layers)
 
         func towerLayer(_ p: String, embeddingName: String) throws -> TowerLayerWeights {
@@ -169,12 +206,12 @@ struct ModelWeights {
                 ehProj: try m(p + "eh_proj.weight", H, 2 * H),
                 attentionNorm: try t(p + "transformer_layer.attention_norm.weight", .bf16, [H]),
                 ffnNorm: try t(p + "transformer_layer.ffn_norm.weight", .bf16, [H]),
-                wqkv: try m(a + "wqkv.weight", 9216, H),
+                wqkv: try d(a + "wqkv.weight", 9216, H),
                 wo: try m(a + "wo.weight", H, 4096),
                 qNorm: try t(a + "q_norm.weight", .bf16, [256]),
                 kNorm: try t(a + "k_norm.weight", .bf16, [256]),
-                w1: try m(f + "w1.weight", config.towerIntermediate, H),
-                w3: try m(f + "w3.weight", config.towerIntermediate, H),
+                w1: try d(f + "w1.weight", config.towerIntermediate, H),
+                w3: try d(f + "w3.weight", config.towerIntermediate, H),
                 w2: try m(f + "w2.weight", H, config.towerIntermediate),
                 finalNorm: try t(p + "final_layernorm.weight", .bf16, [H]))
         }
@@ -182,6 +219,6 @@ struct ModelWeights {
             codebookEmbeddings: try t("audio_decoder.codebook_embeddings.weight", .bf16, [config.codebookSize * config.numCodebooks, H]),
             shared: try (0..<config.towerLayers).map { try towerLayer("audio_decoder_mtp_shared.layers.\($0).", embeddingName: "semantic_embedding") },
             residual: try (0..<(config.numCodebooks - 1)).map { try towerLayer("audio_decoder_mtp.layers.\($0).", embeddingName: "codebook_embedding") },
-            heads: try (0..<(config.numCodebooks - 1)).map { try m("audio_decoder_mtp.heads.\($0).weight", config.codebookSize, H) })
+            heads: try (0..<(config.numCodebooks - 1)).map { try d("audio_decoder_mtp.heads.\($0).weight", config.codebookSize, H) })
     }
 }

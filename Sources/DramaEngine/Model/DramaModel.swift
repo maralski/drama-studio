@@ -20,6 +20,28 @@ package final class DramaModel: @unchecked Sendable {
     }
     package internal(set) var scheduleSource: ScheduleSource
     package let tuningKey: TuningKey
+    /// Where the decode families' exponent-coded form came from, or why
+    /// they stayed bf16.
+    package enum PackedSource: Equatable, Sendable {
+        /// `DRAMA_PACKED=0`: every family stays bf16.
+        case disabled
+        /// The cache could neither be loaded nor built; every family stays bf16.
+        case unavailable(reason: String)
+        /// Mapped from a complete, verified cache.
+        case loaded(URL, bytes: Int)
+        /// Packed, verified and written on this load, then mapped.
+        case built(URL, bytes: Int, seconds: Double)
+
+        /// Whether one row of a coded family runs the packed GEMV.
+        package var isPacked: Bool {
+            switch self {
+            case .loaded, .built: return true
+            case .disabled, .unavailable: return false
+            }
+        }
+    }
+    package let packedSource: PackedSource
+    let packed: PackedWeightCache?
     let store: SafeTensorsStore
     let weights: ModelWeights
     let backbone: Backbone
@@ -48,8 +70,11 @@ package final class DramaModel: @unchecked Sendable {
 
     /// `schedule` nil means the tuning cache's schedule for this device and
     /// model when there is one, else the default; a value is used as given.
+    /// The packed weight cache under `packedDirectory` is built on the first
+    /// load of a checkpoint and mapped afterwards.
     package init(location: ModelLocation, precision: Precision = .exact, capacity: Int = DramaModel.defaultCapacity,
-                schedule: KernelSchedule? = nil, tuningDirectory: URL = TuningCache.defaultDirectory) throws {
+                schedule: KernelSchedule? = nil, tuningDirectory: URL = TuningCache.defaultDirectory,
+                packedDirectory: URL = PackedWeightCache.defaultDirectory) throws {
         ctx = try MetalContext()
         self.location = location
         self.precision = precision
@@ -57,7 +82,31 @@ package final class DramaModel: @unchecked Sendable {
         config = try ModelConfig(url: location.directory.appendingPathComponent("config.json"))
         tuningKey = try TuningKey(ctx: ctx, location: location)
         store = try SafeTensorsStore(directory: location.directory, device: ctx.device)
-        weights = try ModelWeights(store: store, config: config, device: ctx.device)
+        var families: [(DenseMatrix, TensorRef)] = []
+        let plain = try ModelWeights(store: store, config: config, device: ctx.device) { families.append(($0, $1)); return nil }
+        func log(_ line: String) { FileHandle.standardError.write((line + "\n").data(using: .utf8)!) }
+        var cache: PackedWeightCache?
+        if !PackedWeightCache.enabled {
+            packedSource = .disabled
+        } else {
+            do {
+                let opened = try PackedWeightCache(matrices: families, model: tuningKey.model, sources: store.fingerprints, root: packedDirectory, device: ctx.device, log: log)
+                cache = opened
+                switch opened.outcome {
+                case .loaded: packedSource = .loaded(opened.directory, bytes: opened.byteCount)
+                case .built(let seconds): packedSource = .built(opened.directory, bytes: opened.byteCount, seconds: seconds)
+                }
+            } catch {
+                log("packed weights unavailable, decoding from bf16: \(error)")
+                packedSource = .unavailable(reason: "\(error)")
+            }
+        }
+        packed = cache
+        if let cache {
+            weights = try ModelWeights(store: store, config: config, device: ctx.device) { m, _ in cache.matrices[m] }
+        } else {
+            weights = plain
+        }
         let chosen: KernelSchedule
         if let schedule {
             try schedule.validate()
@@ -87,6 +136,21 @@ package final class DramaModel: @unchecked Sendable {
     }
 
     deinit { drain() }
+
+    /// Every mapped weight file an encoder declares resident: the shards and
+    /// the packed matrices.
+    var residentWeights: [MTLBuffer] { store.shards + (packed?.buffers ?? []) }
+
+    /// Unpacks every packed matrix from its mapped file and compares it with
+    /// its shard bytes. Returns the matrix count and the first mismatch, if
+    /// any, as "name rows offset weight index".
+    package func verifyPackedWeights() throws -> (matrices: Int, mismatch: String?) {
+        guard let packed else { return (0, nil) }
+        var families: [(DenseMatrix, TensorRef)] = []
+        _ = try ModelWeights(store: store, config: config, device: ctx.device) { families.append(($0, $1)); return nil }
+        let bad = packed.verify(against: families)
+        return (families.count, bad.map { "\($0.0.name) rows \($0.0.rowOffset) weight \($0.index)" })
+    }
 
     func track(_ cb: MTLCommandBuffer) { inFlight = cb }
 
@@ -209,7 +273,7 @@ package final class DramaModel: @unchecked Sendable {
     func commandBuffer() -> (MTLCommandBuffer, MTLComputeCommandEncoder) {
         let cb = ctx.queue.makeCommandBuffer()!
         let enc = tracer?.encoder(for: cb) ?? cb.makeComputeCommandEncoder(dispatchType: .concurrent)!
-        enc.useResources(store.shards, usage: .read)
+        enc.useResources(residentWeights, usage: .read)
         return (cb, enc)
     }
 
@@ -268,12 +332,12 @@ package final class DramaModel: @unchecked Sendable {
 
     /// Touches every weight page once, builds every pipeline state, and runs
     /// one command buffer that declares the shards, so the first request pays
-    /// for none of them (the GPU wires the 41 GB on its first use). Shards are
-    /// walked on parallel threads. Returns bytes walked.
+    /// for none of them (the GPU wires the 41 GB on its first use). Shards and
+    /// packed files are walked on parallel threads. Returns bytes walked.
     @discardableResult
     package func warmUp() -> Int {
         ctx.warmPipelines()
-        let shards = store.shards
+        let shards = residentWeights
         defer {
             let (cb, enc) = commandBuffer()
             try? backbone.k.zero(enc, backbone.counts)

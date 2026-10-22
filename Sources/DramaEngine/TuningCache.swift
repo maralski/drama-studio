@@ -3,7 +3,8 @@ import Foundation
 import Metal
 
 /// What a tuned schedule is valid for: this GPU, this OS, these kernel
-/// sources, this checkpoint, this schedule layout. Any change is a miss.
+/// sources, this checkpoint, packed or bf16 decode weights, this schedule
+/// layout. Any change is a miss.
 package struct TuningKey: Codable, Equatable, Sendable {
     /// `MTLDevice.name`.
     package var chip: String
@@ -14,16 +15,20 @@ package struct TuningKey: Codable, Equatable, Sendable {
     /// Snapshot directory name, a dash, and the first 16 hex digits of the
     /// SHA-256 of model.safetensors.index.json.
     package var model: String
+    /// Whether the decode families read their exponent-coded form
+    /// (`PackedWeightCache.enabled`): the two states run different kernels.
+    package var packed: Bool
     /// Bumped when KernelSchedule's fields change without a kernel change.
     package var schema: Int
 
-    package static let currentSchema = 2
+    package static let currentSchema = 3
 
-    package init(chip: String, os: String, kernels: String, model: String, schema: Int = TuningKey.currentSchema) {
+    package init(chip: String, os: String, kernels: String, model: String, packed: Bool, schema: Int = TuningKey.currentSchema) {
         self.chip = chip
         self.os = os
         self.kernels = kernels
         self.model = model
+        self.packed = packed
         self.schema = schema
     }
 
@@ -38,12 +43,13 @@ package struct TuningKey: Codable, Equatable, Sendable {
         self.init(chip: chip,
                   os: "\(v.majorVersion).\(v.minorVersion).\(v.patchVersion)",
                   kernels: kernelDigest,
-                  model: location.directory.lastPathComponent + "-" + Self.hex(SHA256.hash(data: index)).prefix(16))
+                  model: location.directory.lastPathComponent + "-" + Self.hex(SHA256.hash(data: index)).prefix(16),
+                  packed: PackedWeightCache.enabled)
     }
 
     /// First 16 hex digits of the SHA-256 over the fields, plus ".json".
     package var fileName: String {
-        let text = [chip, os, kernels, model, String(schema)].joined(separator: "\n")
+        let text = [chip, os, kernels, model, packed ? "packed" : "bf16", String(schema)].joined(separator: "\n")
         return String(Self.hex(SHA256.hash(data: Data(text.utf8))).prefix(16)) + ".json"
     }
 
@@ -84,7 +90,7 @@ package struct ForwardCheck: Codable, Equatable, Sendable {
 }
 
 package struct TuningReport: Codable, Equatable, Sendable {
-    package static let currentVersion = 2
+    package static let currentVersion = 4
     package var version: Int = TuningReport.currentVersion
     package var key: TuningKey
     package var created: Date

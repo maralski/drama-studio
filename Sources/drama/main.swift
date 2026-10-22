@@ -48,7 +48,36 @@ func loadModel(_ args: Args) throws -> DramaModel {
     }
     let model = try DramaModel(location: loc, precision: precision, capacity: args.int("capacity", DramaModel.defaultCapacity), schedule: schedule)
     FileHandle.standardError.write("loaded \(loc.directory.lastPathComponent) in \(String(format: "%.2f", Date().timeIntervalSince(t0)))s\n".data(using: .utf8)!)
+    FileHandle.standardError.write((packedLine(model) + "\n").data(using: .utf8)!)
     return model
+}
+
+func packedLine(_ model: DramaModel) -> String {
+    switch model.packedSource {
+    case .disabled: return "packed weights: disabled (DRAMA_PACKED=0)"
+    case .unavailable(let reason): return "packed weights: unavailable, decoding from bf16 (\(reason))"
+    case .loaded(let url, let bytes): return "packed weights: used, \(bytes) bytes mapped from \(url.path)"
+    case .built(let url, let bytes, let seconds): return "packed weights: built in \(String(format: "%.1f", seconds)) s, \(bytes) bytes at \(url.path)"
+    }
+}
+
+/// drama pack: builds the packed weight cache when it is missing or damaged,
+/// else unpacks every mapped weight and compares it with the shards. No frame runs.
+func pack(_ args: Args) throws {
+    let model = try loadModel(args)
+    switch model.packedSource {
+    case .disabled:
+        fail("packing is disabled by DRAMA_PACKED=0")
+    case .unavailable(let reason):
+        fail("the packed cache could not be built: \(reason)")
+    case .built(let url, let bytes, let seconds):
+        print("built \(bytes) bytes in \(String(format: "%.1f", seconds)) s at \(url.path)")
+    case .loaded(let url, let bytes):
+        let t0 = Date()
+        let (matrices, mismatch) = try model.verifyPackedWeights()
+        if let mismatch { fail("packed cache at \(url.path) is wrong: \(mismatch)") }
+        print("verified \(matrices) matrices, \(bytes) bytes, against the shards in \(String(format: "%.1f", Date().timeIntervalSince(t0))) s at \(url.path)")
+    }
 }
 
 func readFrames(_ path: String) throws -> [Frame] {
@@ -534,10 +563,11 @@ case "fbench": try fbench(args)
 case "profile": try profile(args)
 case "trace": try trace(args)
 case "tune": try tune(args)
+case "pack": try pack(args)
 case "schedule-ab": try scheduleAB(args)
 case "generate": try generate(args)
 case "decode": try decodeCommand(args)
 case "codec-bench": try codecBench(args)
 case "serve": try serve(args)
-default: fail("usage: drama <dump|bench|kbench|dbench|fbench|profile|trace|tune|schedule-ab|generate|decode|codec-bench|serve> [options]")
+default: fail("usage: drama <dump|bench|kbench|dbench|fbench|profile|trace|tune|pack|schedule-ab|generate|decode|codec-bench|serve> [options]")
 }

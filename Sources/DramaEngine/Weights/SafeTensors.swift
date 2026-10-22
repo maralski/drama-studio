@@ -38,13 +38,55 @@ struct TensorRef: @unchecked Sendable {
     }
 }
 
+/// What identifies one weight file's bytes without reading them: its name,
+/// size, modification time in nanoseconds and inode. A re-export under the
+/// same name changes the time and usually the inode.
+struct ShardFingerprint: Codable, Equatable {
+    let name: String
+    let size: Int
+    let modified: Int64
+    let inode: UInt64
+}
+
+/// A read-only file mapped whole, page-rounded, and wrapped as a Metal buffer
+/// without copying. The buffer owns the mapping: it is unmapped when the
+/// last holder of the buffer lets go, so a TensorRef or PackedBF16 that
+/// outlives this value still reads mapped bytes.
+struct MappedBuffer {
+    let buffer: MTLBuffer
+    let fileSize: Int
+    let fingerprint: ShardFingerprint
+
+    init(url: URL, device: MTLDevice) throws {
+        let fd = open(url.path, O_RDONLY)
+        guard fd >= 0 else { throw EngineError.badModel("cannot open \(url.lastPathComponent)") }
+        defer { close(fd) }
+        var st = stat()
+        guard fstat(fd, &st) == 0 else { throw EngineError.badModel("cannot stat \(url.lastPathComponent)") }
+        fileSize = Int(st.st_size)
+        fingerprint = ShardFingerprint(name: url.lastPathComponent, size: fileSize,
+                                       modified: Int64(st.st_mtimespec.tv_sec) * 1_000_000_000 + Int64(st.st_mtimespec.tv_nsec), inode: UInt64(st.st_ino))
+        let pageSize = Int(getpagesize())
+        let length = max(fileSize + pageSize - 1, pageSize) / pageSize * pageSize
+        guard let base = mmap(nil, length, PROT_READ, MAP_SHARED, fd, 0), base != MAP_FAILED else {
+            throw EngineError.badModel("mmap failed for \(url.lastPathComponent)")
+        }
+        guard let buffer = device.makeBuffer(bytesNoCopy: base, length: length, options: .storageModeShared, deallocator: { pointer, length in munmap(pointer, length) }) else {
+            munmap(base, length)
+            throw EngineError.badModel("Metal refused the mapping of \(url.lastPathComponent)")
+        }
+        buffer.label = url.lastPathComponent
+        self.buffer = buffer
+    }
+}
+
 /// All shards of a safetensors checkpoint, memory-mapped and wrapped as Metal
 /// buffers without copying.
 final class SafeTensorsStore: @unchecked Sendable {
     let directory: URL
     private(set) var shards: [MTLBuffer] = []
     private var tensors: [String: TensorRef] = [:]
-    private var mappings: [(UnsafeMutableRawPointer, Int)] = []
+    private var files: [MappedBuffer] = []
 
     init(directory: URL, device: MTLDevice) throws {
         self.directory = directory
@@ -59,10 +101,6 @@ final class SafeTensorsStore: @unchecked Sendable {
         }
     }
 
-    deinit {
-        for (pointer, length) in mappings { munmap(pointer, length) }
-    }
-
     func tensor(_ name: String) throws -> TensorRef {
         guard let t = tensors[name] else { throw EngineError.badModel("missing tensor \(name)") }
         return t
@@ -70,25 +108,15 @@ final class SafeTensorsStore: @unchecked Sendable {
 
     func has(_ name: String) -> Bool { tensors[name] != nil }
     var tensorNames: [String] { Array(tensors.keys) }
+    /// Every shard's fingerprint, in shard name order.
+    var fingerprints: [ShardFingerprint] { files.map(\.fingerprint) }
 
     private func mapShard(_ url: URL, device: MTLDevice) throws {
-        let fd = open(url.path, O_RDONLY)
-        guard fd >= 0 else { throw EngineError.badModel("cannot open \(url.lastPathComponent)") }
-        defer { close(fd) }
-        var st = stat()
-        guard fstat(fd, &st) == 0 else { throw EngineError.badModel("cannot stat \(url.lastPathComponent)") }
-        let fileSize = Int(st.st_size)
-        let pageSize = Int(getpagesize())
-        let mappedLength = (fileSize + pageSize - 1) / pageSize * pageSize
-        guard let base = mmap(nil, mappedLength, PROT_READ, MAP_SHARED, fd, 0), base != MAP_FAILED else {
-            throw EngineError.badModel("mmap failed for \(url.lastPathComponent)")
-        }
-        mappings.append((base, mappedLength))
-        guard let buffer = device.makeBuffer(bytesNoCopy: base, length: mappedLength, options: .storageModeShared, deallocator: nil) else {
-            throw EngineError.badModel("Metal refused the mapping of \(url.lastPathComponent)")
-        }
-        buffer.label = url.lastPathComponent
+        let mapped = try MappedBuffer(url: url, device: device)
+        files.append(mapped)
+        let buffer = mapped.buffer
         shards.append(buffer)
+        let base = buffer.contents()
 
         let headerLength = Int(base.load(as: UInt64.self).littleEndian)
         let headerData = Data(bytes: base.advanced(by: 8), count: headerLength)

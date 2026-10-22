@@ -9,6 +9,7 @@ final class ScheduleTests: XCTestCase {
         let ctx = try MetalContext()
         var names: [String] = ["attention", "moe_gate_up_fp8", "moe_down_fp8", "moe_pre_bf16", "moe_mid_fp8", "moe_post_fp8"]
         names += KernelSchedule.gemvTokenTiles.map { "gemv_bf16_t\($0)" }
+        names += KernelSchedule.gemvPackedShapes.map { "gemv_packed_t\($0.tokenTile)" } + ["swiglu_packed_dec"]
         names += KernelSchedule.gemmTiles.map { "gemm_bf16_\($0.label)" }
         names += KernelSchedule.moeTiles.flatMap { ["moe_gate_up_fp8_tiled_\($0.label)", "moe_down_fp8_tiled_\($0.label)"] }
         names += KernelSchedule.gdnParts.map { "gdn_recurrent_p\($0)" }
@@ -19,6 +20,9 @@ final class ScheduleTests: XCTestCase {
         let threads = try ctx.pipeline("attention").maxTotalThreadsPerThreadgroup
         XCTAssertGreaterThanOrEqual(threads, 32 * KernelSchedule.attentionSplits.max()!)
         XCTAssertGreaterThanOrEqual(try ctx.pipeline("moe_post_fp8").maxTotalThreadsPerThreadgroup, 512)
+        for name in ["gemv_packed_t1", "swiglu_packed_dec"] {
+            XCTAssertGreaterThanOrEqual(try ctx.pipeline(name).maxTotalThreadsPerThreadgroup, 32 * KernelSchedule.gemvSimdgroups.max()!, name)
+        }
     }
 
     func testValidateRejectsOutOfDomainValues() throws {
@@ -26,6 +30,8 @@ final class ScheduleTests: XCTestCase {
         let broken: [(String, (inout KernelSchedule) -> Void)] = [
             ("gemvDecode.tokenTile 12", { $0.gemvDecode.tokenTile = 12 }),
             ("gemvNarrow.simdgroups 3", { $0.gemvNarrow.simdgroups = 3 }),
+            ("gemvPackedDecode.tokenTile 8", { $0.gemvPackedDecode.tokenTile = 8 }),
+            ("gemvPackedDecode.simdgroups 3", { $0.gemvPackedDecode.simdgroups = 3 }),
             ("gemmTile 48x32x16", { $0.gemmTile = .init(bm: 48, bn: 32, bk: 16) }),
             ("moeTile 64x64x16", { $0.moeTile = .init(bn: 64, rows: 64, bk: 16) }),
             ("attentionSplitDecode 5", { $0.attentionSplitDecode = 5 }),
@@ -64,6 +70,28 @@ final class ScheduleTests: XCTestCase {
                     XCTAssertTrue(got.allSatisfy { $0.isFinite })
                     reference = got
                 }
+            }
+        }
+    }
+
+    /// Every packed decode shape covers every row: a simdgroup count whose
+    /// threadgroup grid misses rows leaves zeros where the bf16 GEMV has sums.
+    func testPackedDecodeShapesMatchBF16() throws {
+        var f = try PackedGemvTests.Fixture()
+        for (n, kDim) in [(4096, 2048), (9216, 2048), (33, 2048)] {
+            let w = PackedGemvTests.realisticBF16(f.ctx.device, rows: n, cols: kDim, seed: UInt64(n))
+            let packed = PackedBF16(w, device: f.ctx.device)
+            let x = f.floats(kDim, label: "x")
+            let yRef = Buf(f.ctx.device, floats: n, label: "yRef"), y = Buf(f.ctx.device, floats: n, label: "y")
+            try f.run { enc in try Kernels(ctx: f.ctx, precision: .exact).gemv(enc, w, x: x, y: yRef, m: 1) }
+            let reference = yRef.read(n).map(\.bitPattern)
+            for shape in KernelSchedule.gemvPackedShapes {
+                var s = KernelSchedule.default
+                s.gemvPackedDecode = shape
+                let k = Kernels(ctx: f.ctx, precision: .exact, schedule: s)
+                y.zero()
+                try f.run { enc in try k.gemvPacked(enc, packed, x: x, y: y, m: 1) }
+                XCTAssertEqual(y.read(n).map(\.bitPattern), reference, "n=\(n) \(shape.label)")
             }
         }
     }

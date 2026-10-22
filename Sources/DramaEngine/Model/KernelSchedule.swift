@@ -32,6 +32,9 @@ package struct KernelSchedule: Codable, Equatable, Sendable {
 
     /// Dense projections with one row (decode), any N.
     package var gemvDecode = GemvShape(tokenTile: 32, simdgroups: 4)
+    /// The exponent-coded projections with one row (`DenseWeight.coded`);
+    /// token tile 1, the one that streams fastest at decode.
+    package var gemvPackedDecode = GemvShape(tokenTile: 1, simdgroups: 4)
     /// Dense projections with M > 1 and N <= 64, where a GEMM would have one or
     /// two column tiles walking K alone.
     package var gemvNarrow = GemvShape(tokenTile: 32, simdgroups: 4)
@@ -71,6 +74,7 @@ package struct KernelSchedule: Codable, Equatable, Sendable {
     package static let gdnParts = [1, 2, 4, 8]
 
     package static let gemvShapes: [GemvShape] = gemvTokenTiles.flatMap { t in gemvSimdgroups.map { GemvShape(tokenTile: t, simdgroups: $0) } }
+    package static let gemvPackedShapes: [GemvShape] = gemvSimdgroups.map { GemvShape(tokenTile: 1, simdgroups: $0) }
 
     /// Throws when any field is outside its domain.
     package func validate() throws {
@@ -80,6 +84,7 @@ package struct KernelSchedule: Codable, Equatable, Sendable {
         for (name, shape) in [("gemvDecode", gemvDecode), ("gemvNarrow", gemvNarrow)] {
             try check(Self.gemvTokenTiles.contains(shape.tokenTile) && Self.gemvSimdgroups.contains(shape.simdgroups), name, shape.label)
         }
+        try check(Self.gemvPackedShapes.contains(gemvPackedDecode), "gemvPackedDecode", gemvPackedDecode.label)
         try check(Self.gemmTiles.contains(gemmTile), "gemmTile", gemmTile.label)
         try check(Self.moeTiles.contains(moeTile), "moeTile", moeTile.label)
         try check(Self.attentionSplits.contains(attentionSplitDecode), "attentionSplitDecode", "\(attentionSplitDecode)")

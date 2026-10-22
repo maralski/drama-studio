@@ -126,10 +126,10 @@ final class FrameEncoder {
     private(set) var encoder: MTLComputeCommandEncoder
     let samples: MTLCounterSampleBuffer?
     private(set) var names: [String] = []
-    private let shards: [MTLBuffer]
+    private let resident: [MTLBuffer]
 
     init(model: DramaModel, stages: StageCounters?, first: String) throws {
-        shards = model.store.shards
+        resident = model.residentWeights
         guard let samples = try stages?.makeBuffer() else {
             (commandBuffer, encoder) = model.commandBuffer()
             self.samples = nil
@@ -137,11 +137,11 @@ final class FrameEncoder {
         }
         self.samples = samples
         commandBuffer = model.ctx.queue.makeCommandBuffer()!
-        encoder = Self.open(commandBuffer, samples: samples, index: 0, shards: shards)
+        encoder = Self.open(commandBuffer, samples: samples, index: 0, resident: resident)
         names = [first]
     }
 
-    private static func open(_ cb: MTLCommandBuffer, samples: MTLCounterSampleBuffer, index: Int, shards: [MTLBuffer]) -> MTLComputeCommandEncoder {
+    private static func open(_ cb: MTLCommandBuffer, samples: MTLCounterSampleBuffer, index: Int, resident: [MTLBuffer]) -> MTLComputeCommandEncoder {
         let d = MTLComputePassDescriptor()
         d.dispatchType = .concurrent
         let a = d.sampleBufferAttachments[0]!
@@ -149,7 +149,7 @@ final class FrameEncoder {
         a.startOfEncoderSampleIndex = 2 * index
         a.endOfEncoderSampleIndex = 2 * index + 1
         let enc = cb.makeComputeCommandEncoder(descriptor: d)!
-        enc.useResources(shards, usage: .read)
+        enc.useResources(resident, usage: .read)
         return enc
     }
 
@@ -157,7 +157,7 @@ final class FrameEncoder {
     func stage(_ name: String) -> MTLComputeCommandEncoder {
         guard let samples, names.count < StageCounters.maxStages else { return encoder }
         encoder.endEncoding()
-        encoder = Self.open(commandBuffer, samples: samples, index: names.count, shards: shards)
+        encoder = Self.open(commandBuffer, samples: samples, index: names.count, resident: resident)
         names.append(name)
         return encoder
     }

@@ -3,7 +3,7 @@ import XCTest
 @testable import DramaEngine
 
 final class AutotuneTests: XCTestCase {
-    static let key = TuningKey(chip: "Apple M3 Max", os: "26.5.2", kernels: String(repeating: "ab", count: 32), model: "snap-0123456789abcdef", schema: 2)
+    static let key = TuningKey(chip: "Apple M3 Max", os: "26.5.2", kernels: String(repeating: "ab", count: 32), model: "snap-0123456789abcdef", packed: true, schema: 2)
 
     func tempDirectory() throws -> URL {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("drama-tuning-\(UUID().uuidString)")
@@ -28,6 +28,7 @@ final class AutotuneTests: XCTestCase {
         k = base; k.os = "26.5.3"; variants.append(k)
         k = base; k.kernels = String(repeating: "ba", count: 32); variants.append(k)
         k = base; k.model = "snap-fedcba9876543210"; variants.append(k)
+        k = base; k.packed = false; variants.append(k)
         k = base; k.schema = 3; variants.append(k)
         for v in variants { XCTAssertNotEqual(v.fileName, base.fileName, "\(v)") }
         XCTAssertEqual(Set(variants.map(\.fileName)).count, variants.count)
@@ -37,6 +38,7 @@ final class AutotuneTests: XCTestCase {
         let dir = try tempDirectory()
         var schedule = KernelSchedule.default
         schedule.gemvDecode = .init(tokenTile: 16, simdgroups: 8)
+        schedule.gemvPackedDecode = .init(tokenTile: 1, simdgroups: 8)
         schedule.moeTile = .init(bn: 64, rows: 32, bk: 32)
         let saved = report(Self.key, schedule: schedule)
         let url = try TuningCache.save(saved, directory: dir)
@@ -45,6 +47,7 @@ final class AutotuneTests: XCTestCase {
         XCTAssertEqual(hit.report, saved)
         XCTAssertEqual(hit.url, url)
         XCTAssertEqual(hit.report.schedule.gemvDecode.tokenTile, 16)
+        XCTAssertEqual(hit.report.schedule.gemvPackedDecode.simdgroups, 8)
     }
 
     func testMissingFileIsAMiss() throws {
@@ -117,6 +120,7 @@ final class AutotuneTests: XCTestCase {
     static var allTuned: KernelSchedule {
         var s = KernelSchedule.default
         s.gemvDecode = .init(tokenTile: 1, simdgroups: 1)
+        s.gemvPackedDecode = .init(tokenTile: 1, simdgroups: 8)
         s.gemvNarrow = .init(tokenTile: 1, simdgroups: 8)
         s.gemmTile = .init(bm: 64, bn: 64, bk: 16)
         s.moeTile = .init(bn: 64, rows: 16, bk: 16)
@@ -137,6 +141,7 @@ final class AutotuneTests: XCTestCase {
         XCTAssertEqual(s.attentionSplitPrefill, KernelSchedule.default.attentionSplitPrefill)
         XCTAssertEqual(s.gdnPartsPrefill, KernelSchedule.default.gdnPartsPrefill)
         XCTAssertEqual(s.gemvDecode, tuned.gemvDecode)
+        XCTAssertEqual(s.gemvPackedDecode, tuned.gemvPackedDecode)
         XCTAssertEqual(s.attentionSplitDecode, tuned.attentionSplitDecode)
         XCTAssertEqual(s.gdnPartsDecode, tuned.gdnPartsDecode)
         XCTAssertEqual(Set(notes.keys), ["gemv.narrow", "gemm.prefill", "moe.tiled", "attention.prefill", "gdn.prefill"])
@@ -148,6 +153,7 @@ final class AutotuneTests: XCTestCase {
         let lost = ForwardCheck(rows: 1, defaultMs: 17, tunedMs: 18, kept: false)
         let (s, notes) = Autotune.applyForwardChecks(schedule: tuned, defaults: .default, checks: [lost])
         XCTAssertEqual(s.gemvDecode, KernelSchedule.default.gemvDecode)
+        XCTAssertEqual(s.gemvPackedDecode, KernelSchedule.default.gemvPackedDecode)
         XCTAssertEqual(s.attentionSplitDecode, KernelSchedule.default.attentionSplitDecode)
         XCTAssertEqual(s.gdnPartsDecode, KernelSchedule.default.gdnPartsDecode)
         XCTAssertEqual(s.gemvNarrow, tuned.gemvNarrow)
@@ -155,7 +161,7 @@ final class AutotuneTests: XCTestCase {
         XCTAssertEqual(s.moeTile, tuned.moeTile)
         XCTAssertEqual(s.attentionSplitPrefill, tuned.attentionSplitPrefill)
         XCTAssertEqual(s.gdnPartsPrefill, tuned.gdnPartsPrefill)
-        XCTAssertEqual(Set(notes.keys), ["gemv.decode", "attention.decode", "gdn.decode"])
+        XCTAssertEqual(Set(notes.keys), ["gemv.decode", "gemv.packed", "attention.decode", "gdn.decode"])
     }
 
     /// A kept check changes nothing, and a reverted field that already held
@@ -197,8 +203,9 @@ final class AutotuneTests: XCTestCase {
         guard let loc = ModelLocation.huggingFaceCache(), loc.isComplete else { throw XCTSkip("drama-3 weights needed") }
         let model = try DramaModel(location: loc, schedule: .default)
         let entries = try Autotune.census(model: model)
-        XCTAssertEqual(entries.map(\.name), ["gemv.decode", "gemv.narrow", "gemm.prefill", "moe.tiled", "attention.decode", "attention.prefill", "gdn.decode", "gdn.prefill"])
-        XCTAssertEqual(Set(entries.map(\.name)), Set(Autotune.fields.map(\.entry)))
+        let packed = model.packedSource.isPacked ? ["gemv.packed"] : []
+        XCTAssertEqual(entries.map(\.name), ["gemv.decode"] + packed + ["gemv.narrow", "gemm.prefill", "moe.tiled", "attention.decode", "attention.prefill", "gdn.decode", "gdn.prefill"])
+        XCTAssertEqual(Set(entries.map(\.name)), Set(Autotune.fields.map(\.entry)).subtracting(packed.isEmpty ? ["gemv.packed"] : []))
         // The MoE workload routes real hidden states, not the noise pool.
         let H = model.config.hiddenSize
         let moeInput = try model.probeMoEInput(rows: 300)

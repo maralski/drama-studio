@@ -202,10 +202,20 @@ final class SplitPassEncoder: NSObject {
     }
 
     /// Reads the shapes from each kernel's parameter block, laid out as
-    /// Kernels.swift binds it: GEMV and GEMM {N, K, M} at index 3, the expert
-    /// kernels {hidden, intermediate} at 5 (gate/up) or 6 (down) with one
-    /// threadgroup column per active expert.
+    /// Kernels.swift binds it: GEMV, GEMM and the fused tower decode kernels
+    /// {N, K, ...} at index 3; the packed kernels {N, K, M, round, escaped}
+    /// at 3, their bytes the packed sections plus one per escaped exponent;
+    /// the expert kernels {hidden, intermediate} at 5 (gate/up) or 6 (down)
+    /// with one threadgroup column per active expert.
     private func weightTraffic(groups: MTLSize) -> (String?, Int?) {
+        if kernel.hasPrefix("gemv_packed") || kernel == "swiglu_packed_dec", let p = params[3], p.count >= 5 {
+            let n = Int(p[0]), k = Int(p[1]), escaped = Int(p[4]), matrices = kernel == "swiglu_packed_dec" ? 2 : 1
+            return (matrices == 2 ? "2x\(n)x\(k)" : "\(n)x\(k)", matrices * PackedBF16.sectionOffsets(tiles: n * k / PackedBF16.tile).escape + escaped)
+        }
+        if kernel == "swiglu_dec" || kernel == "gemv_residual", let p = params[3], p.count >= 2 {
+            let n = Int(p[0]), k = Int(p[1]), matrices = kernel == "swiglu_dec" ? 2 : 1
+            return (matrices == 2 ? "2x\(n)x\(k)" : "\(n)x\(k)", matrices * n * k * 2)
+        }
         if kernel.hasPrefix("gemv_bf16") || kernel.hasPrefix("gemm_bf16"), let p = params[3], p.count >= 2 {
             let n = Int(p[0]), k = Int(p[1])
             return ("\(n)x\(k)", n * k * 2)

@@ -227,6 +227,7 @@ package enum Autotune {
 
     static let fields = [
         Field("gemv.decode", .decode, \.gemvDecode),
+        Field("gemv.packed", .decode, \.gemvPackedDecode),
         Field("gemv.narrow", .prefill, \.gemvNarrow),
         Field("gemm.prefill", .prefill, \.gemmTile),
         Field("moe.tiled", .prefill, \.moeTile),
@@ -340,7 +341,8 @@ struct Noise {
 }
 
 extension Autotune {
-    /// The nine workloads, on the model's resident weights and scratch buffers.
+    /// The workloads, one per schedule field the model uses, on its resident
+    /// weights and scratch buffers.
     static func census(model: DramaModel) throws -> [Entry] {
         let c = model.config, bb = model.backbone, tw = model.tower, weights = model.weights
         let H = c.hiddenSize
@@ -369,7 +371,9 @@ extension Autotune {
 
         func seeds(_ fills: [() -> Void]) -> () -> Void { { for f in fills { f() } } }
 
-        // gemv.decode: every M = 1 projection of a linear layer plus the candidate logits.
+        // gemv.decode: every M = 1 projection of a linear layer plus the
+        // candidate logits, the coded families on their bf16 tensors so the
+        // field is tuned on the kernel it selects.
         do {
             let seed = seeds([noise.fill(bb.h, count: H), noise.fill(bb.normed, count: 4096), noise.fill(bb.sharedAct, count: 512), noise.fill(bb.hiddenOut, count: H)])
             entries.append(Entry(
@@ -378,8 +382,8 @@ extension Autotune {
                 layers: 10,
                 encode: { enc, k, i in
                     let lw = linear(i), mw = weights.backbone.layers[linearLayers[i]].moe
-                    try k.gemv(enc, lw.inProjQKV, x: bb.h, y: bb.big, m: 1)
-                    try k.gemv(enc, lw.inProjZ, x: bb.h, y: bb.z, m: 1)
+                    try k.gemv(enc, lw.inProjQKV.bf16, x: bb.h, y: bb.big, m: 1)
+                    try k.gemv(enc, lw.inProjZ.bf16, x: bb.h, y: bb.z, m: 1)
                     try k.gemv(enc, lw.inProjA, x: bb.h, y: bb.a, m: 1)
                     try k.gemv(enc, lw.inProjB, x: bb.h, y: bb.b, m: 1)
                     try k.gemv(enc, lw.outProj, x: bb.normed, y: bb.mixOut, m: 1)
@@ -389,11 +393,38 @@ extension Autotune {
                     try k.gemv(enc, mw.sharedDown, x: bb.sharedAct, y: bb.sharedOut, m: 1)
                     try k.gemv(enc, mw.sharedExpertGate, x: bb.h, y: bb.sharedGate, m: 1)
                     try k.gemv(enc, weights.backbone.lmHeadEos, x: bb.hiddenOut, y: bb.cand, m: 1)
-                    try k.gemv(enc, weights.backbone.lmHeadSemantic, x: bb.hiddenOut, y: bb.cand, yOffset: 1, m: 1)
+                    try k.gemv(enc, weights.backbone.lmHeadSemantic.bf16, x: bb.hiddenOut, y: bb.cand, yOffset: 1, m: 1)
                 },
                 outputs: {
                     bb.big.read(8192) + bb.z.read(4096) + bb.a.read(32) + bb.b.read(32) + bb.mixOut.read(H) + bb.routerLogits.read(c.numExperts)
                         + bb.sharedG.read(512) + bb.sharedU.read(512) + bb.sharedOut.read(H) + bb.sharedGate.read(1) + bb.cand.read(c.codebookSize + 1)
+                },
+                seedInputs: seed))
+        }
+
+        // gemv.packed: one row of every exponent-coded family, the tower's
+        // w1 and w3 through the packed swiglu, when the model has them; every
+        // candidate forms the same bits.
+        if model.packed != nil {
+            let seed = seeds([noise.fill(bb.h, count: H), noise.fill(bb.hiddenOut, count: H), noise.fill(tw.th, count: H), noise.fill(tw.hiddenA, count: H)])
+            let towerLayers = tw.allLayers, heads = weights.tower.heads
+            entries.append(Entry(
+                name: "gemv.packed",
+                candidates: Candidate.over(\.gemvPackedDecode, KernelSchedule.gemvPackedShapes, label: \.label),
+                layers: 10,
+                encode: { enc, k, i in
+                    let lw = linear(i), fw = full(i)
+                    try k.gemv(enc, lw.inProjQKV, x: bb.h, y: bb.big, m: 1)
+                    try k.gemv(enc, lw.inProjZ, x: bb.h, y: bb.z, m: 1)
+                    try k.gemv(enc, fw.qProj, x: bb.h, y: bb.convOut, m: 1)
+                    try k.gemv(enc, weights.backbone.lmHeadSemantic, x: bb.hiddenOut, y: bb.cand, yOffset: 1, m: 1)
+                    try k.gemv(enc, towerLayers[i].wqkv, x: tw.th, y: tw.tqkv, m: 1)
+                    try k.swigluDecode(enc, w1: towerLayers[i].w1, w3: towerLayers[i].w3, x: tw.th, y: tw.ffAct)
+                    try k.gemv(enc, heads[i % heads.count], x: tw.hiddenA, y: tw.headLogits, m: 1)
+                },
+                outputs: {
+                    bb.big.read(8192) + bb.z.read(4096) + bb.convOut.read(8192) + bb.cand.read(c.codebookSize + 1) + tw.tqkv.read(9216)
+                        + tw.ffAct.read(c.towerIntermediate) + tw.headLogits.read(c.codebookSize)
                 },
                 seedInputs: seed))
         }
