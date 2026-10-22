@@ -45,6 +45,11 @@ struct SeededGenerator: RandomNumberGenerator {
 
 /// The reference sampler: sort, drop everything past top-k or past the top-p
 /// mass (keeping the best), softmax, then argmax of probability / exponential noise.
+///
+/// Top-p 1 (or more) keeps every candidate up to top-k. Without that rule the
+/// cut would fall where the summed mass of a peaked row rounds to one ulp above
+/// 1, which happens on about one real tower row in a hundred, and the GPU
+/// sampler's double-float arithmetic cannot reproduce double's rounding there.
 package struct Sampler {
     var rng: SeededGenerator
 
@@ -68,9 +73,10 @@ package struct Sampler {
         for v in values { expSum += exp(v - maxValue) }
         var cumulative = 0.0
         var kept = 0
+        let nucleus = topP < 1
         for i in 0..<n {
             cumulative += exp(values[i] - maxValue) / expSum
-            let dropped = (cumulative > topP || i >= topK) && i > 0
+            let dropped = ((nucleus && cumulative > topP) || i >= topK) && i > 0
             if dropped { break }
             kept = i + 1
         }

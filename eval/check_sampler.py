@@ -13,7 +13,7 @@ def truncated_probs(logits, temperature, top_k, top_p):
     v = logits[order] / max(temperature, 1e-5)
     p = np.exp(v - v.max()); p /= p.sum()
     cum = np.cumsum(p)
-    dropped = (cum > top_p) | (np.arange(len(v)) >= top_k)
+    dropped = ((cum > top_p) if top_p < 1 else False) | (np.arange(len(v)) >= top_k)
     dropped[0] = False
     kept = np.where(~dropped)[0]
     q = p[kept] / p[kept].sum()

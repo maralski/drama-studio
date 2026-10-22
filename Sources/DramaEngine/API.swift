@@ -47,6 +47,7 @@ public struct GenerationConfig: Sendable, Codable, Equatable {
     /// of candidates, keeps them all and leaves the choice to top-p.
     public var topK: Int = 30
     /// Top-p nucleus kept before sampling. Default 0.7, the vendor's value.
+    /// 1 keeps every candidate up to top-k.
     public var topP: Double = 0.7
     /// The most frames one chunk may run. Defaults to the text's expected
     /// duration times 1.5, plus 2 s.

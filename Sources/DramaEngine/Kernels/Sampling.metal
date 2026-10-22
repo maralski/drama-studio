@@ -294,6 +294,8 @@ inline uint sample_one(device const float* logits, uint n, df t, df topP, uint t
     df cumulative = df_make(0.0f, 0.0f);
     df keptSum = df_make(0.0f, 0.0f);
     uint limit = min(clamp(topK, 1u, uint(SAMPLE_MAX_KEPT)), n);
+    // Top-p 1 keeps every candidate up to top-k, as on the CPU; see `Sampler`.
+    bool nucleus = df_gt(df_make(1.0f, 0.0f), topP);
     for (uint i = 0; i < limit; i++) {
         Cand best;
         best.val = -INFINITY; best.idx = 0xffffffffu; best.ehi = 0.0f; best.elo = 0.0f;
@@ -315,7 +317,7 @@ inline uint sample_one(device const float* logits, uint n, df t, df topP, uint t
             if (lane == 0) {
                 df term = df_make(w.ehi, w.elo);
                 cumulative = df_add(cumulative, df_div(term, expSum));
-                bool dropped = i > 0 && df_gt(cumulative, topP);
+                bool dropped = i > 0 && nucleus && df_gt(cumulative, topP);
                 if (!dropped) {
                     sh.keptIdx[i] = w.idx;
                     sh.keptE[i] = term;

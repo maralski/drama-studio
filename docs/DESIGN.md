@@ -158,8 +158,11 @@ xoshiro256** stream as the CPU `Sampler`, which stays as the reference the
 parity test checks against. The CPU works in double; the kernels work in
 double-float (hi + lo fp32 pairs, exp by range reduction and a degree-13
 series, log by Newton steps on that exp) so every top-p cutoff and argmax
-decision matches. The top of the distribution is extracted one element at a
-time with simdgroup reductions, since at most top-k elements are kept.
+decision matches. Top-p 1 applies no cutoff on either side: the summed mass
+of a peaked row rounds to one ulp above 1 on about one tower row in a hundred,
+and double-float cannot reproduce where double's rounding would cut. The top
+of the distribution is extracted one element at a time with simdgroup
+reductions, since at most top-k elements are kept.
 A decode frame is one command buffer: main sampler, tower with a sampler after
 each head, backbone step for the new row. The samplers write the frame row and
 the tower's code inputs on the GPU, and the next frame's command buffer is
