@@ -117,7 +117,7 @@ func dump(_ args: Args) throws {
 func scheduleLine(_ model: DramaModel, args: Args) -> String {
     switch model.scheduleSource {
     case .cache(let url): return "schedule: tuned (\(url.path))"
-    case .given: return args.flags.contains("untuned") ? "schedule: default (--untuned)" : "schedule: given"
+    case .given: return args.flags.contains("untuned") ? "schedule: default (--untuned)" : "schedule: given (\(args["schedule-file"] ?? "in code"))"
     case .default: return "schedule: default (no tuning cache; run drama tune)"
     }
 }
@@ -305,8 +305,15 @@ func generate(_ args: Args) throws {
 }
 
 /// drama profile [--rows 128]: GPU ms per kernel group for one backbone forward.
+/// drama profile --tower [--pos 500] [--rounds 5] [--schedule-file s.json]: the tower decode step.
 func profile(_ args: Args) throws {
     let model = try loadModel(args)
+    if args.flags.contains("tower") {
+        print(scheduleLine(model, args: args))
+        model.warmUp()
+        for line in try model.profileTower(pos: args.int("pos", 500), rounds: args.int("rounds", 5)) { print(line) }
+        return
+    }
     let rows = args.int("rows", 128)
     let groups = try model.profileBackbone(rows: rows)
     let total = groups.reduce(0) { $0 + $1.1 }
