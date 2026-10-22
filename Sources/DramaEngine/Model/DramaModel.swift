@@ -236,7 +236,10 @@ package final class DramaModel: @unchecked Sendable {
             }),
             ("tower layers and heads", { enc in
                 try self.tower.decodeShared(enc, hidden: self.backbone.hiddenOut, hiddenRow: 0, frames: self.backbone.framesView(p), pos: p, codebooks: codebooks)
-                for i in 1..<(self.config.numCodebooks - 1) { try self.tower.residualStep(enc, i, frames: self.backbone.framesView(p), pos: p, codebooks: codebooks) }
+                for i in 0..<(self.config.numCodebooks - 1) {
+                    let out = try self.tower.residualStep(enc, i, frames: self.backbone.framesView(p), pos: p, codebooks: codebooks)
+                    try self.tower.head(enc, i, input: out)
+                }
             }),
             ("sample_tower x9", { enc in
                 for head in 0..<(self.config.numCodebooks - 1) {
@@ -325,6 +328,8 @@ package final class GenerationSession {
     /// overlap in their start and end stamps, so the steady frame time is
     /// the spacing of the end times.
     package private(set) var gpuEndTimes: [Double] = []
+    private let timeline: FrameTimeline?
+    private let timelineSession: Int
 
     /// A committed frame command buffer. It samples the frame for `position`,
     /// writes it to frame row `position + 1`, and leaves the sampler's
@@ -337,6 +342,10 @@ package final class GenerationSession {
         /// The sampler state the next `step` must pass; nil until the previous
         /// frame's post-state is known.
         var startState: SIMD4<UInt64>?
+        var encodeStart: Double
+        var commit: Double
+        var stageNames: [String]
+        var stageSamples: MTLCounterSampleBuffer?
     }
     private var inFlight: FrameJob?
     private var encodedFrames = 0
@@ -347,10 +356,12 @@ package final class GenerationSession {
 
     /// `prefixRows` leading rows are the shared system prefix: their states are
     /// reused when the previous session had the same prefix, and saved otherwise.
-    package init(model: DramaModel, prompt: [Frame], prefixRows: Int = 0, trace: Bool = false) throws {
+    package init(model: DramaModel, prompt: [Frame], prefixRows: Int = 0, trace: Bool = false, timeline: FrameTimeline? = nil) throws {
         self.model = model
         self.promptRows = prompt.count
         self.trace = trace
+        self.timeline = timeline
+        timelineSession = timeline?.beginSession() ?? 0
         guard prompt.count >= 1, prompt.count + 1 < model.capacity else { throw EngineError.badModel("prompt of \(prompt.count) rows does not fit") }
         model.drain()
         let usable = prefixRows > 0 && prefixRows < prompt.count ? prefixRows : 0
@@ -409,6 +420,7 @@ package final class GenerationSession {
     /// produced.
     package func step(temperature: Double, topK: Int, topP: Double, sampler: inout Sampler) throws -> (frame: Frame?, trace: StepTrace) {
         guard !finished else { return (nil, StepTrace(candidateLogits: [], towerLogits: [])) }
+        let stepEnter = timeline == nil ? 0 : FrameTimeline.now()
         let params = SamplingParams(temperature: temperature, topK: topK, topP: topP)
         var cand: [Float] = []
         let job: FrameJob
@@ -423,8 +435,19 @@ package final class GenerationSession {
             job = encoded
         }
         inFlight = trace ? nil : try encodeFrame(params: params, state: nil)
+        let waitStart = timeline == nil ? 0 : FrameTimeline.now()
         job.commandBuffer.waitUntilCompleted()
         if let e = job.commandBuffer.error { throw EngineError.badModel("GPU error in decode: \(e)") }
+        let ready = timeline == nil ? 0 : FrameTimeline.now()
+        defer {
+            if let timeline {
+                let cb = job.commandBuffer
+                timeline.append(FrameTimeline.Row(session: timelineSession, position: job.position, stepEnter: stepEnter, stepExit: FrameTimeline.now(),
+                                                  encodeStart: job.encodeStart, commit: job.commit, waitStart: waitStart, ready: ready,
+                                                  kernelStart: cb.kernelStartTime, kernelEnd: cb.kernelEndTime, gpuStart: cb.gpuStartTime, gpuEnd: cb.gpuEndTime,
+                                                  stages: timeline.stages?.resolve(job.stageSamples, names: job.stageNames) ?? []))
+            }
+        }
         gpuSeconds += job.commandBuffer.gpuEndTime - job.commandBuffer.gpuStartTime
         gpuEndTimes.append(job.commandBuffer.gpuEndTime)
         sampler.state = model.sampler.state(slot: job.rngSlot)
@@ -455,24 +478,28 @@ package final class GenerationSession {
         guard p + 2 < model.capacity else { return nil }
         let slotIn = k % 2, slotOut = (k + 1) % 2
         if let state { model.sampler.setState(state, slot: slotIn) }
+        let encodeStart = timeline == nil ? 0 : FrameTimeline.now()
         let n = config.codebookSize + 1
         let kernels = model.tower.k
-        let (cb, enc) = model.commandBuffer()
-        try kernels.sampleMain(enc, logits: model.backbone.cand, rng: model.sampler.rng, frames: model.backbone.frames,
+        let frame = try FrameEncoder(model: model, stages: timeline?.stages, first: "sample.main")
+        try kernels.sampleMain(frame.encoder, logits: model.backbone.cand, rng: model.sampler.rng, frames: model.backbone.frames,
                                code0: model.tower.codes[0], semantic: model.tower.semantic, status: model.sampler.status,
                                params: kernelParams(params, n: n, rngIn: slotIn, rngOut: slotOut, position: p, head: 0))
-        try encodeTower(enc, position: p, hiddenRow: k == 0 ? lastHiddenRow : 0) { head in
-            try kernels.sampleTower(enc, logits: model.tower.headLogits, logitsOffset: head * config.codebookSize, rng: model.sampler.rng,
+        try encodeTower(stage: frame.stage, position: p, hiddenRow: k == 0 ? lastHiddenRow : 0) { head in
+            try kernels.sampleTower(frame.stage("sample.tower"), logits: model.tower.headLogits, logitsOffset: head * config.codebookSize, rng: model.sampler.rng,
                                     frames: model.backbone.frames, codeOut: model.tower.codes[head + 1], status: model.sampler.status,
                                     params: kernelParams(params, n: config.codebookSize, rngIn: slotOut, rngOut: slotOut, position: p, head: head))
         }
-        try model.backbone.forward(enc, rows: 1, pos0: p + 1)
-        try model.backbone.candidateLogits(enc, row0: 0, rows: 1)
-        enc.endEncoding()
+        try model.backbone.forward(frame.stage("backbone"), rows: 1, pos0: p + 1)
+        try model.backbone.candidateLogits(frame.stage("lmhead.cand"), row0: 0, rows: 1)
+        frame.encoder.endEncoding()
+        let cb = frame.commandBuffer
         cb.commit()
+        let commit = timeline == nil ? 0 : FrameTimeline.now()
         model.track(cb)
         encodedFrames += 1
-        return FrameJob(commandBuffer: cb, position: p, rngSlot: slotOut, params: params, startState: state)
+        return FrameJob(commandBuffer: cb, position: p, rngSlot: slotOut, params: params, startState: state, encodeStart: encodeStart, commit: commit,
+                        stageNames: frame.names, stageSamples: frame.samples)
     }
 
     private func kernelParams(_ params: SamplingParams, n: Int, rngIn: Int, rngOut: Int, position: Int, head: Int) -> SamplerKernelParams {
@@ -482,17 +509,16 @@ package final class GenerationSession {
 
     /// The tower for position `p`: the shared layers, then residual layer i and
     /// head i for each of the nine heads, with `afterHead(i)` encoded between heads.
-    private func encodeTower(_ enc: MTLComputeCommandEncoder, position p: Int, hiddenRow: Int, afterHead: (Int) throws -> Void) throws {
+    /// `stage(name)` returns the encoder for the next stage.
+    private func encodeTower(stage: (String) -> MTLComputeCommandEncoder, position p: Int, hiddenRow: Int, afterHead: (Int) throws -> Void) throws {
         model.tower.captureLayers = trace && p == promptRows - 1
         defer { model.tower.captureLayers = false }
         let frames = model.backbone.framesView(p)
         let codebooks = model.weights.tower.codebookEmbeddings
+        try model.tower.decodeShared(stage("tower.shared"), hidden: model.backbone.hiddenOut, hiddenRow: hiddenRow, frames: frames, pos: p, codebooks: codebooks)
         for i in 0..<(config.numCodebooks - 1) {
-            if i == 0 {
-                try model.tower.decodeShared(enc, hidden: model.backbone.hiddenOut, hiddenRow: hiddenRow, frames: frames, pos: p, codebooks: codebooks)
-            } else {
-                try model.tower.residualStep(enc, i, frames: frames, pos: p, codebooks: codebooks)
-            }
+            let out = try model.tower.residualStep(stage("tower.residual"), i, frames: frames, pos: p, codebooks: codebooks)
+            try model.tower.head(stage("tower.head"), i, input: out)
             try afterHead(i)
         }
     }
@@ -506,7 +532,7 @@ package final class GenerationSession {
         model.tower.setMain(row: 0, main: frame[0])
         for i in 1..<(config.numCodebooks - 1) { model.tower.setCode(row: 0, index: i, value: frame[1 + i]) }
         let (cb, enc) = model.commandBuffer()
-        try encodeTower(enc, position: p, hiddenRow: lastHiddenRow) { _ in }
+        try encodeTower(stage: { _ in enc }, position: p, hiddenRow: lastHiddenRow) { _ in }
         enc.endEncoding()
         cb.commit()
         cb.waitUntilCompleted()

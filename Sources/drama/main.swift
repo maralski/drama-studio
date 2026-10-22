@@ -242,7 +242,7 @@ func decodeCommand(_ args: Args) throws {
     try writeWav(frames: try readFrames(framesPath), to: wavPath)
 }
 
-/// drama generate --text "..." [--ref clip_codes.npy --ref-text "..."] --out frames.npy
+/// drama generate --text "..." [--ref clip_codes.npy --ref-text "..."] --out frames.npy [--trace-frames timings.csv [--trace-stages]]
 func generate(_ args: Args) throws {
     guard let text = args["text"], let outPath = args["out"] else { fail("usage: drama generate --text <text> [--ref codes.npy --ref-text <transcript>] --out frames.npy") }
     let model = try loadModel(args)
@@ -264,8 +264,11 @@ func generate(_ args: Args) throws {
     config.stopOnLoop = !args.flags.contains("no-loop-guard")
     config.capSecondsPerCue = args.double("cap-per-cue", config.capSecondsPerCue)
     if let s = args["seed"].flatMap(UInt64.init) { config.seed = s }
+    FileHandle.standardError.write((scheduleLine(model, args: args) + "\n").data(using: .utf8)!)
     if args.flags.contains("warm") { model.warmUp() }
     let gen = FrameGenerator(model: model, tokenizer: tokenizer)
+    let timeline = args["trace-frames"] == nil ? nil : try FrameTimeline(device: model.ctx.device, stages: args.flags.contains("trace-stages"))
+    gen.timeline = timeline
     if args.flags.contains("no-retry") { config.minSpokenRatio = 0 }
     if DramaCodec.modelsExist(), !args.flags.contains("no-codec") {
         let codec = try awaitBlocking { try await DramaCodec(directory: DramaCodec.defaultDirectory) }
@@ -290,6 +293,10 @@ func generate(_ args: Args) throws {
         }
     }
     try NPY.write(.int64(all.flatMap { $0.map(Int64.init) }, shape: [all.count, 11]), to: URL(fileURLWithPath: outPath))
+    if let path = args["trace-frames"], let timeline {
+        try timeline.csv().write(toFile: path, atomically: true, encoding: .utf8)
+        print("wrote \(timeline.rows.count) frame timings to \(path)")
+    }
     print("wrote \(all.count) frames (\(String(format: "%.1f", Double(all.count) * 2048 / 44100))s of audio) to \(outPath)")
     guard let wavPath = args["wav"], !all.isEmpty else { return }
     if audio.isEmpty { return try writeWav(frames: all, to: wavPath) }

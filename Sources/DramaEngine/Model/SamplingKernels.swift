@@ -58,7 +58,7 @@ struct SamplerKernelParams {
 }
 
 extension Kernels {
-    static let samplerThreads = 1024
+    static let samplerThreads = 256
 
     /// Samples code `head + 1` from `logits` (4096 floats at `logitsOffset`) and writes
     /// it to `codeOut[0]` and to the frame row's slot.

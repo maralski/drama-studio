@@ -66,6 +66,8 @@ package final class FrameGenerator {
     /// take to generate, so the stop fires within about a reading of the
     /// audio going silent.
     package static let silenceProbeEveryFrames = 16
+    /// Set, every decode session records its per-frame timestamps here.
+    package var timeline: FrameTimeline?
 
     static let charactersPerSecond = 16.0
 
@@ -201,7 +203,7 @@ package final class FrameGenerator {
             for attempt in 0...maxRetries {
                 guard shouldContinue() else { break }
                 let t0 = Date()
-                let session = try GenerationSession(model: model, prompt: prompt, prefixRows: prefixRows)
+                let session = try GenerationSession(model: model, prompt: prompt, prefixRows: prefixRows, timeline: timeline)
                 let prefillSeconds = Date().timeIntervalSince(t0)
                 if attempt == 0 { onEvent(.prefilled(rows: prompt.count)) }
                 var frames: [Frame] = []

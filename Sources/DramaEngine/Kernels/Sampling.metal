@@ -163,9 +163,14 @@ inline ulong xoshiro_next(thread ulong* s) {
     return result;
 }
 
-#define SAMPLE_TG 1024
-#define SAMPLE_SLOTS 5
+// A sampler is one threadgroup. At 1024 threads it waits for a whole core to
+// drain whenever another process uses the GPU, about 2 ms per draw instead of
+// 40 us; 256 threads find room on a busy core.
+#define SAMPLE_TG 256
+#define SAMPLE_SG (SAMPLE_TG / 32)
+#define SAMPLE_SLOTS 17
 #define SAMPLE_MAX_KEPT 1024
+static_assert(SAMPLE_TG * SAMPLE_SLOTS >= 4097 && SAMPLE_SLOTS <= 32, "every candidate needs a slot and a bit of `taken`");
 
 struct SamplerParams {
     uint n;
@@ -237,7 +242,7 @@ struct SamplerShared {
 };
 
 // One draw of the CPU `Sampler.sample`: returns the index into `logits`. Every
-// thread of the 1024-wide threadgroup must call it; `rng` is advanced on
+// thread of the SAMPLE_TG-wide threadgroup must call it; `rng` is advanced on
 // thread 0 only. `bad` is set when a logit is not finite.
 inline uint sample_one(device const float* logits, uint n, df t, df topP, uint topK,
                        thread ulong* rng, threadgroup SamplerShared& sh,
@@ -256,7 +261,7 @@ inline uint sample_one(device const float* logits, uint n, df t, df topP, uint t
     if (lane == 0) sh.partials[sg].val = localMax;
     threadgroup_barrier(mem_flags::mem_threadgroup);
     if (sg == 0) {
-        float m = simd_max(sh.partials[lane].val);
+        float m = simd_max(lane < SAMPLE_SG ? sh.partials[lane].val : -INFINITY);
         if (lane == 0) sh.maxVal = m;
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
@@ -276,7 +281,7 @@ inline uint sample_one(device const float* logits, uint n, df t, df topP, uint t
     if (lane == 0) sh.sums[sg] = local;
     threadgroup_barrier(mem_flags::mem_threadgroup);
     if (sg == 0) {
-        df total = df_simd_sum(sh.sums[lane]);
+        df total = df_simd_sum(lane < SAMPLE_SG ? sh.sums[lane] : df_make(0.0f, 0.0f));
         if (lane == 0) {
             sh.expSum = total;
             sh.kept = 0;
@@ -304,7 +309,9 @@ inline uint sample_one(device const float* logits, uint n, df t, df topP, uint t
         if (lane == 0) sh.partials[sg] = best;
         threadgroup_barrier(mem_flags::mem_threadgroup);
         if (sg == 0) {
-            Cand w = cand_simd_best(sh.partials[lane]);
+            Cand none;
+            none.val = -INFINITY; none.idx = 0xffffffffu; none.ehi = 0.0f; none.elo = 0.0f;
+            Cand w = cand_simd_best(lane < SAMPLE_SG ? sh.partials[lane] : none);
             if (lane == 0) {
                 df term = df_make(w.ehi, w.elo);
                 cumulative = df_add(cumulative, df_div(term, expSum));
@@ -331,12 +338,12 @@ inline uint sample_one(device const float* logits, uint n, df t, df topP, uint t
         for (uint j = 0; j < kept; j++) sh.keptU[j] = (xoshiro_next(rng) >> 11) + 1;
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
-    if (tid < kept) {
-        ulong m = sh.keptU[tid];
+    for (uint j = tid; j < kept; j += SAMPLE_TG) {
+        ulong m = sh.keptU[j];
         df exponential = df_neg(df_log_unit(m));
-        df p = df_div(sh.keptE[tid], sh.keptSum);
+        df p = df_div(sh.keptE[j], sh.keptSum);
         df score = df_div(p, exponential);
-        sh.keptE[tid] = score;
+        sh.keptE[j] = score;
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
     if (tid == 0) {

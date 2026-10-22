@@ -159,7 +159,7 @@ final class Tower {
         }
     }
 
-    /// Decode: the shared layers plus residual layer 0 and head 0, for one row.
+    /// Decode: the shared layers for one row.
     func decodeShared(_ enc: MTLComputeCommandEncoder, hidden: Buf, hiddenRow: Int, frames: Buf, pos: Int, codebooks: TensorRef) throws {
         var h = hidden
         var off = hiddenRow
@@ -167,15 +167,18 @@ final class Tower {
             h = try layer(enc, i, hidden: h, hiddenOffset: off, codes: codes[0], frames: frames, rows: 1, pos0: pos, codebooks: codebooks, addUnseen: i == 0)
             off = 0
         }
-        try residualStep(enc, 0, frames: frames, pos: pos, codebooks: codebooks)
     }
 
-    /// Residual layer `i` (input code i) followed by head i (logits for code i + 1).
-    func residualStep(_ enc: MTLComputeCommandEncoder, _ i: Int, frames: Buf, pos: Int, codebooks: TensorRef) throws {
+    /// Residual layer `i` for one row (input code i); returns its output.
+    func residualStep(_ enc: MTLComputeCommandEncoder, _ i: Int, frames: Buf, pos: Int, codebooks: TensorRef) throws -> Buf {
         let index = config.towerLayers + i
         let input = (index - 1) % 2 == 0 ? hiddenA : hiddenB
-        let out = try layer(enc, index, hidden: input, hiddenOffset: 0, codes: codes[i], frames: frames, rows: 1, pos0: pos, codebooks: codebooks, addUnseen: false)
-        try k.gemv(enc, weights.heads[i], x: out, y: headLogits, yOffset: i * config.codebookSize, m: 1)
+        return try layer(enc, index, hidden: input, hiddenOffset: 0, codes: codes[i], frames: frames, rows: 1, pos0: pos, codebooks: codebooks, addUnseen: false)
+    }
+
+    /// Head `i` on residual layer i's output: the logits for code i + 1.
+    func head(_ enc: MTLComputeCommandEncoder, _ i: Int, input: Buf) throws {
+        try k.gemv(enc, weights.heads[i], x: input, y: headLogits, yOffset: i * config.codebookSize, m: 1)
     }
 
     func readHeadLogits(head: Int) -> [Float] { headLogits.read(config.codebookSize, offset: head * config.codebookSize) }

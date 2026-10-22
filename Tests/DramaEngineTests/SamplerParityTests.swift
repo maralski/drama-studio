@@ -11,6 +11,8 @@ final class SamplerParityTests: XCTestCase {
     /// run (160,000 picks over the four tests, all identical when last run).
     static let samplesPerSet = ProcessInfo.processInfo.environment["DRAMA_SAMPLER_PARITY_SAMPLES"].flatMap(Int.init) ?? 2_000
     static let settings = [SamplingParams(temperature: 0.7, topK: 30, topP: 0.7), SamplingParams(temperature: 1.0, topK: 30, topP: 0.95)]
+    /// Keeps more candidates than a sampler threadgroup has threads.
+    static let wide = SamplingParams(temperature: 1.0, topK: 600, topP: 1.0)
     static let codebookSize = ModelConstants.codebookSize
     static let candidates = ModelConstants.codebookSize + 1
 
@@ -132,9 +134,9 @@ final class SamplerParityTests: XCTestCase {
 
     static func cycled(_ rows: [[Float]], count: Int) -> [[Float]] { (0..<count).map { rows[$0 % rows.count] } }
 
-    func checkTower(_ rows: [[Float]], seed: UInt64, label: String) throws {
+    func checkTower(_ rows: [[Float]], seed: UInt64, label: String, settings: [SamplingParams] = settings) throws {
         let harness = try Harness(n: rows[0].count, frameRows: Harness.batch + 1)
-        for p in Self.settings {
+        for p in settings {
             let start = Sampler(seed: seed).state
             let gpu = try harness.towerPicks(rows, start: start, settings: p)
             var cpu = Sampler(state: start)
@@ -146,11 +148,11 @@ final class SamplerParityTests: XCTestCase {
     }
 
     func testUniformLogits() throws {
-        try checkTower(Self.uniformRows(count: Self.samplesPerSet, n: Self.codebookSize, seed: 1, peak: false), seed: 11, label: "uniform")
+        try checkTower(Self.uniformRows(count: Self.samplesPerSet, n: Self.codebookSize, seed: 1, peak: false), seed: 11, label: "uniform", settings: Self.settings + [Self.wide])
     }
 
     func testPeakedLogits() throws {
-        try checkTower(Self.uniformRows(count: Self.samplesPerSet, n: Self.codebookSize, seed: 2, peak: true), seed: 12, label: "peaked")
+        try checkTower(Self.uniformRows(count: Self.samplesPerSet, n: Self.codebookSize, seed: 2, peak: true), seed: 12, label: "peaked", settings: Self.settings + [Self.wide])
     }
 
     func testRealTowerLogits() throws {
