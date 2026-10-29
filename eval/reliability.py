@@ -1,3 +1,5 @@
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """Reliability study: does every sentence come out as speech, every time?
 
 One row per (condition, seed): the drama CLI generates frames, the

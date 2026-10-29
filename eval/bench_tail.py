@@ -1,3 +1,5 @@
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """Stall tail of an interleaved bench A/B (eval/bench_ab.sh or perf_ab.sh
 output): per side, the rows-1 cells more than `--above` ms (default 2) over
 their column's median, with the column medians and ranges, so a binary whose

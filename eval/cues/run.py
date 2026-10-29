@@ -1,3 +1,5 @@
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """Performance-cue experiments: which chunking, retry, loop-guard and sampling
 policy keeps every sentence of a cue line?
 

@@ -1,4 +1,6 @@
 #!/bin/sh
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 # Interleaved A/B timing of one drama binary with and without the tuned kernel
 # schedule: GPU bench plus one end-to-end generation with a 10 s reference clip
 # (about 300 prompt rows, 600 frames). Side A runs --untuned, side B the cache.

@@ -1,3 +1,5 @@
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """Export the Drama 3 DAC codec to Core ML.
 
     ~/.cache/drama-codec-venv/bin/python -I Sources/DramaEngine/CodecConversion/convert_codec.py [--codec PATH] [--out DIR] [--only encoder|decoder|probe]

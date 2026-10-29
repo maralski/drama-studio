@@ -1,3 +1,5 @@
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """Run the vendored fish-speech Drama 3 oracle and write the docs/EVAL.md dump."""
 
 import argparse

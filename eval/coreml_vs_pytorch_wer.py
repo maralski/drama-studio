@@ -1,3 +1,5 @@
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """Decodes the same frames with the shipped Core ML codec and with the PyTorch codec, transcribes both, and compares word error rates."""
 import json, subprocess, sys
 from pathlib import Path

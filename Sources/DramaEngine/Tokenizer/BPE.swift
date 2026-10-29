@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 struct BPE: Sendable {
     struct Merge: Sendable {
         let rank: Int32

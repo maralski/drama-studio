@@ -1,3 +1,5 @@
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """Speaker similarity (resemblyzer embedding cosine) between the reference clip and each cloned e2e output; writes it into report.json."""
 import json, sys
 from pathlib import Path

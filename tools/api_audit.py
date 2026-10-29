@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """List DramaEngine's public API and check its documentation rules.
 
     swift package dump-symbol-graph --minimum-access-level public

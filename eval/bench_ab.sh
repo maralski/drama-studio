@@ -1,4 +1,6 @@
 #!/bin/sh
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 # Interleaved A/B of `drama bench` between two binaries, no generation. Writes
 # bench_<side>_<i>.txt in perf_ab.sh's layout so eval/perf_ab_summary.py
 # summarizes it; load.txt gets an uptime line before every run. Pass a third

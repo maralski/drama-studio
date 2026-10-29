@@ -1,3 +1,5 @@
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """Tail and drift of `drama generate --trace-frames` CSVs: per file, the frame
 interval's median, p90, p99 and max, the frames more than `--above` ms (default
 2) over the median, and the median of the first and last thirds of each

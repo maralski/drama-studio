@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """GPU ms per frame by frame position within the chunk, per condition, from
 eval/probe_cadence.sh traces: the frames before a gated probe's first reading
 run with no probe, so the same positions across conditions in the same round

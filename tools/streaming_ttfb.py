@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """Time to first audio byte of `stream: true` through `curl -N`, against two servers, interleaved.
 
     tools/streaming_ttfb.py --side before=http://127.0.0.1:8781:PID --side after=http://127.0.0.1:8782:PID --runs 5

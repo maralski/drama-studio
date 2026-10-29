@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 import Foundation
 
 /// The File > Open Recent Project list: most recent first, at most ten, in UserDefaults.

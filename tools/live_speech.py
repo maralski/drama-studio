@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """Speaks text from stdin through POST /v1/audio/speech/live as it is typed or piped.
 
 Each stdin line goes out as one HTTP chunk the moment it is read; an empty line

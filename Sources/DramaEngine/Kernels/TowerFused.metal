@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 // One-row (decode) kernels for the codebook tower. Each reproduces the
 // arithmetic of the dispatches it replaces in the same order, so a tower run
 // with them is bit-identical to the prefill path's dispatches on one row.

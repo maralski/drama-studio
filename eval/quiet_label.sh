@@ -1,4 +1,6 @@
 #!/bin/sh
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 # Labels a measurement with the GPU's state right before it: a 120-frame
 # generation on a drama binary with 256-thread samplers, traced per frame, and
 # the sampler stages summed. Under another GPU client the samplers are the

@@ -1,4 +1,6 @@
 #!/bin/sh
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 # The cue-line and prose harness per silence-probe cadence: variant a (the
 # pre-study defaults, where the stop matters most), seeds 1 to 5, for every
 # condition, each whole harness run under tools/with-gpu-lock.

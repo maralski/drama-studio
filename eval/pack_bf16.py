@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """Packs bf16 matrices from the drama-3 shards into the exponent-coded layout
 gemv_packed_t reads (Sources/DramaEngine/Kernels/PackedLinear.metal), unpacks
 them again and checks every bit pattern came back, then reports bits per

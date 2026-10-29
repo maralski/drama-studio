@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 // Router: softmax over 256 experts, top-8, renormalized. One threadgroup of
 // 256 threads per token.
 struct RouterParams {

@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 /// The semantic version of the DramaEngine library.
 ///
 /// A major version changes when a public symbol is removed or changes meaning,

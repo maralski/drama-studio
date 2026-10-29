@@ -1,4 +1,6 @@
 #!/bin/sh
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 # Interleaved end-to-end timing of silence-probe cadences on the app's path:
 # sentence chunking, the text-derived cap, the Core ML codec and its probe,
 # one process at a time under tools/with-gpu-lock, with Drama Studio quit.

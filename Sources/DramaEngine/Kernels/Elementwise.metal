@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 kernel void residual_add(device float* x [[buffer(0)]],
                          device const float* y [[buffer(1)]],
                          uint i [[thread_position_in_grid]]) {

@@ -1,3 +1,5 @@
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """Check the Core ML codec against the PyTorch reference.
 
     tools/.venv/bin/python -I tools/verify_codec.py [--models DIR] [--work DIR] [--fixtures DIR]

@@ -1,3 +1,5 @@
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """How late the silence stop fires, from the cue harness's rows.
 
 Each chunk line the drama CLI logs carries `spoken=<s>` (the chunk's audio

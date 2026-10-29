@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """Runs one command while holding the machine's GPU lock, so timed GPU runs and
 model loads never overlap: one `drama` process, one benchmark, one test binary
 that loads the model, at a time.

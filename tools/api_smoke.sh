@@ -1,4 +1,6 @@
 #!/bin/zsh
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 # Drives a running Drama Studio API end to end with curl and checks each answer.
 # Usage: tools/api_smoke.sh [base-url]   (default http://127.0.0.1:8780)
 # Creates two voices named "API smoke ..." and deletes them again.

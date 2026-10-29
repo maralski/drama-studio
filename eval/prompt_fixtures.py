@@ -1,3 +1,5 @@
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """Writes prompt and chunking fixtures from the fish-speech reference code."""
 import json, sys, glob, os
 import torch

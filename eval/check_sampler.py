@@ -1,3 +1,5 @@
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """Checks a sampled engine trace: every pick must lie inside the top-k / top-p
 set of the logits the engine itself produced, and the rank histogram must look
 like draws from the truncated softmax rather than uniform noise."""

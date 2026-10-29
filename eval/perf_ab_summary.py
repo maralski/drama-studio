@@ -1,3 +1,5 @@
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """Summarize eval/perf_ab.sh output: median and range per side of the bench
 rows and of the end-to-end prefill seconds and frames per second."""
 import re, statistics, sys

@@ -1,3 +1,5 @@
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """Score dump b against reference dump a (docs/EVAL.md); exit 1 if a threshold fails."""
 
 import argparse

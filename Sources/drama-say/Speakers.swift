@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 import AVFoundation
 
 /// Plays the studio's 16-bit mono 44.1 kHz PCM as it arrives. The player node

@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 // Top-k / top-p sampling on the GPU, reproducing the CPU `Sampler` bit for bit
 // in its decisions: the CPU works in double, Metal has no double, so the
 // arithmetic here runs in double-float (an unevaluated hi + lo pair of fp32,

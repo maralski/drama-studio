@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 enum ByteLevel {
     static let scalarForByte: [Unicode.Scalar] = {
         var next: UInt32 = 256

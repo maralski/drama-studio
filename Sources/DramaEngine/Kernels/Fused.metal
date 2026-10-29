@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 // Fused decode kernels. Each one performs the fp32 operations of the kernels
 // it replaces in the same order, so its outputs are bit-identical to theirs.
 

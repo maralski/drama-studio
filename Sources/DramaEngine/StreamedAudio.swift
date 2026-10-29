@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 /// Joins a run's audio events into one signal: partials as they arrive, and
 /// of each chunk's final audio only what its partials did not already carry.
 ///

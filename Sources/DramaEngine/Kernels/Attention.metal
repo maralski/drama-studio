@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 // Partial RoPE on contiguous [rows, 256] with the row's position = pos0 + row / heads.
 struct RopeParams {
     uint heads;

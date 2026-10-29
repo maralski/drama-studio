@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """Information content of the bf16 weights a decode frame streams, per matrix
 family, read with numpy over the memory-mapped safetensors shards (CPU only).
 

@@ -1,3 +1,5 @@
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """Decode engine frames ([N, 11]) or codes ([10, T]) to a 44.1 kHz wav with the reference DAC codec on the CPU."""
 import argparse, time
 from pathlib import Path

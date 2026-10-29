@@ -1,3 +1,5 @@
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """Rescores non-English reliability rows with Whisper's multilingual `small`
 model (the study runs small.en, which cannot transcribe French or German) and
 writes the corrected rows to <out>/rescored/*.jsonl, leaving the originals."""

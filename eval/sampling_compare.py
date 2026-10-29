@@ -1,3 +1,5 @@
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """Pairs a reliability variant against the shipped-default rows by condition
 and seed, and reports what a sampling change does to prose: rows lost or
 won, the word error rate shift with its standard error, the sentences

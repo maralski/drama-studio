@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 struct AddedTokens: Sendable {
     enum Segment {
         case text(ArraySlice<UInt8>)

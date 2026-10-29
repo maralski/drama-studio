@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """Summarizes `drama generate --trace-frames` CSVs: where each decode frame's
 wall time goes, in milliseconds per frame, median and mean over the frames of
 every session after its first `--skip` frames.

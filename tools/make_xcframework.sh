@@ -1,4 +1,6 @@
 #!/bin/zsh
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 # Builds dist/DramaEngine.xcframework for macOS on Apple silicon, then proves a
 # consumer can use it: Examples/SpeakCLI is built against the framework instead
 # of the source package and run with --check and --mock.

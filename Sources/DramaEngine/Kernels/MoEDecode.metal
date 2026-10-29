@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 // The MoE layer of one decode row in three dispatches: moe_pre_bf16 (router,
 // shared gate and up, expert gate), moe_mid_fp8 (routing and the routed
 // gate-up), moe_post_fp8 (routed down, shared down, combine). Bit-identical to

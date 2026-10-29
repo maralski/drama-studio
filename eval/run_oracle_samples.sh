@@ -1,4 +1,6 @@
 #!/bin/zsh
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 # Waits for the forced run, then samples the two-sentence text with the oracle at two seeds.
 cd "$(dirname "$0")"
 while [ ! -f out/plain2_ref_f32.npz ]; do sleep 20; done

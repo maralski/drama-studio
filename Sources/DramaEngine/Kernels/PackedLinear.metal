@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 // GEMV over exponent-coded bf16 (eval/weight_entropy.py, eval/pack_bf16.py).
 // A row is tiles of 256 weights. Per tile: a header word (bits 0-7 the base
 // exponent, bits 8-31 the byte offset of the tile's escape list), 256

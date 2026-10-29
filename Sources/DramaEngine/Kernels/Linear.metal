@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 // y[m*N + n] = sum_k W[n][k] * x[m*K + k] for bf16 W [N, K], fp32 x.
 // One simdgroup per output row and MTILE-token tile (the grid's second
 // dimension); a threadgroup holds simdgroups_per_threadgroup rows, so the host

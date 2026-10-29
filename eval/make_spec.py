@@ -1,3 +1,5 @@
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """Write the example prompt specs under eval/specs; clone.json also encodes its clip."""
 
 import argparse

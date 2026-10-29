@@ -1,3 +1,5 @@
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """End-to-end speech evaluation of the Metal engine.
 
 For each sentence in sentences.json, with and without the reference voice:

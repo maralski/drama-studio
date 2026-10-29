@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 """Summarises eval/probe_cadence.sh runs per condition: frames per second and
 GPU ms per frame from the --trace-frames CSVs, the probe's share of the decode
 from the chunk log, where each chunk ended, and whether the frames matched the
