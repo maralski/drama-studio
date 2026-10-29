@@ -53,13 +53,15 @@ final class SessionModel {
     var playbackRate: Double {
         didSet {
             player.rate = Float(playbackRate)
-            UserDefaults.standard.set(playbackRate, forKey: Self.playbackRateKey)
+            AppHome.defaults.set(playbackRate, forKey: Self.playbackRateKey)
         }
     }
     @ObservationIgnored var playsWhileGenerating = true
 
     let library: VoiceLibrary
-    let synthesizer: any SpeechSynthesizer
+    private(set) var synthesizer: any SpeechSynthesizer
+    /// Why generation is refused right now; the app asks its setup coordinator.
+    @ObservationIgnored var generationRefusal: @MainActor () -> String? = { nil }
     @ObservationIgnored private let pronunciationURL: URL
     @ObservationIgnored private let player = StreamingPlayer()
     @ObservationIgnored private let previewPlayer = StreamingPlayer()
@@ -85,7 +87,7 @@ final class SessionModel {
         self.synthesizer = synthesizer
         self.library = library
         self.pronunciationURL = pronunciationURL
-        let rate = UserDefaults.standard.double(forKey: Self.playbackRateKey)
+        let rate = AppHome.defaults.double(forKey: Self.playbackRateKey)
         playbackRate = Self.playbackRates.contains(rate) ? rate : 1
         player.rate = Float(playbackRate)
         player.onDrained = { [weak self] in self?.playbackDrained() }
@@ -127,7 +129,7 @@ final class SessionModel {
     /// No seed, so every generation draws a fresh one.
     var config: GenerationConfig {
         var config = GenerationConfig.make(expressiveness: expressiveness, quickPreview: quickPreview)
-        if UserDefaults.standard.object(forKey: Self.streamsAudioKey) as? Bool ?? true { config.streaming = .defaultLowLatency }
+        if AppHome.defaults.object(forKey: Self.streamsAudioKey) as? Bool ?? true { config.streaming = .defaultLowLatency }
         return config
     }
 
@@ -424,6 +426,10 @@ final class SessionModel {
     /// rewrites every text.
     private func start(_ request: SpeechRequest, as job: Job) {
         stopPreview()
+        if let refusal = generationRefusal() {
+            settleAfterGeneration(.failed(refusal))
+            return
+        }
         var request = request
         switch job {
         case .take:
@@ -623,6 +629,20 @@ final class SessionModel {
         }
     }
 
+    /// Swaps in the engine once setup has put its files in place; a run under way stops first.
+    func replaceSynthesizer(_ next: any SpeechSynthesizer) {
+        stopGeneration()
+        synthesizer = next
+        refreshEngineState()
+    }
+
+    /// The setup window's last step: a short line in the editor, ready for Generate.
+    func prepareFirstLine() {
+        replaceSource(with: .plain(Examples.firstLine.text))
+        screenplayMode = false
+        notice = nil
+    }
+
     /// The engine also loads for API requests, so ask it rather than infer from this session's runs.
     func refreshEngineState() {
         Task { modelLoaded = await synthesizer.isLoaded }
@@ -779,6 +799,7 @@ final class SessionModel {
     }
 
     func encodeVoice(clip: URL, transcript: String, name: String) async throws {
+        if let refusal = generationRefusal() { throw GenerationRefused(message: refusal) }
         let voice = try await synthesizer.encodeReference(audioURL: clip, transcript: transcript, name: name)
         try library.add(voice)
     }

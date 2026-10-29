@@ -1,16 +1,18 @@
 // Copyright 2026 Peter Marelas
 // SPDX-License-Identifier: Apache-2.0
 import AppKit
+import DramaEngine
 import DramaServer
 import SwiftUI
 
 struct SettingsView: View {
     let server: APIServerController
+    let setup: SetupCoordinator
 
     var body: some View {
         TabView {
             Tab("General", systemImage: "gearshape") {
-                GeneralSettingsView(server: server)
+                GeneralSettingsView(server: server, setup: setup)
             }
             Tab("Pronunciation", systemImage: "character.book.closed") {
                 PronunciationSettingsView()
@@ -22,11 +24,13 @@ struct SettingsView: View {
 
 private struct GeneralSettingsView: View {
     let server: APIServerController
+    let setup: SetupCoordinator
     @AppStorage(ModelSetup.customDirectoryKey) private var modelPath = ""
     @AppStorage(APIServerController.startsWithAppKey) private var startsWithApp = true
     @AppStorage(APIServerController.portKey) private var port = Int(APIService.defaultPort)
     @AppStorage(SessionModel.streamsAudioKey) private var streamsAudio = true
     @State private var status: ModelSetup.Status = .missing
+    @State private var codecReady = true
 
     var body: some View {
         Form {
@@ -39,17 +43,21 @@ private struct GeneralSettingsView: View {
                 LabeledContent("Status") { statusLabel }
                 HStack {
                     Button("Choose Folder\u{2026}") { chooseFolder() }
-                    Button("Use Hugging Face Cache") { modelPath = "" }
+                    Button("Use Default Location") { modelPath = "" }
                         .disabled(modelPath.isEmpty)
                 }
                 if let problem = status.problem {
                     Text(problem).font(.caption).foregroundStyle(.secondary)
-                    HStack {
-                        Text(ModelSetup.downloadCommand).font(.body.monospaced()).textSelection(.enabled)
+                }
+                if !codecReady, let command = codecCommand {
+                    Text("The Core ML codec models are missing, and this build has no codec download. Build them once in Terminal:")
+                        .font(.caption).foregroundStyle(.secondary)
+                    HStack(alignment: .top) {
+                        Text(command).font(.caption.monospaced()).textSelection(.enabled)
                         Spacer()
                         Button("Copy Command") {
                             NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(ModelSetup.downloadCommand, forType: .string)
+                            NSPasteboard.general.setString(command, forType: .string)
                         }
                     }
                     .padding(8)
@@ -63,17 +71,28 @@ private struct GeneralSettingsView: View {
             Section("About") {
                 Text("Drama Studio by Peter Marelas").font(.headline)
                 Text("Built with Fish Audio. Drama Studio runs Fish Audio Drama 3 locally on Apple silicon.").foregroundStyle(.secondary)
-                Link("Fish Audio Community License", destination: ModelSetup.licenseURL)
+                Link("Fish Audio Community License", destination: TermsAgreement.licenseURL)
+                if let date = TermsAgreement(defaults: AppHome.defaults).acceptedDate {
+                    Text("You agreed to its terms on \(date.formatted(date: .long, time: .shortened)).").foregroundStyle(.secondary)
+                }
             }
         }
         .formStyle(.grouped)
-        .task(id: modelPath) { status = ModelSetup.status(customPath: modelPath) }
+        .task(id: modelPath) {
+            status = ModelSetup.status(customPath: modelPath)
+            codecReady = DramaCodec.modelsExist(in: AppHome.codec)
+        }
+        .onChange(of: modelPath) { setup.resume() }
+    }
+
+    private var codecCommand: String? {
+        CodecBundle(info: Bundle.main.infoDictionary) == nil ? ModelSetup.codecConversionCommand() : nil
     }
 
     private var location: String {
         switch status {
         case .ready(let url), .incomplete(let url): url.path
-        case .missing: modelPath.isEmpty ? "Hugging Face cache (not downloaded)" : modelPath
+        case .missing: modelPath.isEmpty ? "\(AppHome.models.path) (not downloaded)" : modelPath
         }
     }
 

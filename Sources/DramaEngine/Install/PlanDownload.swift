@@ -66,7 +66,7 @@ package struct PlanDownload: Sendable {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         var finished = plan.files.filter { plan.isInPlace($0, in: directory) }.reduce(Int64(0)) { $0 + $1.size }
         var filesDone = plan.files.count - plan.missingFiles(in: directory).count
-        let gate = ReportGate(interval: reportInterval)
+        let gate = ProgressThrottle(interval: reportInterval)
         for file in plan.missingFiles(in: directory) {
             let base = DownloadProgress(totalBytes: plan.totalBytes, doneBytes: finished, file: file.path, fileSize: file.size,
                                         filesDone: filesDone, fileCount: plan.files.count)
@@ -101,15 +101,15 @@ package struct PlanDownload: Sendable {
     }
 }
 
-/// Lets a report through at most once per interval.
-private final class ReportGate: @unchecked Sendable {
+/// Lets a progress report through at most once per interval.
+package final class ProgressThrottle: @unchecked Sendable {
     private let interval: Duration
     private let lock = NSLock()
     private var last: ContinuousClock.Instant?
 
-    init(interval: Duration) { self.interval = interval }
+    package init(interval: Duration = .milliseconds(100)) { self.interval = interval }
 
-    func allows() -> Bool {
+    package func allows() -> Bool {
         let now = ContinuousClock.now
         return lock.withLock {
             if let last, now - last < interval { return false }

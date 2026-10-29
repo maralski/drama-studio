@@ -10,23 +10,28 @@ struct DramaStudioApp: App {
     @State private var model: SessionModel
     @State private var server: APIServerController
     @State private var presence: AppPresence
+    @State private var setup: SetupCoordinator
 
     init() {
         if CommandLine.arguments.contains("--check-resources") { exit(Self.checkResources()) }
         let model = SessionModel(synthesizer: ModelSetup.makeSynthesizer(), library: VoiceLibrary())
         let server = APIServerController(session: model)
         let presence = AppPresence()
+        let setup = SetupCoordinator(services: .live(session: model, server: server))
+        model.generationRefusal = { [setup] in setup.generationRefusal }
         _model = State(initialValue: model)
         _server = State(initialValue: server)
         _presence = State(initialValue: presence)
+        _setup = State(initialValue: setup)
         server.startIfEnabled()
         presence.start()
     }
 
     var body: some Scene {
         Window("Drama Studio", id: Self.mainWindowID) {
-            ContentView(model: model)
+            ContentView(model: model, setup: setup)
                 .environment(server)
+                .defaultAppStorage(AppHome.defaults)
                 .onOpenURL { model.open($0) }
         }
         .defaultSize(width: 1240, height: 780)
@@ -34,6 +39,7 @@ struct DramaStudioApp: App {
 
         MenuBarExtra {
             MenuBarContent(model: model, server: server, presence: presence)
+                .defaultAppStorage(AppHome.defaults)
         } label: {
             Image(nsImage: MenuBarIcon.image)
         }
@@ -44,7 +50,8 @@ struct DramaStudioApp: App {
         .defaultSize(width: 760, height: 500)
 
         Settings {
-            SettingsView(server: server)
+            SettingsView(server: server, setup: setup)
+                .defaultAppStorage(AppHome.defaults)
         }
     }
 

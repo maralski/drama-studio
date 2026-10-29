@@ -5,10 +5,19 @@ import SwiftUI
 
 struct ContentView: View {
     @Bindable var model: SessionModel
+    let setup: SetupCoordinator
     @State private var showsInspector = true
     @State private var newVoiceClip: NewVoiceRequest?
 
     var body: some View {
+        if setup.stage == .ready {
+            studio
+        } else {
+            SetupView(setup: setup, model: model)
+        }
+    }
+
+    private var studio: some View {
         NavigationSplitView {
             VoiceLibraryView(model: model, newVoice: $newVoiceClip)
                 .navigationSplitViewColumnWidth(min: 210, ideal: 240, max: 320)

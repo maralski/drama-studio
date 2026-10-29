@@ -21,10 +21,10 @@ final class APIServerController {
 
     init(session: SessionModel) {
         self.session = session
-        UserDefaults.standard.register(defaults: [Self.startsWithAppKey: true, Self.portKey: Int(APIService.defaultPort)])
+        AppHome.defaults.register(defaults: [Self.startsWithAppKey: true, Self.portKey: Int(APIService.defaultPort)])
     }
 
-    var port: UInt16 { UInt16(exactly: UserDefaults.standard.integer(forKey: Self.portKey)) ?? APIService.defaultPort }
+    var port: UInt16 { UInt16(exactly: AppHome.defaults.integer(forKey: Self.portKey)) ?? APIService.defaultPort }
     var url: String { "http://127.0.0.1:\(state.port ?? port)" }
 
     var isRunning: Bool {
@@ -44,7 +44,7 @@ final class APIServerController {
     }
 
     func startIfEnabled() {
-        if UserDefaults.standard.bool(forKey: Self.startsWithAppKey) { start() }
+        if AppHome.defaults.bool(forKey: Self.startsWithAppKey) { start() }
     }
 
     func start() {
@@ -61,7 +61,8 @@ final class APIServerController {
             token: token,
             version: Self.version,
             jobs: jobs,
-            engineBusyElsewhere: { [session] in await session.state.isGenerating }
+            engineBusyElsewhere: { [session] in await session.state.isGenerating },
+            refusal: { [session] in await session.generationRefusal() }
         )
         let server = APIServer(service: service, port: port) { state in
             DispatchQueue.main.async { MainActor.assumeIsolated { self.serverChanged(state, from: service) } }

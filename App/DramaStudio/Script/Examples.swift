@@ -29,6 +29,9 @@ struct CastPreset: Identifiable, Hashable {
 }
 
 enum Examples {
+    /// The line the setup window offers as the first thing to speak.
+    static var firstLine: ExampleLine { lines[0] }
+
     static let lines: [ExampleLine] = [
         ExampleLine(title: "Good News", text: "[with bright eager excitement] They said yes! [gasps] They actually said yes, and we start on Monday!"),
         ExampleLine(title: "The Ultimatum", text: "[icy calm] Sit down. [pause] You have one minute to explain where the money went."),

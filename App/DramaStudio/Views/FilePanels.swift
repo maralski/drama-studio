@@ -12,7 +12,7 @@ enum FilePanels {
     static let projectType = UTType(filenameExtension: StudioProject.fileExtension, conformingTo: .package) ?? .package
 
     static var lastExportFormat: ExportFormat {
-        UserDefaults.standard.string(forKey: exportFormatKey).flatMap(ExportFormat.init) ?? .wav16
+        AppHome.defaults.string(forKey: exportFormatKey).flatMap(ExportFormat.init) ?? .wav16
     }
 
     static func importScript(into model: SessionModel) {
@@ -27,7 +27,7 @@ enum FilePanels {
         guard model.canExport else { return }
         let format = format ?? lastExportFormat
         guard let url = save(name: "\(model.title).\(format.fileExtension)", type: format.contentType, message: "Export as \(format.title), 44.1 kHz mono") else { return }
-        UserDefaults.standard.set(format.rawValue, forKey: exportFormatKey)
+        AppHome.defaults.set(format.rawValue, forKey: exportFormatKey)
         model.export(to: url, as: format)
     }
 
@@ -69,10 +69,10 @@ enum FilePanels {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [type]
         panel.nameFieldStringValue = name
-        panel.directoryURL = UserDefaults.standard.url(forKey: exportFolderKey)
+        panel.directoryURL = AppHome.defaults.url(forKey: exportFolderKey)
         panel.message = message
         guard panel.runModal() == .OK, let url = panel.url else { return nil }
-        UserDefaults.standard.set(url.deletingLastPathComponent(), forKey: exportFolderKey)
+        AppHome.defaults.set(url.deletingLastPathComponent(), forKey: exportFolderKey)
         return url
     }
 }

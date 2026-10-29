@@ -12,11 +12,11 @@ enum RecentProjects {
     }
 
     /// Projects still on disk, most recent first.
-    static func load(from defaults: UserDefaults = .standard) -> [URL] {
+    static func load(from defaults: UserDefaults = AppHome.defaults) -> [URL] {
         (defaults.stringArray(forKey: key) ?? []).map { URL(filePath: $0) }.filter { FileManager.default.fileExists(atPath: $0.path) }
     }
 
-    static func save(_ recent: [URL], to defaults: UserDefaults = .standard) {
+    static func save(_ recent: [URL], to defaults: UserDefaults = AppHome.defaults) {
         defaults.set(recent.map(\.path), forKey: key)
     }
 }
