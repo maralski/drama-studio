@@ -29,7 +29,8 @@ struct DramaStudioApp: App {
                 .environment(server)
                 .onOpenURL { model.open($0) }
         }
-        .defaultSize(width: 1240, height: 780)
+        .defaultSize(width: 1360, height: 820)
+        .windowResizability(.contentMinSize)
         .commands { StudioCommands(model: model) }
 
         MenuBarExtra {
