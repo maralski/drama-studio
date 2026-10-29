@@ -40,8 +40,8 @@ about 49 GB of free disk and a fast connection for the first run.
    You can pause, or quit and open the app again. The download continues
    where it stopped. Each file is checked against a SHA-256 value that ships
    with the app before it is kept.
-6. Wait about 30 seconds while the first load tunes the GPU kernels for your
-   Mac.
+6. Wait 30 seconds to a minute while the first load tunes the GPU kernels
+   for your Mac.
 7. Click **Generate** to speak your first line.
 
 If you already downloaded the model with `hf download fishaudio/drama-3`,

@@ -49,7 +49,7 @@ struct SetupView: View {
         case .codec(.needsConversion(let command)): ConversionCard(command: command, setup: setup)
         case .tuning(let detail):
             WorkingCard(title: "Getting Drama 3 ready for this Mac",
-                        detail: "The first load maps 41 GB of weights, tunes the GPU kernels for this Mac (about 30 seconds) and builds a packed-weight cache (a few seconds). It happens once; later launches skip it.",
+                        detail: "The first load maps 41 GB of weights, tunes the GPU kernels for this Mac (30 seconds to a minute) and builds a packed-weight cache (a few seconds). It happens once; later launches skip it.",
                         line: detail)
         case .firstLine: FirstLineCard(setup: setup, model: model)
         case .ready: EmptyView()

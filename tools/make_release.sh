@@ -157,7 +157,7 @@ From Terminal you can instead run \`xattr -dr com.apple.quarantine /Applications
 
 1. The setup window asks you to agree to the Fish Audio Community License terms.
 2. It downloads the Drama 3 weights from Hugging Face (41.5 GB, pinned to revision e0a9218) and the Core ML codec models from this release ($zip_gb GB).
-3. It tunes the kernels for about 30 seconds.
+3. It tunes the kernels for this Mac, 30 seconds to a minute.
 4. You speak your first line.
 
 ## License
