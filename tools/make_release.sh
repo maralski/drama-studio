@@ -57,7 +57,7 @@ mkdir "$codec_stage"
 for package in $packages; do
     ditto --norsrc --noextattr "$codec_dir/$package" "$codec_stage/$package"
 done
-cp LICENSE-FISH-AUDIO NOTICE "$codec_stage/"
+cp -p LICENSE-FISH-AUDIO NOTICE "$codec_stage/"
 print "Zipping the codec models"
 ditto -c -k --norsrc --noextattr "$codec_stage" "$zip"
 
