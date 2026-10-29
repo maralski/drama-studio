@@ -142,6 +142,10 @@ public final class APIService: Sendable {
     public let jobs: SpeechJobSlot
     public let takes = TakeCache()
     private let engineBusyElsewhere: @Sendable () async -> Bool
+    /// Why generation is refused right now, such as license terms not yet
+    /// agreed to; nil allows it. Asked before every request that speaks or
+    /// clones a voice.
+    private let refusal: @Sendable () async -> String?
     /// Read per request: the app edits the file while the server runs.
     private let pronunciation: @Sendable () -> PronunciationDictionary
 
@@ -152,6 +156,7 @@ public final class APIService: Sendable {
         version: String,
         jobs: SpeechJobSlot = SpeechJobSlot(),
         engineBusyElsewhere: @escaping @Sendable () async -> Bool = { false },
+        refusal: @escaping @Sendable () async -> String? = { nil },
         pronunciation: @escaping @Sendable () -> PronunciationDictionary = { (try? PronunciationDictionary.load()) ?? PronunciationDictionary() }
     ) {
         self.synthesizer = synthesizer
@@ -160,6 +165,7 @@ public final class APIService: Sendable {
         self.info = EngineInfo(describing: synthesizer, version: version)
         self.jobs = jobs
         self.engineBusyElsewhere = engineBusyElsewhere
+        self.refusal = refusal
         self.pronunciation = pronunciation
     }
 
@@ -173,6 +179,7 @@ public final class APIService: Sendable {
         case .failure(let error):
             return .error(error)
         case .success(let api):
+            if api.generates, let message = await refusal() { return .error(APIError(.forbidden, message)) }
             do {
                 if case .live(let parameters) = api { return try await live(parameters, body: body ?? AsyncThrowingStream { $0.finish() }) }
                 return try await handle(api)

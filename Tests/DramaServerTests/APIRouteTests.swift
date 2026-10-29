@@ -267,6 +267,32 @@ final class APIRouteTests: XCTestCase {
         XCTAssertFalse(busy, "a client that hangs up mid-stream releases the job slot")
     }
 
+    func testARefusalAnswers403BeforeTheEngineRunsAndLeavesReadsAlone() async throws {
+        let refused = APIService(synthesizer: engine, voices: VoiceDirectory(url: directory), token: nil, version: "test",
+                                 refusal: { "Agree to the license terms in Drama Studio first." })
+        let generating = [
+            HTTPRequest(method: "POST", path: "/v1/audio/speech", body: Data("{\"input\":\"Hello.\"}".utf8)),
+            HTTPRequest(method: "POST", path: "/v1/tts", body: Data("{\"text\":\"Hello.\"}".utf8)),
+            HTTPRequest(method: "GET", path: "/v1/audio/speech/stream", query: ["input": "Hello."]),
+            HTTPRequest(method: "POST", path: "/v1/audio/speech/live"),
+            HTTPRequest(method: "POST", path: "/v1/voices",
+                        body: try JSONSerialization.data(withJSONObject: ["name": "Ann", "transcript": "Hello there.", "audio_base64": Self.clip.base64EncodedString()])),
+        ]
+        for request in generating {
+            let response = await refused.respond(to: request)
+            XCTAssertEqual(response.status, .forbidden, request.path)
+            XCTAssertEqual(text(response), "Agree to the license terms in Drama Studio first.\n")
+        }
+        let spoken = await engine.requests
+        XCTAssertTrue(spoken.isEmpty, "a refused request never reaches the engine")
+        let voices = await refused.respond(to: HTTPRequest(method: "GET", path: "/v1/voices"))
+        XCTAssertEqual(String(decoding: voices.bodyData ?? Data(), as: UTF8.self), "{\"voices\":[]}", "no voice was cloned")
+        for path in ["/v1/health", "/v1/models", "/v1/voices"] {
+            let response = await refused.respond(to: HTTPRequest(method: "GET", path: path))
+            XCTAssertEqual(response.status, .ok, path)
+        }
+    }
+
     func testTokenIsEnforced() async {
         let guarded = APIService(synthesizer: engine, voices: VoiceDirectory(url: directory), token: "t0ken", version: "test")
         let open = await guarded.respond(to: HTTPRequest(method: "GET", path: "/v1/health"))

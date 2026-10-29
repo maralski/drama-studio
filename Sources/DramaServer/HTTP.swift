@@ -7,6 +7,7 @@ public enum HTTPStatus: Int, Sendable {
     case created = 201
     case badRequest = 400
     case unauthorized = 401
+    case forbidden = 403
     case notFound = 404
     case methodNotAllowed = 405
     case payloadTooLarge = 413
@@ -21,6 +22,7 @@ public enum HTTPStatus: Int, Sendable {
         case .created: "Created"
         case .badRequest: "Bad Request"
         case .unauthorized: "Unauthorized"
+        case .forbidden: "Forbidden"
         case .notFound: "Not Found"
         case .methodNotAllowed: "Method Not Allowed"
         case .payloadTooLarge: "Payload Too Large"

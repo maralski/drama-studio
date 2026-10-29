@@ -89,6 +89,16 @@ public enum APIRequest: Sendable, Equatable {
     case take(String)
 }
 
+extension APIRequest {
+    /// Whether the request runs the model to speak or to clone a voice.
+    var generates: Bool {
+        switch self {
+        case .speech, .live, .addVoice: true
+        case .health, .models, .listVoices, .deleteVoice, .take: false
+        }
+    }
+}
+
 public struct APIError: Error, Sendable, Equatable {
     public var status: HTTPStatus
     public var message: String
