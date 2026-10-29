@@ -13,3 +13,4 @@ dist/
 .DS_Store
 .claude/
 __pycache__/
+App/Icon/AppIcon.iconset/
