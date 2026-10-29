@@ -396,3 +396,174 @@ expected lateness to 7 to 15 frames at twice the probe CPU (a reading takes
 stays at 16. Chunks longer than 512 frames now decode in two full windows at
 the end of the attempt instead of overlapping generation; no cue or prose
 line reaches that length.
+
+## Silence probe cadence
+
+Question: the decode hillclimb (`.audit/hillclimb.tsv`, the W7 row) measured
+that the silence probe's readings, Core ML decodes of the newest frames on
+the CPU every 16 frames, slow the GPU's frames while they run, most likely
+by sharing memory bandwidth. How often should the probe read? Fewer
+readings cost stop latency, because the stop fires at the first reading
+after the audio holds 2 s of silence.
+
+Two levers were measured on the app's path (sentence chunking, the text
+cap, the Core ML codec and its probe, `drama generate` without
+`--no-codec`), one process at a time under `tools/with-gpu-lock` with the
+app quit:
+
+- the cadence: a reading every 16 frames (today), 32 or 64
+  (`--probe-every N`);
+- the start: from the chunk's first frames (today, `--probe-after-expected
+  no`), or only from the chunk's expected end less the 2 s the stop needs.
+  A chunk that speaks its text cannot hold 2 s of trailing silence before
+  that frame, so an earlier reading can only end an attempt that has
+  already failed.
+
+Three changes go with the late start. A reading that has fallen more than
+44 frames behind (the silent run the stop waits for) classifies only the
+newest 44: either they are all silent and the stop fires whatever came
+before, or one is not and older frames could not extend the tail; so the
+gated first reading costs at most three probe calls, however long the
+chunk. The loop guard keeps its own 16-frame cadence
+(`FrameGenerator.loopGuardEveryFrames`), so the probe setting cannot move a
+seed's frames except through where the silence stop fires. And a reading
+that falls due while the previous one still runs now waits for the probe's
+queue and covers only the frames up to its due point, where before it was
+dropped (`SilenceProbeSchedule.due(at:)`). The measurements below found why
+that matters.
+
+### Passes
+
+A first pass (23 October) is superseded. The loop under test checked the
+probe's reading only on frames where a reading was offered, not on every
+frame as the shipped code does, which added up to one cadence of lateness
+to every stop; it also ran under another project's Metal benchmarks (80 to
+500 ms GPU frames against 21 quiet). The second and third passes ran on
+29 October after that fix, with the GPU quiet by the sampler label
+(`eval/quiet_label.sh`: samplers 0.65 to 0.99 ms per frame across the
+passes, under the 1 ms gate) and the app quit; a virtual machine used about
+80 percent of a core throughout, and the backbone slowed from 12.4 to 16.8
+ms per frame over each pass, the sustained-load slowdown the quiet-GPU pass
+described. Pass 2 measured every cadence and the late start as first
+written; pass 3 measured the late start with waiting readings, the shipped
+policy.
+
+### Cost
+
+Five interleaved rounds (pass 2) and three (pass 3) of a four-sentence,
+461-frame paragraph with a reference clip, seed 1 (`eval/probe_cadence.sh`,
+`eval/probe_cadence_summary.py`). GPU time comes from `--trace-frames`,
+probe seconds from the chunk log's new `probe=` field. Each delta pairs a
+condition with the probe-off run of the same round, which cancels the
+drift; each round ran the conditions in the order of the columns, so the
+drift within a round penalises the later, gated ones:
+
+| | off | 16 (today) | 32 | 64 | 16 from the expected end (pass 2) | 32 from the expected end | 16 from the expected end, waiting readings (shipped, pass 3) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| probe CPU, share of decode | 0 | 35% | 32% | 24% | 20% | 17% | 21% |
+| GPU ms per frame over off, median [range] | 0 | +2.10 [1.78..2.85]; pass 3 +2.43 [1.20..2.43] | +1.43 [0.65..3.26] | +1.24 [0.06..3.83] | +0.54 [-0.15..3.81] | -0.10 [-0.53..4.22] | +0.26 [-0.02..0.79] |
+| frames per second against off, median | | -7.4%; pass 3 -8.5% | -5.1% | -4.3% | -1.9% | +0.4% | -1.0% |
+| frames byte-identical to today's | every round | | every round | every round | every round | every round | every round |
+
+Today's cadence costs 2 to 2.4 ms of every frame in every round. Halving or
+quartering the readings recovers less than half of it, since a reading of
+more frames costs more calls; starting late recovers nearly all of it,
+because the readings before the expected end are most of them.
+
+### Lateness and coverage
+
+The cue harness (`eval/cues/run.py`, eight cue lines) and the six prose
+lines, seeds 1 to 5, through `eval/probe_cadence_harness.sh`;
+`eval/cues/probe_latency.py` prints the lateness. Variant a has no loop
+guard and no eos retry, so the stop matters most there:
+
+| variant a | all sentences, cue | all sentences, prose | frames late, chunks the stop ended (cue; prose) | chunks at their cap already 2 s silent | byte-identical to today's (cue, prose) |
+| --- | --- | --- | --- | --- | --- |
+| 16 (today) | 34 of 40 | 27 of 30 | 8, 16, 17, 17, 21, 23; 11, 11, 24 | 2 | |
+| 16, A/A rerun | 33 of 40 | | 10, 13, 18, 19, 19, 21, 22 | 2 | 30 |
+| 32 | 33 of 40 | 30 of 30 | 32, 33, 35, 38, 42; none | 3 | 30, 24 |
+| 64 | 34 of 40 | 29 of 30 | 22, 46; 83 | 6 | 30, 24 |
+| 16 from the expected end, readings dropped (pass 2) | 32 of 40 | 29 of 30 | 10, 15, 16, 20, 23, 40, 48; 22 | 2 | 31, 24 |
+| 16 from the expected end, waiting readings (shipped) | 34 of 40 | 29 of 30 | 11, 17, 21, 23, 26, 28; 22 | 2 | 32, 24 |
+
+Under the shipped defaults (variant he2):
+
+| he2 | all sentences, cue | all sentences, prose | frames late (cue; prose) | byte-identical to today's (cue, prose) |
+| --- | --- | --- | --- | --- |
+| 16 (today) | 38 of 40 | 29 of 30 | 10, 13, 19, 22; 23 | |
+| 16, A/A rerun | 34 of 40 | 28 of 30 | 9, 17, 19, 19, 20, 27, 29; 10, 24 | 29, 27 |
+| 16 from the expected end, readings dropped (pass 2) | 35 of 40 | 28 of 30 | 11, 13, 16, plus an eos and a cap 41 and 45 frames past the mark; 26, 45 | 30, 24 |
+| 16 from the expected end, waiting readings (shipped) | 39 of 40 | 29 of 30 | 10, 15, 19, 22; none | 32, 26 |
+
+The cadence sets the lateness: a reading every 32 frames puts the stop
+about 35 frames late against 17, and every 64 frames triples the chunks
+that run to their cap while already silent. The A/A rows give the
+harness's own spread: today's cadence run twice scores 34 and 33 of 40 cue
+lines under variant a and 38 and 34 under he2, with only 29 or 30 of 40
+generations byte-identical between its own runs. Where a stop lands
+depends on when its reading finishes, not only on the seed, and every
+frame after that follows a different seed path, so a difference of three
+or four lines between two settings is not a difference between them.
+
+These lines barely exercise the late start: every sentence in them is
+expected to last at most 3.6 s (77 frames), so the gate lands at or before
+frame 48, where today's first reading lands anyway. A third set was built
+for it, `eval/cues/long-lines.json`: eight lines from the reliability
+slices and `eval/sentences.json` with 13 sentences of 4.2 to 16.5 s (the
+lighthouse paragraph, long prose, numbers, a cloned voice), variant a,
+seeds 1 to 5:
+
+| long sentences | all sentences | probe CPU, share of decode | byte-identical to today's |
+| --- | --- | --- | --- |
+| 16 (today) | 38 of 40 | 39% | |
+| 16, A/A rerun | 39 of 40 | 39% | 36 of 40 |
+| 16 from the expected end, readings dropped (pass 2) | 39 of 40 | 26% | 36 of 40 |
+| 16 from the expected end, waiting readings (shipped) | 39 of 40 | 28% | 35 of 40 |
+
+### Dropped readings
+
+The pass-2 gated rows carried stops 40 to 48 frames late that neither run
+of today's cadence showed, and a cue-span chunk that went silent at the
+same frame in all three runs (2 s of silence at frame 115) stopped at 136
+and 137 under today's cadence and at 163 gated. The mechanism: a reading
+offered while the previous one still ran was dropped, so the next one had
+32 frames to classify, two probe calls of about 190 ms; at 45 frames per
+second (a quiet GPU, and faster still once the probe stops slowing it) two
+calls take longer than the 16 frames a cadence step generates, so the next
+offer is dropped as well, and the probe stays at an effective cadence of 32
+for the rest of the chunk. Any slow reading starts it: the gate's
+catch-up, a load spike, or, under today's cadence, a busy CPU. Waiting
+readings break the chain, since each reading after a slow one classifies
+one cadence in one call and the probe is back on time within a reading
+(`SilenceProbeTests.testASlowReadingDelaysTheNextOneInsteadOfDroppingIt`
+simulates the queue and fails with readings of three then two calls when
+the drop is put back). With them the late 40 to 48 frame stops are gone
+and every set scores at or above today's first run.
+
+One stop still moves on the long set: weather seed 1, an attempt that
+stopped speaking after its first clause and held 2 s of silence at frame
+78, one frame before its gate. Today's stop landed at frame 89; the gated
+one lands at 95 (98 with dropped readings), because the gated first
+reading decodes 44 frames instead of 16. Attempts that fall silent before
+their expected end are failures the retry rule regenerates, so that cost
+is about 0.15 s of GPU time on an attempt thrown away.
+
+### Shipped
+
+A reading every 16 frames from the chunk's expected end less 2 s, with
+waiting readings (`SilenceProbePolicy.shipped`). On the paragraph it gives
+back nearly all of the 2.1 to 2.4 ms per frame the probe cost the GPU (8.5
+percent of frames per second down to 1.0), cuts the probe's CPU from about
+a third of the decode to a fifth, keeps every frame of a generation the
+same until a stop lands, and on all three harness sets scores within the
+spread of today's cadence run against itself. The cadences of 32 and 64
+frames were not taken: they recover less speed and make the stop two to
+three times later.
+
+Not done: the GPU cost is measured on one paragraph at one seed; a chunk
+expected to last under about 4 s never reaches the gate, so short lines
+keep today's few readings. The harness's run-to-run spread (four lines of
+40 between two runs of the same setting) is measured and reported, not
+removed; a stop decision that does not depend on timing would need the
+generation loop to wait for each reading, which costs the GPU the time the
+probe takes.

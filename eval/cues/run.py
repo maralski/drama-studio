@@ -124,6 +124,7 @@ def main():
     ap.add_argument("--seeds", type=int, nargs="+", default=list(range(1, 11)))
     ap.add_argument("--out", type=Path, default=OUT)
     ap.add_argument("--drama", type=Path, default=EVAL.parent / ".build/release/drama")
+    ap.add_argument("--flag", action="append", default=[], help="an extra drama flag for every run, as 'probe-every 32' or 'probe-after-expected'")
     ap.add_argument("--summary", action="store_true")
     a = ap.parse_args()
     if a.summary:
@@ -147,7 +148,7 @@ def main():
                 for seed in a.seeds:
                     name = f"{item['id']}__s{seed}"
                     if name in done: continue
-                    row = run_one(a.drama, item, seed, a.out, codec, asr)
+                    row = run_one(a.drama, item, seed, a.out, codec, asr, extra_flags=[f"--{w}" if i == 0 else w for flag in a.flag for i, w in enumerate(flag.split())])
                     row.update(variant=variant, line=line["id"], text=item["text"])
                     if "hyp" in row:
                         row["sentences"] = sentences_present(item["text"], row["hyp"])

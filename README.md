@@ -763,9 +763,20 @@ chunk's last frames decode while the next chunk prefills and generates. The
 silence stop does not wait for that queue: every 16 frames it decodes the
 newest 16 frames, after 48 of context, through the 64-frame probe shape on a
 second queue (190 ms a reading against 1.6 s for a 512-frame window), and
-drops the audio. In sentence mode the chunk's audio is decoded once, at the
-end of the attempt; see `eval/reliability/REPORT.md` for how late the stop
-fired before and after.
+drops the audio. The readings start only at the chunk's expected end less
+the 2 s the stop needs, the first frame at which a chunk that spoke its text
+could hold that silence. Each reading shares memory bandwidth with the GPU:
+reading from the first frames cost 2.1 to 2.4 ms of every frame (8 percent of
+frames per second on a four-sentence paragraph), the late start 0.3 ms, with
+the same frames and, on the cue, prose and long-sentence harness, coverage
+within the harness's own run-to-run spread. A reading that falls due while the last
+one still runs waits for the queue instead of being dropped, so one slow
+reading cannot leave the probe a cadence behind for the rest of the chunk.
+`drama generate --probe-every N` and `--probe-after-expected no` set other
+policies for measurement. In sentence mode the chunk's audio is decoded once,
+at the end of the attempt; `eval/reliability/REPORT.md` has how late the
+stop fired before and after the probe shape ("Silence probe latency") and
+per cadence ("Silence probe cadence").
 
 Measured on the M3 Max (16 cores, 12 performance), with the same two-sentence
 line, 9.4 s of audio in 202 frames, seed 7, in every run. The machine was not

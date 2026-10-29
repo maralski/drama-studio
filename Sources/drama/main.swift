@@ -236,13 +236,13 @@ func codecBench(_ args: Args) throws {
         for w in DecodeWindow.windows(frames: frames.count) { full += try decode(c, w) }
         let fullRMS = (0..<frames.count).map { frameRMS(full, frame: $0) }
 
-        let probe = SilenceProbe(shape: probeFrames, context: context, decode)
+        let probe = SilenceProbe(shape: probeFrames, context: context, silenceFrames: silenceFrames, decode)
         var probeRMS = [Float](repeating: 0, count: frames.count)
         var probeCalls = 0
         var probeStop: Int?
         var landed = 0
         while landed < frames.count {
-            let next = min(frames.count, landed + FrameGenerator.silenceProbeEveryFrames)
+            let next = min(frames.count, landed + SilenceProbePolicy.shipped.everyFrames)
             for w in DecodeWindow.probing(landed ..< next, shape: probeFrames, context: context) {
                 let audio = try decode(c, w)
                 for (i, f) in w.kept.enumerated() { probeRMS[f] = frameRMS(audio, frame: i) }
@@ -299,6 +299,9 @@ func generate(_ args: Args) throws {
     let timeline = args["trace-frames"] == nil ? nil : try FrameTimeline(device: model.ctx.device, stages: args.flags.contains("trace-stages"))
     gen.timeline = timeline
     if args.flags.contains("no-retry") { config.minSpokenRatio = 0 }
+    // --probe-every N reads the silence probe every N frames (0: never); --probe-after-expected no reads from the chunk's first frames instead of its expected end.
+    gen.silenceProbe = SilenceProbePolicy(everyFrames: args.int("probe-every", SilenceProbePolicy.shipped.everyFrames),
+                                          afterExpectedEnd: args["probe-after-expected"].map { $0 != "no" } ?? SilenceProbePolicy.shipped.afterExpectedEnd)
     if DramaCodec.modelsExist(), !args.flags.contains("no-codec") {
         let codec = try awaitBlocking { try await DramaCodec(directory: DramaCodec.defaultDirectory) }
         gen.codec = { codes, window in try DramaSynthesizer.decodeBlocking(codec, codes: codes, window: window) }
@@ -317,7 +320,7 @@ func generate(_ args: Args) throws {
             all += r.frames
             audio += r.samples
             let silenceAt = config.stopAfterSilenceSeconds.flatMap(r.silenceStopFrame).map(String.init) ?? "-"
-            FileHandle.standardError.write(String(format: "  %d rows prefilled in %.2fs; %d frames in %.2fs (%.1f frames/s, GPU %.1f ms/frame) eos=%@ attempts=%d loop=%@ spoken=%.2fs cap=%d end=%@ silence_at=%@\n", r.promptRows, r.prefillSeconds, r.frames.count, r.decodeSeconds, Double(r.frames.count) / max(r.decodeSeconds, 1e-9), r.gpuSeconds * 1000 / Double(max(r.frames.count, 1)), r.finishedByEOS ? "yes" : "no", r.attempts, r.end == .loopGuard ? "yes" : "no", r.spokenSeconds, r.frameBudget, "\(r.end)", silenceAt).data(using: .utf8)!)
+            FileHandle.standardError.write(String(format: "  %d rows prefilled in %.2fs; %d frames in %.2fs (%.1f frames/s, GPU %.1f ms/frame) eos=%@ attempts=%d loop=%@ spoken=%.2fs cap=%d end=%@ silence_at=%@ probe=%.2fs\n", r.promptRows, r.prefillSeconds, r.frames.count, r.decodeSeconds, Double(r.frames.count) / max(r.decodeSeconds, 1e-9), r.gpuSeconds * 1000 / Double(max(r.frames.count, 1)), r.finishedByEOS ? "yes" : "no", r.attempts, r.end == .loopGuard ? "yes" : "no", r.spokenSeconds, r.frameBudget, "\(r.end)", silenceAt, r.probeSeconds).data(using: .utf8)!)
         default: break
         }
     }

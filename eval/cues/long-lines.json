@@ -1,0 +1,38 @@
+[
+ {
+  "id": "long-one",
+  "text": "When the old lighthouse keeper finally retired after forty years of watching the same stretch of grey water, the whole town, fishermen and shopkeepers and children who had never once seen him smile, gathered on the pier to throw him a party he had never asked for."
+ },
+ {
+  "id": "long-para",
+  "text": "The museum opens at nine. Tickets are cheaper before noon, and the east wing closes early on Thursdays. If you bring a student card, the guided tour is free, but you have to book it at the front desk at least an hour ahead."
+ },
+ {
+  "id": "clone-long",
+  "ref": true,
+  "text": "Before we begin, a quick reminder that the exits are at the back of the hall, the restrooms are to your left, and the session will run for about forty minutes with questions at the end."
+ },
+ {
+  "id": "num-time",
+  "text": "The meeting is at 3:45 on the 21st of March, in room 207 on the second floor.",
+  "wer_threshold": 0.25
+ },
+ {
+  "id": "num-money",
+  "text": "The invoice total is $1,249.99, due within 30 days, or 2.5 percent interest applies.",
+  "wer_threshold": 0.3
+ },
+ {
+  "id": "num-year",
+  "text": "In 1969 three astronauts flew 384,400 kilometres to the Moon and came home eight days later.",
+  "wer_threshold": 0.25
+ },
+ {
+  "id": "weather",
+  "text": "It rained all morning, but by noon the clouds had cleared and the whole valley was glowing."
+ },
+ {
+  "id": "lighthouse",
+  "text": "When the old lighthouse keeper finally retired, the town threw him a party on the pier. Children ran between the tables, gulls circled overhead, and someone had baked a cake shaped like the lighthouse itself, complete with a tiny candle at the top."
+ }
+]

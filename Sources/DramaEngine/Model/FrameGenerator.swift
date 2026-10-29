@@ -30,7 +30,10 @@ package final class FrameGenerator {
         package var attempts: Int
         /// The chunk's decoded audio; empty without a `codec`.
         package var samples: [Float]
+        /// Codec time of the attempt: the chunk's audio and the probe's readings.
         package var codecSeconds: Double
+        /// The probe's share of `codecSeconds`.
+        package var probeSeconds: Double = 0
         package var durationSeconds: Double { Double(frames.count) * Double(ModelConstants.samplesPerFrame) / Double(ModelConstants.sampleRate) }
         /// `[10][T]` codes, the shape the codec and history take.
         package var codes: [[Int32]] { (0..<ModelConstants.numCodebooks).map { c in frames.map { $0[1 + c] } } }
@@ -56,16 +59,18 @@ package final class FrameGenerator {
 
     /// Decodes one window of a chunk's codes, through the smallest decoder
     /// shape the window fits. Set, the silence stop reads the newest frames
-    /// of each chunk through the probe shape every `silenceProbeEveryFrames`
-    /// frames, `.lowLatency` streams the chunk's audio as it generates, and
+    /// of each chunk through the probe shape as `silenceProbe` schedules,
+    /// `.lowLatency` streams the chunk's audio as it generates, and
     /// `ChunkResult.samples` carries it. Without it, the early stop is off
     /// and the spoken-duration check falls back to the frame count.
     package var codec: ((_ codes: [[Int32]], _ window: DecodeWindow) throws -> [Float])?
-    /// How often the silence probe reads the newest frames. With the probe
-    /// shape of 64 frames, a reading costs well under the 0.4 s these frames
-    /// take to generate, so the stop fires within about a reading of the
-    /// audio going silent.
-    package static let silenceProbeEveryFrames = 16
+    /// When the silence stop reads a chunk's newest frames. The shipped
+    /// policy is ``SilenceProbePolicy/shipped``; the `drama` CLI's
+    /// `--probe-every` and `--probe-after-expected` set others for measurement.
+    package var silenceProbe = SilenceProbePolicy.shipped
+    /// How often the loop guard checks the main tokens, independent of the
+    /// probe's cadence so the frames a seed gives never change through it.
+    package static let loopGuardEveryFrames = 16
     /// Set, every decode session records its per-frame timestamps here.
     package var timeline: FrameTimeline?
 
@@ -211,7 +216,8 @@ package final class FrameGenerator {
                 let t1 = Date()
                 let silenceFrames = config.stopAfterSilenceSeconds.map(Self.silenceFrames)
                 let decoder = codec.map(ChunkDecoder.init)
-                let probe = codec.map { SilenceProbe($0) }
+                let probe = codec.map { SilenceProbe(silenceFrames: silenceFrames ?? .max, $0) }
+                var readings = silenceProbe.schedule(expectedSeconds: expected, silenceFrames: silenceFrames ?? 0)
                 var offered = 0
                 for step in 0..<budget {
                     guard shouldContinue() else { end = .cancelled; break }
@@ -220,12 +226,12 @@ package final class FrameGenerator {
                     frames.append(frame)
                     onEvent(.frame(index: step, maxFrames: budget))
                     try deliver(current: (index, decoder))
-                    if config.stopOnLoop, frames.count % Self.silenceProbeEveryFrames == 0, MainTokenLoop.cycles(frames.map { $0[0] }) { end = .loopGuard; break }
+                    if config.stopOnLoop, frames.count % Self.loopGuardEveryFrames == 0, MainTokenLoop.cycles(frames.map { $0[0] }) { end = .loopGuard; break }
                     guard let decoder, let probe else { continue }
                     let snapshot = frames
                     if let streamStep, frames.count - offered >= streamStep, runner.offer({ _ = try? decoder.advance(to: snapshot) }) { offered = frames.count }
-                    guard let limit = config.stopAfterSilenceSeconds, let silenceFrames, frames.count > silenceFrames else { continue }
-                    if frames.count % Self.silenceProbeEveryFrames == 0 { probeRunner.offer { probe.measure(snapshot) } }
+                    guard let limit = config.stopAfterSilenceSeconds else { continue }
+                    if let upTo = readings.due(at: frames.count), probeRunner.offer({ probe.measure(Array(snapshot.prefix(upTo))) }) { readings.started() }
                     if probe.latest >= limit { end = .silence; break }
                 }
                 var result = ChunkResult(index: index, count: chunks.count, text: chunk.turn, frames: frames, promptRows: prompt.count,
@@ -246,7 +252,8 @@ package final class FrameGenerator {
                 try deliver(current: (index, decoder))
                 result.spokenSeconds = max(0, result.durationSeconds - trailingSilence)
                 result.samples = decoder?.samples ?? []
-                result.codecSeconds = (decoder?.codecSeconds ?? 0) + (probe?.codecSeconds ?? 0)
+                result.probeSeconds = probe?.codecSeconds ?? 0
+                result.codecSeconds = (decoder?.codecSeconds ?? 0) + result.probeSeconds
                 if best == nil || Self.better(result, than: best!) { best = result }
                 if attempt == maxRetries || !Self.shouldRetry(end: end, spokenSeconds: result.spokenSeconds, expectedSeconds: expected, config: config) { break }
                 onEvent(.retry(index: index, attempt: attempt + 1, spokenSeconds: result.spokenSeconds, expectedSeconds: expected))

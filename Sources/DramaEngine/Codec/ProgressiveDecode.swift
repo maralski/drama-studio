@@ -149,6 +149,77 @@ final class DecodeRunner: @unchecked Sendable {
     func drain() { queue.sync {} }
 }
 
+/// When the silence stop reads a chunk's newest frames: every `everyFrames`
+/// frames, and not before `firstFrame`.
+package struct SilenceProbeSchedule: Equatable, Sendable {
+    package var everyFrames: Int
+    package var firstFrame: Int
+    /// A reading that fell due while the previous one still ran: the frame
+    /// count it classifies up to.
+    package private(set) var waiting: Int?
+
+    package init(everyFrames: Int, firstFrame: Int) {
+        self.everyFrames = everyFrames
+        self.firstFrame = firstFrame
+    }
+
+    /// Whether a reading falls due once `frames` frames have landed. A
+    /// cadence of 0 never reads.
+    package func reads(at frames: Int) -> Bool {
+        everyFrames > 0 && frames >= firstFrame && frames.isMultiple(of: everyFrames)
+    }
+
+    /// The frame count to classify up to when a reading should start now,
+    /// once `frames` frames have landed: the newest one that fell due. A
+    /// reading that cannot start yet waits for the probe's queue rather than
+    /// being dropped, and covers only the frames up to its due point, so one
+    /// slow reading costs one late reading instead of leaving every later
+    /// one too long to finish within the cadence. Call `started()` when it
+    /// starts.
+    package mutating func due(at frames: Int) -> Int? {
+        if reads(at: frames) { waiting = frames }
+        return waiting
+    }
+
+    package mutating func started() { waiting = nil }
+}
+
+/// How the silence stop paces its readings. With the probe shape of 64 frames
+/// a reading of 16 new frames costs about 190 ms, under the 0.4 s those frames
+/// take to generate, so a reading every 16 frames fires the stop within about
+/// a reading of the audio going silent. Each reading shares memory bandwidth
+/// with the GPU, so the shipped policy reads only once the chunk could have
+/// spoken its text: that gave back about 2 ms of every frame on a paragraph,
+/// with the cue, prose and long-sentence harness inside its own run-to-run
+/// spread (`eval/reliability/REPORT.md`, "Silence probe cadence").
+package struct SilenceProbePolicy: Equatable, Sendable {
+    /// Frames between readings; 0 turns the probe off.
+    package var everyFrames: Int
+    /// Read only from the chunk's expected end less the silence the stop
+    /// needs, the first frame at which the stop could end a chunk that spoke
+    /// its text; before it no probe work shares the GPU's memory bandwidth.
+    package var afterExpectedEnd: Bool
+
+    package init(everyFrames: Int, afterExpectedEnd: Bool) {
+        self.everyFrames = everyFrames
+        self.afterExpectedEnd = afterExpectedEnd
+    }
+
+    package static let shipped = SilenceProbePolicy(everyFrames: 16, afterExpectedEnd: true)
+
+    /// The readings for a chunk expected to speak `expectedSeconds`, whose
+    /// stop needs `silenceFrames` silent frames. No reading lands before the
+    /// audio could hold that silence.
+    package func schedule(expectedSeconds: Double, silenceFrames: Int) -> SilenceProbeSchedule {
+        var first = silenceFrames + 1
+        if afterExpectedEnd {
+            let expected = Int((expectedSeconds * Double(ModelConstants.sampleRate) / Double(ModelConstants.samplesPerFrame)).rounded())
+            first = max(first, expected - silenceFrames)
+        }
+        return SilenceProbeSchedule(everyFrames: everyFrames, firstFrame: first)
+    }
+}
+
 /// The silence that ends an attempt's audio, read from short decodes of its
 /// newest frames. Each call decodes the frames not yet classified in probe
 /// windows (`DecodeWindow.probing`, the small decoder shape) and extends the
@@ -160,15 +231,22 @@ package final class SilenceProbe: @unchecked Sendable {
     private let decode: Decode
     private let shape: Int
     private let context: Int
+    private let silenceFrames: Int
     private let lock = NSLock()
     private var classified = 0
     private var trailingSilentFrames = 0
     private var seconds = 0.0
 
-    package init(shape: Int = DramaCodec.probeFrames, context: Int = DramaCodec.probeContext, _ decode: @escaping Decode) {
+    /// `silenceFrames` is the silent run the stop waits for. A reading that
+    /// has fallen more than that many frames behind classifies only the
+    /// newest `silenceFrames`: either they are all silent, and the stop fires
+    /// whatever came before, or one is not, and the older frames could not
+    /// have extended the tail. The reading then saturates at `silenceFrames`.
+    package init(shape: Int = DramaCodec.probeFrames, context: Int = DramaCodec.probeContext, silenceFrames: Int = .max, _ decode: @escaping Decode) {
         self.decode = decode
         self.shape = shape
         self.context = context
+        self.silenceFrames = silenceFrames
     }
 
     /// Seconds of silence at the end of the frames classified so far.
@@ -183,11 +261,14 @@ package final class SilenceProbe: @unchecked Sendable {
     /// Classifies the frames not yet classified. A failed decode leaves the
     /// reading where it was. Calls must not overlap.
     package func measure(_ frames: [Frame]) {
-        let (done, run0) = lock.withLock { (classified, trailingSilentFrames) }
+        var (done, run) = lock.withLock { (classified, trailingSilentFrames) }
         guard frames.count > done else { return }
+        if frames.count - done > silenceFrames {
+            done = frames.count - silenceFrames
+            run = 0
+        }
         let codes = (0..<ModelConstants.numCodebooks).map { c in frames.map { $0[1 + c] } }
         let t0 = Date()
-        var run = run0
         var classifiedTo = done
         for w in DecodeWindow.probing(done ..< frames.count, shape: shape, context: context) {
             guard let audio = try? decode(codes, w) else { break }
@@ -199,9 +280,10 @@ package final class SilenceProbe: @unchecked Sendable {
         }
         let elapsed = Date().timeIntervalSince(t0)
         lock.withLock {
+            seconds += elapsed
+            guard classifiedTo > done else { return }
             classified = classifiedTo
             trailingSilentFrames = run
-            seconds += elapsed
         }
     }
 }
