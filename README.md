@@ -10,6 +10,45 @@ Built with Fish Audio. The model weights are under the
 [Fish Audio Community License](https://huggingface.co/fishaudio/drama-3/blob/main/LICENSE);
 cloning a real person's voice without their consent is not permitted.
 
+## Install
+
+You need a Mac with Apple silicon and macOS 15 or later. Drama Studio has
+been verified only on an M3 Max with 128 GB. Use a Mac with 64 GB of unified
+memory or more: the engine maps about 41 GB of model weights. You also need
+about 49 GB of free disk and a fast connection for the first run.
+
+1. Download `DramaStudio-<version>.dmg` from the latest release on this
+   repository's GitHub Releases page.
+2. Open the disk image and drag Drama Studio to Applications.
+3. Open Drama Studio from Applications.
+
+   The release is not notarized, so macOS blocks the first open. Open System
+   Settings, go to Privacy & Security, scroll to Security, and click
+   **Open Anyway** next to the message about Drama Studio. Confirm with your
+   password. If you use Terminal, you can run
+   `xattr -dr com.apple.quarantine /Applications/DramaStudio.app` instead.
+
+4. Read the license terms in the setup window and click **I Agree**. Fish
+   Audio licenses the model under the Fish Audio Community License, and
+   Drama Studio generates nothing until you agree.
+5. Wait for the downloads. The window shows the progress of each file, the
+   total, and the time left:
+   - the Drama 3 weights from Hugging Face, 41.5 GB, pinned to revision
+     `e0a9218`;
+   - the Core ML voice codec from the release, 1.5 GB.
+
+   You can pause, or quit and open the app again. The download continues
+   where it stopped. Each file is checked against a SHA-256 value that ships
+   with the app before it is kept.
+6. Wait about 30 seconds while the first load tunes the GPU kernels for your
+   Mac.
+7. Click **Generate** to speak your first line.
+
+If you already downloaded the model with `hf download fishaudio/drama-3`,
+Drama Studio uses that copy and skips the 41.5 GB download. If you are below
+64 GB of memory, the setup window says so before anything downloads. You can
+continue at your own risk.
+
 ## What you get
 
 - **Script editor** with import of `.txt`, `.md`, `.rtf`, `.rtfd`, `.html`,
@@ -43,6 +82,8 @@ cloning a real person's voice without their consent is not permitted.
   shows the model state, the API address, and the current job. ⌘Q quits.
 
 ## Requirements
+
+These are for building from source. To use the app, see [Install](#install).
 
 - Apple silicon Mac with plenty of unified memory. The weights are 41.5 GB and
   are mapped, not copied, plus about 2 GB of state and codec; only a 128 GB M3
@@ -84,6 +125,18 @@ Command line:
 
 `DRAMA_PREVIEW_ENGINE=1` runs the app or `drama serve` on a mock engine that
 produces placeholder tones, for working on everything but the model.
+
+The app looks for the weights in this order: the folder chosen in Settings,
+its own download in `~/Library/Application Support/DramaStudio/Models/drama-3-e0a9218/`,
+then the newest Hugging Face cache snapshot. A build from `tools/make_app.sh`
+has no codec download, so its setup window shows the Python conversion command
+above when the codec models are missing; `tools/make_release.sh` builds the
+release DMG and the codec zip and writes the zip's URL and SHA-256 into the
+app. `DRAMA_STUDIO_HOME=<folder>` moves the downloads, the codec, the tuning
+and the settings into one folder and ignores the Hugging Face cache, to try a
+first run without touching your own. `DRAMA_STUDIO_MEMORY_GB=16` shows the
+low-memory warning on a Mac that has enough. `tools/pin_model_plan.py --check`
+compares the pinned download plan with Hugging Face.
 
 ## Documents
 
@@ -934,6 +987,13 @@ commercial use while annual revenue is under USD 500,000; it forbids cloning a
 real person's voice without their consent and the other uses its Section IV(b)
 lists, and it needs a separate Fish Audio license to offer speech generation to
 others as a hosted service.
+
+Section IV(b) of that license asks anyone who makes speech generation available
+to others to bind them to its use restrictions, so the app's setup window shows
+them and asks you to agree before it downloads or generates anything. Until you
+agree, the window, the HTTP API (403) and through it the MCP server and
+`drama-say` refuse to speak. The command-line `drama` tool is for developers
+building from source and does not ask.
 
 The fish-speech reference code copied under `eval/oracle/` and
 `Sources/DramaEngine/CodecConversion/dac_reference/`, the parts of DramaEngine
