@@ -32,8 +32,10 @@ struct DramaStudioApp: App {
         .defaultSize(width: 1240, height: 780)
         .commands { StudioCommands(model: model) }
 
-        MenuBarExtra("Drama Studio", systemImage: "waveform.badge.mic") {
+        MenuBarExtra {
             MenuBarContent(model: model, server: server, presence: presence)
+        } label: {
+            Image(nsImage: MenuBarIcon.image)
         }
 
         Window("Drama Studio Help", id: HelpWindowView.id) {
