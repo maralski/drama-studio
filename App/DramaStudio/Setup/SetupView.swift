@@ -6,8 +6,12 @@ import SwiftUI
 
 /// The first-run window: one card per ``SetupStage``.
 struct SetupView: View {
+    static let windowID = "setup"
+
     let setup: SetupCoordinator
     let model: SessionModel
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismissWindow) private var dismissWindow
 
     var body: some View {
         ScrollView {
@@ -28,7 +32,11 @@ struct SetupView: View {
             .frame(maxWidth: .infinity)
         }
         .background(Color(nsColor: .windowBackgroundColor))
-        .navigationTitle("Set Up Drama Studio")
+        .onChange(of: setup.stage) { _, stage in
+            guard stage == .ready else { return }
+            openWindow(id: DramaStudioApp.mainWindowID)
+            dismissWindow(id: Self.windowID)
+        }
     }
 
     @ViewBuilder

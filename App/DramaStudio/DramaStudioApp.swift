@@ -11,6 +11,8 @@ struct DramaStudioApp: App {
     @State private var server: APIServerController
     @State private var presence: AppPresence
     @State private var setup: SetupCoordinator
+    /// Whether this launch opens the setup window instead of the studio.
+    private let opensSetup: Bool
 
     init() {
         if CommandLine.arguments.contains("--check-resources") { exit(Self.checkResources()) }
@@ -23,22 +25,34 @@ struct DramaStudioApp: App {
         _server = State(initialValue: server)
         _presence = State(initialValue: presence)
         _setup = State(initialValue: setup)
+        opensSetup = setup.stage != .ready
         server.startIfEnabled()
         presence.start()
     }
 
     var body: some Scene {
         Window("Drama Studio", id: Self.mainWindowID) {
-            ContentView(model: model, setup: setup)
+            ContentView(model: model)
                 .environment(server)
                 .defaultAppStorage(AppHome.defaults)
                 .onOpenURL { model.open($0) }
         }
         .defaultSize(width: 1240, height: 780)
+        .defaultLaunchBehavior(opensSetup ? .suppressed : .automatic)
         .commands { StudioCommands(model: model) }
 
+        // Its own window, so the studio window never swaps its root view, and
+        // closing it leaves a download running behind the menu bar item.
+        Window("Set Up Drama Studio", id: SetupView.windowID) {
+            SetupView(setup: setup, model: model)
+                .defaultAppStorage(AppHome.defaults)
+        }
+        .defaultSize(width: 900, height: 820)
+        .defaultLaunchBehavior(opensSetup ? .presented : .suppressed)
+        .restorationBehavior(.disabled)
+
         MenuBarExtra {
-            MenuBarContent(model: model, server: server, presence: presence)
+            MenuBarContent(model: model, server: server, presence: presence, setup: setup)
                 .defaultAppStorage(AppHome.defaults)
         } label: {
             Image(nsImage: MenuBarIcon.image)

@@ -8,6 +8,7 @@ struct MenuBarContent: View {
     let model: SessionModel
     let server: APIServerController
     let presence: AppPresence
+    let setup: SetupCoordinator
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -21,7 +22,9 @@ struct MenuBarContent: View {
         Divider()
         Text(MenuBarStatus.job(session: model.state, job: server.job))
         Divider()
-        Button(presence.hasWindow ? "Show Drama Studio" : "Open Drama Studio") { presence.showMainWindow(openWindow) }
+        Button(presence.hasWindow ? "Show Drama Studio" : "Open Drama Studio") {
+            presence.showMainWindow(openWindow, id: setup.stage == .ready ? DramaStudioApp.mainWindowID : SetupView.windowID)
+        }
         Button(server.isRunning ? "Stop API Server" : "Start API Server") { server.toggle() }
         Divider()
         Button("Quit Drama Studio") { NSApp.terminate(nil) }
