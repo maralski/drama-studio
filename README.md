@@ -17,8 +17,8 @@ been verified only on an M3 Max with 128 GB. Use a Mac with 64 GB of unified
 memory or more: the engine maps about 41 GB of model weights. You also need
 about 49 GB of free disk and a fast connection for the first run.
 
-1. Download `DramaStudio-<version>.dmg` from the latest release on this
-   repository's GitHub Releases page.
+1. Download `DramaStudio-<version>.dmg` from the
+   [latest release](https://github.com/maralski/drama-studio/releases/latest).
 2. Open the disk image and drag Drama Studio to Applications.
 3. Open Drama Studio from Applications.
 
