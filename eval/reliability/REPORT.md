@@ -193,7 +193,7 @@ Method. The 33 conditions of slices `a`, `b` and `c`, five seeds, through
 each condition's own flags, so the four expressiveness-slider conditions ran
 under the Space's sampling too; everything else as the study ran it: sentence
 chunking, the CLI's fixed 600-frame cap, the Core ML silence stop, the
-duration retry. Binary built from this branch (main at f55dfb4 plus the
+duration retry. Binary built from this branch (main at 1048a42 plus the
 harness flag), so the three cue guards shipped after the study (loop guard,
 eos-gated retry, cap per cue) were on; the rows they are compared with ran
 before those guards, which matters for the cue and control rows and is
@@ -340,7 +340,7 @@ seeds 1 to 5, each binary the only engine process, load average 3 to 11 from
 other sessions (`eval/out/cues-before`, `eval/out/cues-after`;
 `eval/cues/probe_latency.py` prints the table):
 
-| | before (`f55dfb4` plus the instrument) | after |
+| | before (`1048a42` plus the instrument) | after |
 | --- | --- | --- |
 | all sentences present | 38 of 40 | 39 of 40 |
 | chunks ended by the silence stop | 0 of 60 | 4 of 60 |

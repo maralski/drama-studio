@@ -839,7 +839,7 @@ rows are in `.audit/streaming.tsv`.
 
 Time to the first audio byte of `stream: true` through `curl -N`
 (`tools/streaming_ttfb.py`, 5 runs per side, alternating). Before is the
-engine at `1365b5e`, which decoded every chunk after the whole request was
+engine at `9e645ef`, which decoded every chunk after the whole request was
 generated. Both sides returned the same 827,392 bytes, with HTTP 200 and curl
 exit 0 every time. Server CPU comes from `ps -o time=` before and after each
 request:
