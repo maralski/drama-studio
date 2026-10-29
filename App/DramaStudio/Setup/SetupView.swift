@@ -71,7 +71,7 @@ private struct StepStrip: View {
         HStack(spacing: 14) {
             ForEach(steps, id: \.self) { step in
                 let state = state(of: step)
-                Label(step.title, systemImage: state == .done ? "checkmark.circle.fill" : state == .current ? "circle.inset.filled" : "circle")
+                Label(step.label, systemImage: state == .done ? "checkmark.circle.fill" : state == .current ? "circle.inset.filled" : "circle")
                     .foregroundStyle(state == .upcoming ? .secondary : state == .done ? Color.green : Color.accentColor)
                     .fontWeight(state == .current ? .semibold : .regular)
             }
@@ -194,7 +194,7 @@ private struct TransferCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(file).font(.callout.monospaced())
                     ProgressView(value: progress.fileFraction)
-                    Text("\(ModelSetup.gigabytes(progress.fileBytes)) of \(ModelSetup.gigabytes(progress.fileSize))")
+                    Text("\(progress.fileBytes.formatted(.byteCount(style: .file))) of \(progress.fileSize.formatted(.byteCount(style: .file)))")
                         .font(.caption).foregroundStyle(.secondary).monospacedDigit()
                 }
                 .padding(10)

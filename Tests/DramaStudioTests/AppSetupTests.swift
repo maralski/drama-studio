@@ -225,9 +225,15 @@ final class AppSetupTests: XCTestCase {
     func testRateEstimateNeedsAFewSecondsThenDividesRemainingByRate() {
         var rate = RateEstimate()
         rate.add(bytes: 0, at: 0)
-        rate.add(bytes: 100, at: 1)
-        XCTAssertNil(rate.secondsLeft(remaining: 1000))
-        rate.add(bytes: 400, at: 4)
-        XCTAssertEqual(rate.secondsLeft(remaining: 1000) ?? 0, 10, accuracy: 0.001)
+        rate.add(bytes: 100_000_000, at: 2)
+        XCTAssertNil(rate.secondsLeft(remaining: 1_000_000_000), "two seconds is too early")
+        var slow = RateEstimate()
+        slow.add(bytes: 0, at: 0)
+        slow.add(bytes: 1_000_000, at: 10)
+        XCTAssertNil(slow.secondsLeft(remaining: 1_000_000_000), "a megabyte of small files says nothing about the shards")
+        var steady = RateEstimate()
+        steady.add(bytes: 0, at: 0)
+        steady.add(bytes: 500_000_000, at: 10)
+        XCTAssertEqual(steady.secondsLeft(remaining: 1_000_000_000) ?? 0, 20, accuracy: 0.001)
     }
 }

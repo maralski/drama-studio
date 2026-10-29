@@ -17,6 +17,17 @@ enum SetupStep: String, CaseIterable, Sendable {
         case .tuning: "Tune for this Mac"
         }
     }
+
+    /// The step's name in the window's step strip.
+    var label: String {
+        switch self {
+        case .requirements: "This Mac"
+        case .terms: "Terms"
+        case .weights: "Model"
+        case .codec: "Voice codec"
+        case .tuning: "Tuning"
+        }
+    }
 }
 
 /// What is already on this Mac, read from disk and settings.
@@ -104,9 +115,10 @@ struct RateEstimate {
 
     mutating func reset() { samples = [] }
 
-    /// Nil until there are a few seconds of samples.
+    /// Nil until there are five seconds and 50 MB of samples; small files
+    /// at the start of a download are all latency and would overstate the time.
     func secondsLeft(remaining: Int64) -> Double? {
-        guard let first = samples.first, let last = samples.last, last.time - first.time >= 3, last.bytes > first.bytes else { return nil }
+        guard let first = samples.first, let last = samples.last, last.time - first.time >= 5, last.bytes - first.bytes >= 50_000_000 else { return nil }
         return Double(remaining) / (Double(last.bytes - first.bytes) / (last.time - first.time))
     }
 }
