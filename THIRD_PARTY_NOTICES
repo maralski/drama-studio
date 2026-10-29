@@ -1,0 +1,75 @@
+Third-party notices
+
+Drama Studio contains code and content copied or derived from the projects
+below. Their licenses require these notices to accompany it.
+
+================================================================================
+fish-speech (Fish Audio)
+https://github.com/fishaudio/fish-speech, tag v3.0.0-beta
+(commit 1ff3c3ed2f80d3106a83909dd25b83129c3d816f)
+
+Copied, with the edits stated beside each copy:
+  eval/oracle/ (fish_omni/, errors.py, sampling.py, dac/), the PyTorch
+    reference the faithfulness suite runs; edits in eval/oracle/LICENSE_NOTE.md
+  Sources/DramaEngine/CodecConversion/dac_reference/modded_dac.py, rvq.py,
+    modded_dac_vq.yaml, the codec reference the Core ML conversion traces;
+    edits in Sources/DramaEngine/CodecConversion/dac_reference/README.md
+
+Derived (reimplemented in Swift and Metal from the reference code):
+  Sources/DramaEngine/Model/ and Sources/DramaEngine/Kernels/, the Drama 3
+    backbone, codebook tower and their kernels, following
+    fish_speech/models/text2semantic/fish_omni/
+  Sources/DramaEngine/Prompt/, the prompt layout, chunking and reference
+    history, following fish_omni/generate.py and chunking.py
+  Sources/DramaEngine/Model/Sampler.swift and Kernels/Sampling.metal, the
+    sampling recipe and repetition-aware redraw of fish_omni/tower.py
+  Sources/DramaEngine/CodecConversion/convert_codec.py and the Core ML codec
+    models it produces, converted from the codec checkpoint
+
+Fish Audio Drama 3 Space
+https://huggingface.co/spaces/fishaudio/Drama-3
+
+Derived:
+  App/DramaStudio/Script/Examples.swift and the performance cue palette, the
+    example cast, lines and cues from studio_content.json
+  Sources/DramaEngine/Prompt/DirectorsNote.swift, the director's-note retake
+    recipe and the voice-design prompt layout
+================================================================================
+
+These Fish Audio Materials are licensed under the Fish Audio Community
+License, Version 1.0. Copyright © 39 AI, INC. All Rights Reserved.
+
+The full agreement is in LICENSE-FISH-AUDIO. The copied and derived parts
+above remain subject to it in addition to the Apache License that covers the
+rest of Drama Studio.
+
+================================================================================
+descript-audio-codec
+https://github.com/descriptinc/descript-audio-codec, version 1.0.0
+
+Used in: Sources/DramaEngine/CodecConversion/dac_reference/dac_nn.py (merged
+copy of dac/nn/layers.py and dac/nn/quantize.py; docstrings, from_latents and
+the demo removed).
+================================================================================
+
+MIT License
+
+Copyright (c) 2023-present, Descript
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

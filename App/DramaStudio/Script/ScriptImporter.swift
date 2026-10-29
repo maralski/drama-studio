@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 import AppKit
 import DramaEngine
 import UniformTypeIdentifiers
@@ -9,7 +11,7 @@ enum ImportFormat: CaseIterable {
     case plainText, markdown, rtf, rtfd, html, docx, subRip, webVTT
     case pptx, pdf, epub
 
-    static let subRipType = UTType(importedAs: "audio.fish.community.DramaStudio.subrip", conformingTo: .plainText)
+    static let subRipType = UTType(importedAs: "io.github.maralski.DramaStudio.subrip", conformingTo: .plainText)
 
     init?(url: URL) {
         let ext = url.pathExtension.lowercased()

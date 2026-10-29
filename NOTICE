@@ -1,0 +1,55 @@
+Drama Studio
+Copyright 2026 Peter Marelas
+
+Drama Studio's own code is licensed under the Apache License, Version 2.0
+(see LICENSE).
+
+Built with Fish Audio.
+
+Drama Studio runs Fish Audio Drama 3. It does not include the Drama 3 model
+weights or the codec checkpoint; the app downloads them from Fish Audio's
+Hugging Face repository (fishaudio/drama-3). They are licensed by Fish Audio
+under the Fish Audio Community License, Version 1.0, a copy of which is in
+LICENSE-FISH-AUDIO. That license, not the Apache License, governs the model,
+the codec, and what you may do with the audio they produce.
+
+These Fish Audio Materials are licensed under the Fish Audio Community
+License, Version 1.0. Copyright © 39 AI, INC. All Rights Reserved.
+
+The attribution above applies to the Fish Audio Materials in this repository
+and to the parts of Drama Studio derived from them, listed in
+THIRD_PARTY_NOTICES with how each was changed:
+
+- eval/oracle/ and Sources/DramaEngine/CodecConversion/dac_reference/ hold
+  copies of fish-speech v3.0.0-beta source files, edited only as stated in
+  eval/oracle/LICENSE_NOTE.md and dac_reference/README.md.
+- DramaEngine reimplements the Drama 3 inference path of fish-speech in Swift
+  and Metal.
+- The Core ML codec models that the release offers for download are converted
+  from Fish Audio's codec checkpoint.
+- The example cast and lines in the app come from Fish Audio's Drama 3 Space.
+
+Use restrictions that come with the model. By using Drama Studio with Drama 3
+you agree to the Fish Audio Community License, including its Section IV(b).
+In short, you may not use the model or its output to:
+
+- imitate the voice of an identifiable person without that person's consent
+  (or, for a minor, a parent's or guardian's, and for a deceased person, the
+  rights holder's), or another legal right to do so;
+- impersonate a person or organization to deceive, defraud or harass, or place
+  calls that break telemarketing or robocall laws;
+- generate sexual content involving a minor or a voice presented as a minor's,
+  or use any real person's voice without their consent;
+- remove or obscure any watermark or provenance signal the model applies;
+- create, train, distill or improve another speech, audio or voice generation
+  model or a foundational generative model.
+
+Commercial use is licensed by Fish Audio only while your annual revenue is
+below USD 500,000, and offering text to speech or voice cloning to others as a
+hosted service always needs a separate license from Fish Audio. Drama Studio's
+HTTP API and MCP server listen on 127.0.0.1 for programs on the same Mac; they
+are not a hosted service, and exposing them to other people would make one.
+Read LICENSE-FISH-AUDIO for the binding terms.
+
+Fish Audio and Drama 3 are names of 39 AI, INC. This project is not
+affiliated with or endorsed by Fish Audio.

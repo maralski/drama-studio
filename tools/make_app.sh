@@ -1,4 +1,6 @@
 #!/bin/zsh
+# Copyright 2026 Peter Marelas
+# SPDX-License-Identifier: Apache-2.0
 # Builds dist/DramaStudio.app from the SwiftPM products and ad-hoc signs it.
 # The MCP server and the say command ship beside the app binary as
 # Contents/MacOS/drama-mcp and Contents/MacOS/drama-say.
@@ -42,7 +44,7 @@ cat > "$app/Contents/Info.plist" <<PLIST
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleIdentifier</key><string>audio.fish.community.DramaStudio</string>
+    <key>CFBundleIdentifier</key><string>io.github.maralski.DramaStudio</string>
     <key>CFBundleName</key><string>Drama Studio</string>
     <key>CFBundleDisplayName</key><string>Drama Studio</string>
     <key>CFBundleExecutable</key><string>DramaStudio</string>
@@ -56,11 +58,11 @@ cat > "$app/Contents/Info.plist" <<PLIST
     <key>NSHighResolutionCapable</key><true/>
     <key>NSSupportsAutomaticTermination</key><false/>
     <key>NSMicrophoneUsageDescription</key><string>Drama Studio records reference clips for voice cloning.</string>
-    <key>NSHumanReadableCopyright</key><string>Copyright © 2026 Peter Marelas. Built with Fish Audio. Fish Audio Drama 3 is licensed under the Fish Audio Community License.</string>
+    <key>NSHumanReadableCopyright</key><string>Copyright 2026 Peter Marelas. Apache License 2.0. Built with Fish Audio; Fish Audio Drama 3 is licensed under the Fish Audio Community License.</string>
     <key>CFBundleURLTypes</key>
     <array>
         <dict>
-            <key>CFBundleURLName</key><string>audio.fish.community.DramaStudio</string>
+            <key>CFBundleURLName</key><string>io.github.maralski.DramaStudio</string>
             <key>CFBundleURLSchemes</key><array><string>dramastudio</string></array>
         </dict>
     </array>
@@ -71,7 +73,7 @@ $(doc_type "Markdown Script" net.daringfireball.markdown)
 $(doc_type "Rich Text Script" public.rtf com.apple.rtfd)
 $(doc_type "HTML Script" public.html)
 $(doc_type "Word Document" org.openxmlformats.wordprocessingml.document)
-$(doc_type "Subtitles" audio.fish.community.DramaStudio.subrip org.w3.webvtt)
+$(doc_type "Subtitles" io.github.maralski.DramaStudio.subrip org.w3.webvtt)
 $(doc_type "PowerPoint Presentation" org.openxmlformats.presentationml.presentation)
 $(doc_type "PDF Document" com.adobe.pdf)
 $(doc_type "EPUB Book" org.idpf.epub-container)
@@ -82,14 +84,14 @@ $(doc_type "EPUB Book" org.idpf.epub-container)
             <key>LSTypeIsPackage</key><true/>
             <key>LSItemContentTypes</key>
             <array>
-                <string>audio.fish.community.DramaStudio.project</string>
+                <string>io.github.maralski.DramaStudio.project</string>
             </array>
         </dict>
     </array>
     <key>UTExportedTypeDeclarations</key>
     <array>
         <dict>
-            <key>UTTypeIdentifier</key><string>audio.fish.community.DramaStudio.project</string>
+            <key>UTTypeIdentifier</key><string>io.github.maralski.DramaStudio.project</string>
             <key>UTTypeDescription</key><string>Drama Studio Project</string>
             <key>UTTypeConformsTo</key><array><string>com.apple.package</string></array>
             <key>UTTypeTagSpecification</key>
@@ -99,7 +101,7 @@ $(doc_type "EPUB Book" org.idpf.epub-container)
     <key>UTImportedTypeDeclarations</key>
     <array>
         <dict>
-            <key>UTTypeIdentifier</key><string>audio.fish.community.DramaStudio.subrip</string>
+            <key>UTTypeIdentifier</key><string>io.github.maralski.DramaStudio.subrip</string>
             <key>UTTypeDescription</key><string>SubRip Subtitles</string>
             <key>UTTypeConformsTo</key><array><string>public.plain-text</string></array>
             <key>UTTypeTagSpecification</key>

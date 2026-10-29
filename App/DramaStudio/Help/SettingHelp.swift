@@ -1,3 +1,5 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
 import Foundation
 
 /// The help text for every control. The popovers beside each control and the
@@ -130,7 +132,7 @@ enum SettingHelp: String, CaseIterable, Identifiable {
         case .modelLocation:
             "Where Drama Studio looks for the Drama 3 weights, about 41.5 GB. By default it uses the Hugging Face cache, where \u{201C}hf download fishaudio/drama-3\u{201D} puts them. Choose a folder only if you keep the model somewhere else, such as an external drive. Restart Drama Studio after changing it."
         case .license:
-            "Drama Studio is written by Peter Marelas and its code is MIT-licensed. It runs Fish Audio's Drama 3 model, whose weights are under the Fish Audio Community License. Everything runs on this Mac, and scripts and voices are not uploaded. Clone a real person's voice only with their consent, and read the license for what else it allows."
+            "Drama Studio is written by Peter Marelas and its code is under the Apache License 2.0. It runs Fish Audio's Drama 3 model, whose weights are under the Fish Audio Community License, and the parts of Drama Studio derived from Fish Audio's code stay under that license too. Everything runs on this Mac, and scripts and voices are not uploaded. Clone a real person's voice only with their consent, and read the license for what else it allows."
         }
     }
 }

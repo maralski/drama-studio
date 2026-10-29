@@ -919,8 +919,26 @@ To redo the end-to-end table on an idle machine: `eval/tune_ab.sh
 .build/release/drama 5 eval/out/perf/ab_tune_idle` then
 `eval/.venv/bin/python -I eval/perf_ab_summary.py eval/out/perf/ab_tune_idle`.
 
-## Licenses
+## License
 
-The app code is MIT, copyright 2026 Peter Marelas (see `LICENSE`). The vendored reference code under `eval/oracle/` and the
-model weights are under the Fish Audio Community License; see
-`eval/oracle/LICENSE_NOTE.md`.
+Copyright 2026 Peter Marelas. Drama Studio's own code is under the Apache
+License 2.0; see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+Built with Fish Audio. Drama Studio runs Fish Audio Drama 3, and the model
+weights and codec checkpoint are not included: the app downloads them from
+[fishaudio/drama-3](https://huggingface.co/fishaudio/drama-3), where Fish Audio
+licenses them under the Fish Audio Community License, Version 1.0, copied here
+as [LICENSE-FISH-AUDIO](LICENSE-FISH-AUDIO). That license governs the model and
+the audio you make with it. It allows research and non-commercial use, and
+commercial use while annual revenue is under USD 500,000; it forbids cloning a
+real person's voice without their consent and the other uses its Section IV(b)
+lists, and it needs a separate Fish Audio license to offer speech generation to
+others as a hosted service.
+
+The fish-speech reference code copied under `eval/oracle/` and
+`Sources/DramaEngine/CodecConversion/dac_reference/`, the parts of DramaEngine
+reimplemented from it, the converted Core ML codec, and the example cast from
+Fish Audio's Drama 3 Space stay under the Fish Audio Community License as well;
+[THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES) lists each one and what changed.
+descript-audio-codec code keeps its MIT notice there. This project is not
+affiliated with or endorsed by Fish Audio.
