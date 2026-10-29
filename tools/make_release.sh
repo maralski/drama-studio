@@ -112,13 +112,14 @@ if $notarized; then
 fi
 ln -s /Applications "$dmg_stage/Applications"
 cp $licenses "$dmg_stage/"
-hdiutil create -quiet -ov -format UDZO -fs HFS+ -volname "Drama Studio $version" -srcfolder "$dmg_stage" "$dmg"
-# One build on macOS 27.0.1 wrote a DMG that failed its own checksum and
-# would not attach; a rerun was fine.
-if ! hdiutil verify -quiet "$dmg" 2>/dev/null; then
-    print -u2 "$dmg_name does not pass hdiutil verify; rerun tools/make_release.sh."
-    exit 1
-fi
+# hdiutil on macOS 27 sometimes writes a DMG that fails its own checksum
+# (twice in about a dozen runs here, cause unknown); build it again until it verifies.
+for attempt in 1 2 3; do
+    hdiutil create -quiet -ov -format UDZO -fs HFS+ -volname "Drama Studio $version" -srcfolder "$dmg_stage" "$dmg"
+    hdiutil verify -quiet "$dmg" 2>/dev/null && break
+    print -u2 "$dmg_name failed hdiutil verify (attempt $attempt)."
+    if (( attempt == 3 )); then exit 1; fi
+done
 if $notarized; then
     codesign --force --timestamp --sign "$identity" "$dmg"
     notarize "$dmg"
