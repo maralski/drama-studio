@@ -30,6 +30,7 @@ cp "$bin/drama-say" "$app/Contents/MacOS/drama-say"
 
 cp -R "$bin/$resources" "$app/Contents/Resources/$resources"
 cp LICENSE NOTICE LICENSE-FISH-AUDIO THIRD_PARTY_NOTICES "$app/Contents/Resources/"
+cp App/Icon/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
 
 short_version=$(<"$root/VERSION")
 version=$(git -C "$root" rev-list --count HEAD 2>/dev/null || echo 1)
@@ -54,6 +55,7 @@ cat > "$app/Contents/Info.plist" <<PLIST
 <dict>
     <key>CFBundleIdentifier</key><string>io.github.maralski.DramaStudio</string>
     <key>CFBundleName</key><string>Drama Studio</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundleDisplayName</key><string>Drama Studio</string>
     <key>CFBundleExecutable</key><string>DramaStudio</string>
     <key>CFBundlePackageType</key><string>APPL</string>

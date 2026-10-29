@@ -13,7 +13,7 @@ struct SetupView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Label("Drama Studio", systemImage: "waveform.badge.mic")
+                    Label { Text("Drama Studio") } icon: { Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 32, height: 32) }
                         .font(.largeTitle.weight(.semibold))
                     Text("Expressive speech from Fish Audio's Drama 3, running on this Mac.")
                         .foregroundStyle(.secondary)
