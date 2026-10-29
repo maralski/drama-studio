@@ -23,7 +23,9 @@ cp "$bin/drama-mcp" "$app/Contents/MacOS/drama-mcp"
 cp "$bin/drama-say" "$app/Contents/MacOS/drama-say"
 
 cp -R "$bin/$resources" "$app/Contents/Resources/$resources"
+cp LICENSE NOTICE LICENSE-FISH-AUDIO THIRD_PARTY_NOTICES "$app/Contents/Resources/"
 
+short_version=$(<"$root/VERSION")
 version=$(git -C "$root" rev-list --count HEAD 2>/dev/null || echo 1)
 
 doc_type() {
@@ -49,7 +51,7 @@ cat > "$app/Contents/Info.plist" <<PLIST
     <key>CFBundleDisplayName</key><string>Drama Studio</string>
     <key>CFBundleExecutable</key><string>DramaStudio</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>0.1</string>
+    <key>CFBundleShortVersionString</key><string>$short_version</string>
     <key>CFBundleVersion</key><string>$version</string>
     <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
     <key>CFBundleDevelopmentRegion</key><string>en</string>
