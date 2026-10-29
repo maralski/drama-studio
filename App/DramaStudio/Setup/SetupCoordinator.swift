@@ -52,7 +52,7 @@ final class SetupCoordinator {
         case .firstLine, .ready: nil
         case .requirements, .terms: TermsAgreement.refusal
         case .failed(let step, _) where step == .requirements || step == .terms: TermsAgreement.refusal
-        default: "Drama Studio is still setting up (\(stage.step?.title.lowercased() ?? "setup")). Generation starts when its setup window finishes."
+        default: "Drama Studio is still setting up. Generation starts when its setup window finishes."
         }
     }
 
