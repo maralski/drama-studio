@@ -1,9 +1,15 @@
 #!/bin/zsh
 # Copyright 2026 Peter Marelas
 # SPDX-License-Identifier: Apache-2.0
-# Builds dist/DramaStudio.app from the SwiftPM products and ad-hoc signs it.
+# Builds dist/DramaStudio.app from the SwiftPM products and signs it.
 # The MCP server and the say command ship beside the app binary as
 # Contents/MacOS/drama-mcp and Contents/MacOS/drama-say.
+#
+#   SIGN_IDENTITY           codesign identity; "-" (the default) signs ad hoc,
+#                           anything else signs with the hardened runtime
+#   DS_CODEC_BUNDLE_URL     with DS_CODEC_BUNDLE_SHA256, the Core ML codec zip
+#   DS_CODEC_BUNDLE_SHA256  the setup window downloads; unset in development
+#                           builds, which convert the codec with Python instead
 set -euo pipefail
 
 root=${0:A:h:h}
@@ -113,10 +119,40 @@ $(doc_type "EPUB Book" org.idpf.epub-container)
 </dict>
 </plist>
 PLIST
+codec_url=${DS_CODEC_BUNDLE_URL:-}
+codec_sha=${DS_CODEC_BUNDLE_SHA256:-}
+if [[ -n $codec_url || -n $codec_sha ]]; then
+    if [[ ! $codec_url == https://* || ! $codec_sha =~ '^[0-9a-f]{64}$' ]]; then
+        print -u2 "DS_CODEC_BUNDLE_URL must be an https URL and DS_CODEC_BUNDLE_SHA256 a lowercase sha256; set both or neither."
+        exit 1
+    fi
+    plutil -insert DSCodecBundleURL -string "$codec_url" "$app/Contents/Info.plist"
+    plutil -insert DSCodecBundleSHA256 -string "$codec_sha" "$app/Contents/Info.plist"
+fi
 plutil -lint "$app/Contents/Info.plist" >/dev/null
 
-codesign --force --deep --sign - "$app"
-codesign --verify --strict "$app"
+identity=${SIGN_IDENTITY:--}
+if [[ $identity == - ]]; then
+    codesign --force --deep --sign - "$app"
+else
+    # The app records reference clips from the microphone. Metal, Core ML and
+    # the Python conversion child process need no hardened-runtime exception.
+    entitlements="$root/dist/DramaStudio.entitlements"
+    cat > "$entitlements" <<'ENTITLEMENTS'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.device.audio-input</key><true/>
+</dict>
+</plist>
+ENTITLEMENTS
+    for tool in drama-mcp drama-say; do
+        codesign --force --options runtime --timestamp --sign "$identity" "$app/Contents/MacOS/$tool"
+    done
+    codesign --force --options runtime --timestamp --entitlements "$entitlements" --sign "$identity" "$app"
+fi
+codesign --verify --deep --strict "$app"
 
 # SwiftPM's generated Bundle.module looks only at the .app root, where
 # codesign forbids content, and then at the absolute build directory. Hide the
