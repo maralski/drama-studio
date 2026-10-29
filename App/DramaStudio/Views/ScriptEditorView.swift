@@ -21,11 +21,14 @@ struct ScriptEditorView: View {
                 let highlight = model.state.isPlaying ? model.highlight(at: model.position) : nil
                 let playing = model.state.isPlaying ? model.playingSegment(at: model.position) : nil
                 if let document = model.document {
-                    HSplitView {
+                    // Not an HSplitView: a split view nested in the NavigationSplitView's
+                    // detail column makes their minimum sizes chase each other until AppKit
+                    // aborts the app.
+                    HStack(spacing: 0) {
                         SectionsView(model: model, document: document, playingID: playing)
-                            .frame(minWidth: 240, idealWidth: 320, maxWidth: 460)
+                            .frame(width: 280)
+                        Divider()
                         editor(highlight: highlight?.segmentID == model.selectedSegmentID ? highlight : nil)
-                            .frame(minWidth: 320)
                     }
                 } else {
                     editor(highlight: highlight)

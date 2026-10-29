@@ -37,12 +37,13 @@ struct DramaStudioApp: App {
                 .defaultAppStorage(AppHome.defaults)
                 .onOpenURL { model.open($0) }
         }
-        .defaultSize(width: 1240, height: 780)
+        .defaultSize(width: 1360, height: 820)
+        .windowResizability(.contentMinSize)
         .defaultLaunchBehavior(opensSetup ? .suppressed : .automatic)
         .commands { StudioCommands(model: model) }
 
-        // Its own window, so the studio window never swaps its root view, and
-        // closing it leaves a download running behind the menu bar item.
+        // Its own window, sized for one column of text, so closing it leaves a
+        // download running behind the menu bar item.
         Window("Set Up Drama Studio", id: SetupView.windowID) {
             SetupView(setup: setup, model: model)
                 .defaultAppStorage(AppHome.defaults)

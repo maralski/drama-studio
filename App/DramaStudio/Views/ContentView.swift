@@ -4,6 +4,11 @@ import AppKit
 import SwiftUI
 
 struct ContentView: View {
+    /// Wide enough for the sidebar, the editor with its transport bar and the
+    /// inspector at their minimum widths. Below it SwiftUI's split view keeps
+    /// re-solving the columns' sizes and AppKit aborts the app.
+    static let minimumSize = CGSize(width: 1280, height: 640)
+
     @Bindable var model: SessionModel
     @State private var showsInspector = true
     @State private var newVoiceClip: NewVoiceRequest?
@@ -25,6 +30,7 @@ struct ContentView: View {
                         .inspectorColumnWidth(min: 270, ideal: 300, max: 380)
                 }
         }
+        .frame(minWidth: Self.minimumSize.width, minHeight: Self.minimumSize.height)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button("Import Script", systemImage: "square.and.arrow.down") { FilePanels.importScript(into: model) }
