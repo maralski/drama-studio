@@ -18,9 +18,9 @@ final class AppPresence {
         }
     }
 
-    func showMainWindow(_ openWindow: OpenWindowAction, id: String = DramaStudioApp.mainWindowID) {
+    func showMainWindow(_ openWindow: OpenWindowAction) {
         NSApp.setActivationPolicy(.regular)
-        openWindow(id: id)
+        openWindow(id: DramaStudioApp.mainWindowID)
         NSApp.activate()
     }
 
