@@ -4,6 +4,15 @@ import XCTest
 @testable import DramaEngine
 
 final class FrameBudgetTests: XCTestCase {
+    func testPassageMarkupDoesNotCountAsSpokenText() {
+        for text in ["<whisper>Twelve chars</whisper>", "<slow>Twelve chars</slow>",
+                     "<emphasis>Twelve chars</emphasis>", "<whisper><slow>Twelve chars</slow></whisper>"] {
+            XCTAssertEqual(FrameGenerator.expectedSeconds(for: text), 0.75)
+            XCTAssertEqual(FrameGenerator.frameBudget(for: text, config: GenerationConfig()), 68)
+            XCTAssertEqual(GenerationEstimate(lines: [text]).expectedFrames, [16])
+        }
+    }
+
     func testDefaultCapFollowsTheText() {
         XCTAssertEqual(GenerationConfig().frameCap, .fromText(margin: 1.5, floorSeconds: 2.0))
     }
