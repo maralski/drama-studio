@@ -5,6 +5,22 @@ DramaEngine follows [semantic versioning](https://semver.org). The version is
 release removes a public symbol or changes what one means, a minor release
 adds one, and a patch release changes neither.
 
+## 1.0.2
+
+- Retry incomplete chunks before normal playback for every voice. Keep short
+  sentences separate, allow pauses before speech finishes, and give slow
+  reference voices more generation time. Quick Preview retains partial streaming. (#8)
+- Make optional silence-stop checkpoints deterministic for seeded generation. (#8)
+- Preserve all takes, voice assignments, and export selections in projects.
+  Add recovery drafts, Save As, unsaved-work prompts, and regeneration of
+  changed sections. Project format 2 requires this app version. (#9)
+- Separate auditioning from export selection and warn about outdated or
+  incomplete audio. Adapt the studio and dialogs to smaller windows. (#9)
+- Download verified app updates in the background and ask before restarting.
+  Wait for project quit approval before starting the installer. (#7, #9)
+- Add optional anonymous usage counts, sent only after explicit consent.
+  Scripts, audio, transcripts, and voice information are excluded.
+
 ## 1.0.1
 
 - Preserve retry safeguards for streamed laughter, emotion cues, passage tags,

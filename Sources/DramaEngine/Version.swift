@@ -14,5 +14,5 @@ public enum DramaEngineVersion: Sendable {
     /// The minor version.
     public static let minor = 0
     /// The patch version.
-    public static let patch = 1
+    public static let patch = 2
 }
