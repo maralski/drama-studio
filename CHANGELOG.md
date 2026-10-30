@@ -5,6 +5,14 @@ DramaEngine follows [semantic versioning](https://semver.org). The version is
 release removes a public symbol or changes what one means, a minor release
 adds one, and a patch release changes neither.
 
+## 1.0.3
+
+- Fit setup windows to their content instead of inheriting the editor's large
+  default or restored size. Long setup messages scroll while action buttons
+  remain visible; completing setup returns to a resizable editor. (#10)
+- Include the usage-sharing screen in layout coverage and add a regression
+  for short setup content and long errors. (#10)
+
 ## 1.0.2
 
 - Retry incomplete chunks before normal playback for every voice. Keep short
