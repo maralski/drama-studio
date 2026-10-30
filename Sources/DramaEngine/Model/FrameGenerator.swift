@@ -96,8 +96,7 @@ package final class FrameGenerator {
     }
 
     package static func expectedSeconds(for text: String) -> Double {
-        let plain = text.replacingOccurrences(of: #"<\|[^|]*\|>|\[[^\]]*\]"#, with: "", options: .regularExpression)
-        let chars = plain.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ").count
+        let chars = DirectorsNote.spokenWords(text).count
         return Double(chars) / charactersPerSecond
     }
 
