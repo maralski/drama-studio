@@ -8,6 +8,7 @@ import SwiftUI
 struct SetupView: View {
     let setup: SetupCoordinator
     let model: SessionModel
+    @State private var contentHeight: CGFloat = 360
 
     var body: some View {
         VStack(spacing: 0) {
@@ -27,18 +28,21 @@ struct SetupView: View {
                 .padding(.horizontal, 40)
                 .padding(.vertical, 36)
                 .frame(maxWidth: .infinity)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
             }
+            .frame(height: min(contentHeight, 520))
+            .scrollDisabled(contentHeight <= 520)
             footer
         }
         .background(Color(nsColor: .windowBackgroundColor))
         .navigationTitle("Set Up Drama Studio")
-        .frame(minWidth: 600, minHeight: 480)
+        .frame(width: 740)
     }
 
     @ViewBuilder
     private var footer: some View {
         switch setup.stage {
-        case .ready, .tuning, .codec(.unpacking), .usage:
+        case .ready, .tuning, .codec(.unpacking):
             EmptyView()
         default:
             HStack {
@@ -53,6 +57,11 @@ struct SetupView: View {
                     Spacer()
                     Button("I Agree") { setup.acceptTerms() }
                         .keyboardShortcut(.defaultAction)
+                case .usage:
+                    Button("Don't Share") { setup.chooseUsage(enabled: false) }
+                        .keyboardShortcut(.defaultAction)
+                    Spacer()
+                    Button("Share Usage Information") { setup.chooseUsage(enabled: true) }
                 case .weights(let transfer), .codec(.downloading(let transfer)):
                     Spacer()
                     if transfer.paused {
@@ -78,7 +87,7 @@ struct SetupView: View {
                 case .failed:
                     Spacer()
                     Button("Try Again") { setup.resume() }.keyboardShortcut(.defaultAction)
-                case .ready, .tuning, .codec(.unpacking), .usage:
+                case .ready, .tuning, .codec(.unpacking):
                     EmptyView()
                 }
             }
@@ -93,7 +102,7 @@ struct SetupView: View {
         switch setup.stage {
         case .requirements(let gaps): RequirementsCard(gaps: gaps)
         case .terms: TermsCard()
-        case .usage: UsageCard(setup: setup)
+        case .usage: UsageCard()
         case .weights(let transfer):
             TransferCard(title: "Downloading Drama 3",
                          detail: "\(ModelSetup.gigabytes(ModelDownloadPlan.drama3.totalBytes)) of model files from Hugging Face (fishaudio/drama-3 at revision e0a9218), into \(AppHome.models.path). Each file is checked against its SHA-256 before it is kept.",
@@ -324,19 +333,11 @@ private struct FailedCard: View {
 }
 
 private struct UsageCard: View {
-    let setup: SetupCoordinator
-
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             CardTitle(text: "Help improve Drama Studio")
             Text(UsageMonitoring.explanation)
                 .fixedSize(horizontal: false, vertical: true)
-            HStack {
-                Button("Don't Share") { setup.chooseUsage(enabled: false) }
-                    .keyboardShortcut(.defaultAction)
-                Spacer()
-                Button("Share Usage Information") { setup.chooseUsage(enabled: true) }
-            }
         }
     }
 }
