@@ -49,6 +49,30 @@ Drama Studio uses that copy and skips the 41.5 GB download. If you are below
 64 GB of memory, the setup window says so before anything downloads. You can
 continue at your own risk.
 
+
+## App updates
+
+Drama Studio checks GitHub for a newer stable release at launch and downloads
+it in the background. Automatic checks and downloads are on by default. Turn
+them off in **Settings > Updates**, or use **Drama Studio > Check for Updates**
+to check manually at any time.
+
+Once the download is verified, the Software Update window offers **Install and
+Restart**. Save your project and finish generation or API requests before
+confirming. **Later** leaves the running app unchanged; return to the update
+window when ready. Quitting normally does not install an update. A deferred
+update is downloaded again on the next automatic or manual check.
+
+Updates require the app to be installed in a folder you can write to, such as
+Applications or your user's Applications folder. Apps running from a mounted
+DMG, App Translocation, or a Swift build directory cannot update themselves.
+The updater changes only the app bundle; models, voices, and projects stay in
+place. It uses the release's `DramaStudio-<version>.dmg` and `SHA256SUMS`, checks
+the bundle identity, version, and minimum macOS requirement, verifies its code
+signature, and requires the
+same signing identity for Developer ID builds. Ad-hoc builds rely on GitHub
+HTTPS and the published checksum for authenticity.
+
 ## What you get
 
 - **Script editor** with import of `.txt`, `.md`, `.rtf`, `.rtfd`, `.html`,

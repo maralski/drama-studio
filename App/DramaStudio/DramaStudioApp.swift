@@ -7,9 +7,14 @@ import SwiftUI
 struct DramaStudioApp: App {
     static let mainWindowID = "main"
 
+    @Environment(\.openWindow) private var openWindow
+
+    private func updateWindow() { openWindow(id: "updates") }
+
     @State private var model: SessionModel
     @State private var server: APIServerController
     @State private var presence: AppPresence
+    @State private var updater = AppUpdater()
     @State private var setup: SetupCoordinator
 
     init() {
@@ -31,12 +36,26 @@ struct DramaStudioApp: App {
         Window("Drama Studio", id: Self.mainWindowID) {
             ContentView(model: model, setup: setup)
                 .environment(server)
+                .environment(updater)
+                .onChange(of: updater.readyVersion) { if updater.readyVersion != nil { updateWindow() } }
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in updater.discardOnQuit() }
+                .task { await updater.start() }
                 .defaultAppStorage(AppHome.defaults)
                 .onOpenURL { model.open($0) }
         }
         .defaultSize(width: 1360, height: 820)
         .windowResizability(.contentMinSize)
-        .commands { StudioCommands(model: model) }
+        .commands {
+            StudioCommands(model: model)
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") {
+                    NSApp.activate()
+                    updateWindow()
+                    Task { await updater.check() }
+                }
+                .disabled(updater.busy)
+            }
+        }
 
         MenuBarExtra {
             MenuBarContent(model: model, server: server, presence: presence)
@@ -50,8 +69,16 @@ struct DramaStudioApp: App {
         }
         .defaultSize(width: 760, height: 500)
 
+        Window("Software Update", id: "updates") {
+            UpdateSettingsView()
+                .modifier(UpdateConfirmation())
+                .environment(updater)
+                .frame(width: 520, height: 260)
+        }
+
         Settings {
             SettingsView(server: server, setup: setup)
+                .environment(updater)
                 .defaultAppStorage(AppHome.defaults)
         }
     }
