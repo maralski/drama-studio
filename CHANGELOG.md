@@ -7,6 +7,17 @@ adds one, and a patch release changes neither.
 
 ## 1.0.1
 
+- Preserve retry safeguards for streamed laughter, emotion cues, passage tags,
+  and director's notes. These requests send completed sentences when retries
+  are enabled, so failed attempts can be replaced before playback. Plain text
+  and Quick Preview retain partial streaming. (#6)
+- Exclude passage markup from speech timing estimates and frame budgets. (#1)
+- Stop showing a false "stopped early" warning when reopening saved projects. (#2)
+- Decode form-encoded spaces in API query text while preserving encoded plus
+  signs and URL paths. (#5)
+- Compare streamed audio with its own take in the API smoke test, and make
+  session progress tests independent of polling timing. (#3, #4)
+
 - `GenerationConfig.topP` at 1 or above now applies no nucleus cut: every
   candidate up to `topK` stays eligible. Before, the cut compared the
   cumulative mass against 1 on rounding noise, so on peaked rows the CPU
