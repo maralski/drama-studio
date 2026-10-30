@@ -22,7 +22,7 @@ struct InspectorView: View {
             AdvancedSection(model: model)
             if ModelSetup.isPreviewEngine {
                 Section {
-                    Label("Preview engine: audio is a placeholder tone until the Metal engine ships.", systemImage: "info.circle")
+                    Label("Preview mode uses placeholder tones instead of speech.", systemImage: "info.circle")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -42,6 +42,7 @@ private struct CastSection: View {
         Section {
             if model.document == nil {
                 Toggle(isOn: $model.screenplayMode) { HelpLabel("Screenplay mode", help: .screenplayMode) }
+                    .accessibilityLabel("Screenplay mode")
                     .help("Treat \u{201C}Name: line\u{201D} dialogue as separate speakers")
             }
             switch model.castSpeakers {
@@ -61,13 +62,13 @@ private struct CastSection: View {
                         HStack(spacing: 4) {
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(speaker.name)
-                                Text(speaker.tag).font(.caption.monospaced()).foregroundStyle(.secondary)
                             }
                             HelpButton(.speakerVoice)
                         }
                     }
+                    .accessibilityLabel("Voice for \(speaker.name)")
                     if model.canKeepVoice(for: speaker) {
-                        Button("Keep This Voice", systemImage: "square.and.arrow.down") { model.keepVoice(for: speaker) }
+                        Button("Save Voice to Library", systemImage: "square.and.arrow.down") { model.keepVoice(for: speaker) }
                             .help("Save the voice of the first take to the library, so it stays the same in later sessions")
                     }
                 }
@@ -133,5 +134,25 @@ private struct AdvancedSection: View {
                 .buttonStyle(.plain)
             }
         }
+    }
+}
+
+struct InspectorSheet: View {
+    let model: SessionModel
+    let dismiss: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Text("Voice and Performance").font(.headline)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(20)
+            InspectorView(model: model)
+            HStack {
+                Spacer()
+                Button("Done", action: dismiss).keyboardShortcut(.defaultAction)
+            }
+            .dialogActions()
+        }
+        .frame(width: 380, height: 500)
     }
 }

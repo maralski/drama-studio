@@ -10,50 +10,107 @@ struct SetupView: View {
     let model: SessionModel
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Label { Text("Drama Studio") } icon: { Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 32, height: 32) }
-                        .font(.largeTitle.weight(.semibold))
-                    Text("Expressive speech from Fish Audio's Drama 3, running on this Mac.")
-                        .foregroundStyle(.secondary)
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label { Text("Drama Studio") } icon: { Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 32, height: 32) }
+                            .font(.largeTitle.weight(.semibold))
+                        Text("Expressive speech from Fish Audio's Drama 3, running on this Mac.")
+                            .foregroundStyle(.secondary)
+                    }
+                    StepStrip(stage: setup.stage)
+                    Divider()
+                    card
                 }
-                StepStrip(stage: setup.stage)
-                Divider()
-                card
+                .frame(maxWidth: 660, alignment: .leading)
+                .padding(.horizontal, 40)
+                .padding(.vertical, 36)
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: 660, alignment: .leading)
-            .padding(.horizontal, 40)
-            .padding(.vertical, 36)
-            .frame(maxWidth: .infinity)
+            footer
         }
         .background(Color(nsColor: .windowBackgroundColor))
         .navigationTitle("Set Up Drama Studio")
+        .frame(minWidth: 600, minHeight: 480)
+    }
+
+    @ViewBuilder
+    private var footer: some View {
+        switch setup.stage {
+        case .ready, .tuning, .codec(.unpacking):
+            EmptyView()
+        default:
+            HStack {
+                switch setup.stage {
+                case .requirements:
+                    Button("Quit") { NSApp.terminate(nil) }
+                    Spacer()
+                    Button("Continue Anyway") { setup.acknowledgeRequirements() }
+                        .keyboardShortcut(.defaultAction)
+                case .terms:
+                    Button("Quit") { NSApp.terminate(nil) }
+                    Spacer()
+                    Button("I Agree") { setup.acceptTerms() }
+                        .keyboardShortcut(.defaultAction)
+                case .weights(let transfer), .codec(.downloading(let transfer)):
+                    Spacer()
+                    if transfer.paused {
+                        Button("Resume") { setup.resume() }.keyboardShortcut(.defaultAction)
+                    } else {
+                        Button("Pause") { setup.pause() }
+                    }
+                case .codec(.needsConversion(let command)):
+                    Button("Copy Command") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(command, forType: .string)
+                    }
+                    Spacer()
+                    Button("Check Again") { setup.resume() }.keyboardShortcut(.defaultAction)
+                case .firstLine:
+                    Button("Open the Studio") { setup.finish() }
+                    Spacer()
+                    Button("Generate", systemImage: "play.fill") {
+                        setup.finish()
+                        model.generate()
+                    }
+                    .keyboardShortcut(.defaultAction)
+                case .failed:
+                    Spacer()
+                    Button("Try Again") { setup.resume() }.keyboardShortcut(.defaultAction)
+                case .ready, .tuning, .codec(.unpacking):
+                    EmptyView()
+                }
+            }
+            .frame(maxWidth: 660)
+            .frame(maxWidth: .infinity)
+            .dialogActions()
+        }
     }
 
     @ViewBuilder
     private var card: some View {
         switch setup.stage {
-        case .requirements(let gaps): RequirementsCard(gaps: gaps, setup: setup)
-        case .terms: TermsCard(setup: setup)
+        case .requirements(let gaps): RequirementsCard(gaps: gaps)
+        case .terms: TermsCard()
         case .weights(let transfer):
             TransferCard(title: "Downloading Drama 3",
                          detail: "\(ModelSetup.gigabytes(ModelDownloadPlan.drama3.totalBytes)) of model files from Hugging Face (fishaudio/drama-3 at revision e0a9218), into \(AppHome.models.path). Each file is checked against its SHA-256 before it is kept.",
-                         transfer: transfer, setup: setup)
+                         transfer: transfer)
         case .codec(.downloading(let transfer)):
             TransferCard(title: "Downloading the voice codec",
                          detail: "The three Core ML models that turn Drama 3's codes into audio, from this release on GitHub.",
-                         transfer: transfer, setup: setup)
+                         transfer: transfer)
         case .codec(.unpacking):
             WorkingCard(title: "Unpacking the voice codec", detail: "Checking the three Core ML models and moving them into place.", line: nil)
-        case .codec(.needsConversion(let command)): ConversionCard(command: command, setup: setup)
+        case .codec(.needsConversion(let command)): ConversionCard(command: command)
         case .tuning(let detail):
             WorkingCard(title: "Getting Drama 3 ready for this Mac",
-                        detail: "The first load maps 41 GB of weights, tunes the GPU kernels for this Mac (30 seconds to a minute) and builds a packed-weight cache (a few seconds). It happens once; later launches skip it.",
+                        detail: "Preparing speech generation for this Mac usually takes 30 seconds to a minute. Later launches skip this preparation.",
                         line: detail)
-        case .firstLine: FirstLineCard(setup: setup, model: model)
+        case .firstLine: FirstLineCard(model: model)
         case .ready: EmptyView()
-        case .failed(let step, let reason): FailedCard(step: step, reason: reason, setup: setup)
+        case .failed(let step, let reason): FailedCard(step: step, reason: reason)
         }
     }
 }
@@ -112,7 +169,6 @@ private struct CardTitle: View {
 
 private struct RequirementsCard: View {
     let gaps: [String]
-    let setup: SetupCoordinator
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -122,18 +178,11 @@ private struct RequirementsCard: View {
             Bullets(items: gaps)
             Text("Nothing has been downloaded yet. You can continue at your own risk; the download is 41.5 GB.")
                 .foregroundStyle(.secondary)
-            HStack {
-                Button("Quit") { NSApp.terminate(nil) }
-                Spacer()
-                Button("Continue Anyway") { setup.acknowledgeRequirements() }
-                    .keyboardShortcut(.defaultAction)
-            }
         }
     }
 }
 
 private struct TermsCard: View {
-    let setup: SetupCoordinator
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -147,12 +196,6 @@ private struct TermsCard: View {
             Text("Nothing downloads and nothing is spoken until you agree. Next, Drama Studio downloads \(ModelSetup.gigabytes(ModelDownloadPlan.drama3.totalBytes)) of model files from Hugging Face.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
-            HStack {
-                Button("Quit") { NSApp.terminate(nil) }
-                Spacer()
-                Button("I Agree") { setup.acceptTerms() }
-                    .keyboardShortcut(.defaultAction)
-            }
         }
     }
 }
@@ -161,7 +204,6 @@ private struct TransferCard: View {
     let title: String
     let detail: String
     let transfer: Transfer
-    let setup: SetupCoordinator
 
     private var progress: DownloadProgress { transfer.progress }
 
@@ -183,7 +225,9 @@ private struct TransferCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             CardTitle(text: title)
-            Text(detail).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            DisclosureGroup("Download details") {
+                Text(detail).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
             ProgressView(value: progress.fraction)
             HStack {
                 Text(summary).monospacedDigit()
@@ -204,14 +248,6 @@ private struct TransferCard: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            HStack {
-                Spacer()
-                if transfer.paused {
-                    Button("Resume") { setup.resume() }.keyboardShortcut(.defaultAction)
-                } else {
-                    Button("Pause") { setup.pause() }
-                }
-            }
         }
     }
 }
@@ -228,14 +264,13 @@ private struct WorkingCard: View {
                 CardTitle(text: title)
             }
             Text(detail).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            if let line { Text(line).font(.callout.monospaced()).foregroundStyle(.secondary) }
+            if let line { DisclosureGroup("Preparation details") { Text(line).font(.callout.monospaced()).foregroundStyle(.secondary) } }
         }
     }
 }
 
 private struct ConversionCard: View {
     let command: String
-    let setup: SetupCoordinator
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -248,22 +283,12 @@ private struct ConversionCard: View {
                 .padding(10)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
-            HStack {
-                Button("Copy Command") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(command, forType: .string)
-                }
-                Spacer()
-                Button("Check Again") { setup.resume() }.keyboardShortcut(.defaultAction)
-            }
         }
     }
 }
 
 private struct FirstLineCard: View {
-    let setup: SetupCoordinator
     let model: SessionModel
-    @FocusState private var generateFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -276,25 +301,13 @@ private struct FirstLineCard: View {
                 .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
-            HStack {
-                Button("Open the Studio") { setup.finish() }
-                Spacer()
-                Button("Generate", systemImage: "play.fill") {
-                    setup.finish()
-                    model.generate()
-                }
-                .keyboardShortcut(.defaultAction)
-                .focused($generateFocused)
-            }
         }
-        .onAppear { generateFocused = true }
     }
 }
 
 private struct FailedCard: View {
     let step: SetupStep
     let reason: String
-    let setup: SetupCoordinator
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -304,10 +317,6 @@ private struct FailedCard: View {
             Text(reason).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
             if step == .weights || step == .codec {
                 Text("Files that finished downloading are kept, and a partial file resumes.").foregroundStyle(.secondary)
-            }
-            HStack {
-                Spacer()
-                Button("Try Again") { setup.resume() }.keyboardShortcut(.defaultAction)
             }
         }
     }

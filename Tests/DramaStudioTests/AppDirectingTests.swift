@@ -136,7 +136,7 @@ final class AppDirectingTests: XCTestCase {
         XCTAssertTrue(session.sessionVoices.isEmpty)
     }
 
-    func testTakesAreNumberedAndClearedWhenTheScriptChanges() async {
+    func testTakesAreNumberedAndPreservedWhenTheScriptChanges() async {
         let session = makeSession()
         await finish(session.generate, in: session)
         await finish(session.generate, in: session)
@@ -145,18 +145,20 @@ final class AppDirectingTests: XCTestCase {
         XCTAssertEqual(session.selectedTakeID, session.takes[1].id)
         XCTAssertEqual(session.takes[1].samples, session.audio)
         session.selectTake(session.takes[0].id)
-        session.toggleKeepSelectedTake()
+        session.useSelectedTakeForExport()
         XCTAssertEqual(session.keptTakeID, session.takes[0].id)
 
         session.script += " The end."
         XCTAssertFalse(session.canRetake, "takes of the old text can't be retaken")
         XCTAssertNotNil(session.retakeBlocker)
         await finish(session.generate, in: session)
-        XCTAssertEqual(session.takes.map(\.number), [1])
-        XCTAssertNil(session.keptTakeID)
+        XCTAssertEqual(session.takes.map(\.number), [1, 2, 3])
+        XCTAssertEqual(session.keptTakeID, session.takes[0].id)
+        XCTAssertTrue(session.isOutdated(session.takes[0]))
+        XCTAssertFalse(session.isOutdated(session.takes[2]))
     }
 
-    func testChangingTheVoiceEndsTheSetOfTakes() async {
+    func testChangingTheVoicePreservesEarlierTakes() async {
         let session = makeSession()
         await finish(session.generate, in: session)
         XCTAssertTrue(session.canRetake)
@@ -164,7 +166,7 @@ final class AppDirectingTests: XCTestCase {
         XCTAssertFalse(session.canRetake, "a retake would clone the first take, which is the old voice")
         XCTAssertTrue(session.retakeBlocker?.contains("voice changed") == true)
         await finish(session.generate, in: session)
-        XCTAssertEqual(session.takes.map(\.number), [1])
+        XCTAssertEqual(session.takes.map(\.number), [1, 2])
         XCTAssertTrue(session.canRetake)
     }
 
@@ -197,7 +199,7 @@ final class AppDirectingTests: XCTestCase {
 
         session.script = "A new line to read."
         await finish(session.generate, in: session)
-        let first = session.takes[0].take
+        let first = session.takes.last!.take
         XCTAssertNotEqual(first, voice)
         await finish({ session.retake(note: "angrier") }, in: session)
         XCTAssertEqual(synthesizer.requests[3].previousTakes, [voice, first])
@@ -220,10 +222,10 @@ final class AppDirectingTests: XCTestCase {
         await finish(session.generate, in: session)
         let first = session.takes[0]
         XCTAssertNotEqual(first.samples, session.takes[1].samples)
-        XCTAssertEqual(session.exportSamples, session.takes[1].samples, "no kept take: the current audio")
+        XCTAssertTrue(session.exportSamples == first.samples, "auditioning a new take does not change the export selection")
 
         session.selectTake(first.id)
-        session.toggleKeepSelectedTake()
+        session.useSelectedTakeForExport()
         session.selectTake(session.takes[1].id)
         XCTAssertEqual(session.audio, session.takes[1].samples)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -262,6 +264,19 @@ final class AppDirectingTests: XCTestCase {
         await finish({ session.tryLine("Hello.", as: design) }, in: session)
         session.useDesign(changed, for: speaker)
         XCTAssertNil(session.sessionVoices[.designed(changed)], "a changed design was not heard")
+    }
+
+    func testReplacingAnAuditionedVoiceMarksTheSavedProjectDirty() async throws {
+        let session = makeSession()
+        let speaker = try session.prepared.get().speakers[0]
+        session.setVoice(.designed(design), for: speaker)
+        await finish(session.generate, in: session)
+        XCTAssertTrue(session.saveProject(to: directory.appending(path: "Voice.dramaproj")))
+        XCTAssertFalse(session.hasUnsavedChanges)
+        await finish({ session.tryLine("A different sample to choose a new voice.", as: design) }, in: session)
+        session.useDesign(design, for: speaker)
+        XCTAssertTrue(session.hasUnsavedChanges)
+        XCTAssertTrue(session.isOutdated(session.takes[0]))
     }
 
     func testTryingALineCountsAsBusy() {

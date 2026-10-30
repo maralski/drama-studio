@@ -15,7 +15,7 @@ struct TakesStrip: View {
                         Text(section.label).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
                     ForEach(model.visibleTakes) { take in
-                        TakeChip(take: take, isSelected: take.id == model.visibleSelectedTakeID, isKept: take.id == model.keptTakeID) {
+                        TakeChip(take: take, isSelected: take.id == model.visibleSelectedTakeID, isKept: take.id == model.visibleExportTakeID, isOutdated: model.isOutdated(take, in: model.selectedSegment)) {
                             model.selectTake(take.id)
                         }
                     }
@@ -23,8 +23,21 @@ struct TakesStrip: View {
                 .padding(2)
             }
             .scrollIndicators(.never)
+            .fixedSize(horizontal: false, vertical: true)
             .defaultScrollAnchor(.leading, for: .alignment)
             .defaultScrollAnchor(.trailing, for: .sizeChanges)
+            HStack {
+                Text(model.exportSummary).font(.caption).foregroundStyle(.secondary)
+                if model.previewingTakeID != nil {
+                    Button("Stop Audition", systemImage: "stop.fill") { model.stopPreview() }
+                }
+                Spacer()
+                Button(isSelectedKept ? "Used for Export" : "Use for Export", systemImage: "checkmark.circle") {
+                    model.useSelectedTakeForExport()
+                }
+                .disabled(model.visibleSelectedTakeID == nil || model.state.isGenerating || isSelectedKept)
+                .help("Use the selected take in exported audio and captions")
+            }
             if model.document == nil {
             HStack(spacing: 8) {
                 TextField("Give a note", text: $note, prompt: Text("Give a note, such as softer and warmer"))
@@ -36,34 +49,30 @@ struct TakesStrip: View {
                     .disabled(!model.canRetake || DirectorsNote.clean(note) == nil)
                     .help("Read the line again with this note, after the takes so far")
                 Spacer()
-                Button(isSelectedKept ? "Kept" : "Keep", systemImage: isSelectedKept ? "star.fill" : "star") { model.toggleKeepSelectedTake() }
-                    .disabled(model.selectedTakeID == nil || model.state.isGenerating)
-                    .help("Mark the selected take as the one Export writes")
-                HelpButton(.keepTake)
             }
-            ScrollView(.horizontal) {
-                HStack(spacing: 6) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), alignment: .leading)], alignment: .leading, spacing: 6) {
                     ForEach(Examples.notes, id: \.self) { suggestion in
                         Button(suggestion) { note = suggestion }
                             .buttonStyle(.bordered)
                             .buttonBorderShape(.capsule)
                             .controlSize(.small)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                }
             }
-            .scrollIndicators(.never)
+            .fixedSize(horizontal: false, vertical: true)
             if let blocker = model.retakeBlocker {
                 Text(blocker).font(.caption).foregroundStyle(.secondary)
             }
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 16)
         .background(.bar)
         .overlay(alignment: .top) { Divider() }
     }
 
-    private var isSelectedKept: Bool { model.selectedTakeID != nil && model.selectedTakeID == model.keptTakeID }
+    private var isSelectedKept: Bool { model.visibleSelectedTakeID != nil && model.visibleSelectedTakeID == model.visibleExportTakeID }
 
     private func retake() {
         guard model.canRetake else { return }
@@ -75,19 +84,23 @@ private struct TakeChip: View {
     let take: SessionTake
     let isSelected: Bool
     let isKept: Bool
+    let isOutdated: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 4) {
-                if isKept { Image(systemName: "star.fill").foregroundStyle(.yellow) }
+                if isKept { Label("Export", systemImage: "checkmark.circle.fill").font(.caption) }
+                if isOutdated { Label("Outdated", systemImage: "clock.badge.exclamationmark").font(.caption) }
                 Text(take.label).lineLimit(1)
             }
         }
         .buttonStyle(.bordered)
         .buttonBorderShape(.capsule)
         .overlay { Capsule().strokeBorder(Color.accentColor, lineWidth: isSelected ? 2 : 0) }
-        .help(isKept ? "The kept take, which Export writes. Click to play." : "Click to play this take")
+        .accessibilityLabel("\(take.label)\(isKept ? ", used for export" : "")\(isOutdated ? ", outdated" : "")")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .help("Click to audition. Use for Export changes the exported take.")
     }
 }
 

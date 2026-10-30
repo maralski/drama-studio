@@ -7,6 +7,7 @@ import SwiftUI
 struct DramaStudioApp: App {
     static let mainWindowID = "main"
 
+    @NSApplicationDelegateAdaptor(StudioAppDelegate.self) private var appDelegate
     @State private var model: SessionModel
     @State private var server: APIServerController
     @State private var presence: AppPresence
@@ -23,6 +24,11 @@ struct DramaStudioApp: App {
         _server = State(initialValue: server)
         _presence = State(initialValue: presence)
         _setup = State(initialValue: setup)
+        model.confirmReplacement = { [weak model] message in
+            guard let model else { return false }
+            return FilePanels.confirmReplacement(model, message: message)
+        }
+        appDelegate.model = model
         server.startIfEnabled()
         presence.start()
     }
@@ -49,6 +55,7 @@ struct DramaStudioApp: App {
             HelpWindowView()
         }
         .defaultSize(width: 760, height: 500)
+        .windowResizability(.contentMinSize)
 
         Settings {
             SettingsView(server: server, setup: setup)
@@ -91,8 +98,11 @@ struct StudioCommands: Commands {
             .disabled(model.recentProjects.isEmpty)
         }
         CommandGroup(replacing: .saveItem) {
-            Button("Save Project…") { FilePanels.saveProject(model) }
+            Button("Save Project") { FilePanels.saveProject(model) }
                 .keyboardShortcut("s")
+                .disabled(model.state.isGenerating)
+            Button("Save Project As…") { FilePanels.saveProject(model, saveAs: true) }
+                .keyboardShortcut("s", modifiers: [.command, .shift])
                 .disabled(model.state.isGenerating)
         }
         CommandGroup(replacing: .importExport) {
@@ -105,6 +115,8 @@ struct StudioCommands: Commands {
             Button("Generate") { model.generate() }
                 .keyboardShortcut(.return)
                 .disabled(!model.canGenerate)
+            Button("Generate Changed Sections") { model.generateChangedSections() }
+                .disabled(!model.canGenerateChangedSections)
             Button("Narrate This Section") { model.narrateSelectedSection() }
                 .keyboardShortcut(.return, modifiers: [.command, .shift])
                 .disabled(!model.canNarrateSection)

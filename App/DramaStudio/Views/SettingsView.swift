@@ -19,6 +19,7 @@ struct SettingsView: View {
             }
         }
         .frame(width: 560)
+        .frame(minHeight: 460, idealHeight: 600)
     }
 }
 
@@ -130,6 +131,7 @@ private struct APIServerSection: View {
             LabeledContent("Port") {
                 TextField("Port", value: $port, format: .number.grouping(.never))
                     .frame(width: 80)
+                    .labelsHidden()
                     .multilineTextAlignment(.trailing)
                     .onSubmit { server.restart() }
             }

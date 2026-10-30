@@ -18,6 +18,12 @@ struct VoiceLibraryView: View {
                         .tag(voice.id)
                         .contextMenu {
                             Button("Preview") { model.togglePreview(voice) }
+                            if case .success(let speakers) = model.castSpeakers {
+                                ForEach(speakers) { speaker in
+                                    Button("Assign to \(speaker.name)") { model.setVoice(.library(voice.id), for: speaker) }
+                                        .disabled(model.state.isGenerating)
+                                }
+                            }
                             Button("Remove\u{2026}", role: .destructive) { pendingRemoval = voice }
                         }
                 }
@@ -30,7 +36,7 @@ struct VoiceLibraryView: View {
         }
         .overlay {
             if model.library.voices.isEmpty {
-                ContentUnavailableView("No Voices", systemImage: "person.wave.2", description: Text("Add or drop a reference clip to clone a voice."))
+                ContentUnavailableView("Custom Voices", systemImage: "person.wave.2", description: Text("You can generate with the default voice. Add or drop a reference clip to create a custom voice."))
             }
         }
         .overlay {
@@ -51,17 +57,23 @@ struct VoiceLibraryView: View {
     }
 
     private var footer: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 8) {
             Button("Add Voice", systemImage: "plus") { newVoice = NewVoiceRequest() }
+                .frame(width: 24, height: 24)
                 .help("Add a reference voice")
             Button("Remove Voice", systemImage: "minus") { pendingRemoval = model.library.voice(selection) }
+                .frame(width: 24, height: 24)
                 .disabled(selection == nil)
                 .help("Remove the selected voice")
             Spacer()
         }
         .labelStyle(.iconOnly)
         .buttonStyle(.borderless)
-        .padding(8)
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 16)
+        .background(.bar)
+        .overlay(alignment: .top) { Divider() }
     }
 }
 

@@ -154,18 +154,34 @@ speaker picker. The editor edits the selected section.
   previous section goes along as history, and with no library voice cast
   the speaker's first narrated section is also the voice, the way takes and
   the live route already carry a voice. Narrate This Section
-  generates one section again; the takes strip then lists that section's
-  takes, and the one you click is the one the narration uses.
+  generates one section again. Click a take to audition it, then click
+  **Use for Export** to choose it for the narration. The Export badge identifies
+  the chosen take; auditioning another take does not change it.
+- Editing text or changing a speaker or voice marks the affected audio as
+  **Needs regeneration**. **Generate Changed Sections** updates only missing
+  or outdated sections. Export asks before writing outdated or incomplete audio.
+  Earlier takes remain available, including after a project is reopened.
 - Export writes the whole narration, Per Section (numbered files and a
   `manifest.csv`), Captions as SRT or WebVTT, timed from the frames each
   sentence took, and for a deck a Slide Narration Package: `slide-NN.wav` per
   narrated slide and a `README.txt` on adding them with Insert > Audio. The
   app does not change the deck.
-- Save Project writes a `.dramaproj` bundle with the document or script, the
-  library voices cast, the settings, and the chosen takes with their codes
-  and audio, so a reopened project plays, exports and narrates further
-  sections in the same voice without generating again.
-- Flatten to Script turns the sections back into one plain script.
+- **Save Project** writes a `.dramaproj` bundle with the document or script,
+  settings, voice assignments, session voices, and every take with its original
+  text, voice assignments, codes, and audio. Library assignments still refer to
+  voices in the local library. Save updates the current project; **Save Project
+  As** creates a copy. Format 2 projects require this version of Drama Studio.
+  Older projects still open, with a verification warning for audio whose
+  generation history was not stored.
+- Import, Open Project, and Quit offer Save, Discard Changes, or Cancel when
+  work is unsaved. A failed or cancelled save leaves the current session open.
+  After editing pauses for two seconds, the app writes a recovery draft in the
+  background; drafts wait until generation stops. The next launch offers to
+  restore a draft left by an interrupted session. Recovery does not replace
+  the last manually saved project.
+- **Flatten to Script** turns the sections into one plain script and removes
+  their takes from the session. Its confirmation offers to save a project copy
+  first.
 
 ![The Export menu for a deck](docs/screenshots/document-export-menu.png)
 
