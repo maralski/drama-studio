@@ -6,6 +6,14 @@ import XCTest
 final class HTTPParsingTests: XCTestCase {
     private func raw(_ text: String, body: Data = Data()) -> Data { Data(text.utf8) + body }
 
+    func testFormEncodedQueryDecodesSpacesWithoutChangingLiteralPlusesOrThePath() {
+        let buffer = raw("GET /a+b?input=%5Blaughs%5D+We+can+try+tomorrow.&voice=Test+Voice&literal=C%2B%2B&encoded=%252B&accent=caf%C3%A9 HTTP/1.1\r\nHost: localhost\r\n\r\n")
+        guard case .complete(let request) = HTTPRequestParser.parse(buffer) else { return XCTFail("Request did not parse") }
+        XCTAssertEqual(request.path, "/a+b")
+        XCTAssertEqual(request.query, ["input": "[laughs] We can try tomorrow.", "voice": "Test Voice",
+                                       "literal": "C++", "encoded": "%2B", "accent": "café"])
+    }
+
     func testParsesRequestLineHeadersQueryAndBody() {
         let body = Data("{\"input\":\"hi\"}".utf8)
         let buffer = raw("POST /v1/audio/speech?x=1&name=a%20b HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: \(body.count)\r\n\r\n", body: body)

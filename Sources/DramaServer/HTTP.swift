@@ -129,7 +129,8 @@ public enum HTTPRequestParser {
         } else {
             framing = .length(0)
         }
-        guard let target = URLComponents(string: String(requestLine[1])) else { return .invalid(.badRequest, "Malformed request target.") }
+        guard var target = URLComponents(string: String(requestLine[1])) else { return .invalid(.badRequest, "Malformed request target.") }
+        target.percentEncodedQuery = target.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%20")
         var query: [String: String] = [:]
         for item in target.queryItems ?? [] { query[item.name] = item.value ?? "" }
         let request = HTTPRequest(method: String(requestLine[0]).uppercased(), path: target.path, query: query, headers: headers)
