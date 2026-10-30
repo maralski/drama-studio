@@ -14,6 +14,9 @@ struct SettingsView: View {
             Tab("General", systemImage: "gearshape") {
                 GeneralSettingsView(server: server, setup: setup)
             }
+            Tab("Updates", systemImage: "arrow.down.circle") {
+                UpdateSettingsView()
+            }
             Tab("Pronunciation", systemImage: "character.book.closed") {
                 PronunciationSettingsView()
             }
