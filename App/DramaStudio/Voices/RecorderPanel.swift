@@ -44,6 +44,8 @@ struct RecorderPanel: View {
                     Button(preview.isPlaying ? "Stop" : "Play", systemImage: preview.isPlaying ? "stop.fill" : "play.fill") { preview.toggle(url) }
                     secondsLabel(duration)
                     Spacer()
+                }
+                HStack(spacing: 10) {
                     Button("Record Again") {
                         preview.stop()
                         Task { await recorder.record() }

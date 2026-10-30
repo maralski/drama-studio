@@ -4,7 +4,7 @@ import DramaEngine
 import Foundation
 
 /// What speaks for one speaker.
-enum VoiceChoice: Hashable {
+enum VoiceChoice: Hashable, Codable, Sendable {
     case modelDefault
     /// A voice the model picks; its first take becomes the session voice.
     case surprise

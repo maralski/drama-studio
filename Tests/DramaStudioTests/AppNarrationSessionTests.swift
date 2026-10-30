@@ -120,10 +120,11 @@ final class AppNarrationSessionTests: XCTestCase {
         XCTAssertEqual(session.audio, session.narrationTakes.compactMap { session.chosenTake(for: $0.segmentID)?.samples }.flatMap { $0 })
 
         session.selectTake(section.takes[0].id)
+        XCTAssertEqual(session.sectionTakes[document.segments[1].id]?.chosenID, section.takes[1].id, "audition leaves the export unchanged")
+        XCTAssertEqual(session.visibleSelectedTakeID, section.takes[0].id)
+        session.useSelectedTakeForExport()
         XCTAssertEqual(session.sectionTakes[document.segments[1].id]?.chosenID, section.takes[0].id)
-        XCTAssertEqual(session.audio, session.narrationTakes.compactMap { session.chosenTake(for: $0.segmentID)?.samples }.flatMap { $0 })
-        XCTAssertEqual(session.playhead, before[0]!.samples.count, "playback starts at the section")
-        XCTAssertTrue(session.state.isPlaying)
+        XCTAssertTrue(session.audio == session.narrationTakes.compactMap { session.chosenTake(for: $0.segmentID)?.samples }.flatMap { $0 })
     }
 
     func testSkippingASectionRemovesItFromTheAudioAndTheQueue() async throws {
@@ -226,6 +227,208 @@ final class AppNarrationSessionTests: XCTestCase {
         XCTAssertEqual(reopened.takes.first?.sentences.map(\.text), ["A plain line that is long enough.", "Another one that is also long."])
         XCTAssertEqual(reopened.captionTakes.first?.sentences, session.captionTakes.first?.sentences)
         XCTAssertTrue(reopened.canExportCaptions)
+    }
+
+    func testProjectPreservesAllTakesAndExportChoice() async throws {
+        let session = makeSession()
+        session.script = "The first version of our narration."
+        session.generate()
+        await finish(session)
+        session.useSelectedTakeForExport()
+        let exported = session.exportSamples
+        session.generate()
+        await finish(session)
+        XCTAssertEqual(session.takes.count, 2)
+        let bundle = directory.appending(path: "AllTakes.dramaproj")
+        session.saveProject(to: bundle)
+        let reopened = makeSession()
+        reopened.openProject(from: bundle)
+        XCTAssertEqual(reopened.takes.count, 2)
+        XCTAssertEqual(reopened.keptTakeID, session.keptTakeID)
+        XCTAssertEqual(reopened.selectedTakeID, session.selectedTakeID)
+        XCTAssertEqual(reopened.exportSamples, exported)
+    }
+
+    func testEditedDocumentWarnsUntilUpdatedAndPreservesHistoryOnReopen() async throws {
+        let session = makeSession()
+        let deck = directory.appending(path: "review.pptx")
+        try PPTXFixture.package(PPTXFixture.standard).write(to: deck)
+        session.open(deck)
+        session.generate()
+        await finish(session)
+        let firstID = try XCTUnwrap(session.document?.segments.first?.id)
+        let original = try XCTUnwrap(session.chosenTake(for: firstID))
+        let otherIDs = session.document!.segments.dropFirst().map(\.id)
+        let untouched = otherIDs.map { session.chosenTake(for: $0)?.id }
+        let bundle = directory.appending(path: "Review.dramaproj")
+        XCTAssertTrue(session.saveProject(to: bundle))
+        XCTAssertFalse(session.hasUnsavedChanges)
+
+        session.editorText = "These are the revised quarterly results."
+        XCTAssertTrue(session.hasUnsavedChanges)
+        XCTAssertEqual(session.sectionStatus(session.selectedSegment!), "Needs regeneration")
+        XCTAssertNotNil(session.exportWarning)
+        XCTAssertTrue(session.saveProject(to: bundle))
+        let reopened = makeSession()
+        reopened.openProject(from: bundle)
+        XCTAssertEqual(reopened.sectionStatus(reopened.selectedSegment!), "Needs regeneration")
+        XCTAssertEqual(reopened.chosenTake(for: firstID)?.basis?.text, "Good morning, everyone.\nToday we cover the numbers.")
+        XCTAssertFalse(reopened.hasUnsavedChanges)
+
+        let requestCount = synthesizer.requests.count
+        reopened.generateChangedSections()
+        await finish(reopened)
+        XCTAssertEqual(synthesizer.requests.count, requestCount + 1)
+        XCTAssertEqual(reopened.sectionStatus(reopened.selectedSegment!), "Ready")
+        XCTAssertNil(reopened.exportWarning)
+        XCTAssertEqual(otherIDs.map { reopened.chosenTake(for: $0)?.id }, untouched)
+        XCTAssertEqual(reopened.visibleTakes.count, 2)
+        let updated = try XCTUnwrap(reopened.chosenTake(for: firstID))
+        let output = reopened.exportSamples
+        reopened.selectTake(original.id)
+        XCTAssertTrue(reopened.exportSamples == output, "audition cannot change the file to be exported")
+        reopened.useSelectedTakeForExport()
+        XCTAssertNotNil(reopened.exportWarning)
+        reopened.selectTake(updated.id)
+        reopened.useSelectedTakeForExport()
+        XCTAssertNil(reopened.exportWarning)
+        let wav = directory.appending(path: "review.wav")
+        reopened.export(to: wav, as: .wavFloat)
+        XCTAssertTrue(try StudioProject.readSamples(from: wav) == output)
+        let captions = directory.appending(path: "review.srt")
+        reopened.exportCaptions(to: captions, as: .srt)
+        let text = try String(contentsOf: captions, encoding: .utf8)
+        XCTAssertTrue(text.contains("These are the revised quarterly results."))
+        XCTAssertFalse(text.contains("Good morning, everyone."))
+        XCTAssertTrue(reopened.saveProject(to: bundle))
+        let final = makeSession()
+        final.openProject(from: bundle)
+        XCTAssertTrue(final.exportSamples == output)
+        XCTAssertEqual(final.chosenTake(for: firstID)?.id, updated.id)
+        XCTAssertEqual(final.visibleTakes.count, 2)
+        XCTAssertNil(final.exportWarning)
+        if let path = ProcessInfo.processInfo.environment["DRAMA_UI_FIXTURE_DIRECTORY"] {
+            let destination = URL(filePath: path)
+            try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+            try FileManager.default.copyItem(at: bundle, to: destination.appending(path: "Review.dramaproj"))
+            try FileManager.default.copyItem(at: deck, to: destination.appending(path: "review.pptx"))
+        }
+    }
+
+    func testCancelledReplacementPreservesUnsavedWorkAndFailedSaveStaysDirty() async throws {
+        let session = makeSession()
+        XCTAssertFalse(session.hasUnsavedChanges)
+        session.script = "Keep this unsaved script."
+        session.generate()
+        await finish(session)
+        let ids = session.takes.map(\.id)
+        session.confirmReplacement = { _ in false }
+        session.open(document())
+        session.cast(Examples.cast[0])
+        let textFile = directory.appending(path: "replacement.txt")
+        try "Replacement text.".write(to: textFile, atomically: true, encoding: .utf8)
+        session.importScript(from: textFile)
+        XCTAssertEqual(session.script, "Keep this unsaved script.")
+        XCTAssertEqual(session.takes.map(\.id), ids)
+        XCTAssertTrue(session.hasUnsavedChanges)
+        let blocker = directory.appending(path: "not-a-directory")
+        try Data().write(to: blocker)
+        XCTAssertFalse(session.saveProject(to: blocker.appending(path: "failed.dramaproj")))
+        XCTAssertTrue(session.hasUnsavedChanges)
+        XCTAssertNil(session.projectURL)
+        XCTAssertNotNil(session.notice)
+
+        let saved = directory.appending(path: "Saved.dramaproj")
+        session.confirmReplacement = { _ in session.saveProject(to: saved) }
+        session.open(document())
+        XCTAssertNotNil(session.document)
+        XCTAssertNil(session.projectURL, "an import must not overwrite the previous project")
+        let restored = makeSession()
+        restored.openProject(from: saved)
+        XCTAssertEqual(restored.script, "Keep this unsaved script.")
+        XCTAssertEqual(restored.takes.map(\.id), ids)
+        XCTAssertFalse(restored.hasUnsavedChanges)
+        session.confirmReplacement = { _ in false }
+        session.flattenToScript()
+        XCTAssertNotNil(session.document)
+    }
+
+    func testVoiceAndSpeakerChangesMarkAudioOutdatedAndUndoingTextRestoresReady() async throws {
+        let session = makeSession()
+        session.open(document())
+        session.generate()
+        await finish(session)
+        let section = try XCTUnwrap(session.selectedSegment)
+        session.editorText = "Changed."
+        XCTAssertEqual(session.sectionStatus(session.selectedSegment!), "Needs regeneration")
+        session.editorText = section.text
+        XCTAssertEqual(session.sectionStatus(session.selectedSegment!), "Ready")
+        session.setSpeaker(2, for: section.id)
+        XCTAssertEqual(session.sectionStatus(session.selectedSegment!), "Needs regeneration")
+        session.setSpeaker(0, for: section.id)
+        XCTAssertEqual(session.sectionStatus(session.selectedSegment!), "Ready")
+        session.setVoice(.surprise, forSpeaker: 0)
+        XCTAssertEqual(session.sectionStatus(session.selectedSegment!), "Needs regeneration")
+    }
+
+    func testLegacyProjectOpensWithUnverifiedAudioWarning() async throws {
+        let session = makeSession()
+        session.script = "An old project without generation history."
+        session.generate()
+        await finish(session)
+        var project = StudioProject(title: "Legacy", script: session.script, expressiveness: 0.5,
+                                    quickPreview: false, takes: session.captionTakes)
+        project.version = 1
+        let bundle = directory.appending(path: "Legacy.dramaproj")
+        try project.save(to: bundle, audio: session.exportSamples)
+        let reopened = makeSession()
+        reopened.openProject(from: bundle)
+        XCTAssertTrue(reopened.canExport)
+        XCTAssertNotNil(reopened.exportWarning)
+        XCTAssertFalse(reopened.hasUnsavedChanges)
+    }
+
+    func testRecoveryKeepsUnsavedEditsAndOriginalProjectDestination() async throws {
+        let session = makeSession()
+        session.script = "This is the saved version."
+        session.generate()
+        await finish(session)
+        let original = directory.appending(path: "Original.dramaproj")
+        XCTAssertTrue(session.saveProject(to: original))
+        session.script = "These edits have not been saved."
+        let recovery = RecoveryStore(url: directory.appending(path: "Recovery.dramaproj"))
+        try await recovery.update(session.projectSnapshot)
+        XCTAssertTrue(session.hasUnsavedChanges, "writing a draft is not saving the project")
+        XCTAssertEqual(session.projectURL, original)
+        XCTAssertEqual(try StudioProject.load(from: original).script, "This is the saved version.")
+        let restored = makeSession()
+        restored.openProject(from: recovery.url, recovering: true)
+        XCTAssertEqual(restored.script, "These edits have not been saved.")
+        XCTAssertEqual(restored.projectURL, original)
+        XCTAssertTrue(restored.hasUnsavedChanges)
+        XCTAssertNotNil(restored.exportWarning)
+        XCTAssertTrue(restored.saveProject(to: original))
+        try await recovery.update(nil)
+        let exists = await recovery.exists()
+        XCTAssertFalse(exists)
+        XCTAssertEqual(try StudioProject.load(from: original).script, "These edits have not been saved.")
+    }
+
+    func testCorruptArchiveDoesNotReplaceTheOpenProject() async throws {
+        let session = makeSession()
+        session.script = "A generated line for the archive."
+        session.generate()
+        await finish(session)
+        let bundle = directory.appending(path: "Broken.dramaproj")
+        XCTAssertTrue(session.saveProject(to: bundle))
+        var project = try StudioProject.load(from: bundle)
+        project.archive!.plainTakes.append(project.archive!.plainTakes[0])
+        try JSONEncoder().encode(project).write(to: bundle.appending(path: "project.json"))
+        session.script = "Preserve this unsaved work."
+        session.openProject(from: bundle)
+        XCTAssertEqual(session.script, "Preserve this unsaved work.")
+        XCTAssertTrue(session.hasUnsavedChanges)
+        XCTAssertNotNil(session.notice)
     }
 
     func testPronunciationRewritesTheRequestTextOnly() async throws {

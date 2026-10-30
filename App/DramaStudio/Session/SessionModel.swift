@@ -1,5 +1,6 @@
 // Copyright 2026 Peter Marelas
 // SPDX-License-Identifier: Apache-2.0
+import CryptoKit
 import DramaEngine
 import DramaServer
 import SwiftUI
@@ -21,9 +22,37 @@ final class SessionModel {
     /// Absent means `.modelDefault`.
     private(set) var speakerVoices: [Int: VoiceChoice] = [:]
     /// The first take made with a surprise or designed voice, reused so later takes keep that voice.
-    private(set) var sessionVoices: [VoiceChoice: Take] = [:]
+    private(set) var sessionVoices: [VoiceChoice: Take] = [:] {
+        didSet {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
+            sessionVoiceFingerprints = sessionVoices.compactMapValues { take in
+                guard let data = try? encoder.encode(take) else { return nil }
+                return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+            }
+        }
+    }
+    private var sessionVoiceFingerprints: [VoiceChoice: String] = [:]
+    private(set) var projectURL: URL?
+    private var savedRevision: ProjectRevision?
+    @ObservationIgnored var confirmReplacement: (String) -> Bool = { _ in true }
+    @ObservationIgnored private var generationBasis: TakesBasis?
+    private(set) var sectionSelections: [UUID: UUID] = [:]
+    private(set) var previewingTakeID: UUID?
+
+    var hasUnsavedChanges: Bool { savedRevision != projectRevision }
+    var projectName: String { projectURL?.deletingPathExtension().lastPathComponent ?? title }
+
+    private var projectRevision: ProjectRevision {
+        ProjectRevision(source: source, voices: speakerVoices, sessionVoices: sessionVoices, screenplay: screenplayMode,
+                        expressiveness: expressiveness, quickPreview: quickPreview,
+                        takes: takes.map(\.id), sections: sectionTakes.mapValues { $0.takes.map(\.id) },
+                        exportTake: keptTakeID, sectionExports: sectionTakes.mapValues(\.chosenID))
+    }
+
     var selection: TextSelection?
     var notice: String?
+    var exportedURL: URL?
 
     private(set) var state: PlaybackState = .idle
     private(set) var telemetry = GenerationTelemetry()
@@ -37,11 +66,8 @@ final class SessionModel {
     @ObservationIgnored private var estimateStart = Date()
     private(set) var previewingVoice: ReferenceVoice.ID?
     private(set) var modelLoaded = false
-    /// Every finished read of `takesBasis`, oldest first.
+    /// All recorded takes, with their individual source text and voices.
     private(set) var takes: [SessionTake] = []
-    /// The script and voices the takes were read with. A retake clones the
-    /// first take, so it is only offered while both still hold.
-    private(set) var takesBasis: TakesBasis?
     /// The take Export writes.
     private(set) var keptTakeID: UUID?
     private(set) var selectedTakeID: UUID?
@@ -92,6 +118,7 @@ final class SessionModel {
         player.rate = Float(playbackRate)
         player.onDrained = { [weak self] in self?.playbackDrained() }
         previewPlayer.onDrained = { [weak self] in self?.stopPreview() }
+        savedRevision = projectRevision
     }
 
     var prepared: Result<PreparedScript, ScriptError> {
@@ -145,6 +172,7 @@ final class SessionModel {
     }
 
     func selectSegment(_ id: NarrationDocument.Segment.ID?) {
+        stopPreview()
         selectedSegmentID = id
         selection = nil
         guard let id, let take = narrationTakes.first(where: { $0.segmentID == id }) else { return }
@@ -171,20 +199,25 @@ final class SessionModel {
 
     /// Starts a document: its first section is selected, nothing narrated yet.
     func open(_ document: NarrationDocument) {
+        guard confirmReplacement("Open another document?") else { return }
+        projectURL = nil
         replaceSource(with: .document(document))
     }
 
     /// Turns the document back into a plain script of its narrated sections.
     func flattenToScript() {
-        guard let document else { return }
+        guard let document, confirmReplacement("Flattening removes the sections and their takes. Save a project copy before continuing?") else { return }
+        projectURL = nil
         replaceSource(with: .plain(document.flattened()))
         screenplayMode = false
     }
 
-    /// Switching to or from a document starts over; a plain script replacing
-    /// a plain script keeps its takes until the next Generate, as before.
+    /// A confirmed import starts a new project; editing text keeps its history.
     private func replaceSource(with new: ScriptSource) {
-        if document != nil || new.document != nil { clearNarration() }
+        clearNarration()
+        projectURL = nil
+        savedRevision = nil
+        exportedURL = nil
         source = new
         selectedSegmentID = new.document?.segments.first?.id
         selection = nil
@@ -192,13 +225,14 @@ final class SessionModel {
 
     private func clearNarration() {
         stopGeneration()
+        stopPreview()
         stopPlayback(resetTo: 0)
         audio = []
         result = nil
         takes = []
         keptTakeID = nil
         selectedTakeID = nil
-        takesBasis = nil
+        sectionSelections = [:]
         sectionTakes = [:]
         liveSpans = []
         generationClock = nil
@@ -232,7 +266,7 @@ final class SessionModel {
     }
 
     var visibleSelectedTakeID: SessionTake.ID? {
-        document == nil ? selectedTakeID : selectedSegmentID.flatMap { sectionTakes[$0]?.chosenID }
+        document == nil ? selectedTakeID : selectedSegmentID.flatMap { sectionSelections[$0] ?? sectionTakes[$0]?.chosenID }
     }
 
     /// Rebuilds the transport's audio from the chosen takes. Callers that
@@ -290,14 +324,89 @@ final class SessionModel {
     var retakeBlocker: String? {
         guard document == nil, case .success(let script) = prepared else { return nil }
         if script.speakers.count > 1 { return "Retakes work on scripts with one speaker, because the note rewrites the line without speaker tags." }
-        guard !takes.isEmpty, let takesBasis else { return nil }
-        if script.text != takesBasis.text { return "The script changed since these takes. Generate to start a new set." }
-        if speakerVoices != takesBasis.voices { return "The voice changed since these takes. Generate to start a new set." }
+        guard !takes.isEmpty else { return nil }
+        guard let selected = takes.first(where: { $0.id == selectedTakeID }), !selected.isIncomplete,
+              let takesBasis = selected.basis else { return "Generate a complete take before adding a direction note." }
+        if script.text != takesBasis.text { return "The script changed since these takes. Generate to make an updated take." }
+        if speakerVoices != takesBasis.voices || currentPlainBasis?.voiceAnchors != takesBasis.voiceAnchors { return "The voice changed since these takes. Generate to make an updated take." }
         return nil
     }
 
     var keptTake: SessionTake? { takes.first { $0.id == keptTakeID } }
-    var exportSamples: [Float] { keptTake?.samples ?? audio }
+    var exportSamples: [Float] { document == nil ? (keptTake?.samples ?? audio) : chosenSections.flatMap(\.take.samples) }
+    var visibleExportTakeID: UUID? {
+        document == nil ? (keptTakeID ?? selectedTakeID) : selectedSegmentID.flatMap { sectionTakes[$0]?.chosenID }
+    }
+    var exportSummary: String {
+        if document != nil { return "Exporting \(narrationTakes.count) sections" }
+        return exportTake.map { "Exporting Take \($0.number)" } ?? "Exporting partial audio"
+    }
+    var currentPlainBasis: TakesBasis? {
+        (try? prepared.get()).map { makeBasis(text: $0.text, voices: speakerVoices) }
+    }
+    func basis(for segment: NarrationDocument.Segment) -> TakesBasis {
+        let tag = segment.speakerTag ?? 0
+        return makeBasis(text: SectionRequests.spokenText(of: segment), voices: [tag: speakerVoices[tag] ?? .modelDefault])
+    }
+    private func makeBasis(text: String, voices: [Int: VoiceChoice]) -> TakesBasis {
+        let anchors = sessionVoiceFingerprints.filter { voices.values.contains($0.key) }
+        return TakesBasis(text: text, voices: voices, voiceAnchors: anchors.isEmpty ? nil : anchors)
+    }
+
+    private func recordedBasis(for voice: VoiceChoice?) -> TakesBasis? {
+        guard var basis = generationBasis else { return nil }
+        if let voice, let fingerprint = sessionVoiceFingerprints[voice] {
+            var anchors = basis.voiceAnchors ?? [:]
+            anchors[voice] = fingerprint
+            basis.voiceAnchors = anchors
+        }
+        return basis
+    }
+
+    func isOutdated(_ take: SessionTake, in segment: NarrationDocument.Segment? = nil) -> Bool {
+        guard !take.isIncomplete, let recorded = take.basis else { return true }
+        return recorded != (segment.map { basis(for: $0) } ?? currentPlainBasis)
+    }
+    func sectionStatus(_ segment: NarrationDocument.Segment) -> String {
+        if segment.skip { return "Skipped" }
+        if state.isGenerating && currentSection == segment.id { return "Generating…" }
+        guard let take = chosenTake(for: segment.id) else { return "Not generated" }
+        if take.isIncomplete { return "Incomplete" }
+        return isOutdated(take, in: segment) ? "Needs regeneration" : "Ready"
+    }
+    var exportWarning: String? {
+        if let document {
+            let included = document.segments.filter { !$0.skip }
+            let missing = included.filter { chosenTake(for: $0.id) == nil }.count
+            let outdated = included.filter { segment in chosenTake(for: segment.id).map { isOutdated($0, in: segment) } ?? false }.count
+            guard missing > 0 || outdated > 0 else { return nil }
+            var parts: [String] = []
+            if outdated > 0 { parts.append("\(outdated) \(outdated == 1 ? "section has" : "sections have") outdated or incomplete audio.") }
+            if missing > 0 { parts.append("\(missing) \(missing == 1 ? "section has" : "sections have") no audio and will be omitted.") }
+            parts.append("Generate changed sections, or export the existing audio.")
+            return parts.joined(separator: " ")
+        }
+        guard let take = exportTake else { return canExport ? "This audio is incomplete because generation stopped early." : nil }
+        if take.isIncomplete { return "This take is incomplete because generation stopped early. Regenerate it or export the existing audio." }
+        return isOutdated(take) ? "The export take uses earlier text or voices, or comes from a project without generation history. Regenerate it or export the existing audio." : nil
+    }
+    var canGenerateChangedSections: Bool {
+        !state.isGenerating && !changedSections.isEmpty
+    }
+    private var changedSections: [UUID] {
+        guard let document else { return [] }
+        return SectionRequests.queue(document).filter { id in
+            guard let segment = document.segments.first(where: { $0.id == id }), let take = chosenTake(for: id) else { return true }
+            return isOutdated(take, in: segment)
+        }
+    }
+    func generateChangedSections() {
+        guard canGenerateChangedSections, let first = changedSections.first else { return }
+        let queue = changedSections
+        beginRun()
+        narrate(SectionRun(current: first, remaining: Array(queue.dropFirst()), audioStart: 0, startsPlayback: true))
+    }
+
 
     /// The take Export writes, as a plain script's one-section timeline.
     private var exportTake: SessionTake? {
@@ -333,13 +442,6 @@ final class SessionModel {
             return
         }
         guard case .success(let script) = prepared else { return }
-        let basis = TakesBasis(text: script.text, voices: speakerVoices)
-        if basis != takesBasis {
-            takes = []
-            keptTakeID = nil
-            selectedTakeID = nil
-            takesBasis = basis
-        }
         let casting = casting
         start(SpeechRequest(text: script.text, references: casting.references, character: casting.character,
                             previousTakes: casting.voiceTake.map { [$0] } ?? [], config: config),
@@ -384,9 +486,10 @@ final class SessionModel {
     func retake(note: String) {
         guard canRetake, let note = DirectorsNote.clean(note), case .success(let script) = prepared else { return }
         let casting = casting
-        let voice = casting.voiceTake.flatMap { $0 == takes.first?.take ? nil : $0 }
+        let matching = takes.filter { !$0.isIncomplete && $0.basis == currentPlainBasis }
+        let voice = casting.voiceTake.flatMap { $0 == matching.first?.take ? nil : $0 }
         start(SpeechRequest(text: script.text, references: casting.references, character: casting.character, note: note,
-                            previousTakes: (voice.map { [$0] } ?? []) + takes.map(\.take), config: config),
+                            previousTakes: (voice.map { [$0] } ?? []) + matching.map(\.take), config: config),
               as: .take(note: note, recordsVoice: casting.recordsVoice))
     }
 
@@ -416,6 +519,8 @@ final class SessionModel {
     }
 
     func cast(_ preset: CastPreset) {
+        guard confirmReplacement("Replace the script with this character example?") else { return }
+        projectURL = nil
         replaceSource(with: .plain(preset.line))
         screenplayMode = false
         notice = nil
@@ -438,6 +543,11 @@ final class SessionModel {
             stopPlayback(resetTo: 0)
         case .sections:
             break
+        }
+        switch job {
+        case .take: generationBasis = currentPlainBasis
+        case .sections(let run): generationBasis = document?.segments.first { $0.id == run.current }.map { basis(for: $0) }
+        case .audition: generationBasis = nil
         }
         pronunciation = (try? PronunciationDictionary.load(from: pronunciationURL)) ?? PronunciationDictionary()
         scriptLines = (try? GenerationPlan(request))?.chunks.map(\.line) ?? []
@@ -471,6 +581,7 @@ final class SessionModel {
     func stopGeneration() {
         guard state.isGenerating else { return }
         recordUsage(.generationCancelled)
+        preservePartialTake()
         run += 1
         generation?.cancel()
         generation = nil
@@ -480,6 +591,30 @@ final class SessionModel {
             recompose()
         }
         settleAfterGeneration(audio.isEmpty ? .idle : state.afterGeneration)
+    }
+
+    private func preservePartialTake() {
+        guard state.isGenerating else { return }
+        let start: Int
+        let section: UUID?
+        switch job {
+        case .take?: start = 0; section = nil
+        case .sections(let run)?: start = run.audioStart; section = run.current
+        default: return
+        }
+        guard start < audio.count else { return }
+        let number = section.flatMap { sectionTakes[$0]?.nextNumber } ?? ((takes.last?.number ?? 0) + 1)
+        let partial = SessionTake(number: number, note: "Stopped early", take: Take(text: generationBasis?.text ?? "", codes: []),
+                                  samples: Array(audio[start...]), basis: generationBasis, isIncomplete: true)
+        if let section {
+            if sectionTakes[section] == nil { sectionTakes[section] = SectionTakes(first: partial) }
+            else { sectionTakes[section]?.add(partial) }
+            sectionSelections[section] = partial.id
+        } else {
+            takes.append(partial)
+            selectedTakeID = partial.id
+            if keptTakeID == nil { keptTakeID = partial.id }
+        }
     }
 
     func apply(_ event: SpeechEvent) {
@@ -581,14 +716,16 @@ final class SessionModel {
 
     private func addTake(_ result: SpeechResult, note: String?, recordsVoice: VoiceChoice?) {
         if let recordsVoice, sessionVoices[recordsVoice] == nil { sessionVoices[recordsVoice] = result.take }
-        let take = SessionTake(number: (takes.last?.number ?? 0) + 1, note: note, take: result.take, samples: result.samples, sentences: sentences(of: result))
+        let take = SessionTake(number: (takes.last?.number ?? 0) + 1, note: note, take: result.take, samples: result.samples, sentences: sentences(of: result), basis: recordedBasis(for: recordsVoice))
         takes.append(take)
         selectedTakeID = take.id
+        if keptTakeID == nil { keptTakeID = take.id }
     }
 
     private func addSectionTake(_ result: SpeechResult, run: SectionRun) {
         if let choice = run.recordsVoice, sessionVoices[choice] == nil { sessionVoices[choice] = result.take }
-        let take = SessionTake(number: sectionTakes[run.current]?.nextNumber ?? 1, note: nil, take: result.take, samples: result.samples, sentences: sentences(of: result))
+        let take = SessionTake(number: sectionTakes[run.current]?.nextNumber ?? 1, note: nil, take: result.take, samples: result.samples, sentences: sentences(of: result), basis: recordedBasis(for: run.recordsVoice))
+        sectionSelections[run.current] = take.id
         if sectionTakes[run.current] == nil {
             sectionTakes[run.current] = SectionTakes(first: take)
         } else {
@@ -596,28 +733,41 @@ final class SessionModel {
         }
     }
 
-    /// Plays the take. For a plain script it becomes the transport's audio;
-    /// for a document it becomes its section's chosen take.
+    /// Auditions a take without changing the export selection.
     func selectTake(_ id: SessionTake.ID) {
         guard !state.isGenerating else { return }
         if document != nil {
             guard let section = sectionTakes.first(where: { $0.value.takes.contains { $0.id == id } })?.key else { return }
-            stopPlayback(resetTo: 0)
-            sectionTakes[section]?.chosenID = id
-            recompose()
-            startPlayback(from: narrationTakes.first { $0.segmentID == section }?.sampleRange.lowerBound ?? 0)
+            stopPlayback(resetTo: nil)
+            stopPreview()
+            sectionSelections[section] = id
+            if let take = sectionTakes[section]?.takes.first(where: { $0.id == id }) {
+                previewingTakeID = id
+                playAudition(take.samples)
+            }
             return
         }
         guard let take = takes.first(where: { $0.id == id }) else { return }
+        stopPreview()
         stopPlayback(resetTo: 0)
         selectedTakeID = id
         audio = take.samples
         startPlayback(from: 0)
     }
 
-    func toggleKeepSelectedTake() {
-        keptTakeID = keptTakeID == selectedTakeID ? nil : selectedTakeID
+    func useSelectedTakeForExport() {
+        guard !state.isGenerating, let selected = visibleSelectedTakeID else { return }
+        if let section = selectedSegmentID, document != nil {
+            sectionTakes[section]?.chosenID = selected
+            stopPreview()
+            stopPlayback(resetTo: 0)
+            recompose()
+        } else {
+            keptTakeID = selected
+        }
     }
+
+
 
     private func generationEnded(run ended: Int, error: Error?) {
         guard ended == run else { return }
@@ -625,6 +775,7 @@ final class SessionModel {
         refreshEngineState()
         if let error {
             if !(error is CancellationError) { recordUsage(.generationFailed) }
+            preservePartialTake()
             stopPlayback(resetTo: nil)
             settleAfterGeneration(.failed(Self.describe(error)))
             recompose()
@@ -661,6 +812,7 @@ final class SessionModel {
     }
 
     func togglePlayback() {
+        stopPreview()
         if state.isPlaying {
             stopPlayback(resetTo: nil)
         } else if canPlay {
@@ -709,7 +861,10 @@ final class SessionModel {
             if ImportFormat(url: url)?.opensAsDocument == true {
                 open(try NarrationDocument.importFile(at: url))
             } else {
-                replaceSource(with: .plain(try ScriptImporter.importFile(at: url)))
+                let text = try ScriptImporter.importFile(at: url)
+                guard confirmReplacement("Import another script?") else { return }
+                projectURL = nil
+                replaceSource(with: .plain(text))
                 screenplayMode = Screenplay.looksLikeScreenplay(script)
             }
             notice = nil
@@ -804,10 +959,13 @@ final class SessionModel {
         }
     }
 
-    func encodeVoice(clip: URL, transcript: String, name: String) async throws {
+    @discardableResult
+    func encodeVoice(clip: URL, transcript: String, name: String) async throws -> ReferenceVoice {
         if let refusal = generationRefusal() { throw GenerationRefused(message: refusal) }
         let voice = try await synthesizer.encodeReference(audioURL: clip, transcript: transcript, name: name)
+        try Task.checkCancellation()
         try library.add(voice)
+        return voice
     }
 
     func togglePreview(_ voice: ReferenceVoice) {
@@ -828,6 +986,7 @@ final class SessionModel {
     }
 
     func stopPreview() {
+        previewingTakeID = nil
         previewPlayer.stop()
         previewingVoice = nil
     }
@@ -842,28 +1001,30 @@ final class SessionModel {
     }
 
     func export(to url: URL, as format: ExportFormat) {
-        report { try AudioExporter.write(exportSamples, to: url, as: format) }
+        report(to: url) { try AudioExporter.write(exportSamples, to: url, as: format) }
     }
 
     func exportSections(to folder: URL, as format: ExportFormat) {
         guard let document else { return }
-        report { try SegmentExport.export(takes: narrationTakes, document: document, samples: audio, to: folder, format: format) }
+        report(to: folder) { try SegmentExport.export(takes: narrationTakes, document: document, samples: audio, to: folder, format: format) }
     }
 
     func exportCaptions(to url: URL, as format: Captions.Format) {
-        report { try Data(Captions.render(captionTakes, as: format).utf8).write(to: url, options: .atomic) }
+        report(to: url) { try Data(Captions.render(captionTakes, as: format).utf8).write(to: url, options: .atomic) }
     }
 
     func exportSlidePackage(to folder: URL, as format: ExportFormat) {
         guard let document else { return }
-        report { try SlidePackage.export(takes: narrationTakes, document: document, samples: audio, to: folder, format: format) }
+        report(to: folder) { try SlidePackage.export(takes: narrationTakes, document: document, samples: audio, to: folder, format: format) }
     }
 
-    private func report(_ export: () throws -> Void) {
+    private func report(to url: URL, _ export: () throws -> Void) {
         do {
             try export()
+            exportedURL = url
             notice = nil
         } catch {
+            exportedURL = nil
             notice = "Export failed: \(error.localizedDescription)"
         }
     }
@@ -873,27 +1034,80 @@ final class SessionModel {
         speakerVoices.compactMapValues { if case .library(let id) = $0 { id } else { nil } }
     }
 
-    func saveProject(to url: URL) {
-        let project = StudioProject(title: title, script: script, document: document, casting: libraryCasting,
+    var recoveryRevision: ProjectRevision { projectRevision }
+
+    var projectSnapshot: ProjectSnapshot {
+        var project = StudioProject(title: title, script: script, document: document, casting: libraryCasting,
                                     expressiveness: expressiveness, quickPreview: quickPreview, takes: captionTakes)
+        project.archive = ProjectArchive(plainTakes: takes.map(ArchivedTake.init),
+                                         sectionTakes: sectionTakes.mapValues { $0.takes.map(ArchivedTake.init) },
+                                         sectionExports: sectionTakes.mapValues(\.chosenID),
+                                         selectedTake: selectedTakeID, exportTake: keptTakeID,
+                                         sectionSelections: sectionSelections, selectedSegment: selectedSegmentID, originalProjectURL: projectURL, voices: speakerVoices,
+                                         sessionVoices: sessionVoices, screenplayMode: screenplayMode)
+        let all = takes + sectionTakes.values.flatMap(\.takes)
+        return ProjectSnapshot(project: project, audio: exportSamples,
+                               archivedAudio: Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0.samples) }))
+    }
+
+    @discardableResult
+    func saveProject(to url: URL) -> Bool {
+        guard !state.isGenerating else {
+            notice = "Stop generation before saving the project."
+            return false
+        }
         do {
-            try project.save(to: url, audio: document != nil ? audio : exportSamples)
+            try projectSnapshot.save(to: url)
+            projectURL = url
+            savedRevision = projectRevision
             rememberProject(url)
             notice = nil
+            return true
         } catch {
             notice = "Couldn't save the project: \(error.localizedDescription)"
+            return false
         }
     }
 
-    func openProject(from url: URL) {
+    @discardableResult
+    func openProject(from url: URL, recovering: Bool = false) -> Bool {
         do {
             let project = try StudioProject.load(from: url)
             let audio = try project.audio(in: url)
+            let restored = try project.archive?.restoreTakes(in: url) ?? [:]
+            guard recovering || confirmReplacement("Open another project?") else { return false }
             load(project, audio: audio)
-            rememberProject(url)
-            notice = nil
+            if let archive = project.archive {
+                takes = archive.plainTakes.compactMap { restored[$0.id] }
+                sectionTakes = archive.sectionTakes.compactMapValues { entries in
+                    let values = entries.compactMap { restored[$0.id] }
+                    guard let first = values.first else { return nil }
+                    var group = SectionTakes(first: first)
+                    for take in values.dropFirst() { group.add(take) }
+                    return group
+                }
+                for (id, chosen) in archive.sectionExports where sectionTakes[id]?.takes.contains(where: { $0.id == chosen }) == true {
+                    sectionTakes[id]?.chosenID = chosen
+                }
+                selectedTakeID = archive.selectedTake
+                keptTakeID = archive.exportTake
+                sectionSelections = archive.sectionSelections
+                if let selected = archive.selectedSegment, document?.segments.contains(where: { $0.id == selected }) == true { selectedSegmentID = selected }
+                speakerVoices = archive.voices
+                sessionVoices = archive.sessionVoices
+                screenplayMode = archive.screenplayMode
+                if document != nil { recompose() }
+                else { self.audio = takes.first { $0.id == selectedTakeID }?.samples ?? keptTake?.samples ?? [] }
+                state = self.audio.isEmpty ? .idle : .ready
+            }
+            projectURL = recovering ? project.archive?.originalProjectURL : url
+            savedRevision = recovering ? nil : projectRevision
+            if !recovering { rememberProject(url) }
+            notice = recovering ? "Recovered unsaved work. Save the project to keep it." : nil
+            return true
         } catch {
             notice = "Couldn't open the project: \(Self.describe(error))"
+            return false
         }
     }
 
@@ -913,7 +1127,6 @@ final class SessionModel {
             } else {
                 takes = [take]
                 selectedTakeID = take.id
-                takesBasis = TakesBasis(text: (try? prepared.get())?.text ?? "", voices: speakerVoices)
                 self.audio = take.samples
             }
         }
@@ -950,9 +1163,10 @@ private struct SectionRun {
     var recordsVoice: VoiceChoice?
 }
 
-struct TakesBasis: Equatable {
+struct TakesBasis: Equatable, Codable, Sendable {
     var text: String
     var voices: [Int: VoiceChoice]
+    var voiceAnchors: [VoiceChoice: String]? = nil
 }
 
 /// A line spoken in a designed voice before it is cast.
@@ -963,12 +1177,14 @@ struct Audition: Equatable {
 
 /// One finished read of the script, kept so it can be replayed, retaken, or exported.
 struct SessionTake: Identifiable, Equatable {
-    let id = UUID()
+    var id = UUID()
     let number: Int
     let note: String?
     let take: Take
     let samples: [Float]
     var sentences: [NarrationTake.Sentence] = []
+    var basis: TakesBasis? = nil
+    var isIncomplete = false
     var duration: TimeInterval { Double(samples.count) / Double(ModelConstants.sampleRate) }
 }
 

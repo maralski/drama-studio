@@ -34,7 +34,19 @@ struct WaveformScrubber: View {
         .task(id: model.audio.count) { peaks = Self.peaks(of: model.audio, bins: 160) }
         .accessibilityElement()
         .accessibilityLabel("Playback position")
-        .accessibilityValue("\(Int(progress * 100)) percent")
+        .accessibilityValue("\(TransportBar.clock(position)) of \(TransportBar.clock(model.audio.count))")
+        .accessibilityAdjustableAction { direction in
+            let step = 5.0 / max(model.duration, 1)
+            model.seek(toFraction: min(1, max(0, progress + (direction == .increment ? step : -step))))
+        }
+        .focusable(model.canPlay)
+        .onKeyPress(.leftArrow) { seek(seconds: -5); return .handled }
+        .onKeyPress(.rightArrow) { seek(seconds: 5); return .handled }
+    }
+
+    private func seek(seconds: Double) {
+        let fraction = Double(position) / Double(max(model.audio.count, 1)) + seconds / max(model.duration, 1)
+        model.seek(toFraction: min(1, max(0, fraction)))
     }
 
     /// Where each section after the first begins, as a fraction of the audio.

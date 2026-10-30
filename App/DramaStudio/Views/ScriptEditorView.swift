@@ -1,5 +1,6 @@
 // Copyright 2026 Peter Marelas
 // SPDX-License-Identifier: Apache-2.0
+import AppKit
 import SwiftUI
 
 struct ScriptEditorView: View {
@@ -11,33 +12,33 @@ struct ScriptEditorView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if let url = model.exportedURL {
+                HStack {
+                    Label("Exported \(url.lastPathComponent)", systemImage: "checkmark.circle.fill")
+                    Spacer()
+                    Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+                    Button("Dismiss", systemImage: "xmark") { model.exportedURL = nil }.labelStyle(.iconOnly)
+                }
+                .font(.callout).padding(10).background(Color.green.opacity(0.1))
+            }
             if let notice = model.notice {
                 InlineBanner(message: notice, systemImage: "exclamationmark.triangle.fill", tint: .orange) { model.notice = nil }
             }
-            if let problem = modelStatus?.problem {
+            if model.canExport, let warning = model.exportWarning {
+                InlineBanner(message: warning, systemImage: "clock.badge.exclamationmark", tint: .orange, onDismiss: nil)
+            }
+            if !ModelSetup.isPreviewEngine, let problem = modelStatus?.problem {
                 InlineBanner(message: problem, systemImage: "arrow.down.circle", tint: .accentColor, onDismiss: nil)
             }
             TimelineView(.animation(minimumInterval: 0.1, paused: !model.state.isPlaying)) { _ in
                 let highlight = model.state.isPlaying ? model.highlight(at: model.position) : nil
-                let playing = model.state.isPlaying ? model.playingSegment(at: model.position) : nil
-                if let document = model.document {
-                    // Not an HSplitView: a split view nested in the NavigationSplitView's
-                    // detail column makes their minimum sizes chase each other until AppKit
-                    // aborts the app.
-                    HStack(spacing: 0) {
-                        SectionsView(model: model, document: document, playingID: playing)
-                            .frame(width: 280)
-                        Divider()
-                        editor(highlight: highlight?.segmentID == model.selectedSegmentID ? highlight : nil)
-                    }
-                } else {
-                    editor(highlight: highlight)
-                }
+                editor(highlight: model.document == nil || highlight?.segmentID == model.selectedSegmentID ? highlight : nil)
             }
             Divider()
             ScriptFooter(model: model)
         }
-        .navigationTitle("Drama Studio")
+        .navigationTitle(model.projectName)
+        .background(ProjectWindowState(model: model).frame(width: 0, height: 0))
         .task(id: modelPath) { modelStatus = ModelSetup.status(customPath: modelPath) }
         .overlay {
             if isDropTarget {
@@ -59,9 +60,13 @@ struct ScriptEditorView: View {
                     VStack(alignment: .leading, spacing: 14) {
                         Text("Type or paste a script, or drop a text, Word, subtitle, PowerPoint, PDF, or EPUB file here.\nUse \u{201C}Name: line\u{201D} dialogue with Screenplay Mode for several voices.")
                             .font(.system(size: 15))
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(.secondary)
                             .allowsHitTesting(false)
-                        Button("Import Script\u{2026}", systemImage: "square.and.arrow.down") { FilePanels.importScript(into: model) }
+                        HStack {
+                            Button("Try an Example") { model.insert(Examples.firstLine) }
+                            Button("Import Document…") { FilePanels.importScript(into: model) }
+                            Button("Open Project…") { FilePanels.openProject(into: model) }
+                        }
                     }
                     .padding(.horizontal, 19)
                     .padding(.vertical, 12)

@@ -4,14 +4,14 @@ import AppKit
 import SwiftUI
 
 struct ContentView: View {
-    /// Wide enough for the sidebar, the editor with its transport bar and the
-    /// inspector at their minimum widths. Below it SwiftUI's split view keeps
-    /// re-solving the columns' sizes and AppKit aborts the app.
-    static let minimumSize = CGSize(width: 1280, height: 640)
+    static let minimumSize = CGSize(width: 900, height: 640)
 
     @Bindable var model: SessionModel
     let setup: SetupCoordinator
     @State private var showsInspector = true
+    @State private var availableWidth: CGFloat = 1360
+    @State private var showsVoices = false
+    @State private var showsCompactInspector = false
     @State private var newVoiceClip: NewVoiceRequest?
 
     var body: some View {
@@ -24,21 +24,48 @@ struct ContentView: View {
 
     private var studio: some View {
         NavigationSplitView {
-            VoiceLibraryView(model: model, newVoice: $newVoiceClip)
-                .navigationSplitViewColumnWidth(min: 210, ideal: 240, max: 320)
+            VStack(spacing: 0) {
+                if model.document != nil {
+                    Picker("Sidebar", selection: $showsVoices) {
+                        Text("Sections").tag(false)
+                        Text("Voices").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .padding(10)
+                }
+                if let document = model.document, !showsVoices {
+                    TimelineView(.animation(minimumInterval: 0.1, paused: !model.state.isPlaying)) { _ in
+                        SectionsView(model: model, document: document,
+                                     playingID: model.state.isPlaying ? model.playingSegment(at: model.position) : nil)
+                    }
+                } else {
+                    VoiceLibraryView(model: model, newVoice: $newVoiceClip)
+                }
+            }
+            .navigationSplitViewColumnWidth(min: 200, ideal: 260, max: 340)
         } detail: {
-            ScriptEditorView(model: model)
-                .safeAreaInset(edge: .bottom, spacing: 0) {
+            HStack(spacing: 0) {
+                VStack(spacing: 0) {
+                    ScriptEditorView(model: model)
+                        .frame(minHeight: 0, maxHeight: .infinity)
                     VStack(spacing: 0) {
                         TransportBar(model: model)
                         if !model.visibleTakes.isEmpty { TakesStrip(model: model) }
                     }
+                    .fixedSize(horizontal: false, vertical: true)
+                    .layoutPriority(1)
                 }
-                .inspector(isPresented: $showsInspector) {
-                    InspectorView(model: model)
-                        .inspectorColumnWidth(min: 270, ideal: 300, max: 380)
+                .frame(minWidth: 480)
+                if showsInspector && availableWidth >= 1100 {
+                    Divider()
+                    InspectorView(model: model).frame(width: 280)
                 }
+            }
         }
+        .navigationSplitViewStyle(.balanced)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { availableWidth = $0 }
+        .onChange(of: model.document != nil) { showsVoices = false }
         .frame(minWidth: Self.minimumSize.width, minHeight: Self.minimumSize.height)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -50,13 +77,20 @@ struct ContentView: View {
                     .help("Insert an example line or cast a character")
             }
             ToolbarItem(placement: .primaryAction) {
-                Button("Inspector", systemImage: "sidebar.trailing") { showsInspector.toggle() }
+                Button("Inspector", systemImage: "sidebar.trailing") {
+                    if availableWidth < 1100 { showsCompactInspector = true }
+                    else { showsInspector.toggle() }
+                }
                     .help("Show or hide voice and tuning controls")
             }
         }
         .sheet(item: $newVoiceClip) { request in
             AddVoiceSheet(model: model, clip: request.clip)
         }
+        .sheet(isPresented: $showsCompactInspector) {
+            InspectorSheet(model: model) { showsCompactInspector = false }
+        }
+        .modifier(ProjectRecovery(model: model))
         .onSpaceKey { model.togglePlayback() }
     }
 }

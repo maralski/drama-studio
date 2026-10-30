@@ -64,6 +64,6 @@ final class AppStudioProjectTests: XCTestCase {
         project.version = StudioProject.currentVersion + 1
         let bundle = try temporaryDirectory().appending(path: "Future.dramaproj")
         try project.save(to: bundle)
-        XCTAssertThrowsError(try StudioProject.load(from: bundle)) { XCTAssertEqual($0 as? ProjectError, .newerVersion(2)) }
+        XCTAssertThrowsError(try StudioProject.load(from: bundle)) { XCTAssertEqual($0 as? ProjectError, .newerVersion(StudioProject.currentVersion + 1)) }
     }
 }

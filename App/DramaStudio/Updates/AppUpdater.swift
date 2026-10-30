@@ -13,6 +13,11 @@ final class AppUpdater {
     private let session: URLSession
     private var started = false
     private var installing = false
+    private var pendingInstall = false
+    @ObservationIgnored var requestTermination: () -> Void = { NSApp.terminate(nil) }
+    @ObservationIgnored var launchInstaller: (URL, URL, URL) throws -> Void = {
+        try UpdateInstaller.launch(staged: $0, target: $1, directory: $2)
+    }
     private var directory: URL?
     private var staged: URL?
     private(set) var busy = false
@@ -87,27 +92,42 @@ final class AppUpdater {
             let candidate = try await Task.detached {
                 try UpdateInstaller.prepare(image: image, checksum: checksum, version: update.version, currentApp: currentApp, directory: folder)
             }.value
-            directory = folder
-            staged = candidate
-            readyVersion = update.version
-            status = "Drama Studio \(update.version) is ready. Save your work, then install and restart."
-            showsReady = true
+            offerPreparedUpdate(candidate, directory: folder, version: update.version)
         } catch {
             if let work { try? FileManager.default.removeItem(at: work) }
             status = "Could not update: \(error.localizedDescription)"
         }
     }
 
+    func offerPreparedUpdate(_ candidate: URL, directory: URL, version: String) {
+        self.directory = directory
+        staged = candidate
+        readyVersion = version
+        status = "Drama Studio \(version) is ready. Save your work, then install and restart."
+        showsReady = true
+    }
+
     func installAndRestart() {
-        guard let staged, let directory, readyVersion != nil, !busy else { return }
+        guard staged != nil, directory != nil, readyVersion != nil, !busy, !pendingInstall else { return }
+        pendingInstall = true
+        requestTermination()
+    }
+
+    func cancelTermination() { pendingInstall = false }
+
+    func completeTermination() -> Bool {
+        guard pendingInstall else { return true }
+        pendingInstall = false
+        guard let staged, let directory else { return false }
         do {
-            try UpdateInstaller.launch(staged: staged, target: app, directory: directory)
+            try launchInstaller(staged, app, directory)
             installing = true
             busy = true
             status = "Restarting to install the update…"
-            NSApp.terminate(nil)
+            return true
         } catch {
             status = "Could not install: \(error.localizedDescription)"
+            return false
         }
     }
 

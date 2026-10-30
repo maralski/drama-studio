@@ -111,8 +111,8 @@ struct DesignVoiceSheet: View {
                 .keyboardShortcut(.defaultAction)
                 .disabled(draft.design == nil || model.isAuditioning)
             }
-            .padding([.horizontal, .bottom], 20)
+            .dialogActions()
         }
-        .frame(width: 520)
+        .frame(width: 520, height: 580)
     }
 }
