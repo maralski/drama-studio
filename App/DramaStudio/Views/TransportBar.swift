@@ -9,20 +9,23 @@ struct TransportBar: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 10) {
-                generateButton
-                Button("New Take", systemImage: "dice") { model.generate() }
-                    .labelStyle(.iconOnly)
-                    .disabled(!model.canTakeAgain)
-                    .help("Generate the script again for a different read; the takes so far stay below")
-                Button(model.state.isPlaying ? "Pause" : "Play", systemImage: model.state.isPlaying ? "pause.fill" : "play.fill") {
-                    model.togglePlayback()
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    playbackButtons
+                    Spacer()
+                    speedMenu
+                    exportMenu
                 }
-                .labelStyle(.iconOnly)
-                .frame(width: 28)
-                .disabled(!model.canPlay)
-                .help("Play or pause (Space)")
-                TimelineView(.animation(paused: !model.state.isPlaying)) { _ in
+                VStack(alignment: .leading, spacing: 8) {
+                    playbackButtons
+                    HStack {
+                        speedMenu
+                        Spacer()
+                        exportMenu
+                    }
+                }
+            }
+            TimelineView(.animation(paused: !model.state.isPlaying)) { _ in
                     HStack(spacing: 10) {
                         WaveformScrubber(model: model, position: model.position)
                         Text("\(Self.clock(model.position)) / \(Self.clock(model.audio.count))")
@@ -30,9 +33,6 @@ struct TransportBar: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                speedMenu
-                exportMenu
-            }
             HStack(spacing: 8) {
                 StatusLine(model: model)
                 if let server { APIChip(server: server) }
@@ -42,10 +42,28 @@ struct TransportBar: View {
                     .disabled(model.state.isGenerating)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
         .background(.bar)
         .overlay(alignment: .top) { Divider() }
+    }
+
+    private var playbackButtons: some View {
+        HStack(spacing: 10) {
+            generateButton
+            Button("New Take", systemImage: "dice") { model.generate() }
+                .labelStyle(.iconOnly)
+                .disabled(!model.canTakeAgain)
+                .help("Generate the script again for a different read; the takes so far stay below")
+            Button(model.state.isPlaying ? "Pause" : "Play", systemImage: model.state.isPlaying ? "pause.fill" : "play.fill") {
+                model.togglePlayback()
+            }
+            .labelStyle(.iconOnly)
+            .frame(width: 28)
+            .disabled(!model.canPlay)
+            .help("Play or pause (Space)")
+        }
+        .fixedSize()
     }
 
     @ViewBuilder
@@ -53,13 +71,13 @@ struct TransportBar: View {
         if model.state.isGenerating {
             Button("Stop", systemImage: "stop.fill") { model.stopGeneration() }
                 .help("Stop generating (⌘.)")
-                .frame(width: 104)
+                .frame(minWidth: 104)
         } else {
-            Button("Generate", systemImage: "waveform") { model.generate() }
+            Button(model.document == nil ? "Generate" : "Generate All", systemImage: "waveform") { model.generate() }
                 .buttonStyle(.borderedProminent)
                 .disabled(!model.canGenerate)
                 .help("Generate speech (⌘Return)")
-                .frame(width: 104)
+                .frame(minWidth: 104)
         }
     }
 
@@ -71,6 +89,7 @@ struct TransportBar: View {
         } label: {
             HelpLabel("Speed", help: .playbackSpeed)
         }
+        .accessibilityLabel("Playback speed")
         .pickerStyle(.menu)
         .fixedSize()
         .help("Playback speed; exports keep the original timing")
@@ -84,7 +103,7 @@ struct TransportBar: View {
         }
         .fixedSize()
         .disabled(!model.canExport)
-        .help(model.keptTake == nil ? "Export audio (⌘E)" : "Export the kept take (⌘E)")
+        .help("\(model.exportSummary) (⌘E)")
     }
 
     static func speed(_ rate: Double) -> String {
@@ -128,7 +147,7 @@ private struct StatusLine: View {
         HStack(spacing: 8) {
             switch model.state {
             case .idle:
-                Text(ModelSetup.isPreviewEngine ? "Preview engine: generation produces a placeholder tone until the Metal engine ships." : "Ready.")
+                Text(ModelSetup.isPreviewEngine ? "Preview mode uses placeholder tones instead of speech." : "Ready.")
             case .loading(let progress, let detail, _):
                 ProgressView(value: progress).frame(width: 120)
                 Text("Loading model \u{2014} \(detail)")
@@ -137,7 +156,7 @@ private struct StatusLine: View {
                 TimelineView(.periodic(from: .now, by: 0.1)) { context in
                     let elapsed = model.generationClock.map { " \u{00B7} \(TransportBar.seconds($0.elapsed(at: context.date)))" } ?? ""
                     let left = model.estimateLabel(at: context.date).map { " \u{00B7} \($0)" } ?? ""
-                    Text("Chunk \(chunk) of \(count) \u{00B7} frame \(model.telemetry.frame) of \(model.telemetry.maxFrames) \u{00B7} \(model.telemetry.framesPerSecond, format: .number.precision(.fractionLength(1))) frames/s\(elapsed)\(left)")
+                    Text("Generating part \(chunk) of \(count)\(elapsed)\(left)")
                         .monospacedDigit()
                 }
             case .ready, .playing:
@@ -151,8 +170,7 @@ private struct StatusLine: View {
         }
         .font(.caption)
         .foregroundStyle(.secondary)
-        .lineLimit(1)
-        .truncationMode(.middle)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private func chunkProgress(chunk: Int, of count: Int) -> Double {

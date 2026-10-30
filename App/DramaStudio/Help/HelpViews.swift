@@ -18,7 +18,7 @@ struct HelpButton: View {
             .help("About \(topic.title)")
             .popover(isPresented: $isShown, arrowEdge: .trailing) {
                 HelpEntryView(topic: topic, titleFont: .headline)
-                    .padding(14)
+                    .padding(16)
                     .frame(width: 300)
             }
     }
@@ -82,5 +82,6 @@ struct HelpWindowView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .navigationTitle("Drama Studio Help")
+        .frame(minWidth: 600, minHeight: 400)
     }
 }

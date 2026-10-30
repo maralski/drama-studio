@@ -5,6 +5,48 @@ import XCTest
 @testable import DramaStudio
 
 final class AppUpdateTests: XCTestCase {
+    @MainActor
+    func testCancelledRestartDoesNotArmInstallerForLaterQuit() {
+        let updater = AppUpdater()
+        let root = URL(filePath: "/tmp/prepared-update")
+        updater.offerPreparedUpdate(root.appending(path: "DramaStudio.app"), directory: root, version: "1.2.0")
+        var requests = 0
+        var launches = 0
+        updater.requestTermination = { requests += 1 }
+        updater.launchInstaller = { _, _, _ in launches += 1 }
+        updater.installAndRestart()
+        XCTAssertEqual(requests, 1)
+        XCTAssertEqual(launches, 0, "Unsaved work must be resolved before launching the installer")
+        XCTAssertFalse(updater.busy)
+        updater.cancelTermination()
+        XCTAssertTrue(updater.completeTermination(), "An ordinary quit after cancellation remains available")
+        XCTAssertEqual(launches, 0)
+        updater.installAndRestart()
+        XCTAssertTrue(updater.completeTermination())
+        XCTAssertEqual(launches, 1)
+        XCTAssertTrue(updater.busy)
+        XCTAssertTrue(updater.completeTermination())
+        XCTAssertEqual(launches, 1, "Termination completion cannot launch twice")
+    }
+
+    @MainActor
+    func testInstallerLaunchFailureCancelsQuitAndAllowsRetry() {
+        let updater = AppUpdater()
+        let root = URL(filePath: "/tmp/prepared-update")
+        updater.offerPreparedUpdate(root.appending(path: "DramaStudio.app"), directory: root, version: "1.2.0")
+        updater.requestTermination = {}
+        updater.launchInstaller = { _, _, _ in throw CocoaError(.fileWriteNoPermission) }
+        updater.installAndRestart()
+        XCTAssertFalse(updater.completeTermination())
+        XCTAssertFalse(updater.busy)
+        XCTAssertTrue(updater.status.hasPrefix("Could not install:"))
+        var launches = 0
+        updater.launchInstaller = { _, _, _ in launches += 1 }
+        updater.installAndRestart()
+        XCTAssertTrue(updater.completeTermination())
+        XCTAssertEqual(launches, 1)
+    }
+
     private func release(_ version: String = "1.10.0", prerelease: Bool = false, host: String = "github.com") -> AppRelease {
         AppRelease(tag_name: "v\(version)", draft: false, prerelease: prerelease, assets: [
             .init(name: "DramaStudio-\(version).dmg", browser_download_url: URL(string: "https://\(host)/maralski/drama-studio/releases/download/v\(version)/DramaStudio-\(version).dmg")!),

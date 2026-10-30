@@ -140,6 +140,25 @@ final class AppSessionTests: XCTestCase {
         XCTAssertEqual(session.audio.count, session.result?.samples.count)
     }
 
+    func testStoppedPartialAudioSurvivesProjectSaveAndReopen() async throws {
+        let session = makeSession(pace: .init(loadSeconds: 0, framesPerSecond: 500))
+        session.script = String(repeating: "A sentence that takes time to generate. ", count: 10)
+        session.generate()
+        await waitUntil { !session.audio.isEmpty }
+        session.stopGeneration()
+        XCTAssertTrue(session.takes.last?.isIncomplete == true)
+        XCTAssertNotNil(session.exportWarning)
+        XCTAssertTrue(session.hasUnsavedChanges)
+        let bundle = directory.appending(path: "Partial.dramaproj")
+        XCTAssertTrue(session.saveProject(to: bundle))
+        let restored = makeSession()
+        restored.openProject(from: bundle)
+        XCTAssertTrue(restored.audio == session.audio)
+        XCTAssertTrue(restored.takes.last?.isIncomplete == true)
+        XCTAssertNotNil(restored.exportWarning)
+        XCTAssertFalse(restored.canRetake)
+    }
+
     func testEmptyScriptCannotGenerate() {
         let session = makeSession()
         session.script = "   "

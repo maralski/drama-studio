@@ -52,13 +52,15 @@ struct PronunciationSettingsView: View {
                 }
                 .disabled(selection.isEmpty)
                 Spacer()
-                if let problem {
-                    Label(problem, systemImage: "exclamationmark.triangle.fill").font(.caption).foregroundStyle(.orange)
-                } else {
-                    Text("Saved for every take and section you generate.").font(.caption).foregroundStyle(.secondary)
-                }
             }
             .controlSize(.small)
+            .fixedSize(horizontal: false, vertical: true)
+            .layoutPriority(1)
+            if let problem {
+                Label(problem, systemImage: "exclamationmark.triangle.fill").font(.caption).foregroundStyle(.orange)
+            } else {
+                Text("Saved for every take and section you generate.").font(.caption).foregroundStyle(.secondary)
+            }
         }
         .padding(20)
         .onAppear(perform: load)

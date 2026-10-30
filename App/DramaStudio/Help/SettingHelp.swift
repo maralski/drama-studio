@@ -77,7 +77,7 @@ enum SettingHelp: String, CaseIterable, Identifiable {
         case .voiceConsent: "Consent"
         case .newTake: "New Take"
         case .directorsNote: "Director's Note"
-        case .keepTake: "Keep Take"
+        case .keepTake: "Use for Export"
         case .quickPreview: "Quick Preview"
         case .expressiveness: "Expressiveness"
         case .playbackSpeed: "Playback Speed"
@@ -100,15 +100,15 @@ enum SettingHelp: String, CaseIterable, Identifiable {
         case .examples:
             "The Examples menu has a line for each opening style, which goes in at the cursor, and a cast of ready-made characters. Choosing a character replaces the script with its line and casts its designed voice. Use them to hear what cues and voice design can do before you write your own."
         case .sections:
-            "A PowerPoint, PDF, or EPUB file opens as sections, one per slide, page, or chapter, listed beside the editor. Generate narrates every section that is not skipped, in order, and keeps each speaker's voice consistent from one section to the next, while Narrate This Section redoes one section and leaves the others alone. Click a section to edit its text or move the playhead to it, and click one of its takes below the transport to choose it. Export writes the whole narration, one file per section, captions, or for a deck a slide narration package."
+            "Import a PowerPoint, PDF or EPUB to narrate it section by section. Generate All narrates included sections; Generate Changed Sections updates missing or outdated audio, and Narrate This Section regenerates the selected section. Click a take to audition it, then Use for Export to choose it. Export the whole narration, individual sections, captions, or a slide narration package."
         case .pronunciation:
             "Rules in Settings rewrite words in the script before the model hears them, so a name or an abbreviation is said the way you want, such as Nguyen said as win. Whole word keeps a rule from changing part of a longer word, and Case sensitive makes US and us different rules. Rules never touch speaker tags, cues in brackets, or markup, and they apply to every take and section you generate. Edit the script instead when only one line should change."
         case .projects:
-            "Save Project writes a .dramaproj bundle with the script or document, the cast's library voices, the settings, and the audio of every chosen take. Open Project brings all of it back, so sections show their durations and playback and export work without generating again. Surprise and designed voices are not saved; click Keep This Voice to add one to the library before you save."
+            "Save Project preserves all takes, their original text and voice assignments, and your export selections. Save updates the current project; Save Project As creates a copy, and a background recovery draft protects edits between saves. Older projects open with an audio verification warning because they did not store generation history. Library voice assignments still refer to your local voice library."
         case .surpriseMe:
-            "Lets the model invent a voice for this speaker. The first take you generate sets that voice, and later takes and retakes keep it. Pick Surprise me again for a different voice, or click Keep This Voice to save it to the library."
+            "Lets the model invent a voice for this speaker. The first take you generate sets that voice, and later takes and retakes keep it. Pick Surprise me again for a different voice, or click Save Voice to Library to save it to the library."
         case .voiceDesign:
-            "Casts a voice from a description instead of a recording: a name, how the voice sounds, and an optional scene. Try a Line speaks a sample in that voice, and if you then click Use Voice without changing the design, the voice you heard is the voice you get. Designed voices cast scripts with one speaker, so click Keep This Voice to save one to the library for a screenplay."
+            "Casts a voice from a description instead of a recording: a name, how the voice sounds, and an optional scene. Try a Line speaks a sample in that voice, and if you then click Use Voice without changing the design, the voice you heard is the voice you get. Designed voices cast scripts with one speaker, so click Save Voice to Library to save one to the library for a screenplay."
         case .referenceClip:
             "A short recording of the voice you want, from a file or recorded here. Use 5 to 20 seconds of clean speech with no music or background noise. In testing, cloned voices scored 0.87 speaker similarity to their clip, against about 0.55 for the model's own voices."
         case .voiceTranscript:
@@ -116,11 +116,11 @@ enum SettingHelp: String, CaseIterable, Identifiable {
         case .voiceConsent:
             "Confirms that the voice is yours or that the speaker agreed to have it cloned. Drama Studio won't add a voice until you check it. The Fish Audio Community License forbids imitating an identifiable person without their consent."
         case .newTake:
-            "Generates the script again with a fresh random seed, so you hear a different read of the same text, voices, and settings. Each take joins the takes strip below the transport, where you can replay it, retake it with a note, or keep it for export. Generating after an edit to the script starts a new set of takes."
+            "Generates the script again with a fresh random seed, so you hear a different read of the same text, voices, and settings. Each take joins the takes strip below the transport, where you can replay it, retake it with a note, or keep it for export. Generating after an edit preserves earlier takes and marks them as outdated."
         case .directorsNote:
             "Tells the performer how to read the line again, such as softer and warmer or slower, with more pauses. Retake reads the whole script once more with the note written in, after the takes so far, so the model hears what to change. Retakes work on scripts with one speaker."
         case .keepTake:
-            "Marks the selected take as the one Export writes. Click a take to hear it, then click Keep. Without a kept take, Export writes the audio in the transport."
+            "Click a take to audition it, then Use for Export to choose the audio and captions to export. The Export badge and status identify the output. Auditioning another take does not change it."
         case .quickPreview:
             "Makes faster rough takes for checking casting, cues, and pacing. It can drop words because it skips retries, uses a shorter time limit, and stops after two seconds of silence. Turn it off for the take you export."
         case .expressiveness:

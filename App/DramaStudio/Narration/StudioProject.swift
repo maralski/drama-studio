@@ -14,7 +14,7 @@ enum ProjectError: LocalizedError, Equatable {
 }
 
 struct StudioProject: Codable, Sendable, Equatable {
-    static let currentVersion = 1
+    static let currentVersion = 2
     static let fileExtension = "dramaproj"
 
     var version = currentVersion
@@ -25,10 +25,11 @@ struct StudioProject: Codable, Sendable, Equatable {
     var expressiveness: Double
     var quickPreview: Bool
     var takes: [NarrationTake] = []
+    var archive: ProjectArchive?
 
     /// Writes the bundle beside the destination first and swaps it in, so a
     /// failed save leaves the previous bundle intact and no stale audio survives.
-    func save(to bundle: URL, audio: [Float] = []) throws {
+    func save(to bundle: URL, audio: [Float] = [], archivedAudio: [UUID: [Float]] = [:]) throws {
         let fileManager = FileManager.default
         let staging = bundle.deletingLastPathComponent().appending(path: ".\(bundle.lastPathComponent)-\(UUID().uuidString)")
         try fileManager.createDirectory(at: staging.appending(path: "audio"), withIntermediateDirectories: true)
@@ -36,11 +37,15 @@ struct StudioProject: Codable, Sendable, Equatable {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             try encoder.encode(self).write(to: staging.appending(path: "project.json"))
-            if !audio.isEmpty {
+            if archive == nil && !audio.isEmpty {
                 for (offset, take) in takes.enumerated() {
                     let range = take.sampleRange.clamped(to: 0..<audio.count)
                     try Self.write(samples: Array(audio[range]), to: staging.appending(path: Self.audioPath(take: offset)))
                 }
+            }
+            for take in archive?.allTakes ?? [] {
+                guard let samples = archivedAudio[take.id] else { throw CocoaError(.fileWriteUnknown) }
+                try Self.write(samples: samples, to: staging.appending(path: take.audioPath))
             }
             if fileManager.fileExists(atPath: bundle.path) {
                 _ = try fileManager.replaceItemAt(bundle, withItemAt: staging)
@@ -64,8 +69,19 @@ struct StudioProject: Codable, Sendable, Equatable {
     func audio(in bundle: URL) throws -> [Float] {
         var combined: [Float] = []
         for (offset, take) in takes.enumerated() {
-            let url = bundle.appending(path: Self.audioPath(take: offset))
-            guard FileManager.default.fileExists(atPath: url.path) else { continue }
+            let path: String
+            if let archive {
+                let id = document == nil ? (archive.exportTake ?? archive.selectedTake) : archive.sectionExports[take.segmentID]
+                guard let id, let stored = archive.allTakes.first(where: { $0.id == id }) else { throw CocoaError(.fileReadCorruptFile) }
+                path = stored.audioPath
+            } else {
+                path = Self.audioPath(take: offset)
+            }
+            let url = bundle.appending(path: path)
+            guard FileManager.default.fileExists(atPath: url.path) else {
+                if archive != nil { throw CocoaError(.fileReadNoSuchFile) }
+                continue
+            }
             let samples = try Self.readSamples(from: url)
             let end = take.sampleRange.lowerBound + samples.count
             if combined.count < end { combined += [Float](repeating: 0, count: end - combined.count) }
