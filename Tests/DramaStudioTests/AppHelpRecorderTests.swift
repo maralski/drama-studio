@@ -259,6 +259,13 @@ private final class StubCapture: AudioCapturing {
 
 @MainActor
 final class AppGenerationClockTests: XCTestCase {
+    func testRestoredAudioWithoutGenerationTelemetryIsNotStoppedEarly() {
+        XCTAssertEqual(
+            TransportBar.summary(audioSeconds: 6.5, frames: nil, framesPerSecond: nil, generationSeconds: nil),
+            "6.5 s of audio"
+        )
+    }
+
     func testSummaryShowsAudioFramesSpeedAndGenerationTime() {
         XCTAssertEqual(
             TransportBar.summary(audioSeconds: 23.6, frames: 559, framesPerSecond: 38.2, generationSeconds: 15.2),
