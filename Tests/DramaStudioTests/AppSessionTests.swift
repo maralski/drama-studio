@@ -30,6 +30,8 @@ final class AppSessionTests: XCTestCase {
 
     func testGenerationStreamsEveryChunkThenSettlesReady() async throws {
         let session = makeSession()
+        var usage: [UsageMetric] = []
+        session.recordUsage = { usage.append($0) }
         session.script = String(repeating: "This sentence is about forty bytes long. ", count: 3)
         session.generate()
         await waitUntil { !session.state.isGenerating }
@@ -39,6 +41,7 @@ final class AppSessionTests: XCTestCase {
         XCTAssertEqual(session.audio.count, result.samples.count)
         XCTAssertEqual(session.audio.count, result.frames.count * ModelConstants.samplesPerFrame)
         XCTAssertTrue(session.canExport)
+        XCTAssertEqual(usage, [.generationSucceeded])
     }
 
     func testChunkEventsUpdateGenerationProgress() {

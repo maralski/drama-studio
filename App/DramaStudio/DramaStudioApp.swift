@@ -28,6 +28,8 @@ struct DramaStudioApp: App {
         _server = State(initialValue: server)
         _presence = State(initialValue: presence)
         _setup = State(initialValue: setup)
+        model.recordUsage = { UsageMonitoring.shared.record($0) }
+        UsageMonitoring.shared.record(.launch)
         server.startIfEnabled()
         presence.start()
     }

@@ -116,7 +116,11 @@ extension SetupServices {
             return engine
         }
         return SetupServices(
-            facts: { ModelSetup.facts(terms: terms) },
+            facts: {
+                var facts = ModelSetup.facts(terms: terms)
+                facts.usageChoiceMade = UsageMonitoring.shared.choiceMade
+                return facts
+            },
             acknowledgeRequirements: { AppHome.defaults.set(true, forKey: MacRequirements.acknowledgedKey) },
             acceptTerms: { terms.accept() },
             weightsBlocker: { ModelSetup.weightsBlocker() },
@@ -140,7 +144,9 @@ extension SetupServices {
             },
             tune: { detail in try await attach().load(onPhase: detail) },
             attachEngine: { _ = attach() },
-            prepareFirstLine: { session.prepareFirstLine() }
+            prepareFirstLine: { session.prepareFirstLine() },
+            chooseUsage: { UsageMonitoring.shared.choose(enabled: $0) },
+            recordUsage: { UsageMonitoring.shared.record($0) }
         )
     }
 }

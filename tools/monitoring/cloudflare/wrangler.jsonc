@@ -1,0 +1,47 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "drama-studio-usage",
+  "main": "src/worker.mjs",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "preview_urls": false,
+  "send_metrics": false,
+  "logpush": false,
+  "observability": {
+    "enabled": false,
+    "logs": {
+      "enabled": false,
+      "invocation_logs": false
+    },
+    "traces": {
+      "enabled": false
+    }
+  },
+  "vars": {
+    "NEW_RELIC_REGION": "US"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "USAGE",
+        "class_name": "UsageBatch"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "UsageBatch"
+      ]
+    }
+  ],
+  "account_id": "dbe4b37d905c7d88049e15d666df4ed9",
+  "secrets_store_secrets": [
+    {
+      "binding": "NEW_RELIC_INGEST_KEY",
+      "store_id": "8ee11a16d1504af58c9d46d87a823e30",
+      "secret_name": "drama-studio-newrelic-ingest-key"
+    }
+  ]
+}

@@ -36,6 +36,7 @@ struct SetupView: View {
         switch setup.stage {
         case .requirements(let gaps): RequirementsCard(gaps: gaps, setup: setup)
         case .terms: TermsCard(setup: setup)
+        case .usage: UsageCard(setup: setup)
         case .weights(let transfer):
             TransferCard(title: "Downloading Drama 3",
                          detail: "\(ModelSetup.gigabytes(ModelDownloadPlan.drama3.totalBytes)) of model files from Hugging Face (fishaudio/drama-3 at revision e0a9218), into \(AppHome.models.path). Each file is checked against its SHA-256 before it is kept.",
@@ -308,6 +309,24 @@ private struct FailedCard: View {
             HStack {
                 Spacer()
                 Button("Try Again") { setup.resume() }.keyboardShortcut(.defaultAction)
+            }
+        }
+    }
+}
+
+private struct UsageCard: View {
+    let setup: SetupCoordinator
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            CardTitle(text: "Help improve Drama Studio")
+            Text(UsageMonitoring.explanation)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Button("Don't Share") { setup.chooseUsage(enabled: false) }
+                    .keyboardShortcut(.defaultAction)
+                Spacer()
+                Button("Share Usage Information") { setup.chooseUsage(enabled: true) }
             }
         }
     }

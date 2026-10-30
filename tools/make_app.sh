@@ -5,6 +5,7 @@
 # The MCP server and the say command ship beside the app binary as
 # Contents/MacOS/drama-mcp and Contents/MacOS/drama-say.
 #
+#   DS_USAGE_ENDPOINT       override the deployed usage relay; set empty to disable
 #   SIGN_IDENTITY           codesign identity; "-" (the default) signs ad hoc,
 #                           anything else signs with the hardened runtime
 #   DS_CODEC_BUNDLE_URL     with DS_CODEC_BUNDLE_SHA256, the Core ML codec zip
@@ -130,6 +131,14 @@ if [[ -n $codec_url || -n $codec_sha ]]; then
     fi
     plutil -insert DSCodecBundleURL -string "$codec_url" "$app/Contents/Info.plist"
     plutil -insert DSCodecBundleSHA256 -string "$codec_sha" "$app/Contents/Info.plist"
+fi
+usage_endpoint=${DS_USAGE_ENDPOINT-https://drama-studio-usage.drama-studio-usage-relay.workers.dev/v1/usage}
+if [[ -n $usage_endpoint ]]; then
+    if [[ ! $usage_endpoint == https://* ]]; then
+        print -u2 "DS_USAGE_ENDPOINT must be an https URL."
+        exit 1
+    fi
+    plutil -insert DSUsageEndpoint -string "$usage_endpoint" "$app/Contents/Info.plist"
 fi
 plutil -lint "$app/Contents/Info.plist" >/dev/null
 

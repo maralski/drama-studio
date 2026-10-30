@@ -24,6 +24,8 @@ struct SetupServices {
     /// Puts the real engine in the session once the weights and codec are in place.
     var attachEngine: @MainActor () -> Void
     var prepareFirstLine: @MainActor () -> Void
+    var chooseUsage: @MainActor (Bool) -> Void = { _ in }
+    var recordUsage: @MainActor (UsageMetric) -> Void = { _ in }
     var now: @Sendable () -> Double = { Date().timeIntervalSinceReferenceDate }
 }
 
@@ -72,6 +74,7 @@ final class SetupCoordinator {
         switch step {
         case .requirements: stage = .requirements(gaps: facts.requirementGaps)
         case .terms: stage = .terms
+        case .usage: stage = .usage
         case .weights: startWeights()
         case .codec: startCodec()
         case .tuning: startTuning()
@@ -85,6 +88,11 @@ final class SetupCoordinator {
 
     func acceptTerms() {
         services.acceptTerms()
+        reconcile()
+    }
+
+    func chooseUsage(enabled: Bool) {
+        services.chooseUsage(enabled)
         reconcile()
     }
 
@@ -138,6 +146,7 @@ final class SetupCoordinator {
             } catch {
                 guard let self, current() else { return }
                 self.work = nil
+                self.services.recordUsage(.setupFailed)
                 self.stage = .failed(step, reason: SessionModel.describe(error))
             }
         }
