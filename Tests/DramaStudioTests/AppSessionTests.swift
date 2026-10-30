@@ -56,6 +56,7 @@ final class AppSessionTests: XCTestCase {
 
     func testAudioArrivesBeforeTheFirstSentenceIsDoneAndMatchesTheTake() async {
         let session = makeSession(pace: .init(loadSeconds: 0, framesPerSecond: 200))
+        session.quickPreview = true
         session.script = "The first sentence is long enough to take a while to say. The second sentence ends the script."
         session.generate()
         await waitUntil { !session.audio.isEmpty || !session.state.isGenerating }
@@ -65,6 +66,22 @@ final class AppSessionTests: XCTestCase {
         await waitUntil { !session.state.isGenerating }
         XCTAssertEqual(session.audio, session.result?.samples, "partials, then each chunk's remainder, add up to the take")
         XCTAssertEqual(session.takes.last?.samples, session.audio)
+    }
+
+    func testNormalGenerationPublishesCompletedChunksWithoutDuplicatingAudio() async throws {
+        let session = makeSession(pace: .init(loadSeconds: 0, framesPerSecond: 200))
+        session.script = "The first sentence is long enough to take a while to say. The second sentence ends the script."
+        session.generate()
+        await waitUntil { !session.audio.isEmpty || !session.state.isGenerating }
+        XCTAssertEqual(session.state, .generating(chunk: 2, of: 2, playing: false))
+        let firstChunk = session.audio
+        await waitUntil { !session.state.isGenerating }
+        let result = try XCTUnwrap(session.result)
+        XCTAssertEqual(firstChunk.count, result.sentences[0].frames * ModelConstants.samplesPerFrame)
+        XCTAssertEqual(firstChunk, Array(result.samples.prefix(firstChunk.count)))
+        XCTAssertEqual(session.audio, result.samples)
+        XCTAssertEqual(session.audio.count, result.frames.count * ModelConstants.samplesPerFrame)
+        XCTAssertEqual(session.takes.last?.samples, result.samples)
     }
 
     func testStreamingSettingTurnsLowLatencyOff() {

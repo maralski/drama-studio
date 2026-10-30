@@ -103,8 +103,8 @@ package final class FrameGenerator {
     /// The most frames a chunk of `line` may run, before the model's capacity
     /// clamps it: the configured cap, plus ``GenerationConfig/capSecondsPerCue``
     /// for each bracket cue when the cap follows the text.
-    package static func frameBudget(for line: String, config: GenerationConfig) -> Int {
-        let frames = config.frameCap.frames(expectedSeconds: expectedSeconds(for: line))
+    package static func frameBudget(for line: String, config: GenerationConfig, expectedSeconds: Double? = nil) -> Int {
+        let frames = config.frameCap.frames(expectedSeconds: expectedSeconds ?? Self.expectedSeconds(for: line))
         guard case .fromText = config.frameCap else { return frames }
         let cues = line.matches(of: #/\[[^\[\]]*\]/#).count
         let seconds = Double(cues) * config.capSecondsPerCue
@@ -125,9 +125,11 @@ package final class FrameGenerator {
         }
     }
 
-    /// Which of two attempts at a chunk to keep: one that reached eos over one
-    /// that did not, then the one that spoke longer.
-    package static func better(_ a: ChunkResult, than b: ChunkResult) -> Bool {
+    /// Prefer an accepted attempt, then eos, then the longer speech.
+    package static func better(_ a: ChunkResult, than b: ChunkResult, expectedSeconds: Double, config: GenerationConfig) -> Bool {
+        let retryA = shouldRetry(end: a.end, spokenSeconds: a.spokenSeconds, expectedSeconds: expectedSeconds, config: config)
+        let retryB = shouldRetry(end: b.end, spokenSeconds: b.spokenSeconds, expectedSeconds: expectedSeconds, config: config)
+        if retryA != retryB { return !retryA }
         if a.finishedByEOS != b.finishedByEOS { return a.finishedByEOS }
         return a.spokenSeconds > b.spokenSeconds
     }
@@ -170,9 +172,6 @@ package final class FrameGenerator {
         var results: [ChunkResult] = []
         /// Full-window decodes: streamed partials and each chunk's audio.
         let runner = DecodeRunner()
-        /// Probe-shape decodes for the silence stop, on their own queue so a
-        /// full-window decode never delays a reading.
-        let probeRunner = DecodeRunner()
         let streamStep = plan.streaming.stepFrames
         let maxRetries = streamStep == nil ? max(0, config.maxRetries) : 0
         /// Streamed chunks whose last frames are still decoding, oldest first.
@@ -202,8 +201,11 @@ package final class FrameGenerator {
             guard shouldContinue() else { break }
             onEvent(.chunkStarted(index: index, count: chunks.count, text: chunk.line))
             let (prompt, prefixRows) = try chunkPrompt(text: chunk.turn, plan: plan, history: history)
+            // Reference duration includes pauses and trailing silence. It may
+            // extend generation time, but cannot measure how much speech is missing.
             let expected = Self.expectedSeconds(for: chunk.line)
-            let budget = min(Self.frameBudget(for: chunk.line, config: config), model.capacity - prompt.count - 1)
+            let allowance = plan.expectedSeconds(for: chunk.line)
+            let budget = min(Self.frameBudget(for: chunk.line, config: config, expectedSeconds: allowance), model.capacity - prompt.count - 1)
             guard budget >= 1 else { throw PromptError.tooLong(prompt.count) }
             var best: ChunkResult?
             for attempt in 0...maxRetries {
@@ -218,7 +220,7 @@ package final class FrameGenerator {
                 let silenceFrames = config.stopAfterSilenceSeconds.map(Self.silenceFrames)
                 let decoder = codec.map(ChunkDecoder.init)
                 let probe = codec.map { SilenceProbe(silenceFrames: silenceFrames ?? .max, $0) }
-                var readings = silenceProbe.schedule(expectedSeconds: expected, silenceFrames: silenceFrames ?? 0)
+                let readings = silenceProbe.schedule(expectedSeconds: allowance, silenceFrames: silenceFrames ?? 0)
                 var offered = 0
                 for step in 0..<budget {
                     guard shouldContinue() else { end = .cancelled; break }
@@ -232,8 +234,12 @@ package final class FrameGenerator {
                     let snapshot = frames
                     if let streamStep, frames.count - offered >= streamStep, runner.offer({ _ = try? decoder.advance(to: snapshot) }) { offered = frames.count }
                     guard let limit = config.stopAfterSilenceSeconds else { continue }
-                    if let upTo = readings.due(at: frames.count), probeRunner.offer({ probe.measure(Array(snapshot.prefix(upTo))) }) { readings.started() }
-                    if probe.latest >= limit { end = .silence; break }
+                    if readings.reads(at: frames.count) {
+                        // Resolve each fixed checkpoint before sampling again, so
+                        // codec speed cannot change a seeded attempt's stop frame.
+                        probe.measure(snapshot)
+                        if probe.latest >= limit { end = .silence; break }
+                    }
                 }
                 var result = ChunkResult(index: index, count: chunks.count, text: chunk.turn, frames: frames, promptRows: prompt.count,
                                          end: end, frameBudget: budget, prefillSeconds: prefillSeconds, decodeSeconds: Date().timeIntervalSince(t1),
@@ -246,7 +252,6 @@ package final class FrameGenerator {
                     best = result
                     break
                 }
-                probeRunner.drain()
                 runner.drain()
                 try deliver(current: (index, decoder))
                 let trailingSilence = try decoder.flatMap { decoder in frames.isEmpty ? nil : try decoder.advance(to: frames) } ?? 0
@@ -255,7 +260,7 @@ package final class FrameGenerator {
                 result.samples = decoder?.samples ?? []
                 result.probeSeconds = probe?.codecSeconds ?? 0
                 result.codecSeconds = (decoder?.codecSeconds ?? 0) + result.probeSeconds
-                if best == nil || Self.better(result, than: best!) { best = result }
+                if best == nil || Self.better(result, than: best!, expectedSeconds: expected, config: config) { best = result }
                 if attempt == maxRetries || !Self.shouldRetry(end: end, spokenSeconds: result.spokenSeconds, expectedSeconds: expected, config: config) { break }
                 onEvent(.retry(index: index, attempt: attempt + 1, spokenSeconds: result.spokenSeconds, expectedSeconds: expected))
             }
@@ -267,7 +272,6 @@ package final class FrameGenerator {
             next.decoder.waitForFinal()
             try deliver()
         }
-        probeRunner.drain()
         runner.drain()
         return results
     }

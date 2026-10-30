@@ -143,61 +143,40 @@ final class SilenceProbeTests: XCTestCase {
         XCTAssertFalse(SilenceProbePolicy(everyFrames: 0, afterExpectedEnd: false).schedule(expectedSeconds: 10, silenceFrames: 44).reads(at: 48), "a cadence of 0 never reads")
     }
 
-    func testTheShippedScheduleWaitsForTheFirstFrameTheStopCouldKeep() {
+    func testTheShippedScheduleWaitsForExpectedSpeechThenSilence() {
         let policy = SilenceProbePolicy.shipped
         XCTAssertEqual(policy, SilenceProbePolicy(everyFrames: 16, afterExpectedEnd: true))
-        // 10 s of text is 215 frames; the audio could hold 2 s of silence at its expected end from frame 171.
+        // A pause within the expected ten seconds of speech must not end the chunk.
         let long = policy.schedule(expectedSeconds: 10, silenceFrames: 44)
-        XCTAssertEqual(long.firstFrame, 171)
-        XCTAssertEqual((0 ... 200).filter(long.reads(at:)), [176, 192])
-        // Text shorter than the silence itself reads as early as a probe from the start.
+        XCTAssertEqual(long.firstFrame, 259)
+        XCTAssertEqual((0 ... 300).filter(long.reads(at:)), [272, 288])
         let short = policy.schedule(expectedSeconds: 1.5, silenceFrames: 44)
-        XCTAssertEqual(short, SilenceProbeSchedule(everyFrames: 16, firstFrame: 45))
-        XCTAssertEqual(SilenceProbePolicy(everyFrames: 32, afterExpectedEnd: true).schedule(expectedSeconds: 10, silenceFrames: 44).reads(at: 176), false)
-        XCTAssertEqual(SilenceProbePolicy(everyFrames: 32, afterExpectedEnd: true).schedule(expectedSeconds: 10, silenceFrames: 44).reads(at: 192), true)
+        XCTAssertEqual(short, SilenceProbeSchedule(everyFrames: 16, firstFrame: 76))
+        XCTAssertEqual((0 ... 100).filter(short.reads(at:)), [80, 96])
+        XCTAssertFalse(SilenceProbePolicy(everyFrames: 32, afterExpectedEnd: true).schedule(expectedSeconds: 10, silenceFrames: 44).reads(at: 256))
+        XCTAssertTrue(SilenceProbePolicy(everyFrames: 32, afterExpectedEnd: true).schedule(expectedSeconds: 10, silenceFrames: 44).reads(at: 288))
     }
 
-    /// Frames land every `msPerFrame` and a probe call holds the probe's
-    /// queue for `msPerCall`, as in the generation loop: a reading starts
-    /// only while the queue is free, and its result counts from when it
-    /// lands. Returns the frame at which the stop fires and the probe calls
-    /// each reading made.
-    private func simulate(_ policy: SilenceProbePolicy, expectedSeconds: Double, silentFrom: Int, frames total: Int,
-                          msPerFrame: Double, msPerCall: Double) -> (stop: Int?, calls: [Int]) {
-        var calls = 0
-        let probe = SilenceProbe(shape: 64, context: 48, silenceFrames: 44, decoder(silent: { $0 >= silentFrom }, windows: { _ in calls += 1 }))
-        var schedule = policy.schedule(expectedSeconds: expectedSeconds, silenceFrames: 44)
-        let all = Self.frames(total)
-        var busyUntil = 0.0
-        var landed: [(at: Double, silent: Double)] = []
-        var perReading: [Int] = []
-        for k in 1 ... total {
-            let now = Double(k) * msPerFrame
-            if let upTo = schedule.due(at: k), now >= busyUntil {
-                schedule.started()
-                calls = 0
-                probe.measure(Array(all.prefix(upTo)))
-                perReading.append(calls)
-                busyUntil = now + Double(calls) * msPerCall
-                landed.append((busyUntil, probe.latest))
-            }
-            if landed.contains(where: { $0.at <= now && $0.silent >= 2.0 }) { return (k, perReading) }
+    func testExpectedEndCheckpointsReadTheBoundedTailThenEachCadence() {
+        let schedule = SilenceProbePolicy.shipped.schedule(expectedSeconds: 6, silenceFrames: 44)
+        let checkpoints = (1 ... 300).filter(schedule.reads(at:))
+        XCTAssertEqual(Array(checkpoints.prefix(3)), [176, 192, 208])
+
+        var asked: [DecodeWindow] = []
+        let probe = SilenceProbe(shape: 64, context: 48, silenceFrames: 44,
+                                 decoder(silent: { $0 >= 160 }, windows: { asked.append($0) }))
+        let all = Self.frames(300)
+        var windowsPerReading: [Int] = []
+        for (checkpoint, silentFrames) in zip(checkpoints, [16, 32, 48]) {
+            let before = asked.count
+            probe.measure(Array(all.prefix(checkpoint)))
+            windowsPerReading.append(asked.count - before)
+            XCTAssertEqual(probe.classifiedFrames, checkpoint)
+            XCTAssertEqual(probe.latest, Double(silentFrames * n) / Double(ModelConstants.sampleRate), accuracy: 1e-9)
+            XCTAssertEqual(probe.latest >= 2.0, checkpoint == 208)
         }
-        return (nil, perReading)
-    }
-
-    func testASlowReadingDelaysTheNextOneInsteadOfDroppingIt() {
-        // A 10 s sentence, silent from frame 160, frames at 45 per second and 190 ms a probe call. The gated first reading
-        // at 176 catches up 44 frames in three calls and lands at frame 202, after the reading due at 192 fell due. That
-        // reading waits for the queue and reads 16 frames; dropped, the one at 208 would read 32 frames in two calls,
-        // longer than a cadence takes to generate, and every later reading would fall behind the same way.
-        let gated = simulate(.shipped, expectedSeconds: 10, silentFrom: 160, frames: 300, msPerFrame: 22, msPerCall: 190)
-        XCTAssertEqual(gated.calls, [3, 1, 1], "after the slow reading every reading classifies one cadence in one call")
-        XCTAssertEqual(gated.stop, 220, "the reading due at 208 sees 48 silent frames")
-        let fromStart = simulate(SilenceProbePolicy(everyFrames: 16, afterExpectedEnd: false), expectedSeconds: 10, silentFrom: 160,
-                                 frames: 300, msPerFrame: 22, msPerCall: 190)
-        XCTAssertEqual(fromStart.stop, 217)
-        XCTAssertTrue(fromStart.calls.allSatisfy { $0 == 1 })
+        XCTAssertEqual(windowsPerReading, [3, 1, 1])
+        XCTAssertEqual(asked.map(\.kept), [132 ..< 148, 148 ..< 164, 164 ..< 176, 176 ..< 192, 192 ..< 208])
     }
 
     func testTheProbeShapeHoldsTheCadenceAndContext() {

@@ -67,7 +67,7 @@ final class APIStreamingTests: XCTestCase {
 
     func testPCMStreamSendsPartialsThatAddUpToTheTake() async throws {
         let response = await service.respond(to: HTTPRequest(method: "POST", path: "/v1/audio/speech",
-                                                             body: try JSONSerialization.data(withJSONObject: ["input": Self.twoSentences, "stream": true, "seed": 3])))
+                                                             body: try JSONSerialization.data(withJSONObject: ["input": Self.twoSentences, "stream": true, "seed": 3, "quick_preview": true])))
         XCTAssertEqual(response.status, .ok)
         XCTAssertNotNil(response.headers["X-Drama-Estimated-Seconds"].flatMap(Double.init))
         var chunks: [Data] = []
@@ -78,7 +78,7 @@ final class APIStreamingTests: XCTestCase {
         XCTAssertTrue(chunks.allSatisfy { $0.count % (ModelConstants.samplesPerFrame * 2) == 0 })
 
         let file = await service.respond(to: HTTPRequest(method: "POST", path: "/v1/audio/speech",
-                                                         body: try JSONSerialization.data(withJSONObject: ["input": Self.twoSentences, "response_format": "pcm", "seed": 3])))
+                                                         body: try JSONSerialization.data(withJSONObject: ["input": Self.twoSentences, "response_format": "pcm", "seed": 3, "quick_preview": true])))
         XCTAssertEqual(chunks.reduce(Data(), +), file.bodyData, "the stream carries exactly the file's audio")
         let fileRequest = await engine.requests.last
         XCTAssertEqual(fileRequest?.config.streaming, .sentence)

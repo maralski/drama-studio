@@ -70,13 +70,13 @@ final class CueGuardTests: XCTestCase {
     }
 
     func testAnAttemptThatReachedEOSBeatsALongerOneThatDidNot() {
-        XCTAssertTrue(FrameGenerator.better(attempt(.eos, spoken: 1), than: attempt(.frameCap, spoken: 5)))
-        XCTAssertFalse(FrameGenerator.better(attempt(.loopGuard, spoken: 5), than: attempt(.eos, spoken: 1)))
+        XCTAssertTrue(FrameGenerator.better(attempt(.eos, spoken: 1), than: attempt(.frameCap, spoken: 5), expectedSeconds: 1, config: GenerationConfig()))
+        XCTAssertFalse(FrameGenerator.better(attempt(.loopGuard, spoken: 5), than: attempt(.eos, spoken: 1), expectedSeconds: 1, config: GenerationConfig()))
     }
 
     func testBetweenTwoEOSAttemptsTheLongerWins() {
-        XCTAssertTrue(FrameGenerator.better(attempt(.eos, spoken: 2.5), than: attempt(.eos, spoken: 2)))
-        XCTAssertFalse(FrameGenerator.better(attempt(.eos, spoken: 2), than: attempt(.eos, spoken: 2.5)))
+        XCTAssertTrue(FrameGenerator.better(attempt(.eos, spoken: 2.5), than: attempt(.eos, spoken: 2), expectedSeconds: 1, config: GenerationConfig()))
+        XCTAssertFalse(FrameGenerator.better(attempt(.eos, spoken: 2), than: attempt(.eos, spoken: 2.5), expectedSeconds: 1, config: GenerationConfig()))
     }
 
     private let plain = "The quick brown fox jumps over the lazy dog now."
@@ -110,5 +110,12 @@ final class CueGuardTests: XCTestCase {
         XCTAssertEqual(FrameGenerator.expectedSeconds(for: words), 15)
         XCTAssertEqual(FrameGenerator.frameBudget(for: words, config: config), 528, "under the maximum before cues")
         XCTAssertEqual(FrameGenerator.frameBudget(for: "[sighs] [laughs] [pause] [sighs] " + words, config: config), FrameCap.maximumFrames)
+    }
+    func testAcceptedSilenceReplacesRejectedEOS() {
+        let config = GenerationConfig()
+        let accepted = attempt(.silence, spoken: 10)
+        let rejected = attempt(.eos, spoken: 1)
+        XCTAssertTrue(FrameGenerator.better(accepted, than: rejected, expectedSeconds: 10, config: config))
+        XCTAssertFalse(FrameGenerator.better(rejected, than: accepted, expectedSeconds: 10, config: config))
     }
 }

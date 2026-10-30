@@ -9,12 +9,29 @@ Play speech while the model is still generating it, and show the time left.
 carries the whole result. ``GenerationConfig/streaming`` decides when the
 audio arrives before that.
 
+### Complete normal takes
+
+Normal takes wait for the model's end of speech, subject to the text-derived
+frame cap and loop guard. ``GenerationConfig/stopAfterSilenceSeconds`` is
+`nil` by default because a silence stop can cut words after a quiet pause.
+Quick preview explicitly uses a 2 s silence stop and disables retries.
+
+A slow reference voice extends the frame budget and the progress estimate.
+The retry check uses the script's length at 16 characters per second instead,
+because reference audio may include pauses or trailing silence. If you opt
+into silence stopping, probe readings follow the voice-aware allowance.
+
 ### Pick when audio leaves the engine
+
+When ``GenerationConfig/maxRetries`` and ``GenerationConfig/minSpokenRatio``
+are positive, every request uses sentence mode, regardless of the requested
+streaming mode or voice. The engine checks each complete attempt before
+releasing audio. Explicitly disable retries to receive low-latency partials.
 
 | Mode | Audio events | A chunk that comes out short | Use for |
 | --- | --- | --- | --- |
 | ``StreamingMode/sentence``, the default | one ``SpeechEvent/audio(samples:chunkIndex:)`` per chunk, once the chunk is generated | generated again, up to ``GenerationConfig/maxRetries`` times | exports, captions, anything kept |
-| ``StreamingMode/defaultLowLatency``, 64-frame steps | ``SpeechEvent/partialAudio(samples:chunkIndex:frameRange:)`` about every 3 s of audio, then the chunk's `audio` | kept, because its start may already be playing | live playback |
+| ``StreamingMode/defaultLowLatency``, with retries disabled, 64-frame steps | ``SpeechEvent/partialAudio(samples:chunkIndex:frameRange:)`` about every 3 s of audio, then the chunk's `audio` | kept, because its start may already be playing | live playback |
 
 Under low latency the CPU decodes the newest 64 frames while the GPU
 generates the next ones. A chunk's partials, in order, join into exactly the
@@ -39,6 +56,7 @@ the samples its partials did not carry.
 ```swift
 var request = SpeechRequest(text: script, references: [voice])
 request.config.streaming = .defaultLowLatency
+request.config.maxRetries = 0
 var audio = StreamedAudio()
 for try await event in engine.synthesize(request) {
     let samples = audio.newSamples(from: event)

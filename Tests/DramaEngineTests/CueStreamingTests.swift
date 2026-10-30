@@ -55,10 +55,56 @@ final class CueStreamingTests: XCTestCase {
         }
     }
 
-    func testSpeakerTagsAloneKeepLowLatency() async throws {
+    func testUnreferencedRequestsKeepRetriesBeforeReleasingAudio() async throws {
         var config = GenerationConfig()
         config.streaming = .lowLatency(stepFrames: 16)
-        let count = try await partials(for: SpeechRequest(text: "<|speaker:0|> " + line, config: config))
-        XCTAssertGreaterThan(count, 0)
+        for text in [line, "<|speaker:0|> " + line] {
+            let count = try await partials(for: SpeechRequest(text: text, config: config))
+            XCTAssertEqual(count, 0)
+        }
+    }
+
+    func testSlowReferenceKeepsRetriesBeforeReleasingAudio() async throws {
+        let voice = ReferenceVoice(name: "Slow narrator", transcript: "Hey there my name is Joey and I love you",
+                                   codes: Array(repeating: Array(repeating: 1, count: 142), count: 10))
+        var config = GenerationConfig()
+        config.streaming = .lowLatency(stepFrames: 16)
+        let count = try await partials(for: SpeechRequest(text: line, references: [voice], config: config))
+        XCTAssertEqual(count, 0, "A slow reference's incomplete attempt must be replaceable before playback.")
+    }
+
+    func testSlowPreviousTakeKeepsRetriesBeforeReleasingAudio() async throws {
+        let take = Take(text: "Hey there my name is Joey and I love you",
+                        codes: Array(repeating: Array(repeating: 1, count: 142), count: 10))
+        var config = GenerationConfig()
+        config.streaming = .lowLatency(stepFrames: 16)
+        let count = try await partials(for: SpeechRequest(text: line, previousTakes: [take], config: config))
+        XCTAssertEqual(count, 0)
+    }
+
+    func testFastReferenceKeepsRetriesBeforeReleasingAudio() async throws {
+        let voice = ReferenceVoice(name: "Fast narrator", transcript: line,
+                                   codes: Array(repeating: Array(repeating: 1, count: 32), count: 10))
+        var config = GenerationConfig()
+        config.streaming = .lowLatency(stepFrames: 16)
+        let count = try await partials(for: SpeechRequest(text: line, references: [voice], config: config))
+        XCTAssertEqual(count, 0)
+    }
+
+    func testSlowReferenceKeepsLowLatencyWhenRetriesAreDisabled() async throws {
+        let voice = ReferenceVoice(name: "Slow narrator", transcript: "Hey there my name is Joey and I love you",
+                                   codes: Array(repeating: Array(repeating: 1, count: 142), count: 10))
+        var quick = GenerationConfig.make(expressiveness: 0.5, quickPreview: true)
+        quick.streaming = .lowLatency(stepFrames: 16)
+        var noAttempts = GenerationConfig()
+        noAttempts.streaming = .lowLatency(stepFrames: 16)
+        noAttempts.maxRetries = 0
+        var noThreshold = GenerationConfig()
+        noThreshold.streaming = .lowLatency(stepFrames: 16)
+        noThreshold.minSpokenRatio = 0
+        for config in [quick, noAttempts, noThreshold] {
+            let count = try await partials(for: SpeechRequest(text: line, references: [voice], config: config))
+            XCTAssertGreaterThan(count, 0)
+        }
     }
 }

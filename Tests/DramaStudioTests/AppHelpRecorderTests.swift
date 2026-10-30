@@ -13,7 +13,7 @@ final class AppSettingHelpTests: XCTestCase {
         "maxNewFrames": "The CLI's fixed cap; the app derives frameCap from the text.",
         "chunkBytes": "Only used by reference chunking, which the app never picks.",
         "chunking": "Fixed by measurement: one sentence per turn cut mean WER from 0.141 to 0.063.",
-        "stopAfterSilenceSeconds": "Fixed by measurement: with the retry it took the mean quiet tail from 30 frames to 2.",
+        "stopAfterSilenceSeconds": "Normal takes wait for end of speech; Quick preview opts into 2 s of silence for speed and may cut words after a pause.",
         "minSpokenRatio": "Fixed by measurement at 0.6; Quick preview sets it to 0.",
         "maxRetries": "Fixed at 2 alongside the retry threshold.",
         "stopOnLoop": "Fixed by measurement: it ends laughter loops and no speech run tripped it.",
@@ -32,6 +32,7 @@ final class AppSettingHelpTests: XCTestCase {
     func testStudioConfigKeepsTheMeasuredDefaults() {
         XCTAssertEqual(GenerationConfig.make(expressiveness: GenerationConfig.defaultExpressiveness, quickPreview: false), GenerationConfig())
         XCTAssertNil(GenerationConfig.make(expressiveness: 0.5, quickPreview: false).seed, "every take draws a fresh seed")
+        XCTAssertNil(GenerationConfig.make(expressiveness: 0.5, quickPreview: false).stopAfterSilenceSeconds)
     }
 
     func testExpressivenessRunsFromSteadyThroughTheVendorsSamplingToTheSpaces() {
@@ -63,11 +64,13 @@ final class AppSettingHelpTests: XCTestCase {
         }
     }
 
-    func testQuickPreviewDropsRetriesAndTightensTheFrameCap() {
+    func testQuickPreviewDropsRetriesEnablesSilenceStopAndTightensTheFrameCap() {
         let preview = GenerationConfig.make(expressiveness: 0.5, quickPreview: true)
         XCTAssertEqual(preview.minSpokenRatio, 0)
+        XCTAssertEqual(preview.stopAfterSilenceSeconds, 2)
         XCTAssertEqual(preview.frameCap, .fromText(margin: 1.2, floorSeconds: 1.0))
         var expected = GenerationConfig()
+        expected.stopAfterSilenceSeconds = 2
         expected.minSpokenRatio = 0
         expected.frameCap = .fromText(margin: 1.2, floorSeconds: 1.0)
         XCTAssertEqual(preview, expected, "preview changes nothing else")

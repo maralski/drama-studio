@@ -32,16 +32,11 @@ public enum ModelConstants: Sendable {
     package static let hiddenSize = 2048
 }
 
-/// How the engine samples and paces one request. The defaults are the
-/// configuration the evaluation measured.
-///
-/// Under the defaults (one sentence per turn, a 2 s silence stop, and
-/// retries of short chunks) every one of 130 plain-prose sentences came out
-/// as speech in the 330-run reliability study, and the 36-run speech suite
-/// scored a mean word error rate of 0.016 with every run reaching the end of
-/// speech. The two controls show what the defaults buy: with retries off, 1
-/// of 5 runs spoke every sentence; with the reference's 300-byte chunking,
-/// 7 of 10 did.
+/// How the engine samples and paces one request. By default, each sentence
+/// gets a generation turn and short attempts are retried before audio leaves
+/// the engine. Normal takes wait for the model's end of speech, subject to
+/// the frame cap and loop guard. Silence stopping is opt-in because a quiet
+/// pause can precede words the model has not generated yet.
 public struct GenerationConfig: Sendable, Codable, Equatable {
     /// Sampling temperature. Default 0.7, the vendor's value.
     public var temperature: Double = 0.7
@@ -52,7 +47,8 @@ public struct GenerationConfig: Sendable, Codable, Equatable {
     /// 1 keeps every candidate up to top-k.
     public var topP: Double = 0.7
     /// The most frames one chunk may run. Defaults to the text's expected
-    /// duration times 1.5, plus 2 s.
+    /// duration times 1.5, plus 2 s. Slow reference voices extend the expected
+    /// duration using their transcript length and audio duration.
     public var frameCap: FrameCap = .fromText(margin: 1.5, floorSeconds: 2.0)
     package var maxNewFrames: Int {
         get {
@@ -73,12 +69,15 @@ public struct GenerationConfig: Sendable, Codable, Equatable {
     /// How text is cut into generation turns. Default ``Chunking/sentences``.
     public var chunking: Chunking = .sentences
     /// Stop a chunk once its decoded audio has been silent for this many
-    /// seconds. Default 2. `nil` keeps generating until the end of speech or
-    /// the frame cap, like the reference.
-    public var stopAfterSilenceSeconds: Double? = 2.0
+    /// seconds. `nil`, the default, lets the model reach the end of speech,
+    /// subject to the frame cap and loop guard. A silence stop can cut words
+    /// after a pause. Quick preview opts into 2 seconds for faster rough takes.
+    public var stopAfterSilenceSeconds: Double? = nil
     /// Generate a chunk again when its spoken audio is shorter than this
-    /// fraction of the expected duration (text length at 16 characters per
-    /// second). Default 0.6. On the evaluation set every good run scored at
+    /// fraction of the expected spoken duration (text length at 16 characters
+    /// per second). Reference audio can include silence, so its duration only
+    /// extends the frame allowance, never this retry threshold. Default 0.6. On the
+    /// evaluation set every good run scored at
     /// least 0.72 and every failed run at most 0.65. 0 turns retries off.
     public var minSpokenRatio: Double = 0.6
     /// The most times one chunk is generated again. Default 2.
@@ -143,8 +142,9 @@ public extension GenerationConfig {
     ///     without a retry more often, kept every sentence of the cue lines,
     ///     and cost 0.007 of word error rate; the middle stays the default
     ///     for that cost.
-    ///   - quickPreview: Turns retries off and tightens the frame cap to the
-    ///     expected duration times 1.2, plus 1 s, for faster rough takes.
+    ///   - quickPreview: Turns retries off, enables a 2 s silence stop, and
+    ///     tightens the frame cap to the expected duration times 1.2, plus 1 s,
+    ///     for faster rough takes that can stop before every word is spoken.
     static func make(expressiveness: Double, quickPreview: Bool) -> GenerationConfig {
         var config = GenerationConfig()
         if expressiveness <= 0.5 {
@@ -158,6 +158,7 @@ public extension GenerationConfig {
             config.topK = 4097
         }
         if quickPreview {
+            config.stopAfterSilenceSeconds = 2
             config.minSpokenRatio = 0
             config.frameCap = .fromText(margin: 1.2, floorSeconds: 1.0)
         }
@@ -175,8 +176,8 @@ public enum StreamingMode: Sendable, Codable, Equatable {
     /// every `stepFrames` generated frames, decoded on the CPU while the GPU
     /// generates. A chunk is never generated again, because its first audio
     /// may already be playing.
-    /// Requests with performance cues or a director's note use ``sentence``
-    /// when retries are enabled, so a failed cue attempt can be replaced.
+    /// Requests use ``sentence`` when `maxRetries` and `minSpokenRatio` are
+    /// positive, so failed attempts can be replaced before playback.
     case lowLatency(stepFrames: Int)
 
     /// Partials every 64 frames, about 3 s of audio. Through the HTTP API on
@@ -197,7 +198,8 @@ public enum FrameCap: Sendable, Codable, Equatable {
     case fixed(Int)
     /// The text's expected duration times `margin`, plus `floorSeconds`,
     /// clamped to ``minimumFrames`` through ``maximumFrames``. The expected
-    /// duration counts 16 characters per second, leaving out cues and tags.
+    /// duration uses 16 characters per second, or the reference voice's slower
+    /// pace, leaving out cues and tags.
     case fromText(margin: Double, floorSeconds: Double)
 
     /// The smallest text-derived cap: 43 frames, about 2 s of audio.

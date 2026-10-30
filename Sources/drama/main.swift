@@ -301,7 +301,12 @@ func generate(_ args: Args) throws {
     let timeline = args["trace-frames"] == nil ? nil : try FrameTimeline(device: model.ctx.device, stages: args.flags.contains("trace-stages"))
     gen.timeline = timeline
     if args.flags.contains("no-retry") { config.minSpokenRatio = 0 }
-    // --probe-every N reads the silence probe every N frames (0: never); --probe-after-expected no reads from the chunk's first frames instead of its expected end.
+    // Probe flags opt into a 2 s silence stop for measurements. Without them,
+    // normal generation waits for EOS, the frame cap, or the loop guard.
+    // --probe-every N reads every N frames (0: never); --probe-after-expected no reads from the first frames.
+    if args["probe-every"] != nil || args["probe-after-expected"] != nil {
+        config.stopAfterSilenceSeconds = 2
+    }
     gen.silenceProbe = SilenceProbePolicy(everyFrames: args.int("probe-every", SilenceProbePolicy.shipped.everyFrames),
                                           afterExpectedEnd: args["probe-after-expected"].map { $0 != "no" } ?? SilenceProbePolicy.shipped.afterExpectedEnd)
     if DramaCodec.modelsExist(), !args.flags.contains("no-codec") {

@@ -21,9 +21,15 @@ final class StreamingBenchTests: XCTestCase {
             config.seed = seed
             switch self {
             case .decodeAfter: config.stopAfterSilenceSeconds = nil
-            case .sentence: break
-            case .lowLatency: config.streaming = .defaultLowLatency
-            case .lowLatency32: config.streaming = .lowLatency(stepFrames: 32)
+            case .sentence: config.stopAfterSilenceSeconds = 2
+            case .lowLatency:
+                config.stopAfterSilenceSeconds = 2
+                config.streaming = .defaultLowLatency
+                config.maxRetries = 0
+            case .lowLatency32:
+                config.stopAfterSilenceSeconds = 2
+                config.streaming = .lowLatency(stepFrames: 32)
+                config.maxRetries = 0
             }
             return config
         }
@@ -59,6 +65,7 @@ final class StreamingBenchTests: XCTestCase {
                 var loopSeconds = 0.0
                 var loopFrames = 0
                 var retries = 0
+                var partials = 0
                 var result: SpeechResult?
                 func closeSegment() {
                     if let s = segment, s.frames > 1 { loopSeconds += Self.seconds(s.last - s.first); loopFrames += s.frames - 1 }
@@ -85,7 +92,10 @@ final class StreamingBenchTests: XCTestCase {
                     case .retry:
                         closeSegment()
                         retries += 1
-                    case .partialAudio, .audio:
+                    case .partialAudio:
+                        partials += 1
+                        if firstAudio == nil { firstAudio = Self.seconds(now - start) }
+                    case .audio:
                         if firstAudio == nil { firstAudio = Self.seconds(now - start) }
                     case .finished(let r):
                         result = r
@@ -97,6 +107,9 @@ final class StreamingBenchTests: XCTestCase {
                 let wall = Self.seconds(ContinuousClock.now - start)
                 let cpu = Self.cpuSeconds() - cpu0
                 let r = try XCTUnwrap(result)
+                if mode == .lowLatency || mode == .lowLatency32 {
+                    XCTAssertGreaterThan(partials, 0, "\(mode.rawValue) must deliver audio before the chunk completes")
+                }
                 XCTAssertEqual(r.samples.count, r.take.frameCount * ModelConstants.samplesPerFrame, "\(mode.rawValue): every frame decoded")
                 let timestamp = ISO8601DateFormatter().string(from: Date())
                 print(String(format: "BENCH\t%@\t%d\t%@\t%d\t%.1f\t%.1f\t%.2f\t%.2f\t%.1f\t%.2f\t%.2f\t%d", timestamp, run, mode.rawValue, r.take.frameCount,

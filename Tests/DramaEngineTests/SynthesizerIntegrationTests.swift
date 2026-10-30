@@ -50,6 +50,7 @@ final class SynthesizerIntegrationTests: XCTestCase {
         var config = GenerationConfig()
         config.seed = 5
         config.streaming = .defaultLowLatency
+        config.maxRetries = 0
         let request = SpeechRequest(text: "The storm had passed by morning, leaving the harbor strangely quiet. Old Tom walked the pier, counting the boats that had survived the night.", config: config)
         var partials: [Int: [Float]] = [:]
         var finals: [Int: [Float]] = [:]

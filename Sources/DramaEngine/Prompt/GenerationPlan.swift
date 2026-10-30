@@ -16,6 +16,22 @@ package struct GenerationPlan: Sendable, Equatable {
 
     package static let historyTakes = 2
 
+    /// A slow reference needs time for its delivery and pauses. Use the slowest
+    /// reference for a mixed cast, without shortening the default allowance.
+    /// This budgets generation and optional silence probes; retries use the
+    /// text-only duration because reference audio may include trailing silence.
+    package func expectedSeconds(for line: String) -> Double {
+        let characters = DirectorsNote.spokenWords(line).count
+        let secondsPerCharacter = references.reduce(1 / FrameGenerator.charactersPerSecond) { pace, reference in
+            let count = DirectorsNote.spokenWords(reference.transcript).count
+            guard count > 0 else { return pace }
+            let seconds = Double(reference.codes.first?.count ?? 0)
+                * Double(ModelConstants.samplesPerFrame) / Double(ModelConstants.sampleRate)
+            return max(pace, seconds / Double(count))
+        }
+        return Double(characters) * secondsPerCharacter
+    }
+
     package struct Chunk: Sendable, Equatable {
         /// The user turn text passed to the prompt builder.
         package var turn: String
@@ -35,8 +51,7 @@ package struct GenerationPlan: Sendable, Equatable {
             body = text
         }
         streaming = config.streaming
-        if config.maxRetries > 0, config.minSpokenRatio > 0,
-           body.range(of: #"\[[^\[\]]*\]|</?[A-Za-z][^<>]*>"#, options: .regularExpression) != nil {
+        if config.maxRetries > 0, config.minSpokenRatio > 0 {
             streaming = .sentence
         }
         var turn: (String) -> String = { $0 }
