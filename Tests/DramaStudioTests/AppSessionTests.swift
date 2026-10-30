@@ -28,21 +28,27 @@ final class AppSessionTests: XCTestCase {
         while !condition(), Date() < deadline { try? await Task.sleep(for: .milliseconds(10)) }
     }
 
-    func testGenerationStreamsEveryChunkThenSettlesReady() async {
+    func testGenerationStreamsEveryChunkThenSettlesReady() async throws {
         let session = makeSession()
         session.script = String(repeating: "This sentence is about forty bytes long. ", count: 3)
-        var states: [PlaybackState] = []
         session.generate()
-        await waitUntil {
-            if states.last != session.state { states.append(session.state) }
-            return !session.state.isGenerating
-        }
+        await waitUntil { !session.state.isGenerating }
         XCTAssertEqual(session.state, .ready)
-        XCTAssertTrue(states.contains { if case .generating(_, let of, _) = $0 { return of == 3 } else { return false } }, "\(states)")
-        let result = try? XCTUnwrap(session.result)
-        XCTAssertEqual(session.audio.count, result?.samples.count)
-        XCTAssertEqual(session.audio.count, (result?.frames.count ?? 0) * ModelConstants.samplesPerFrame)
+        let result = try XCTUnwrap(session.result)
+        XCTAssertEqual(result.sentences.map(\.text), Array(repeating: "This sentence is about forty bytes long.", count: 3))
+        XCTAssertEqual(session.audio.count, result.samples.count)
+        XCTAssertEqual(session.audio.count, result.frames.count * ModelConstants.samplesPerFrame)
         XCTAssertTrue(session.canExport)
+    }
+
+    func testChunkEventsUpdateGenerationProgress() {
+        let session = makeSession()
+        session.apply(.chunkStarted(index: 0, count: 3, text: "First sentence."))
+        XCTAssertEqual(session.state, .generating(chunk: 1, of: 3, playing: false))
+        session.apply(.chunkStarted(index: 1, count: 3, text: "Second sentence."))
+        XCTAssertEqual(session.state, .generating(chunk: 2, of: 3, playing: false))
+        session.apply(.chunkStarted(index: 2, count: 3, text: "Third sentence."))
+        XCTAssertEqual(session.state, .generating(chunk: 3, of: 3, playing: false))
     }
 
     func testAudioArrivesBeforeTheFirstSentenceIsDoneAndMatchesTheTake() async {
