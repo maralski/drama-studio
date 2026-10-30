@@ -8,6 +8,38 @@ import XCTest
 
 @MainActor
 final class AppLayoutTests: XCTestCase {
+    func testSetupFitsUsageContentAndCapsLongErrors() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let model = SessionModel(synthesizer: MockSynthesizer(), library: VoiceLibrary(directory: directory),
+                                 pronunciationURL: directory.appending(path: "pronunciation.json"))
+        let mac = FakeMac()
+        mac.facts.termsAccepted = true
+        mac.usageChoiceMade = false
+        let setup = SetupCoordinator(services: mac.services)
+        XCTAssertEqual(setup.stage, .usage)
+        let host = NSHostingView(rootView: SetupView(setup: setup, model: model))
+        host.frame = CGRect(x: 0, y: 0, width: 1360, height: 820)
+        for _ in 0..<10 {
+            host.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        let compact = host.fittingSize
+        XCTAssertEqual(compact.width, 740, accuracy: 1)
+        XCTAssertLessThan(compact.height, 420, "Short setup must not inherit the editor's height")
+        XCTAssertGreaterThan(compact.height, 250, "The actions and explanation must remain visible")
+
+        mac.usageChoiceMade = true
+        mac.blocker = String(repeating: "The model folder could not be read. Choose another location or try again. ", count: 40)
+        setup.reconcile()
+        for _ in 0..<10 {
+            host.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertEqual(host.fittingSize.width, 740, accuracy: 1)
+        XCTAssertGreaterThan(host.fittingSize.height, compact.height)
+        XCTAssertLessThanOrEqual(host.fittingSize.height, 600, "Long errors scroll while the action footer stays visible")
+    }
+
     func testMinimumSizeLayouts() async throws {
         guard let output = ProcessInfo.processInfo.environment["DRAMA_LAYOUT_AUDIT"] else {
             throw XCTSkip("Set DRAMA_LAYOUT_AUDIT to a directory to render the minimum-size layout audit.")
@@ -66,38 +98,43 @@ final class AppLayoutTests: XCTestCase {
         downloadingMac.facts.termsAccepted = true
         downloadingMac.holdWeights = true
         let downloading = SetupCoordinator(services: downloadingMac.services)
-        try await render(SetupView(setup: downloading, model: model), name: "setup-download", size: CGSize(width: 600, height: 480), in: directory)
+        try await render(SetupView(setup: downloading, model: model), name: "setup-download", size: nil, in: directory)
         downloading.pause()
-        try await render(SetupView(setup: downloading, model: model), name: "setup-paused", size: CGSize(width: 600, height: 480), in: directory)
+        try await render(SetupView(setup: downloading, model: model), name: "setup-paused", size: nil, in: directory)
         downloadingMac.holdWeights = false
         downloading.resume()
         for _ in 0..<100 where downloading.stage != .firstLine { try await Task.sleep(for: .milliseconds(10)) }
-        try await render(SetupView(setup: downloading, model: model), name: "setup-first-line", size: CGSize(width: 600, height: 480), in: directory)
+        try await render(SetupView(setup: downloading, model: model), name: "setup-first-line", size: nil, in: directory)
+        let usageMac = FakeMac()
+        usageMac.facts.termsAccepted = true
+        usageMac.usageChoiceMade = false
+        try await render(SetupView(setup: SetupCoordinator(services: usageMac.services), model: model), name: "setup-usage", size: nil, in: directory)
         let freshMac = FakeMac()
         try await render(SetupView(setup: SetupCoordinator(services: freshMac.services), model: model),
-                         name: "setup-terms", size: CGSize(width: 600, height: 480), in: directory)
+                         name: "setup-terms", size: nil, in: directory)
         freshMac.facts.requirementGaps = ["This Mac has 16 GB of memory. Drama Studio requires at least 64 GB."]
         try await render(SetupView(setup: SetupCoordinator(services: freshMac.services), model: model),
-                         name: "setup-requirements", size: CGSize(width: 600, height: 480), in: directory)
+                         name: "setup-requirements", size: nil, in: directory)
         let failureMac = FakeMac()
         failureMac.facts.termsAccepted = true
         failureMac.blocker = String(repeating: "The model folder could not be read. Choose another location or try again. ", count: 15)
-        try await render(SetupView(setup: SetupCoordinator(services: failureMac.services), model: model), name: "setup-error", size: CGSize(width: 600, height: 480), in: directory)
+        try await render(SetupView(setup: SetupCoordinator(services: failureMac.services), model: model), name: "setup-error", size: nil, in: directory)
         let conversionMac = FakeMac()
         conversionMac.facts = SetupFacts(termsAccepted: true, weightsReady: true)
         conversionMac.conversionCommand = String(repeating: "python convert.py --model /a/long/model/path\n", count: 15)
-        try await render(SetupView(setup: SetupCoordinator(services: conversionMac.services), model: model), name: "setup-conversion", size: CGSize(width: 600, height: 480), in: directory)
+        try await render(SetupView(setup: SetupCoordinator(services: conversionMac.services), model: model), name: "setup-conversion", size: nil, in: directory)
     }
 
-    private func render<V: View>(_ view: V, name: String, size: CGSize, in directory: URL) async throws {
-        let host = NSHostingView(rootView: view.environment(AppUpdater()).frame(width: size.width, height: size.height)
+    private func render<V: View>(_ view: V, name: String, size: CGSize?, in directory: URL) async throws {
+        let host = NSHostingView(rootView: view.environment(AppUpdater()).frame(width: size?.width, height: size?.height)
             .background(Color(nsColor: .windowBackgroundColor)))
         host.sizingOptions = []
-        let window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.borderless],
+        let initialSize = size ?? CGSize(width: 740, height: 600)
+        let window = NSWindow(contentRect: CGRect(origin: .zero, size: initialSize), styleMask: [.borderless],
                               backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         window.contentView = host
-        window.setContentSize(size)
+        window.setContentSize(initialSize)
         window.center()
         window.makeKeyAndOrderFront(nil)
         defer { window.close() }
@@ -105,8 +142,13 @@ final class AppLayoutTests: XCTestCase {
             host.layoutSubtreeIfNeeded()
             try await Task.sleep(for: .milliseconds(30))
         }
-        XCTAssertEqual(host.bounds.size.width, size.width, accuracy: 1, name)
-        XCTAssertEqual(host.bounds.size.height, size.height, accuracy: 1, name)
+        if let size {
+            XCTAssertEqual(host.bounds.size.width, size.width, accuracy: 1, name)
+            XCTAssertEqual(host.bounds.size.height, size.height, accuracy: 1, name)
+        } else {
+            window.setContentSize(host.fittingSize)
+            host.layoutSubtreeIfNeeded()
+        }
         let capture = Process()
         capture.executableURL = URL(filePath: "/usr/sbin/screencapture")
         capture.arguments = ["-x", "-o", "-l", String(window.windowNumber), directory.appending(path: "\(name).png").path]

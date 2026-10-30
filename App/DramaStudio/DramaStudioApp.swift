@@ -55,7 +55,7 @@ struct DramaStudioApp: App {
                 .onOpenURL { model.open($0) }
         }
         .defaultSize(width: 1360, height: 820)
-        .windowResizability(.contentMinSize)
+        .windowResizability(.contentSize)
         .commands {
             StudioCommands(model: model)
             CommandGroup(after: .appInfo) {
