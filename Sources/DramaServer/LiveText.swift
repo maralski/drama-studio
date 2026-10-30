@@ -42,7 +42,6 @@ public struct LiveText: Sendable {
         guard !line.trimmingCharacters(in: .whitespaces).isEmpty else { return flush() }
         pending = pending.isEmpty ? line : pending + " " + line
         guard let cut = Self.endOfLastSentence(in: pending) else { return [] }
-        // Cut before splitting: the splitter folds a short unfinished tail into the sentence before it.
         let sentences = Drama3Chunking.splitSentencesTagged(String(pending[..<cut]))
         var tail = String(pending[cut...]).trimmingCharacters(in: .whitespaces)
         if !tail.isEmpty, !tail.hasPrefix("<|speaker:"), let last = sentences.last, last.hasPrefix("<|speaker:"), let close = last.range(of: "|>") {

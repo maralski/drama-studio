@@ -8,7 +8,8 @@ import Foundation
 /// remaining = (expected frames of unfinished chunks - frames of the current
 /// chunk) / frames per second + prefill seconds * chunks not yet prefilled,
 /// counted down from the last event. A chunk's expected frames come from its
-/// text at 16 characters per second, times 21.53 frames per second. Frames
+/// text at 16 characters per second, or the reference voice's slower pace,
+/// times 21.53 frames per second. Frames
 /// per second is a 3 s moving average that starts at 35.
 ///
 /// Feed it every event with ``apply(_:at:)``, then read ``label(at:)`` or
@@ -58,7 +59,7 @@ public struct GenerationEstimate: Sendable, Equatable {
     }
 
     package init(plan: GenerationPlan) {
-        self.init(lines: plan.chunks.map(\.line))
+        expectedFrames = plan.chunks.map { Int((plan.expectedSeconds(for: $0.line) * Self.audioFramesPerSecond).rounded()) }
     }
 
     /// Expected frames of the whole request.

@@ -94,8 +94,23 @@ final class PromptDirectingTests: XCTestCase {
         let plan = try GenerationPlan(text: "Ahoy. Who goes there in the storm tonight?", references: [], character: Self.captain, config: GenerationConfig())
         XCTAssertEqual(plan.character, Self.captain)
         XCTAssertTrue(plan.references.isEmpty)
-        XCTAssertEqual(plan.chunks.map(\.turn), ["Ahoy. Who goes there in the storm tonight?"], "the builder writes the name")
+        XCTAssertEqual(plan.chunks.map(\.turn), ["Ahoy.", "Who goes there in the storm tonight?"], "the builder writes the name for each sentence")
         XCTAssertEqual(plan.turnText, "Captain: Ahoy. Who goes there in the storm tonight?")
+    }
+
+    func testSentenceChunksDoNotDependOnTheVoice() throws {
+        let lines = ["Here is a poem for you.", "The morning light begins to break, Across the quiet, misty lake."]
+        let text = lines.joined(separator: "\n")
+        let reference = Drama3Prompt.Reference(transcript: "An arbitrary reference voice.", codes: Self.codes(8))
+        let plans = [
+            try GenerationPlan(text: text, references: [], config: GenerationConfig()),
+            try GenerationPlan(text: text, references: [reference], config: GenerationConfig()),
+            try GenerationPlan(text: text, references: [], character: Self.captain, config: GenerationConfig())
+        ]
+        for plan in plans {
+            XCTAssertEqual(plan.chunks.map(\.line), lines)
+            XCTAssertEqual(plan.chunks.map(\.turn), lines)
+        }
     }
 
     func testDefaultVoiceRetakeClonesTheFirstTake() throws {

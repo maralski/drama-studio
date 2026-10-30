@@ -98,14 +98,22 @@ public enum Drama3Chunking: Sendable {
         return chunks.map { UnicodeWhitespace.strip(string($0)) }.filter { !$0.isEmpty }
     }
 
-    /// One chunk per sentence: cut at sentence ends only, keep protected spans
-    /// whole, and fold fragments shorter than `minBytes` into their neighbour.
-    package static func splitSentences(_ text: String, minBytes: Int = 24) -> [String] {
+    /// One chunk per sentence: cut at sentence ends only and keep protected
+    /// spans whole. An explicit `minBytes` folds shorter fragments together.
+    package static func splitSentences(_ text: String, minBytes: Int = 1) -> [String] {
         if UnicodeWhitespace.strip(text).isEmpty { return [] }
         let pieces = breakAtMarks(protectedPieces(text), 0, sentenceEnds)
+        let closers = Set("\"'”’})".unicodeScalars)
         var chunks: [[Unicode.Scalar]] = []
         var current: [Unicode.Scalar] = []
-        for (piece, _) in pieces {
+        for (rawPiece, protected) in pieces {
+            var piece = rawPiece
+            if current.isEmpty, !chunks.isEmpty, !protected {
+                // Keep consecutive end marks and immediate closing quotes with their sentence.
+                let suffix = piece.prefix { sentenceEnds.contains($0) || closers.contains($0) }
+                chunks[chunks.count - 1] += suffix
+                piece.removeFirst(suffix.count)
+            }
             current += piece
             let stripped = Array(UnicodeWhitespace.strip(string(current)).unicodeScalars)
             if utf8Len(stripped) >= minBytes && sentenceEnds.contains(current.last ?? " ") { chunks.append(current); current = [] }
@@ -121,10 +129,10 @@ public enum Drama3Chunking: Sendable {
     ///
     /// Text is cut at sentence ends (`.`, `!`, `?`, `;`, `…`, a newline, or a
     /// CJK one). Decimals such as 3.14, `[cues]`, `<tags>…</tags>`, and
-    /// `<|special|>` tokens are never cut, and a fragment shorter than 24
-    /// UTF-8 bytes joins its neighbour. With `<|speaker:N|>` tags each tagged
-    /// segment is split on its own and every chunk keeps its tag; text before
-    /// the first tag is speaker 0.
+    /// `<|special|>` tokens are never cut. Short sentences stay separate so
+    /// an end-of-speech after one cannot omit the next. With `<|speaker:N|>`
+    /// tags each tagged segment is split on its own and every chunk keeps its
+    /// tag; text before the first tag is speaker 0.
     public static func splitSentencesTagged(_ text: String) -> [String] {
         let ns = text as NSString
         if Drama3Prompt.speakerTag.firstMatch(in: text, range: NSRange(location: 0, length: ns.length)) == nil { return splitSentences(text) }

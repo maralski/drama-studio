@@ -175,7 +175,7 @@ including the model load. Whisper small.en heard slide 4, whose notes read
 "Revenue grew twelve percent. Costs stayed flat, and margins improved.", as
 "Revenue grew 12%. Cost stayed flat, and margins improved." Two slides lost
 words: slide 1 spoke only "Welcome, everyone." of its two sentences, and
-slide 3 only its title. Each was one engine chunk (the splitter joins a
+slide 3 only its title. Each was one engine chunk in that build (the splitter joined a
 sentence under 24 bytes to the next), and with "Stream audio while
 generating" on, a chunk that comes out short is kept rather than generated
 again. With the setting off, Narrate This Section gave slide 1 both sentences
@@ -277,7 +277,7 @@ The speech body takes these fields:
 | `references` | Clips to clone on the fly: `[{audio_path or audio_base64, text}]`. |
 | `speaker_voices` | Library voices per speaker for a multi-speaker script: `{"0": "Narrator", "1": "<id>"}`, with no gaps from speaker 0. |
 | `response_format` | `wav` (default, 16-bit), `pcm` (raw 16-bit little-endian), or `m4a`. |
-| `stream` | `true` streams PCM about every 3 s of generated audio, while each sentence is still generating. |
+| `stream` | `true` streams completed chunks. With `quick_preview`, PCM arrives about every 3 s of generated audio. |
 | `expressiveness` | 0 to 1, default 0.5: the app's Expressiveness slider. 0.5 is the vendor's sampling, 1 the Hugging Face Space's. |
 | `quick_preview` | `true` skips retries and tightens the length cap. |
 | `seed` | A fixed sampler seed, for repeatable takes. |
@@ -317,19 +317,15 @@ curl -sS -H "$AUTH" localhost:8780/v1/audio/speech \
 
 #### Streaming framing
 
-For plain text, all three streaming routes run the engine in low-latency mode: the CPU decodes
-the newest 64 frames (about 3 s of audio) while the GPU generates the next
-ones, and the audio leaves as soon as it is decoded. A sentence that comes out
-too short is not generated again in this mode, because the client may already
-be playing it. The audio is always 16-bit little-endian mono at 44.1 kHz, as
-the `X-Drama-Format: pcm_s16le_mono` and `X-Drama-Sample-Rate: 44100` headers
-say. `stream: true` and the event stream also send `X-Drama-Take-Id` and
-`X-Drama-Estimated-Seconds`, the time the generation is expected to take,
-before the first audio.
+All three streaming routes send completed chunks when retries are enabled.
+The engine validates each attempt before releasing audio, so a rejected attempt
+can be replaced for any voice. Quick Preview disables retries and sends partial
+audio every 64 frames, about 3 seconds, while generation continues.
 
-Requests with performance cues or a director's note stream completed sentences
-when retries are enabled. This lets the engine replace a failed attempt before
-the client hears it. Quick Preview keeps low-latency playback and skips retries.
+The audio is always 16-bit little-endian mono at 44.1 kHz, as the
+`X-Drama-Format: pcm_s16le_mono` and `X-Drama-Sample-Rate: 44100` headers say.
+`stream: true` and the event stream also send `X-Drama-Take-Id` and
+`X-Drama-Estimated-Seconds` before the first audio.
 
 **PCM.** `stream: true` on `POST /v1/audio/speech` answers with
 `Transfer-Encoding: chunked` and raw PCM in the HTTP chunks. A chunk boundary
@@ -648,7 +644,7 @@ reference clip for the cloned runs.
 | --- | --- | --- | --- | --- | --- |
 | reference chunking (300 bytes), no probe | 0.141 | 69% | 89% | 103 frames | 0.867 |
 | one sentence per turn | 0.063 | 86% | 100% | 30 frames | 0.867 |
-| sentence per turn, silence stop, short-chunk retry (shipped defaults) | 0.016 | 92% | 100% | 2 frames | 0.867 |
+| sentence per turn, silence stop, short-chunk retry (previous defaults) | 0.016 | 92% | 100% | 2 frames | 0.867 |
 
 The app now fixes the chunking and retry policies at the shipped defaults; the
 `drama` CLI still reaches them through `--chunking`, `--no-retry` and
@@ -800,15 +796,28 @@ and the w2 and 4096x2048 families in the packed path.
 
 ## Streaming
 
-`GenerationConfig.streaming` decides when decoded audio leaves the engine.
-`.sentence`, the CLI's mode, sends each chunk's audio once the chunk is
-generated. `.lowLatency(stepFrames: 64)`, used by `stream: true`, the event
-stream, the live route, and app playback, also sends a partial every 64
-generated frames (about 3 s of audio). The CPU decodes those frames while the
-GPU generates the next ones. A low-latency chunk is never generated again,
-because its first audio may already be playing. Requests with performance cues
-or a director's note use sentence mode when `maxRetries` and `minSpokenRatio`
-are positive, so cue failures can be retried before audio leaves the engine.
+Default sentence chunking keeps short complete sentences separate. It no longer
+folds a short opening sentence into the next one, which could let the model end
+after the opening and omit the rest of that chunk.
+
+`GenerationConfig.streaming` requests when decoded audio leaves the engine.
+When `maxRetries` and `minSpokenRatio` are positive, every request uses
+`.sentence` mode. Each chunk is decoded and checked before its selected attempt
+leaves the engine. This applies to every voice, plain text, and performance cues.
+
+With retries disabled, `.lowLatency(stepFrames: 64)` sends partial audio every
+64 generated frames, about 3 seconds. The CPU decodes those frames while the GPU
+generates the next ones. Such a chunk cannot be replaced after playback begins.
+Quick Preview opts into this tradeoff.
+
+Normal generation waits for the model's end-of-speech signal, subject to its
+frame cap and loop guard. It does not treat silence as completion, because a
+voice can pause before the remaining words. Quick Preview enables the two-second
+silence stop. Explicit silence probes run at fixed frame checkpoints and finish
+before sampling resumes, so decode timing cannot change the stop frame.
+Retry checks use text-derived duration and stop reason; they do not compare the
+spoken words with the script. Reference pace affects the time allowance, not the
+minimum amount of speech a retry must contain.
 
 The decode reuses the windows a full decode of the chunk would run
 (`DecodeWindow.covering`), so a chunk's partials join into exactly its audio.
@@ -818,23 +827,17 @@ full decode by a maximum absolute error of 0
 each step with a bare 256-frame left context instead differs by 0.027. All
 full-window codec work of a run goes through one serial queue: a low-latency
 chunk's last frames decode while the next chunk prefills and generates. The
-silence stop does not wait for that queue: every 16 frames it decodes the
-newest 16 frames, after 48 of context, through the 64-frame probe shape on a
-second queue (190 ms a reading against 1.6 s for a 512-frame window), and
-drops the audio. The readings start only at the chunk's expected end less
-the 2 s the stop needs, the first frame at which a chunk that spoke its text
-could hold that silence. Each reading shares memory bandwidth with the GPU:
-reading from the first frames cost 2.1 to 2.4 ms of every frame (8 percent of
-frames per second on a four-sentence paragraph), the late start 0.3 ms, with
-the same frames and, on the cue, prose and long-sentence harness, coverage
-within the harness's own run-to-run spread. A reading that falls due while the last
-one still runs waits for the queue instead of being dropped, so one slow
-reading cannot leave the probe a cadence behind for the rest of the chunk.
-`drama generate --probe-every N` and `--probe-after-expected no` set other
-policies for measurement. In sentence mode the chunk's audio is decoded once,
-at the end of the attempt; `eval/reliability/REPORT.md` has how late the
-stop fired before and after the probe shape ("Silence probe latency") and
-per cadence ("Silence probe cadence").
+optional silence stop reads fixed frame checkpoints through the 64-frame probe
+shape. Each reading completes before generation samples another frame. Readings
+start after the voice-aware expected duration plus the configured silent tail.
+`drama generate --probe-every N` and `--probe-after-expected no` explicitly enable
+the probe for measurement. In sentence mode, each attempt's full audio is decoded
+once at its end.
+
+The measurements below describe the earlier asynchronous streaming implementation.
+They predate universal retry buffering and the removal of silence stopping from
+normal generation. `eval/reliability/REPORT.md` records the earlier probe timing
+experiments.
 
 Measured on the M3 Max (16 cores, 12 performance), with the same two-sentence
 line, 9.4 s of audio in 202 frames, seed 7, in every run. The machine was not
@@ -899,7 +902,8 @@ while frames land and runs once per chunk at its end:
 
 The app shows the time left beside the elapsed time while it generates
 (`GenerationEstimate`): the expected frames of the unfinished chunks (text
-length at 16 characters per second, times 21.53 frames per second) less the
+length at 16 characters per second, or the reference voice's slower pace,
+times 21.53 frames per second) less the
 frames of the current chunk, over a 3 s moving average of frames per second
 that starts at 35, plus one prefill per chunk not yet prefilled (0.7 s until
 the first is measured). It reads "about 12 s left", rounded to 5 s above 20 s,

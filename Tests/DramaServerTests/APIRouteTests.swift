@@ -135,6 +135,7 @@ final class APIRouteTests: XCTestCase {
         XCTAssertNotNil(Double(response.headers["X-Drama-Generation-Seconds"] ?? ""))
         let request = await engine.requests.last
         XCTAssertEqual(request?.config.seed, 7)
+        XCTAssertNil(request?.config.stopAfterSilenceSeconds, "normal API takes wait for the model's end of speech")
         XCTAssertEqual(request?.config.temperature, GenerationConfig().temperature, "expressiveness defaults to the vendor sampling")
     }
 
@@ -152,6 +153,7 @@ final class APIRouteTests: XCTestCase {
         _ = await send("POST", "/v1/audio/speech", json: ["input": "Wild.", "expressiveness": 1, "quick_preview": true])
         let request = await engine.requests.last
         XCTAssertEqual(request?.config, GenerationConfig.make(expressiveness: 1, quickPreview: true))
+        XCTAssertEqual(request?.config.stopAfterSilenceSeconds, 2, "quick_preview explicitly enables silence stopping")
     }
 
     func testTTSAliasTakesText() async {

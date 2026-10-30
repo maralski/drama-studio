@@ -11,6 +11,34 @@ final class SilenceStopTests: XCTestCase {
         rms.flatMap { [Float](repeating: $0, count: n) }
     }
 
+    func testNormalCompletionLeavesSilenceStoppingDisabled() {
+        let config = GenerationConfig()
+        XCTAssertNil(config.stopAfterSilenceSeconds)
+        XCTAssertNil(SpeechRequest(text: "A pause can precede more words.").config.stopAfterSilenceSeconds)
+        XCTAssertEqual(config.maxRetries, 2)
+        XCTAssertEqual(config.minSpokenRatio, 0.6)
+        XCTAssertTrue(config.stopOnLoop)
+    }
+
+    func testQuickPreviewExplicitlyEnablesTwoSecondSilenceStop() {
+        for expressiveness in [0.0, 0.5, 1.0] {
+            XCTAssertNil(GenerationConfig.make(expressiveness: expressiveness, quickPreview: false).stopAfterSilenceSeconds)
+            let preview = GenerationConfig.make(expressiveness: expressiveness, quickPreview: true)
+            XCTAssertEqual(preview.stopAfterSilenceSeconds, 2)
+            XCTAssertEqual(preview.minSpokenRatio, 0)
+        }
+    }
+
+    func testCodablePreservesDisabledAndExplicitSilenceThresholds() throws {
+        for threshold in [nil, 2, 1.25] as [Double?] {
+            var config = GenerationConfig()
+            config.stopAfterSilenceSeconds = threshold
+            let restored = try JSONDecoder().decode(GenerationConfig.self, from: JSONEncoder().encode(config))
+            XCTAssertEqual(restored, config)
+            XCTAssertEqual(restored.stopAfterSilenceSeconds, threshold)
+        }
+    }
+
     func testTwoSecondsIsFortyFourFrames() {
         XCTAssertEqual(FrameGenerator.silenceFrames(for: 2.0), 44, "43 frames are 1.997 s")
         XCTAssertEqual(FrameGenerator.silenceFrames(for: 0), 0)

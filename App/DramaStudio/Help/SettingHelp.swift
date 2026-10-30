@@ -122,13 +122,13 @@ enum SettingHelp: String, CaseIterable, Identifiable {
         case .keepTake:
             "Marks the selected take as the one Export writes. Click a take to hear it, then click Keep. Without a kept take, Export writes the audio in the transport."
         case .quickPreview:
-            "Makes faster rough takes for checking casting, cues, and pacing. It trades a possible dropped sentence for speed, because a sentence the model cuts short is kept instead of generated again, and each sentence gets less time to run. Turn it off for the take you export."
+            "Makes faster rough takes for checking casting, cues, and pacing. It can drop words because it skips retries, uses a shorter time limit, and stops after two seconds of silence. Turn it off for the take you export."
         case .expressiveness:
             "Sets how much the delivery varies from one take to the next. The default, in the middle, is the model vendor's own sampling, temperature 0.7 and top-p 0.7; lower is steadier and flatter. The top is the sampling of Fish Audio's own demo, which kept every sentence of the cue lines in the reliability study and needed fewer retries, at a small cost in slurred words on plain prose. Move it up for lines with cues or for livelier delivery, and leave it in the middle for narration you export."
         case .playbackSpeed:
             "Plays the audio faster or slower without changing its pitch, from 0.75x to 1.5x. It changes playback only: exports, captions, and projects keep the original timing. The scrubber and the sentence highlight follow the audio at every speed, and the setting is remembered."
         case .streaming:
-            "Starts playback before the first sentence finishes generating, so a short plain-text attempt is kept once playback starts. Scripts with performance cues or a director's note wait for each sentence to finish so failed attempts can be retried before playback. Quick Preview skips those retries and streams partial audio. Turn streaming off to allow retries for plain text too."
+            "Plays completed chunks while the rest of the script generates. Normal generation checks each chunk and can retry an incomplete attempt before you hear it. Quick Preview skips retries and can start playback before a chunk finishes. Turn streaming off to wait for completed chunks even in Quick Preview."
         case .modelLocation:
             "Where Drama Studio looks for the Drama 3 weights, about 41.5 GB. By default it uses the Hugging Face cache, where \u{201C}hf download fishaudio/drama-3\u{201D} puts them. Choose a folder only if you keep the model somewhere else, such as an external drive. Restart Drama Studio after changing it."
         case .license:

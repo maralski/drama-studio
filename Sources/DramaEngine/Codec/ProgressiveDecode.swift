@@ -151,15 +151,12 @@ final class DecodeRunner: @unchecked Sendable {
     func drain() { queue.sync {} }
 }
 
-/// When the silence stop reads a chunk's newest frames: every `everyFrames`
-/// frames, and not before `firstFrame`.
+/// Fixed checkpoints for the silence stop: every `everyFrames` frames, and
+/// not before `firstFrame`. Generation waits for each reading before the
+/// next frame, so codec latency cannot move or skip a checkpoint.
 package struct SilenceProbeSchedule: Equatable, Sendable {
     package var everyFrames: Int
     package var firstFrame: Int
-    /// A reading that fell due while the previous one still ran: the frame
-    /// count it classifies up to.
-    package private(set) var waiting: Int?
-
     package init(everyFrames: Int, firstFrame: Int) {
         self.everyFrames = everyFrames
         self.firstFrame = firstFrame
@@ -170,36 +167,17 @@ package struct SilenceProbeSchedule: Equatable, Sendable {
     package func reads(at frames: Int) -> Bool {
         everyFrames > 0 && frames >= firstFrame && frames.isMultiple(of: everyFrames)
     }
-
-    /// The frame count to classify up to when a reading should start now,
-    /// once `frames` frames have landed: the newest one that fell due. A
-    /// reading that cannot start yet waits for the probe's queue rather than
-    /// being dropped, and covers only the frames up to its due point, so one
-    /// slow reading costs one late reading instead of leaving every later
-    /// one too long to finish within the cadence. Call `started()` when it
-    /// starts.
-    package mutating func due(at frames: Int) -> Int? {
-        if reads(at: frames) { waiting = frames }
-        return waiting
-    }
-
-    package mutating func started() { waiting = nil }
 }
 
-/// How the silence stop paces its readings. With the probe shape of 64 frames
-/// a reading of 16 new frames costs about 190 ms, under the 0.4 s those frames
-/// take to generate, so a reading every 16 frames fires the stop within about
-/// a reading of the audio going silent. Each reading shares memory bandwidth
-/// with the GPU, so the shipped policy reads only once the chunk could have
-/// spoken its text: that gave back about 2 ms of every frame on a paragraph,
-/// with the cue, prose and long-sentence harness inside its own run-to-run
-/// spread (`eval/reliability/REPORT.md`, "Silence probe cadence").
+/// How the silence stop paces its readings. The shipped policy reads every
+/// 16 frames once the chunk could have spoken its text and its final silent
+/// tail. Each reading completes before generation resumes.
 package struct SilenceProbePolicy: Equatable, Sendable {
     /// Frames between readings; 0 turns the probe off.
     package var everyFrames: Int
-    /// Read only from the chunk's expected end less the silence the stop
+    /// Read only from the chunk's expected end plus the silence the stop
     /// needs, the first frame at which the stop could end a chunk that spoke
-    /// its text; before it no probe work shares the GPU's memory bandwidth.
+    /// its text; before it no probe work delays generation.
     package var afterExpectedEnd: Bool
 
     package init(everyFrames: Int, afterExpectedEnd: Bool) {
@@ -210,13 +188,14 @@ package struct SilenceProbePolicy: Equatable, Sendable {
     package static let shipped = SilenceProbePolicy(everyFrames: 16, afterExpectedEnd: true)
 
     /// The readings for a chunk expected to speak `expectedSeconds`, whose
-    /// stop needs `silenceFrames` silent frames. No reading lands before the
-    /// audio could hold that silence.
+    /// stop needs `silenceFrames` silent frames. Under `afterExpectedEnd`,
+    /// allow the expected speech duration before counting a final silent tail;
+    /// a pause within that duration must not stop the remaining words.
     package func schedule(expectedSeconds: Double, silenceFrames: Int) -> SilenceProbeSchedule {
         var first = silenceFrames + 1
         if afterExpectedEnd {
             let expected = Int((expectedSeconds * Double(ModelConstants.sampleRate) / Double(ModelConstants.samplesPerFrame)).rounded())
-            first = max(first, expected - silenceFrames)
+            first = max(first, expected + silenceFrames)
         }
         return SilenceProbeSchedule(everyFrames: everyFrames, firstFrame: first)
     }
