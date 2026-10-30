@@ -54,7 +54,11 @@ bytes=$(stat -f %z "$work/speech.pcm")
 stream_seconds=$(( bytes / 2.0 / 44100 ))
 print "streamed $bytes bytes = $stream_seconds s of 16-bit mono at 44.1 kHz"
 check "chunked transfer" '[[ $(header transfer-encoding "$work/pcm.h") == chunked ]]'
-check "stream length matches the file's X-Drama-Seconds $wav_seconds" '(( fabs(stream_seconds - wav_seconds) < 0.001 ))'
+stream_take_id=$(header x-drama-take-id "$work/pcm.h")
+curl -fsS "${auth[@]}" "$base/v1/takes/$stream_take_id" -o "$work/stream-take.json"
+take_seconds=$(python3 -c 'import json, sys; print(json.load(sys.stdin)["seconds"])' < "$work/stream-take.json")
+check "stream contains complete PCM samples" '(( bytes > 0 && bytes % 2 == 0 ))'
+check "stream length matches its own take duration $take_seconds" '(( fabs(stream_seconds - take_seconds) < 0.001 ))'
 
 step "POST /v1/tts alias with text"
 code=$(curl -sS "${auth[@]}" -o "$work/alias.wav" -w '%{http_code}' "$base/v1/tts" -d '{"text":"Alias route."}')
