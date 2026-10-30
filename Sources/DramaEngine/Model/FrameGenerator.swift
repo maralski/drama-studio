@@ -174,7 +174,7 @@ package final class FrameGenerator {
         /// Probe-shape decodes for the silence stop, on their own queue so a
         /// full-window decode never delays a reading.
         let probeRunner = DecodeRunner()
-        let streamStep = config.streaming.stepFrames
+        let streamStep = plan.streaming.stepFrames
         let maxRetries = streamStep == nil ? max(0, config.maxRetries) : 0
         /// Streamed chunks whose last frames are still decoding, oldest first.
         var finishing: [(result: ChunkResult, decoder: ChunkDecoder)] = []

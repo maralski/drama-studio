@@ -128,7 +128,7 @@ enum SettingHelp: String, CaseIterable, Identifiable {
         case .playbackSpeed:
             "Plays the audio faster or slower without changing its pitch, from 0.75x to 1.5x. It changes playback only: exports, captions, and projects keep the original timing. The scrubber and the sentence highlight follow the audio at every speed, and the setting is remembered."
         case .streaming:
-            "Plays a take about three seconds after you click Generate, instead of after its first sentence is generated. The audio is decoded on the CPU every few seconds while the GPU generates, so it keeps several CPU cores busy during generation. A sentence that comes out too short is kept rather than generated again, because you may already be hearing it. Turn it off to hear each sentence once it is finished and let the retry fix short sentences."
+            "Starts playback before the first sentence finishes generating. Plain text keeps a short attempt because you may already be hearing it. Scripts with performance cues or a director's note wait for each sentence to finish so failed attempts can be retried before playback. Quick Preview skips those retries and streams partial audio. Turn streaming off to allow retries for plain text too."
         case .modelLocation:
             "Where Drama Studio looks for the Drama 3 weights, about 41.5 GB. By default it uses the Hugging Face cache, where \u{201C}hf download fishaudio/drama-3\u{201D} puts them. Choose a folder only if you keep the model somewhere else, such as an external drive. Restart Drama Studio after changing it."
         case .license:

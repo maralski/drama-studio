@@ -175,6 +175,8 @@ public enum StreamingMode: Sendable, Codable, Equatable {
     /// every `stepFrames` generated frames, decoded on the CPU while the GPU
     /// generates. A chunk is never generated again, because its first audio
     /// may already be playing.
+    /// Requests with performance cues or a director's note use ``sentence``
+    /// when retries are enabled, so a failed cue attempt can be replaced.
     case lowLatency(stepFrames: Int)
 
     /// Partials every 64 frames, about 3 s of audio. Through the HTTP API on
