@@ -129,9 +129,9 @@ public actor MockSynthesizer: SpeechSynthesizer {
                 let residual = (1..<ModelConstants.numCodebooks).map { _ in Int32(rng.next() % UInt64(ModelConstants.residualCodebookSize)) }
                 frames.append([c0 + ModelConstants.semanticStart, c0] + residual)
                 emit(.frame(index: frameIndex, maxFrames: budget))
-                if let step = request.config.streaming.stepFrames, (frameIndex + 1) % step == 0 { stream(through: frameIndex + 1) }
+                if let step = plan.streaming.stepFrames, (frameIndex + 1) % step == 0 { stream(through: frameIndex + 1) }
             }
-            if request.config.streaming.stepFrames != nil { stream(through: target) }
+            if plan.streaming.stepFrames != nil { stream(through: target) }
             timings.decodeSeconds += (ContinuousClock.now - start).seconds
             timings.framesGenerated += target
 

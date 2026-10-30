@@ -317,7 +317,7 @@ curl -sS -H "$AUTH" localhost:8780/v1/audio/speech \
 
 #### Streaming framing
 
-All three streaming routes run the engine in low-latency mode: the CPU decodes
+For plain text, all three streaming routes run the engine in low-latency mode: the CPU decodes
 the newest 64 frames (about 3 s of audio) while the GPU generates the next
 ones, and the audio leaves as soon as it is decoded. A sentence that comes out
 too short is not generated again in this mode, because the client may already
@@ -326,6 +326,10 @@ the `X-Drama-Format: pcm_s16le_mono` and `X-Drama-Sample-Rate: 44100` headers
 say. `stream: true` and the event stream also send `X-Drama-Take-Id` and
 `X-Drama-Estimated-Seconds`, the time the generation is expected to take,
 before the first audio.
+
+Requests with performance cues or a director's note stream completed sentences
+when retries are enabled. This lets the engine replace a failed attempt before
+the client hears it. Quick Preview keeps low-latency playback and skips retries.
 
 **PCM.** `stream: true` on `POST /v1/audio/speech` answers with
 `Transfer-Encoding: chunked` and raw PCM in the HTTP chunks. A chunk boundary
@@ -802,8 +806,9 @@ generated. `.lowLatency(stepFrames: 64)`, used by `stream: true`, the event
 stream, the live route, and app playback, also sends a partial every 64
 generated frames (about 3 s of audio). The CPU decodes those frames while the
 GPU generates the next ones. A low-latency chunk is never generated again,
-because its first audio may already be playing; the help and the API section
-say so.
+because its first audio may already be playing. Requests with performance cues
+or a director's note use sentence mode when `maxRetries` and `minSpokenRatio`
+are positive, so cue failures can be retried before audio leaves the engine.
 
 The decode reuses the windows a full decode of the chunk would run
 (`DecodeWindow.covering`), so a chunk's partials join into exactly its audio.

@@ -10,6 +10,7 @@ package struct GenerationPlan: Sendable, Equatable {
     package var character: Drama3Prompt.Character?
     package var history: [Take]
     package var chunks: [Chunk]
+    package var streaming: StreamingMode
     /// The whole request's user turn, as its take records it.
     package var turnText: String
 
@@ -32,6 +33,11 @@ package struct GenerationPlan: Sendable, Equatable {
             body = DirectorsNote.retakeText(line: text, note: note)
         } else {
             body = text
+        }
+        streaming = config.streaming
+        if config.maxRetries > 0, config.minSpokenRatio > 0,
+           body.range(of: #"\[[^\[\]]*\]|</?[A-Za-z][^<>]*>"#, options: .regularExpression) != nil {
+            streaming = .sentence
         }
         var turn: (String) -> String = { $0 }
         self.references = references
