@@ -68,6 +68,13 @@ private struct GeneralSettingsView: View {
                 Toggle(isOn: $streamsAudio) { HelpLabel("Stream audio while generating", help: .streaming) }
             }
             APIServerSection(server: server, startsWithApp: $startsWithApp, port: $port)
+            Section("Privacy") {
+                Toggle("Share anonymous usage information", isOn: Binding(
+                    get: { UsageMonitoring.shared.enabled },
+                    set: { UsageMonitoring.shared.choose(enabled: $0) }
+                ))
+                Text(UsageMonitoring.explanation).font(.caption).foregroundStyle(.secondary)
+            }
             Section("About") {
                 Text("Drama Studio by Peter Marelas").font(.headline)
                 Text("Built with Fish Audio. Drama Studio runs Fish Audio Drama 3 locally on Apple silicon.").foregroundStyle(.secondary)

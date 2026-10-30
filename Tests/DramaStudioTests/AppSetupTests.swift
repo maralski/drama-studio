@@ -10,6 +10,8 @@ import XCTest
 @MainActor
 final class FakeMac {
     var facts = SetupFacts()
+    var usageChoiceMade = true
+    var usageEnabled = false
     var blocker: String?
     var conversionCommand: String?
     var weightFailures: [Error] = []
@@ -19,7 +21,11 @@ final class FakeMac {
 
     var services: SetupServices {
         SetupServices(
-            facts: { [unowned self] in facts },
+            facts: { [unowned self] in
+                var result = facts
+                result.usageChoiceMade = usageChoiceMade
+                return result
+            },
             acknowledgeRequirements: { [unowned self] in calls.append("acknowledge"); facts.requirementsAcknowledged = true },
             acceptTerms: { [unowned self] in calls.append("accept"); facts.termsAccepted = true },
             weightsBlocker: { [unowned self] in blocker },
@@ -43,7 +49,8 @@ final class FakeMac {
                 if tuningWritesSchedule { facts.tuned = true }
             },
             attachEngine: { [unowned self] in calls.append("attach") },
-            prepareFirstLine: { [unowned self] in calls.append("first line") }
+            prepareFirstLine: { [unowned self] in calls.append("first line") },
+            chooseUsage: { [unowned self] in usageEnabled = $0; usageChoiceMade = true }
         )
     }
 
@@ -220,6 +227,31 @@ final class AppSetupTests: XCTestCase {
         session.generate()
         await settle(setup) { _ in !session.state.isGenerating }
         XCTAssertFalse(session.audio.isEmpty)
+    }
+
+    func testUsageChoiceIsSeparateFromTermsAndEitherAnswerContinues() {
+        for enabled in [false, true] {
+            let mac = FakeMac()
+            mac.usageChoiceMade = false
+            mac.facts = SetupFacts(weightsReady: true, codecReady: true, tuned: true)
+            let setup = SetupCoordinator(services: mac.services)
+            setup.acceptTerms()
+            XCTAssertEqual(setup.stage, .usage)
+            XCTAssertFalse(mac.usageEnabled)
+            XCTAssertFalse(mac.calls.contains("attach"))
+            setup.chooseUsage(enabled: enabled)
+            XCTAssertEqual(setup.stage, .ready)
+            XCTAssertEqual(mac.usageEnabled, enabled)
+            setup.reconcile()
+            XCTAssertEqual(setup.stage, .ready)
+        }
+    }
+
+    func testExistingInstallIsAskedForUsageConsent() {
+        let mac = FakeMac()
+        mac.usageChoiceMade = false
+        mac.facts = SetupFacts(termsAccepted: true, weightsReady: true, codecReady: true, tuned: true)
+        XCTAssertEqual(SetupCoordinator(services: mac.services).stage, .usage)
     }
 
     func testRateEstimateNeedsAFewSecondsThenDividesRemainingByRate() {

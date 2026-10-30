@@ -6,12 +6,13 @@ import Foundation
 /// The steps of a first run, in order. A step is skipped when the Mac
 /// already has what it produces.
 enum SetupStep: String, CaseIterable, Sendable {
-    case requirements, terms, weights, codec, tuning
+    case requirements, terms, usage, weights, codec, tuning
 
     var title: String {
         switch self {
         case .requirements: "Check this Mac"
         case .terms: "Agree to the terms"
+        case .usage: "Help improve Drama Studio"
         case .weights: "Download Drama 3"
         case .codec: "Download the voice codec"
         case .tuning: "Tune for this Mac"
@@ -23,6 +24,7 @@ enum SetupStep: String, CaseIterable, Sendable {
         switch self {
         case .requirements: "This Mac"
         case .terms: "Terms"
+        case .usage: "Usage"
         case .weights: "Model"
         case .codec: "Voice codec"
         case .tuning: "Tuning"
@@ -38,11 +40,13 @@ struct SetupFacts: Equatable {
     var weightsReady = false
     var codecReady = false
     var tuned = false
+    var usageChoiceMade = false
 
     func satisfies(_ step: SetupStep) -> Bool {
         switch step {
         case .requirements: requirementGaps.isEmpty || requirementsAcknowledged
         case .terms: termsAccepted
+        case .usage: usageChoiceMade
         case .weights: weightsReady
         case .codec: codecReady
         case .tuning: tuned
@@ -75,6 +79,7 @@ enum CodecStage: Equatable {
 enum SetupStage: Equatable {
     case requirements(gaps: [String])
     case terms
+    case usage
     case weights(Transfer)
     case codec(CodecStage)
     case tuning(detail: String)
@@ -87,6 +92,7 @@ enum SetupStage: Equatable {
         switch self {
         case .requirements: .requirements
         case .terms: .terms
+        case .usage: .usage
         case .weights: .weights
         case .codec: .codec
         case .tuning: .tuning

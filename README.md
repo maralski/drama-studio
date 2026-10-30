@@ -1007,3 +1007,14 @@ Fish Audio's Drama 3 Space stay under the Fish Audio Community License as well;
 [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES) lists each one and what changed.
 descript-audio-codec code keeps its MIT notice there. This project is not
 affiliated with or endorsed by Fish Audio.
+
+### Optional usage information
+
+During setup, you can choose to share anonymous usage information to help
+improve Drama Studio. Sharing is off unless you enable it. Only counts of app
+launches, generation outcomes and setup failures are included. Scripts, audio,
+voices, file names and personal identifiers are excluded. Change your choice
+at any time in Settings > General > Privacy.
+
+See [usage monitoring configuration](docs/usage-monitoring.md) for release setup
+and the data contract.

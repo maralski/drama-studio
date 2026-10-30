@@ -466,8 +466,11 @@ final class SessionModel {
     }
 
 
+    @ObservationIgnored var recordUsage: (UsageMetric) -> Void = { _ in }
+
     func stopGeneration() {
         guard state.isGenerating else { return }
+        recordUsage(.generationCancelled)
         run += 1
         generation?.cancel()
         generation = nil
@@ -507,6 +510,7 @@ final class SessionModel {
             telemetry.retries += 1
             telemetry.frame = 0
         case .finished(let result):
+            recordUsage(.generationSucceeded)
             if result.timings.framesPerSecond > 0 { telemetry.framesPerSecond = result.timings.framesPerSecond }
             switch job {
             case .take(let note, let voice)?:
@@ -620,10 +624,12 @@ final class SessionModel {
         generation = nil
         refreshEngineState()
         if let error {
+            if !(error is CancellationError) { recordUsage(.generationFailed) }
             stopPlayback(resetTo: nil)
             settleAfterGeneration(.failed(Self.describe(error)))
             recompose()
         } else if state.isGenerating {
+            recordUsage(.generationFailed)
             settleAfterGeneration(audio.isEmpty ? .failed("The engine stopped without producing audio.") : state.afterGeneration)
             recompose()
         }
