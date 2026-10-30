@@ -135,13 +135,21 @@ extension AppUpdateTests {
         try FileManager.default.createDirectory(at: contents.appending(path: "MacOS"), withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
-        let plist: [String: Any] = ["CFBundleIdentifier": "io.github.maralski.DramaStudio", "CFBundleShortVersionString": "1.2.0", "CFBundleExecutable": "DramaStudio", "CFBundlePackageType": "APPL"]
+        let plist: [String: Any] = ["CFBundleIdentifier": "io.github.maralski.DramaStudio", "CFBundleShortVersionString": "1.2.0", "CFBundleExecutable": "DramaStudio", "CFBundlePackageType": "APPL", "LSMinimumSystemVersion": "15.0"]
         try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0).write(to: contents.appending(path: "Info.plist"))
         try FileManager.default.copyItem(at: URL(filePath: "/usr/bin/true"), to: contents.appending(path: "MacOS/DramaStudio"))
         try UpdateInstaller.run("/usr/bin/codesign", ["--force", "--sign", "-", app.path])
         let image = root.appending(path: "update.dmg")
         try UpdateInstaller.run("/usr/bin/hdiutil", ["create", "-quiet", "-format", "UDZO", "-srcfolder", source.path, image.path])
         let hash = SHA256.hash(data: try Data(contentsOf: image)).map { String(format: "%02x", $0) }.joined()
+        let rejectedWork = root.appending(path: "incompatible")
+        try FileManager.default.createDirectory(at: rejectedWork, withIntermediateDirectories: true)
+        XCTAssertThrowsError(try UpdateInstaller.prepare(image: image, checksum: hash, version: "1.2.0", currentApp: app, directory: rejectedWork,
+                                                         systemVersion: OperatingSystemVersion(majorVersion: 14, minorVersion: 7, patchVersion: 0))) { error in
+            XCTAssertEqual(error.localizedDescription, "This update requires macOS 15.0 or later. Your current app has not been changed.")
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: app.path))
+        XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: rejectedWork.appending(path: "mount").path).isEmpty)
         let prepared = try UpdateInstaller.prepare(image: image, checksum: hash, version: "1.2.0", currentApp: app, directory: work)
         XCTAssertEqual(Bundle(url: prepared)?.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String, "1.2.0")
         XCTAssertTrue(FileManager.default.isExecutableFile(atPath: prepared.appending(path: "Contents/MacOS/DramaStudio").path))

@@ -17,7 +17,8 @@ enum UpdateInstaller {
         guard process.terminationStatus == 0 else { throw UpdateError.message("Update preparation failed (\(URL(filePath: executable).lastPathComponent)). Please try again.") }
     }
 
-    static func prepare(image: URL, checksum: String, version: String, currentApp: URL, directory: URL) throws -> URL {
+    static func prepare(image: URL, checksum: String, version: String, currentApp: URL, directory: URL,
+                        systemVersion: OperatingSystemVersion = ProcessInfo.processInfo.operatingSystemVersion) throws -> URL {
         let handle = try FileHandle(forReadingFrom: image)
         defer { try? handle.close() }
         var hash = SHA256()
@@ -35,6 +36,18 @@ enum UpdateInstaller {
               bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String == version,
               FileManager.default.isExecutableFile(atPath: staged.appending(path: "Contents/MacOS/DramaStudio").path) else {
             throw UpdateError.message("The downloaded app does not match this release.")
+        }
+        guard let minimum = bundle.object(forInfoDictionaryKey: "LSMinimumSystemVersion") as? String else {
+            throw UpdateError.message("The update does not declare its minimum macOS version.")
+        }
+        let parts = minimum.split(separator: ".", omittingEmptySubsequences: false)
+        guard (1...3).contains(parts.count),
+              let required = AppVersion((parts.map(String.init) + Array(repeating: "0", count: 3 - parts.count)).joined(separator: ".")),
+              let installed = AppVersion("\(systemVersion.majorVersion).\(systemVersion.minorVersion).\(systemVersion.patchVersion)") else {
+            throw UpdateError.message("The update declares an invalid minimum macOS version.")
+        }
+        guard installed >= required else {
+            throw UpdateError.message("This update requires macOS \(minimum) or later. Your current app has not been changed.")
         }
         try run("/usr/bin/codesign", ["--verify", "--deep", "--strict", staged.path])
         // Signed distributions must retain their designated signing requirement.

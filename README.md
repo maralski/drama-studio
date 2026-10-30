@@ -68,7 +68,8 @@ Applications or your user's Applications folder. Apps running from a mounted
 DMG, App Translocation, or a Swift build directory cannot update themselves.
 The updater changes only the app bundle; models, voices, and projects stay in
 place. It uses the release's `DramaStudio-<version>.dmg` and `SHA256SUMS`, checks
-the bundle identity and version, verifies its code signature, and requires the
+the bundle identity, version, and minimum macOS requirement, verifies its code
+signature, and requires the
 same signing identity for Developer ID builds. Ad-hoc builds rely on GitHub
 HTTPS and the published checksum for authenticity.
 
