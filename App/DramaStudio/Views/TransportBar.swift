@@ -103,12 +103,12 @@ struct TransportBar: View {
         "\(value.formatted(.number.precision(.fractionLength(1)))) s"
     }
 
-    /// The status line after a run. `frames` and `framesPerSecond` are nil when generation stopped early.
+    /// A restored project has audio but no generation telemetry or clock.
     static func summary(audioSeconds: TimeInterval, frames: Int?, framesPerSecond: Double?, generationSeconds: TimeInterval?) -> String {
         var parts = ["\(seconds(audioSeconds)) of audio"]
         if let frames, let framesPerSecond {
             parts += ["\(frames) frames", "\(Int(framesPerSecond.rounded())) frames/s"]
-        } else {
+        } else if generationSeconds != nil {
             parts[0] += " (stopped early)"
         }
         if let generationSeconds { parts.append("generated in \(seconds(generationSeconds))") }
