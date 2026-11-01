@@ -6,10 +6,10 @@ import Foundation
 /// What speaks for one speaker.
 enum VoiceChoice: Hashable, Codable, Sendable {
     case modelDefault
-    /// A voice the model picks; its first take becomes the session voice.
+    /// A voice the model picks; its first checked take becomes the session voice.
     case surprise
     case library(ReferenceVoice.ID)
-    /// A voice cast from a description; its first take becomes the session voice.
+    /// A voice cast from a description; its first checked read becomes the session voice.
     case designed(VoiceDesign)
 
     var design: VoiceDesign? {

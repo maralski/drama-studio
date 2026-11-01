@@ -7,33 +7,9 @@ import Foundation
 public enum AudioEncoding {
     public static let sampleRate = ModelConstants.sampleRate
 
-    public static func pcm16(_ samples: [Float]) -> Data {
-        var data = Data(capacity: samples.count * 2)
-        for sample in samples {
-            let value = Int16((max(-1, min(1, sample)) * 32767).rounded())
-            withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) }
-        }
-        return data
-    }
+    public static func pcm16(_ samples: [Float]) -> Data { PCM16.encode(samples) }
 
-    public static func wav(_ samples: [Float]) -> Data {
-        let pcm = pcm16(samples)
-        var header = Data()
-        func append<T: FixedWidthInteger>(_ value: T) { withUnsafeBytes(of: value.littleEndian) { header.append(contentsOf: $0) } }
-        header.append(Data("RIFF".utf8))
-        append(UInt32(36 + pcm.count))
-        header.append(Data("WAVEfmt ".utf8))
-        append(UInt32(16))
-        append(UInt16(1))
-        append(UInt16(1))
-        append(UInt32(sampleRate))
-        append(UInt32(sampleRate * 2))
-        append(UInt16(2))
-        append(UInt16(16))
-        header.append(Data("data".utf8))
-        append(UInt32(pcm.count))
-        return header + pcm
-    }
+    public static func wav(_ samples: [Float]) -> Data { PCM16.wav(samples) }
 
     public static func m4a(_ samples: [Float]) throws -> Data {
         let url = FileManager.default.temporaryDirectory.appending(path: "drama-\(UUID().uuidString).m4a")

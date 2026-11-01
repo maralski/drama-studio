@@ -197,11 +197,12 @@ final class AppNarrationSessionTests: XCTestCase {
         XCTAssertEqual(reopened.chosenTake(for: session.document!.segments[1].id)?.duration, session.chosenTake(for: session.document!.segments[1].id)?.duration)
         XCTAssertEqual(reopened.recentProjects, [bundle])
 
+        reopened.quickPreview = false
         reopened.selectSegment(session.document!.segments[4].id)
         reopened.narrateSelectedSection()
         await finish(reopened)
         let last = try XCTUnwrap(synthesizer.requests.last)
-        XCTAssertEqual(last.previousTakes.count, 2, "a reopened project still has codes for history")
+        XCTAssertEqual(last.previousTakes, [], "preview codes survive for playback and export, but cannot become checked generation history")
 
         let folder = directory.appending(path: "slides")
         reopened.exportSlidePackage(to: folder, as: .wav16)
@@ -209,6 +210,25 @@ final class AppNarrationSessionTests: XCTestCase {
         let captions = directory.appending(path: "deck.srt")
         reopened.exportCaptions(to: captions, as: .srt)
         XCTAssertTrue(try String(contentsOf: captions, encoding: .utf8).contains("First we go through the numbers."))
+    }
+
+    func testCheckedSectionHistorySurvivesSaveAndOpen() async throws {
+        let session = makeSession()
+        let deck = document()
+        session.open(deck)
+        session.generate()
+        await finish(session)
+        let first = try XCTUnwrap(session.chosenTake(for: deck.segments[0].id))
+        let second = try XCTUnwrap(session.chosenTake(for: deck.segments[1].id))
+        XCTAssertTrue(first.wordsChecked)
+        XCTAssertTrue(second.wordsChecked)
+        let bundle = directory.appending(path: "Checked.dramaproj")
+        XCTAssertTrue(session.saveProject(to: bundle))
+        let reopened = makeSession()
+        XCTAssertTrue(reopened.openProject(from: bundle))
+        reopened.narrateSection(deck.segments[4].id)
+        await finish(reopened)
+        XCTAssertEqual(synthesizer.requests.last?.previousTakes, [first.take, second.take])
     }
 
     func testPlainScriptProjectRoundTripsItsExportedTake() async throws {

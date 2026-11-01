@@ -22,6 +22,14 @@ struct SectionTakes: Equatable {
         takes.append(take)
         chosenID = take.id
     }
+
+    func removing(_ id: SessionTake.ID) -> SectionTakes? {
+        var remaining = self
+        remaining.takes.removeAll { $0.id == id }
+        guard let latest = remaining.takes.last else { return nil }
+        if chosenID == id { remaining.chosenID = latest.id }
+        return remaining
+    }
 }
 
 /// Where one spoken sentence sits in the transport's audio.

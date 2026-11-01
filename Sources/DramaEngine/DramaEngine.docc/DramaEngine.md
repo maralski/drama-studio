@@ -18,7 +18,7 @@ Cloning a real person's voice without their consent is not permitted.
 
 - An Apple silicon Mac with a lot of unified memory. The weights are 41.5 GB and are
   memory-mapped, not copied, plus about 2 GB of state and codec. Only a 128 GB M3 Max has been tested.
-- macOS 15 or later, and Xcode 26 or its command line tools.
+- Xcode 26 or its command line tools. Checked generation requires macOS 26 and an installed on-device speech model for one identifiable script language; unchecked preview targets macOS 15.
 - The model in the Hugging Face cache and the Core ML codec models built once from
   it. See <doc:GettingTheModel>.
 

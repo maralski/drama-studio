@@ -15,7 +15,7 @@ final class SilenceStopTests: XCTestCase {
         let config = GenerationConfig()
         XCTAssertNil(config.stopAfterSilenceSeconds)
         XCTAssertNil(SpeechRequest(text: "A pause can precede more words.").config.stopAfterSilenceSeconds)
-        XCTAssertEqual(config.maxRetries, 2)
+        XCTAssertEqual(config.maxRetries, 5)
         XCTAssertEqual(config.minSpokenRatio, 0.6)
         XCTAssertTrue(config.stopOnLoop)
     }

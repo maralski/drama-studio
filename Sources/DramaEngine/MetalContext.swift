@@ -27,21 +27,12 @@ package final class MetalContext {
         self.library = try Self.compileKernels(source: source, device: device)
     }
 
-    /// The resource bundle: inside a packaged .app it sits in Contents/Resources,
-    /// where SwiftPM's generated accessor does not look.
-    static let resourceBundleName = "DramaStudio_DramaEngine.bundle"
-
-    static func resourceBundle() -> Bundle {
-        if let url = Bundle.main.resourceURL?.appendingPathComponent(resourceBundleName), let b = Bundle(url: url) { return b }
-        return Bundle.module
-    }
-
     static func digest(_ source: String) -> String {
         SHA256.hash(data: Data(source.utf8)).map { String(format: "%02x", $0) }.joined()
     }
 
     static func kernelSources() throws -> String {
-        guard let dir = resourceBundle().url(forResource: "Kernels", withExtension: nil) else {
+        guard let dir = EngineResources.bundle().url(forResource: "Kernels", withExtension: nil) else {
             throw EngineError.missingKernel("Kernels directory")
         }
         let files = try FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)

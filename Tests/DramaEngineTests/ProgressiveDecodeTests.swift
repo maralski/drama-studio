@@ -78,6 +78,7 @@ final class ProgressiveDecodeTests: XCTestCase {
         config.seed = 1
         config.streaming = .lowLatency(stepFrames: 16)
         config.maxRetries = 0
+        config.wordVerification = .uncheckedPreview
         let request = SpeechRequest(text: "The first sentence runs a while. The second one is here too.", config: config)
         var partials: [Int: [Float]] = [:]
         var finals: [Int: [Float]] = [:]

@@ -36,6 +36,7 @@ final class RecordingSynthesizer: SpeechSynthesizer, @unchecked Sendable {
                         case .audio(let samples, let index): continuation.yield(.audio(samples: samples.map { $0 * gain }, chunkIndex: index))
                         case .finished(var result):
                             result.samples = result.samples.map { $0 * gain }
+                            result.wordCoverage = request.config.wordVerification == .required ? .recognized : .unchecked
                             continuation.yield(.finished(result))
                         default: continuation.yield(event)
                         }
@@ -100,6 +101,120 @@ final class AppDirectingTests: XCTestCase {
         XCTAssertNil(session.sessionVoices[.surprise])
         await finish(session.generate, in: session)
         XCTAssertEqual(synthesizer.requests[2].previousTakes, [], "picking Surprise me again gives a fresh surprise")
+    }
+
+    func testUncheckedFirstTakeCannotAnchorANormalRetake() async throws {
+        let session = makeSession()
+        session.setVoice(.designed(design), forSpeaker: 0)
+        session.quickPreview = true
+        await finish(session.generate, in: session)
+        XCTAssertFalse(try XCTUnwrap(session.takes.last).wordsChecked)
+        XCTAssertTrue(session.sessionVoices.isEmpty)
+
+        session.quickPreview = false
+        await finish({ session.retake(note: "softer") }, in: session)
+        XCTAssertEqual(synthesizer.requests[1].previousTakes, [])
+        XCTAssertEqual(synthesizer.requests[1].character, design)
+        let checked = try XCTUnwrap(session.takes.last)
+        XCTAssertTrue(checked.wordsChecked)
+        XCTAssertEqual(session.sessionVoices[.designed(design)], checked.take)
+        await finish(session.generate, in: session)
+        XCTAssertEqual(synthesizer.requests[2].previousTakes, [checked.take])
+    }
+
+    func testUncheckedSectionCannotBecomeTheNextSectionsVoice() async throws {
+        let session = makeSession()
+        let document = NarrationDocument(title: "Cues", source: .text, segments: [
+            .init(index: 0, label: "First", text: "[gasps] The first door is open."),
+            .init(index: 1, label: "Second", text: "<slow>The second door is closed.</slow>"),
+            .init(index: 2, label: "Third", text: "Please wait for me outside.")
+        ])
+        session.open(document)
+        session.setVoice(.designed(design), forSpeaker: 0)
+        session.quickPreview = true
+        await finish({ session.narrateSection(document.segments[0].id) }, in: session)
+        XCTAssertTrue(session.sessionVoices.isEmpty)
+        XCTAssertFalse(try XCTUnwrap(session.chosenTake(for: document.segments[0].id)).wordsChecked)
+        session.quickPreview = false
+        await finish({ session.narrateSection(document.segments[1].id) }, in: session)
+        XCTAssertEqual(synthesizer.requests[1].previousTakes, [])
+        let checked = try XCTUnwrap(session.chosenTake(for: document.segments[1].id))
+        XCTAssertTrue(checked.wordsChecked)
+        await finish({ session.narrateSection(document.segments[2].id) }, in: session)
+        XCTAssertEqual(synthesizer.requests[2].previousTakes, [checked.take])
+    }
+
+    func testLegacyProjectPreservesAudioAndUnverifiedVoiceWithoutReusingThem() async throws {
+        let session = makeSession()
+        session.setVoice(.designed(design), forSpeaker: 0)
+        await finish(session.generate, in: session)
+        let original = try XCTUnwrap(session.takes.first)
+        let url = directory.appending(path: "Legacy.dramaproj")
+        XCTAssertTrue(session.saveProject(to: url))
+
+        let checked = makeSession()
+        XCTAssertTrue(checked.openProject(from: url))
+        XCTAssertTrue(try XCTUnwrap(checked.takes.first).wordsChecked)
+        XCTAssertEqual(checked.sessionVoices[.designed(design)], original.take)
+
+        let manifest = url.appending(path: "project.json")
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: manifest)) as? [String: Any])
+        var archive = try XCTUnwrap(json["archive"] as? [String: Any])
+        var voices = try XCTUnwrap(archive.removeValue(forKey: "recordedVoices") as? [Any])
+        for index in stride(from: 1, to: voices.count, by: 2) {
+            voices[index] = try XCTUnwrap((voices[index] as? [String: Any])?["take"])
+        }
+        archive["sessionVoices"] = voices
+        archive["plainTakes"] = try XCTUnwrap(archive["plainTakes"] as? [[String: Any]]).map { entry in
+            var entry = entry
+            entry.removeValue(forKey: "wordsChecked")
+            return entry
+        }
+        json["archive"] = archive
+        json["version"] = 2
+        try JSONSerialization.data(withJSONObject: json).write(to: manifest)
+
+        let restored = makeSession()
+        XCTAssertTrue(restored.openProject(from: url))
+        XCTAssertEqual(restored.takes.first?.samples, original.samples)
+        XCTAssertFalse(try XCTUnwrap(restored.takes.first).wordsChecked)
+        XCTAssertTrue(restored.sessionVoices.isEmpty)
+        let preserved = try XCTUnwrap(restored.projectSnapshot.project.archive?.recordedVoices?[.designed(design)])
+        XCTAssertEqual(preserved.take, original.take)
+        XCTAssertFalse(preserved.wordsChecked)
+        await finish(restored.generate, in: restored)
+        XCTAssertEqual(synthesizer.requests.last?.previousTakes, [])
+    }
+
+    func testNativeOnlyCheckedProjectKeepsAudioButDoesNotReuseItAsDualChecked() async throws {
+        let session = makeSession()
+        session.setVoice(.designed(design), forSpeaker: 0)
+        await finish(session.generate, in: session)
+        let original = try XCTUnwrap(session.takes.first)
+        let url = directory.appending(path: "NativeOnly.dramaproj")
+        XCTAssertTrue(session.saveProject(to: url))
+        let manifest = url.appending(path: "project.json")
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: manifest)) as? [String: Any])
+        var archive = try XCTUnwrap(json["archive"] as? [String: Any])
+        archive["plainTakes"] = try XCTUnwrap(archive["plainTakes"] as? [[String: Any]]).map { entry in
+            var entry = entry; entry.removeValue(forKey: "wordCheckRevision"); return entry
+        }
+        var voices = try XCTUnwrap(archive["recordedVoices"] as? [Any])
+        for index in stride(from: 1, to: voices.count, by: 2) {
+            var value = try XCTUnwrap(voices[index] as? [String: Any])
+            value.removeValue(forKey: "wordCheckRevision"); voices[index] = value
+        }
+        archive["recordedVoices"] = voices; json["archive"] = archive; json["version"] = 3
+        try JSONSerialization.data(withJSONObject: json).write(to: manifest)
+        let restored = makeSession()
+        XCTAssertTrue(restored.openProject(from: url))
+        let preserved = try XCTUnwrap(restored.takes.first)
+        XCTAssertEqual(preserved.samples, original.samples)
+        XCTAssertTrue(preserved.wordsChecked, "Preserve the historical native-only check.")
+        XCTAssertFalse(preserved.hasCurrentWordCheck)
+        XCTAssertTrue(restored.sessionVoices.isEmpty)
+        await finish(restored.generate, in: restored)
+        XCTAssertEqual(synthesizer.requests.last?.previousTakes, [])
     }
 
     func testDesignedVoiceSendsTheCharacterAndThenItsFirstTake() async {
@@ -252,6 +367,13 @@ final class AppDirectingTests: XCTestCase {
         XCTAssertTrue(session.audio.isEmpty, "trying a line leaves the transport alone")
         XCTAssertEqual(session.script, "[sighs] Once there was a lighthouse.")
         XCTAssertEqual(session.state, .idle)
+        let samples = session.auditionAudio
+        XCTAssertEqual(samples.count, audition.take.frameCount * ModelConstants.samplesPerFrame, "Each generated sample is queued once")
+        session.stopPreview()
+        session.replayAudition()
+        XCTAssertTrue(session.isPlayingAudition)
+        XCTAssertEqual(session.auditionAudio, samples)
+        XCTAssertEqual(synthesizer.requests.count, 1, "Play Again replays the same voice without generating again")
 
         session.useDesign(design, for: speaker)
         XCTAssertEqual(session.voice(for: speaker), .designed(design))
@@ -287,6 +409,74 @@ final class AppDirectingTests: XCTestCase {
         session.cancelAudition()
         XCTAssertFalse(session.state.isGenerating)
         XCTAssertNil(session.audition)
+    }
+
+    func testDesignPreviewUsesTheSameSettingsAsMainGeneration() async throws {
+        let duke = try XCTUnwrap(Examples.cast.first { $0.design.name == "The Duke" })
+        let session = makeSession(script: duke.line)
+        session.expressiveness = 0.75
+        session.quickPreview = false
+        await finish({ session.tryLine(duke.line, as: duke.design) }, in: session)
+        session.setVoice(.designed(duke.design), forSpeaker: 0)
+        await finish(session.generate, in: session)
+        let preview = synthesizer.requests[0]
+        let main = synthesizer.requests[1]
+        XCTAssertEqual(preview.text, main.text)
+        XCTAssertEqual(preview.character, main.character)
+        XCTAssertEqual(preview.config, main.config)
+        XCTAssertEqual(preview.previousTakes, main.previousTakes)
+        XCTAssertEqual(preview.references, main.references)
+    }
+
+    func testDesignPreviewChecksWordsEvenWhenTheMainQuickPreviewIsEnabled() async throws {
+        let session = makeSession()
+        session.quickPreview = true
+        session.expressiveness = 0.25
+        await finish({ session.tryLine("[gasps] Please keep the door closed.", as: design) }, in: session)
+        let sent = try XCTUnwrap(synthesizer.requests.last)
+        XCTAssertEqual(sent.config.wordVerification, .required)
+        XCTAssertEqual(sent.config.maxRetries, 5)
+        XCTAssertEqual(sent.config.minSpokenRatio, 0.6)
+        XCTAssertNil(sent.config.stopAfterSilenceSeconds)
+        XCTAssertEqual(sent.config.frameCap, .fromText(margin: 1.5, floorSeconds: 2))
+        XCTAssertEqual(sent.config.temperature, 0.6, accuracy: 0.001)
+        XCTAssertTrue(session.quickPreview)
+        XCTAssertEqual(session.config.wordVerification, .uncheckedPreview)
+    }
+
+    func testEveryVoicePresetUsesStructuredSpeakerIdentity() throws {
+        XCTAssertFalse(Examples.cast.isEmpty)
+        for preset in Examples.cast {
+            let prompt = try Drama3Prompt.render(text: preset.line, character: preset.design)
+            XCTAssertTrue(prompt.contains("<|im_start|>user\n<|speaker:0|>: " + preset.line), preset.design.name)
+            XCTAssertTrue(prompt.contains(preset.design.description), preset.design.name)
+            if let scene = preset.design.scene { XCTAssertTrue(prompt.contains(scene), preset.design.name) }
+            var renamed = preset.design
+            renamed.name = "A custom display name"
+            XCTAssertEqual(try Drama3Prompt.render(text: preset.line, character: renamed), prompt,
+                           "Renaming \(preset.design.name) must not change what the model speaks")
+        }
+    }
+
+    func testDesignPreviewPlaysBeforeTheWholeSampleFinishes() async throws {
+        let session = SessionModel(synthesizer: MockSynthesizer(pace: .init(loadSeconds: 0, framesPerSecond: 200)),
+                                   library: VoiceLibrary(directory: directory))
+        session.script = "Keep the editor unchanged."
+        let sample = "Hello there. " + String(repeating: "This second sentence takes longer to generate ", count: 8) + "."
+        session.tryLine(sample, as: design)
+        let deadline = Date().addingTimeInterval(5)
+        while session.isAuditioning && !session.isPlayingAudition && Date() < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(session.isPlayingAudition, "The first completed sentence should already be playing")
+        XCTAssertTrue(session.isAuditioning, "Playback must start before the rest of the sample finishes")
+        XCTAssertFalse(session.auditionAudio.isEmpty)
+        XCTAssertTrue(session.audio.isEmpty, "Preview audio must not replace the main transport")
+        XCTAssertTrue(session.takes.isEmpty)
+        XCTAssertEqual(session.script, "Keep the editor unchanged.")
+        session.cancelAudition()
+        XCTAssertFalse(session.isPlayingAudition)
+        XCTAssertTrue(session.auditionAudio.isEmpty)
     }
 
     func testCastPresetReplacesTheScriptAndDesignsTheNarrator() throws {

@@ -1,0 +1,6369 @@
+[
+  {
+    "key": "preset-captain--s1--complete",
+    "line": "[low and menacing] Ye want to know what's out past the reef? [pause] Pray ye never find out.",
+    "primary": {
+      "transcript": "Ye want to know what's out past the reef? Pray ye never find out.",
+      "spans": [
+        {
+          "text": "Ye",
+          "confidence": 0.91
+        },
+        {
+          "text": " want",
+          "confidence": 0.927
+        },
+        {
+          "text": " to",
+          "confidence": 0.999
+        },
+        {
+          "text": " know",
+          "confidence": 0.998
+        },
+        {
+          "text": " what's",
+          "confidence": 0.989
+        },
+        {
+          "text": " out",
+          "confidence": 0.995
+        },
+        {
+          "text": " past",
+          "confidence": 0.969
+        },
+        {
+          "text": " the",
+          "confidence": 0.997
+        },
+        {
+          "text": " reef?",
+          "confidence": 0.738
+        },
+        {
+          "text": " Pray ",
+          "confidence": 0.485
+        },
+        {
+          "text": "ye ",
+          "confidence": 0.994
+        },
+        {
+          "text": "never find ",
+          "confidence": 0.997
+        },
+        {
+          "text": "out.",
+          "confidence": 0.962
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "Ye want to know what's out past the reef? Pray ye never find out.",
+      "spans": [
+        {
+          "text": "Ye",
+          "confidence": 0.91
+        },
+        {
+          "text": " want",
+          "confidence": 0.927
+        },
+        {
+          "text": " to",
+          "confidence": 0.999
+        },
+        {
+          "text": " know",
+          "confidence": 0.998
+        },
+        {
+          "text": " what's",
+          "confidence": 0.989
+        },
+        {
+          "text": " out",
+          "confidence": 0.995
+        },
+        {
+          "text": " past",
+          "confidence": 0.969
+        },
+        {
+          "text": " the",
+          "confidence": 0.997
+        },
+        {
+          "text": " reef?",
+          "confidence": 0.738
+        },
+        {
+          "text": " Pray ",
+          "confidence": 0.485
+        },
+        {
+          "text": "ye ",
+          "confidence": 0.994
+        },
+        {
+          "text": "never ",
+          "confidence": 0.997
+        },
+        {
+          "text": "find ",
+          "confidence": 0.998
+        },
+        {
+          "text": "out.",
+          "confidence": 0.838
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "preset-captain--s1--before-last-word",
+    "line": "[low and menacing] Ye want to know what's out past the reef? [pause] Pray ye never find out.",
+    "primary": {
+      "transcript": "Ye want to know what's out past the reef? Pray ye never find.",
+      "spans": [
+        {
+          "text": "Ye",
+          "confidence": 0.914
+        },
+        {
+          "text": " want",
+          "confidence": 0.924
+        },
+        {
+          "text": " to",
+          "confidence": 0.999
+        },
+        {
+          "text": " know",
+          "confidence": 0.998
+        },
+        {
+          "text": " what's",
+          "confidence": 0.99
+        },
+        {
+          "text": " out",
+          "confidence": 0.995
+        },
+        {
+          "text": " past",
+          "confidence": 0.969
+        },
+        {
+          "text": " the",
+          "confidence": 0.997
+        },
+        {
+          "text": " reef?",
+          "confidence": 0.74
+        },
+        {
+          "text": " Pray ",
+          "confidence": 0.491
+        },
+        {
+          "text": "ye ",
+          "confidence": 0.994
+        },
+        {
+          "text": "never ",
+          "confidence": 0.997
+        },
+        {
+          "text": "find.",
+          "confidence": 0.716
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "Ye want to know what's out past the reef? Pray ye never find.",
+      "spans": [
+        {
+          "text": "Ye",
+          "confidence": 0.908
+        },
+        {
+          "text": " want",
+          "confidence": 0.93
+        },
+        {
+          "text": " to",
+          "confidence": 0.999
+        },
+        {
+          "text": " know",
+          "confidence": 0.998
+        },
+        {
+          "text": " what's",
+          "confidence": 0.99
+        },
+        {
+          "text": " out",
+          "confidence": 0.995
+        },
+        {
+          "text": " past",
+          "confidence": 0.969
+        },
+        {
+          "text": " the",
+          "confidence": 0.997
+        },
+        {
+          "text": " reef?",
+          "confidence": 0.749
+        },
+        {
+          "text": " Pray ",
+          "confidence": 0.512
+        },
+        {
+          "text": "ye ",
+          "confidence": 0.994
+        },
+        {
+          "text": "never ",
+          "confidence": 0.997
+        },
+        {
+          "text": "find.",
+          "confidence": 0.769
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "preset-captain--s1--quarter-last-word",
+    "line": "[low and menacing] Ye want to know what's out past the reef? [pause] Pray ye never find out.",
+    "primary": {
+      "transcript": "Ye want to know what's out past the reef? Pray ye never find.",
+      "spans": [
+        {
+          "text": "Ye",
+          "confidence": 0.91
+        },
+        {
+          "text": " want",
+          "confidence": 0.927
+        },
+        {
+          "text": " to",
+          "confidence": 0.999
+        },
+        {
+          "text": " know",
+          "confidence": 0.998
+        },
+        {
+          "text": " what's",
+          "confidence": 0.989
+        },
+        {
+          "text": " out",
+          "confidence": 0.995
+        },
+        {
+          "text": " past",
+          "confidence": 0.969
+        },
+        {
+          "text": " the",
+          "confidence": 0.997
+        },
+        {
+          "text": " reef?",
+          "confidence": 0.738
+        },
+        {
+          "text": " Pray ",
+          "confidence": 0.485
+        },
+        {
+          "text": "ye ",
+          "confidence": 0.994
+        },
+        {
+          "text": "never ",
+          "confidence": 0.997
+        },
+        {
+          "text": "find.",
+          "confidence": 0.886
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "Ye want to know what's out past the reef? Pray ye never find.",
+      "spans": [
+        {
+          "text": "Ye",
+          "confidence": 0.91
+        },
+        {
+          "text": " want",
+          "confidence": 0.927
+        },
+        {
+          "text": " to",
+          "confidence": 0.999
+        },
+        {
+          "text": " know",
+          "confidence": 0.998
+        },
+        {
+          "text": " what's",
+          "confidence": 0.989
+        },
+        {
+          "text": " out",
+          "confidence": 0.995
+        },
+        {
+          "text": " past",
+          "confidence": 0.969
+        },
+        {
+          "text": " the",
+          "confidence": 0.997
+        },
+        {
+          "text": " reef?",
+          "confidence": 0.738
+        },
+        {
+          "text": " Pray ",
+          "confidence": 0.485
+        },
+        {
+          "text": "ye ",
+          "confidence": 0.994
+        },
+        {
+          "text": "never ",
+          "confidence": 0.997
+        },
+        {
+          "text": "find.",
+          "confidence": 0.93
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "preset-captain--s1--half-last-word",
+    "line": "[low and menacing] Ye want to know what's out past the reef? [pause] Pray ye never find out.",
+    "primary": {
+      "transcript": "Ye want to know what's out past the reef? Pray ye never find.",
+      "spans": [
+        {
+          "text": "Ye",
+          "confidence": 0.91
+        },
+        {
+          "text": " want",
+          "confidence": 0.927
+        },
+        {
+          "text": " to",
+          "confidence": 0.999
+        },
+        {
+          "text": " know",
+          "confidence": 0.998
+        },
+        {
+          "text": " what's",
+          "confidence": 0.989
+        },
+        {
+          "text": " out",
+          "confidence": 0.995
+        },
+        {
+          "text": " past",
+          "confidence": 0.969
+        },
+        {
+          "text": " the",
+          "confidence": 0.997
+        },
+        {
+          "text": " reef?",
+          "confidence": 0.738
+        },
+        {
+          "text": " Pray ",
+          "confidence": 0.485
+        },
+        {
+          "text": "ye ",
+          "confidence": 0.994
+        },
+        {
+          "text": "never ",
+          "confidence": 0.997
+        },
+        {
+          "text": "find.",
+          "confidence": 0.93
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "Ye want to know what's out past the reef? Pray ye never find out.",
+      "spans": [
+        {
+          "text": "Ye",
+          "confidence": 0.91
+        },
+        {
+          "text": " want",
+          "confidence": 0.927
+        },
+        {
+          "text": " to",
+          "confidence": 0.999
+        },
+        {
+          "text": " know",
+          "confidence": 0.998
+        },
+        {
+          "text": " what's",
+          "confidence": 0.989
+        },
+        {
+          "text": " out",
+          "confidence": 0.995
+        },
+        {
+          "text": " past",
+          "confidence": 0.969
+        },
+        {
+          "text": " the",
+          "confidence": 0.997
+        },
+        {
+          "text": " reef?",
+          "confidence": 0.738
+        },
+        {
+          "text": " Pray ",
+          "confidence": 0.485
+        },
+        {
+          "text": "ye ",
+          "confidence": 0.994
+        },
+        {
+          "text": "never ",
+          "confidence": 0.997
+        },
+        {
+          "text": "find ",
+          "confidence": 0.994
+        },
+        {
+          "text": "out.",
+          "confidence": 0.965
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "preset-captain--s1--three-quarter-last-word",
+    "line": "[low and menacing] Ye want to know what's out past the reef? [pause] Pray ye never find out.",
+    "primary": {
+      "transcript": "Ye want to know what's out past the reef? Pray ye never find out.",
+      "spans": [
+        {
+          "text": "Ye",
+          "confidence": 0.91
+        },
+        {
+          "text": " want",
+          "confidence": 0.927
+        },
+        {
+          "text": " to",
+          "confidence": 0.999
+        },
+        {
+          "text": " know",
+          "confidence": 0.998
+        },
+        {
+          "text": " what's",
+          "confidence": 0.989
+        },
+        {
+          "text": " out",
+          "confidence": 0.995
+        },
+        {
+          "text": " past",
+          "confidence": 0.969
+        },
+        {
+          "text": " the",
+          "confidence": 0.997
+        },
+        {
+          "text": " reef?",
+          "confidence": 0.738
+        },
+        {
+          "text": " Pray ",
+          "confidence": 0.485
+        },
+        {
+          "text": "ye ",
+          "confidence": 0.994
+        },
+        {
+          "text": "never ",
+          "confidence": 0.997
+        },
+        {
+          "text": "find ",
+          "confidence": 0.998
+        },
+        {
+          "text": "out.",
+          "confidence": 0.968
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "Ye want to know what's out past the reef? Pray ye never find out.",
+      "spans": [
+        {
+          "text": "Ye",
+          "confidence": 0.91
+        },
+        {
+          "text": " want",
+          "confidence": 0.927
+        },
+        {
+          "text": " to",
+          "confidence": 0.999
+        },
+        {
+          "text": " know",
+          "confidence": 0.998
+        },
+        {
+          "text": " what's",
+          "confidence": 0.989
+        },
+        {
+          "text": " out",
+          "confidence": 0.995
+        },
+        {
+          "text": " past",
+          "confidence": 0.969
+        },
+        {
+          "text": " the",
+          "confidence": 0.997
+        },
+        {
+          "text": " reef?",
+          "confidence": 0.738
+        },
+        {
+          "text": " Pray ",
+          "confidence": 0.485
+        },
+        {
+          "text": "ye ",
+          "confidence": 0.994
+        },
+        {
+          "text": "never ",
+          "confidence": 0.997
+        },
+        {
+          "text": "find ",
+          "confidence": 0.998
+        },
+        {
+          "text": "out.",
+          "confidence": 0.973
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "preset-night-owl--s1--complete",
+    "line": "It's two in the morning, and if you're still awake, [chuckles] you're in good company. <slow>This next one goes out to the night drivers.</slow>",
+    "primary": {
+      "transcript": "It's 2 in the morning, and if you're still awake, you're in good company. This next one goes out to the night drivers.",
+      "spans": [
+        {
+          "text": "It's",
+          "confidence": 0.994
+        },
+        {
+          "text": " 2",
+          "confidence": 0.956
+        },
+        {
+          "text": " in",
+          "confidence": 0.998
+        },
+        {
+          "text": " the",
+          "confidence": 0.999
+        },
+        {
+          "text": " morning,",
+          "confidence": 0.653
+        },
+        {
+          "text": " and",
+          "confidence": 0.985
+        },
+        {
+          "text": " if",
+          "confidence": 0.998
+        },
+        {
+          "text": " you're",
+          "confidence": 0.991
+        },
+        {
+          "text": " still",
+          "confidence": 0.999
+        },
+        {
+          "text": " awake,",
+          "confidence": 0.949
+        },
+        {
+          "text": " you're",
+          "confidence": 0.977
+        },
+        {
+          "text": " in good",
+          "confidence": 0.999
+        },
+        {
+          "text": " company.",
+          "confidence": 0.964
+        },
+        {
+          "text": " This ",
+          "confidence": 0.871
+        },
+        {
+          "text": "next one ",
+          "confidence": 0.999
+        },
+        {
+          "text": "goes ",
+          "confidence": 1.0
+        },
+        {
+          "text": "out to ",
+          "confidence": 0.999
+        },
+        {
+          "text": "the ",
+          "confidence": 0.998
+        },
+        {
+          "text": "night ",
+          "confidence": 0.963
+        },
+        {
+          "text": "drivers.",
+          "confidence": 0.978
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "It's 2 in the morning, and if you're still awake, you're in good company. This next one goes out to the night drivers.",
+      "spans": [
+        {
+          "text": "It's",
+          "confidence": 0.994
+        },
+        {
+          "text": " 2",
+          "confidence": 0.956
+        },
+        {
+          "text": " in",
+          "confidence": 0.998
+        },
+        {
+          "text": " the",
+          "confidence": 0.999
+        },
+        {
+          "text": " morning,",
+          "confidence": 0.653
+        },
+        {
+          "text": " and",
+          "confidence": 0.985
+        },
+        {
+          "text": " if",
+          "confidence": 0.998
+        },
+        {
+          "text": " you're",
+          "confidence": 0.991
+        },
+        {
+          "text": " still",
+          "confidence": 0.999
+        },
+        {
+          "text": " awake,",
+          "confidence": 0.949
+        },
+        {
+          "text": " you're",
+          "confidence": 0.977
+        },
+        {
+          "text": " in good",
+          "confidence": 0.999
+        },
+        {
+          "text": " company.",
+          "confidence": 0.966
+        },
+        {
+          "text": " This ",
+          "confidence": 0.878
+        },
+        {
+          "text": "next one ",
+          "confidence": 0.999
+        },
+        {
+          "text": "goes ",
+          "confidence": 1.0
+        },
+        {
+          "text": "out to ",
+          "confidence": 0.999
+        },
+        {
+          "text": "the ",
+          "confidence": 0.998
+        },
+        {
+          "text": "night ",
+          "confidence": 0.967
+        },
+        {
+          "text": "drivers.",
+          "confidence": 0.972
+        }
+      ]
+    },
+    "expectedPrimary": true,
+    "expectedEligible": false,
+    "expectedCandidate": true
+  },
+  {
+    "key": "preset-night-owl--s1--before-last-word",
+    "line": "It's two in the morning, and if you're still awake, [chuckles] you're in good company. <slow>This next one goes out to the night drivers.</slow>",
+    "primary": {
+      "transcript": "It's 2 in the morning, and if you're still awake, you're in good company. This next one goes out to the night.",
+      "spans": [
+        {
+          "text": "It's",
+          "confidence": 0.994
+        },
+        {
+          "text": " 2",
+          "confidence": 0.956
+        },
+        {
+          "text": " in",
+          "confidence": 0.998
+        },
+        {
+          "text": " the",
+          "confidence": 0.999
+        },
+        {
+          "text": " morning,",
+          "confidence": 0.653
+        },
+        {
+          "text": " and",
+          "confidence": 0.985
+        },
+        {
+          "text": " if",
+          "confidence": 0.998
+        },
+        {
+          "text": " you're",
+          "confidence": 0.991
+        },
+        {
+          "text": " still",
+          "confidence": 0.999
+        },
+        {
+          "text": " awake,",
+          "confidence": 0.949
+        },
+        {
+          "text": " you're",
+          "confidence": 0.977
+        },
+        {
+          "text": " in good",
+          "confidence": 0.999
+        },
+        {
+          "text": " company.",
+          "confidence": 0.958
+        },
+        {
+          "text": " This ",
+          "confidence": 0.852
+        },
+        {
+          "text": "next one goes ",
+          "confidence": 0.999
+        },
+        {
+          "text": "out ",
+          "confidence": 0.998
+        },
+        {
+          "text": "to ",
+          "confidence": 0.994
+        },
+        {
+          "text": "the ",
+          "confidence": 0.977
+        },
+        {
+          "text": "night.",
+          "confidence": 0.452
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "It's 2 in the morning, and if you're still awake, you're in good company. This next one goes out to the night.",
+      "spans": [
+        {
+          "text": "It's",
+          "confidence": 0.994
+        },
+        {
+          "text": " 2",
+          "confidence": 0.956
+        },
+        {
+          "text": " in",
+          "confidence": 0.998
+        },
+        {
+          "text": " the",
+          "confidence": 0.999
+        },
+        {
+          "text": " morning,",
+          "confidence": 0.653
+        },
+        {
+          "text": " and",
+          "confidence": 0.985
+        },
+        {
+          "text": " if",
+          "confidence": 0.998
+        },
+        {
+          "text": " you're",
+          "confidence": 0.991
+        },
+        {
+          "text": " still",
+          "confidence": 0.999
+        },
+        {
+          "text": " awake,",
+          "confidence": 0.949
+        },
+        {
+          "text": " you're",
+          "confidence": 0.977
+        },
+        {
+          "text": " in good",
+          "confidence": 0.999
+        },
+        {
+          "text": " company.",
+          "confidence": 0.959
+        },
+        {
+          "text": " This ",
+          "confidence": 0.855
+        },
+        {
+          "text": "next one goes ",
+          "confidence": 0.999
+        },
+        {
+          "text": "out ",
+          "confidence": 0.998
+        },
+        {
+          "text": "to ",
+          "confidence": 0.994
+        },
+        {
+          "text": "the ",
+          "confidence": 0.983
+        },
+        {
+          "text": "night.",
+          "confidence": 0.752
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "preset-night-owl--s1--quarter-last-word",
+    "line": "It's two in the morning, and if you're still awake, [chuckles] you're in good company. <slow>This next one goes out to the night drivers.</slow>",
+    "primary": {
+      "transcript": "It's 2 in the morning, and if you're still awake, you're in good company. This next one goes out to the night.",
+      "spans": [
+        {
+          "text": "It's",
+          "confidence": 0.994
+        },
+        {
+          "text": " 2",
+          "confidence": 0.956
+        },
+        {
+          "text": " in",
+          "confidence": 0.998
+        },
+        {
+          "text": " the",
+          "confidence": 0.999
+        },
+        {
+          "text": " morning,",
+          "confidence": 0.653
+        },
+        {
+          "text": " and",
+          "confidence": 0.985
+        },
+        {
+          "text": " if",
+          "confidence": 0.998
+        },
+        {
+          "text": " you're",
+          "confidence": 0.991
+        },
+        {
+          "text": " still",
+          "confidence": 0.999
+        },
+        {
+          "text": " awake,",
+          "confidence": 0.949
+        },
+        {
+          "text": " you're",
+          "confidence": 0.977
+        },
+        {
+          "text": " in good",
+          "confidence": 0.999
+        },
+        {
+          "text": " company.",
+          "confidence": 0.961
+        },
+        {
+          "text": " This ",
+          "confidence": 0.857
+        },
+        {
+          "text": "next one goes out ",
+          "confidence": 0.999
+        },
+        {
+          "text": "to ",
+          "confidence": 0.998
+        },
+        {
+          "text": "the ",
+          "confidence": 0.996
+        },
+        {
+          "text": "night.",
+          "confidence": 0.897
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "It's 2 in the morning, and if you're still awake, you're in good company. This next one goes out to the nitro.",
+      "spans": [
+        {
+          "text": "It's",
+          "confidence": 0.994
+        },
+        {
+          "text": " 2",
+          "confidence": 0.956
+        },
+        {
+          "text": " in",
+          "confidence": 0.998
+        },
+        {
+          "text": " the",
+          "confidence": 0.999
+        },
+        {
+          "text": " morning,",
+          "confidence": 0.653
+        },
+        {
+          "text": " and",
+          "confidence": 0.985
+        },
+        {
+          "text": " if",
+          "confidence": 0.998
+        },
+        {
+          "text": " you're",
+          "confidence": 0.991
+        },
+        {
+          "text": " still",
+          "confidence": 0.999
+        },
+        {
+          "text": " awake,",
+          "confidence": 0.949
+        },
+        {
+          "text": " you're",
+          "confidence": 0.977
+        },
+        {
+          "text": " in good",
+          "confidence": 0.999
+        },
+        {
+          "text": " company.",
+          "confidence": 0.964
+        },
+        {
+          "text": " This ",
+          "confidence": 0.867
+        },
+        {
+          "text": "next one ",
+          "confidence": 0.999
+        },
+        {
+          "text": "goes ",
+          "confidence": 1.0
+        },
+        {
+          "text": "out ",
+          "confidence": 0.999
+        },
+        {
+          "text": "to ",
+          "confidence": 0.998
+        },
+        {
+          "text": "the ",
+          "confidence": 0.996
+        },
+        {
+          "text": "nitro.",
+          "confidence": 0.679
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "preset-night-owl--s1--half-last-word",
+    "line": "It's two in the morning, and if you're still awake, [chuckles] you're in good company. <slow>This next one goes out to the night drivers.</slow>",
+    "primary": {
+      "transcript": "It's 2 in the morning, and if you're still awake, you're in good company. This next one goes out to the night driver.",
+      "spans": [
+        {
+          "text": "It's",
+          "confidence": 0.994
+        },
+        {
+          "text": " 2",
+          "confidence": 0.956
+        },
+        {
+          "text": " in",
+          "confidence": 0.998
+        },
+        {
+          "text": " the",
+          "confidence": 0.999
+        },
+        {
+          "text": " morning,",
+          "confidence": 0.653
+        },
+        {
+          "text": " and",
+          "confidence": 0.985
+        },
+        {
+          "text": " if",
+          "confidence": 0.998
+        },
+        {
+          "text": " you're",
+          "confidence": 0.991
+        },
+        {
+          "text": " still",
+          "confidence": 0.999
+        },
+        {
+          "text": " awake,",
+          "confidence": 0.949
+        },
+        {
+          "text": " you're",
+          "confidence": 0.977
+        },
+        {
+          "text": " in good",
+          "confidence": 0.999
+        },
+        {
+          "text": " company.",
+          "confidence": 0.962
+        },
+        {
+          "text": " This ",
+          "confidence": 0.86
+        },
+        {
+          "text": "next one goes out ",
+          "confidence": 0.999
+        },
+        {
+          "text": "to ",
+          "confidence": 0.998
+        },
+        {
+          "text": "the ",
+          "confidence": 0.997
+        },
+        {
+          "text": "night ",
+          "confidence": 0.946
+        },
+        {
+          "text": "driver.",
+          "confidence": 0.634
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "It's 2 in the morning, and if you're still awake, you're in good company. This next one goes out to the night drive.",
+      "spans": [
+        {
+          "text": "It's",
+          "confidence": 0.994
+        },
+        {
+          "text": " 2",
+          "confidence": 0.956
+        },
+        {
+          "text": " in",
+          "confidence": 0.998
+        },
+        {
+          "text": " the",
+          "confidence": 0.999
+        },
+        {
+          "text": " morning,",
+          "confidence": 0.653
+        },
+        {
+          "text": " and",
+          "confidence": 0.985
+        },
+        {
+          "text": " if",
+          "confidence": 0.998
+        },
+        {
+          "text": " you're",
+          "confidence": 0.991
+        },
+        {
+          "text": " still",
+          "confidence": 0.999
+        },
+        {
+          "text": " awake,",
+          "confidence": 0.949
+        },
+        {
+          "text": " you're",
+          "confidence": 0.977
+        },
+        {
+          "text": " in good",
+          "confidence": 0.999
+        },
+        {
+          "text": " company.",
+          "confidence": 0.962
+        },
+        {
+          "text": " This ",
+          "confidence": 0.865
+        },
+        {
+          "text": "next one goes out ",
+          "confidence": 0.999
+        },
+        {
+          "text": "to ",
+          "confidence": 0.998
+        },
+        {
+          "text": "the ",
+          "confidence": 0.997
+        },
+        {
+          "text": "night ",
+          "confidence": 0.971
+        },
+        {
+          "text": "drive.",
+          "confidence": 0.734
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "preset-night-owl--s1--three-quarter-last-word",
+    "line": "It's two in the morning, and if you're still awake, [chuckles] you're in good company. <slow>This next one goes out to the night drivers.</slow>",
+    "primary": {
+      "transcript": "It's 2 in the morning, and if you're still awake, you're in good company. This next one goes out to the night driver.",
+      "spans": [
+        {
+          "text": "It's",
+          "confidence": 0.994
+        },
+        {
+          "text": " 2",
+          "confidence": 0.956
+        },
+        {
+          "text": " in",
+          "confidence": 0.998
+        },
+        {
+          "text": " the",
+          "confidence": 0.999
+        },
+        {
+          "text": " morning,",
+          "confidence": 0.653
+        },
+        {
+          "text": " and",
+          "confidence": 0.985
+        },
+        {
+          "text": " if",
+          "confidence": 0.998
+        },
+        {
+          "text": " you're",
+          "confidence": 0.991
+        },
+        {
+          "text": " still",
+          "confidence": 0.999
+        },
+        {
+          "text": " awake,",
+          "confidence": 0.949
+        },
+        {
+          "text": " you're",
+          "confidence": 0.977
+        },
+        {
+          "text": " in good",
+          "confidence": 0.999
+        },
+        {
+          "text": " company.",
+          "confidence": 0.962
+        },
+        {
+          "text": " This ",
+          "confidence": 0.861
+        },
+        {
+          "text": "next one ",
+          "confidence": 0.999
+        },
+        {
+          "text": "goes ",
+          "confidence": 1.0
+        },
+        {
+          "text": "out to ",
+          "confidence": 0.999
+        },
+        {
+          "text": "the ",
+          "confidence": 0.998
+        },
+        {
+          "text": "night ",
+          "confidence": 0.957
+        },
+        {
+          "text": "driver.",
+          "confidence": 0.674
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "It's 2 in the morning, and if you're still awake, you're in good company. This next one goes out to the night driver.",
+      "spans": [
+        {
+          "text": "It's",
+          "confidence": 0.994
+        },
+        {
+          "text": " 2",
+          "confidence": 0.956
+        },
+        {
+          "text": " in",
+          "confidence": 0.998
+        },
+        {
+          "text": " the",
+          "confidence": 0.999
+        },
+        {
+          "text": " morning,",
+          "confidence": 0.653
+        },
+        {
+          "text": " and",
+          "confidence": 0.985
+        },
+        {
+          "text": " if",
+          "confidence": 0.998
+        },
+        {
+          "text": " you're",
+          "confidence": 0.991
+        },
+        {
+          "text": " still",
+          "confidence": 0.999
+        },
+        {
+          "text": " awake,",
+          "confidence": 0.949
+        },
+        {
+          "text": " you're",
+          "confidence": 0.977
+        },
+        {
+          "text": " in good",
+          "confidence": 0.999
+        },
+        {
+          "text": " company.",
+          "confidence": 0.965
+        },
+        {
+          "text": " This ",
+          "confidence": 0.872
+        },
+        {
+          "text": "next one ",
+          "confidence": 0.999
+        },
+        {
+          "text": "goes ",
+          "confidence": 1.0
+        },
+        {
+          "text": "out to ",
+          "confidence": 0.999
+        },
+        {
+          "text": "the ",
+          "confidence": 0.998
+        },
+        {
+          "text": "night ",
+          "confidence": 0.951
+        },
+        {
+          "text": "driver.",
+          "confidence": 0.866
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "preset-mia--s1--complete",
+    "line": "[with bright eager excitement] Guess what, guess what! [laughs] I found a frog in the garden and his name is Mister Hops!",
+    "primary": {
+      "transcript": "Guess what? Guess what? I found a frog in the garden, and his name is Mr. Hops.",
+      "spans": [
+        {
+          "text": "Guess",
+          "confidence": 0.961
+        },
+        {
+          "text": " what?",
+          "confidence": 0.846
+        },
+        {
+          "text": " Guess ",
+          "confidence": 0.664
+        },
+        {
+          "text": "what?",
+          "confidence": 0.863
+        },
+        {
+          "text": " I ",
+          "confidence": 0.995
+        },
+        {
+          "text": "found ",
+          "confidence": 0.997
+        },
+        {
+          "text": "a ",
+          "confidence": 0.996
+        },
+        {
+          "text": "frog ",
+          "confidence": 0.839
+        },
+        {
+          "text": "in the ",
+          "confidence": 0.998
+        },
+        {
+          "text": "garden, ",
+          "confidence": 0.653
+        },
+        {
+          "text": "and ",
+          "confidence": 0.792
+        },
+        {
+          "text": "his ",
+          "confidence": 0.982
+        },
+        {
+          "text": "name ",
+          "confidence": 0.998
+        },
+        {
+          "text": "is ",
+          "confidence": 0.994
+        },
+        {
+          "text": "Mr. ",
+          "confidence": 0.935
+        },
+        {
+          "text": "Hops.",
+          "confidence": 0.88
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "Guess what? Guess what? I found a frog in the garden, and his name is Mr. Hops.",
+      "spans": [
+        {
+          "text": "Guess",
+          "confidence": 0.961
+        },
+        {
+          "text": " what?",
+          "confidence": 0.846
+        },
+        {
+          "text": " Guess ",
+          "confidence": 0.664
+        },
+        {
+          "text": "what?",
+          "confidence": 0.863
+        },
+        {
+          "text": " I ",
+          "confidence": 0.995
+        },
+        {
+          "text": "found ",
+          "confidence": 0.997
+        },
+        {
+          "text": "a ",
+          "confidence": 0.996
+        },
+        {
+          "text": "frog ",
+          "confidence": 0.839
+        },
+        {
+          "text": "in the ",
+          "confidence": 0.998
+        },
+        {
+          "text": "garden, ",
+          "confidence": 0.653
+        },
+        {
+          "text": "and ",
+          "confidence": 0.792
+        },
+        {
+          "text": "his ",
+          "confidence": 0.982
+        },
+        {
+          "text": "name ",
+          "confidence": 0.998
+        },
+        {
+          "text": "is ",
+          "confidence": 0.994
+        },
+        {
+          "text": "Mr. ",
+          "confidence": 0.94
+        },
+        {
+          "text": "Hops.",
+          "confidence": 0.887
+        }
+      ]
+    },
+    "expectedPrimary": true,
+    "expectedEligible": false,
+    "expectedCandidate": true
+  },
+  {
+    "key": "preset-mia--s1--before-last-word",
+    "line": "[with bright eager excitement] Guess what, guess what! [laughs] I found a frog in the garden and his name is Mister Hops!",
+    "primary": {
+      "transcript": "Guess what? Guess what? I found a frog in the garden, and his name is Mr. Hut.",
+      "spans": [
+        {
+          "text": "Guess",
+          "confidence": 0.961
+        },
+        {
+          "text": " what?",
+          "confidence": 0.846
+        },
+        {
+          "text": " Guess ",
+          "confidence": 0.664
+        },
+        {
+          "text": "what?",
+          "confidence": 0.863
+        },
+        {
+          "text": " I ",
+          "confidence": 0.995
+        },
+        {
+          "text": "found ",
+          "confidence": 0.997
+        },
+        {
+          "text": "a ",
+          "confidence": 0.996
+        },
+        {
+          "text": "frog ",
+          "confidence": 0.839
+        },
+        {
+          "text": "in the ",
+          "confidence": 0.998
+        },
+        {
+          "text": "garden, ",
+          "confidence": 0.653
+        },
+        {
+          "text": "and ",
+          "confidence": 0.792
+        },
+        {
+          "text": "his ",
+          "confidence": 0.982
+        },
+        {
+          "text": "name ",
+          "confidence": 0.998
+        },
+        {
+          "text": "is ",
+          "confidence": 0.994
+        },
+        {
+          "text": "Mr. ",
+          "confidence": 0.899
+        },
+        {
+          "text": "Hut.",
+          "confidence": 0.426
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "Guess what? Guess what? I found a frog in the garden, and his name is Mr. Ho...",
+      "spans": [
+        {
+          "text": "Guess",
+          "confidence": 0.961
+        },
+        {
+          "text": " what?",
+          "confidence": 0.846
+        },
+        {
+          "text": " Guess ",
+          "confidence": 0.664
+        },
+        {
+          "text": "what?",
+          "confidence": 0.863
+        },
+        {
+          "text": " I ",
+          "confidence": 0.995
+        },
+        {
+          "text": "found ",
+          "confidence": 0.997
+        },
+        {
+          "text": "a ",
+          "confidence": 0.996
+        },
+        {
+          "text": "frog ",
+          "confidence": 0.839
+        },
+        {
+          "text": "in the ",
+          "confidence": 0.998
+        },
+        {
+          "text": "garden, ",
+          "confidence": 0.653
+        },
+        {
+          "text": "and ",
+          "confidence": 0.792
+        },
+        {
+          "text": "his ",
+          "confidence": 0.982
+        },
+        {
+          "text": "name ",
+          "confidence": 0.998
+        },
+        {
+          "text": "is ",
+          "confidence": 0.994
+        },
+        {
+          "text": "Mr. ",
+          "confidence": 0.87
+        },
+        {
+          "text": "Ho...",
+          "confidence": 0.381
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "preset-mia--s1--quarter-last-word",
+    "line": "[with bright eager excitement] Guess what, guess what! [laughs] I found a frog in the garden and his name is Mister Hops!",
+    "primary": {
+      "transcript": "Guess what? Guess what? I found a frog in the garden, and his name is Mr. Hop.",
+      "spans": [
+        {
+          "text": "Guess",
+          "confidence": 0.961
+        },
+        {
+          "text": " what?",
+          "confidence": 0.846
+        },
+        {
+          "text": " Guess ",
+          "confidence": 0.664
+        },
+        {
+          "text": "what?",
+          "confidence": 0.863
+        },
+        {
+          "text": " I ",
+          "confidence": 0.995
+        },
+        {
+          "text": "found ",
+          "confidence": 0.997
+        },
+        {
+          "text": "a ",
+          "confidence": 0.996
+        },
+        {
+          "text": "frog ",
+          "confidence": 0.839
+        },
+        {
+          "text": "in the ",
+          "confidence": 0.998
+        },
+        {
+          "text": "garden, ",
+          "confidence": 0.653
+        },
+        {
+          "text": "and ",
+          "confidence": 0.792
+        },
+        {
+          "text": "his ",
+          "confidence": 0.982
+        },
+        {
+          "text": "name ",
+          "confidence": 0.998
+        },
+        {
+          "text": "is ",
+          "confidence": 0.994
+        },
+        {
+          "text": "Mr. ",
+          "confidence": 0.92
+        },
+        {
+          "text": "Hop.",
+          "confidence": 0.638
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "Guess what? Guess what? I found a frog in the garden, and his name is Mr. Hop.",
+      "spans": [
+        {
+          "text": "Guess",
+          "confidence": 0.961
+        },
+        {
+          "text": " what?",
+          "confidence": 0.846
+        },
+        {
+          "text": " Guess ",
+          "confidence": 0.664
+        },
+        {
+          "text": "what?",
+          "confidence": 0.863
+        },
+        {
+          "text": " I ",
+          "confidence": 0.995
+        },
+        {
+          "text": "found ",
+          "confidence": 0.997
+        },
+        {
+          "text": "a ",
+          "confidence": 0.996
+        },
+        {
+          "text": "frog ",
+          "confidence": 0.839
+        },
+        {
+          "text": "in the ",
+          "confidence": 0.998
+        },
+        {
+          "text": "garden, ",
+          "confidence": 0.653
+        },
+        {
+          "text": "and ",
+          "confidence": 0.792
+        },
+        {
+          "text": "his ",
+          "confidence": 0.982
+        },
+        {
+          "text": "name ",
+          "confidence": 0.998
+        },
+        {
+          "text": "is ",
+          "confidence": 0.994
+        },
+        {
+          "text": "Mr. ",
+          "confidence": 0.926
+        },
+        {
+          "text": "Hop.",
+          "confidence": 0.737
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "preset-mia--s1--half-last-word",
+    "line": "[with bright eager excitement] Guess what, guess what! [laughs] I found a frog in the garden and his name is Mister Hops!",
+    "primary": {
+      "transcript": "Guess what? Guess what? I found a frog in the garden, and his name is Mr. Hop.",
+      "spans": [
+        {
+          "text": "Guess",
+          "confidence": 0.961
+        },
+        {
+          "text": " what?",
+          "confidence": 0.846
+        },
+        {
+          "text": " Guess ",
+          "confidence": 0.664
+        },
+        {
+          "text": "what?",
+          "confidence": 0.863
+        },
+        {
+          "text": " I ",
+          "confidence": 0.995
+        },
+        {
+          "text": "found ",
+          "confidence": 0.997
+        },
+        {
+          "text": "a ",
+          "confidence": 0.996
+        },
+        {
+          "text": "frog ",
+          "confidence": 0.839
+        },
+        {
+          "text": "in the ",
+          "confidence": 0.998
+        },
+        {
+          "text": "garden, ",
+          "confidence": 0.653
+        },
+        {
+          "text": "and ",
+          "confidence": 0.792
+        },
+        {
+          "text": "his ",
+          "confidence": 0.982
+        },
+        {
+          "text": "name ",
+          "confidence": 0.998
+        },
+        {
+          "text": "is ",
+          "confidence": 0.994
+        },
+        {
+          "text": "Mr. ",
+          "confidence": 0.92
+        },
+        {
+          "text": "Hop.",
+          "confidence": 0.69
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "Guess what? Guess what? I found a frog in the garden, and his name is Mr. Hop.",
+      "spans": [
+        {
+          "text": "Guess",
+          "confidence": 0.961
+        },
+        {
+          "text": " what?",
+          "confidence": 0.846
+        },
+        {
+          "text": " Guess ",
+          "confidence": 0.664
+        },
+        {
+          "text": "what?",
+          "confidence": 0.863
+        },
+        {
+          "text": " I ",
+          "confidence": 0.995
+        },
+        {
+          "text": "found ",
+          "confidence": 0.997
+        },
+        {
+          "text": "a ",
+          "confidence": 0.996
+        },
+        {
+          "text": "frog ",
+          "confidence": 0.839
+        },
+        {
+          "text": "in the ",
+          "confidence": 0.998
+        },
+        {
+          "text": "garden, ",
+          "confidence": 0.653
+        },
+        {
+          "text": "and ",
+          "confidence": 0.792
+        },
+        {
+          "text": "his ",
+          "confidence": 0.982
+        },
+        {
+          "text": "name ",
+          "confidence": 0.998
+        },
+        {
+          "text": "is ",
+          "confidence": 0.994
+        },
+        {
+          "text": "Mr. ",
+          "confidence": 0.923
+        },
+        {
+          "text": "Hop.",
+          "confidence": 0.661
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "preset-mia--s1--three-quarter-last-word",
+    "line": "[with bright eager excitement] Guess what, guess what! [laughs] I found a frog in the garden and his name is Mister Hops!",
+    "primary": {
+      "transcript": "Guess what? Guess what? I found a frog in the garden, and his name is Mr. Hop.",
+      "spans": [
+        {
+          "text": "Guess",
+          "confidence": 0.961
+        },
+        {
+          "text": " what?",
+          "confidence": 0.846
+        },
+        {
+          "text": " Guess ",
+          "confidence": 0.664
+        },
+        {
+          "text": "what?",
+          "confidence": 0.863
+        },
+        {
+          "text": " I ",
+          "confidence": 0.995
+        },
+        {
+          "text": "found ",
+          "confidence": 0.997
+        },
+        {
+          "text": "a ",
+          "confidence": 0.996
+        },
+        {
+          "text": "frog ",
+          "confidence": 0.839
+        },
+        {
+          "text": "in the ",
+          "confidence": 0.998
+        },
+        {
+          "text": "garden, ",
+          "confidence": 0.653
+        },
+        {
+          "text": "and ",
+          "confidence": 0.792
+        },
+        {
+          "text": "his ",
+          "confidence": 0.982
+        },
+        {
+          "text": "name ",
+          "confidence": 0.998
+        },
+        {
+          "text": "is ",
+          "confidence": 0.994
+        },
+        {
+          "text": "Mr. ",
+          "confidence": 0.923
+        },
+        {
+          "text": "Hop.",
+          "confidence": 0.632
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "Guess what? Guess what? I found a frog in the garden, and his name is Mr. Hop.",
+      "spans": [
+        {
+          "text": "Guess",
+          "confidence": 0.961
+        },
+        {
+          "text": " what?",
+          "confidence": 0.846
+        },
+        {
+          "text": " Guess ",
+          "confidence": 0.664
+        },
+        {
+          "text": "what?",
+          "confidence": 0.863
+        },
+        {
+          "text": " I ",
+          "confidence": 0.995
+        },
+        {
+          "text": "found ",
+          "confidence": 0.997
+        },
+        {
+          "text": "a ",
+          "confidence": 0.996
+        },
+        {
+          "text": "frog ",
+          "confidence": 0.839
+        },
+        {
+          "text": "in the ",
+          "confidence": 0.998
+        },
+        {
+          "text": "garden, ",
+          "confidence": 0.653
+        },
+        {
+          "text": "and ",
+          "confidence": 0.792
+        },
+        {
+          "text": "his ",
+          "confidence": 0.982
+        },
+        {
+          "text": "name ",
+          "confidence": 0.998
+        },
+        {
+          "text": "is ",
+          "confidence": 0.994
+        },
+        {
+          "text": "Mr. ",
+          "confidence": 0.926
+        },
+        {
+          "text": "Hop.",
+          "confidence": 0.774
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "preset-detective--s1--complete",
+    "line": "[sighs] The rain hadn't stopped in three days. [pause] Neither had the phone.",
+    "primary": {
+      "transcript": "The rain hadn't stopped in 3 days. Neither had the phone.",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.996
+        },
+        {
+          "text": " rain",
+          "confidence": 0.992
+        },
+        {
+          "text": " hadn't",
+          "confidence": 0.988
+        },
+        {
+          "text": " stopped",
+          "confidence": 0.997
+        },
+        {
+          "text": " in",
+          "confidence": 0.998
+        },
+        {
+          "text": " 3",
+          "confidence": 0.858
+        },
+        {
+          "text": " days.",
+          "confidence": 0.818
+        },
+        {
+          "text": " Neither ",
+          "confidence": 0.715
+        },
+        {
+          "text": "had ",
+          "confidence": 0.999
+        },
+        {
+          "text": "the ",
+          "confidence": 0.998
+        },
+        {
+          "text": "phone.",
+          "confidence": 0.972
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "The rain hadn't stopped in 3 days. Neither had the phone.",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.996
+        },
+        {
+          "text": " rain",
+          "confidence": 0.992
+        },
+        {
+          "text": " hadn't",
+          "confidence": 0.988
+        },
+        {
+          "text": " stopped",
+          "confidence": 0.997
+        },
+        {
+          "text": " in",
+          "confidence": 0.998
+        },
+        {
+          "text": " 3",
+          "confidence": 0.858
+        },
+        {
+          "text": " days.",
+          "confidence": 0.818
+        },
+        {
+          "text": " Neither ",
+          "confidence": 0.715
+        },
+        {
+          "text": "had ",
+          "confidence": 0.999
+        },
+        {
+          "text": "the ",
+          "confidence": 0.998
+        },
+        {
+          "text": "phone.",
+          "confidence": 0.971
+        }
+      ]
+    },
+    "expectedPrimary": true,
+    "expectedEligible": false,
+    "expectedCandidate": true
+  },
+  {
+    "key": "preset-detective--s1--before-last-word",
+    "line": "[sighs] The rain hadn't stopped in three days. [pause] Neither had the phone.",
+    "primary": {
+      "transcript": "The rain hadn't stopped in 3 days. Neither had the...",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.996
+        },
+        {
+          "text": " rain",
+          "confidence": 0.992
+        },
+        {
+          "text": " hadn't",
+          "confidence": 0.988
+        },
+        {
+          "text": " stopped",
+          "confidence": 0.997
+        },
+        {
+          "text": " in",
+          "confidence": 0.998
+        },
+        {
+          "text": " 3",
+          "confidence": 0.865
+        },
+        {
+          "text": " days.",
+          "confidence": 0.808
+        },
+        {
+          "text": " Neither ",
+          "confidence": 0.72
+        },
+        {
+          "text": "had ",
+          "confidence": 0.998
+        },
+        {
+          "text": "the...",
+          "confidence": 0.21
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "The rain hadn't stopped in 3 days. Neither had the.",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.996
+        },
+        {
+          "text": " rain",
+          "confidence": 0.992
+        },
+        {
+          "text": " hadn't",
+          "confidence": 0.985
+        },
+        {
+          "text": " stopped",
+          "confidence": 0.997
+        },
+        {
+          "text": " in",
+          "confidence": 0.998
+        },
+        {
+          "text": " 3",
+          "confidence": 0.861
+        },
+        {
+          "text": " days.",
+          "confidence": 0.821
+        },
+        {
+          "text": " Neither ",
+          "confidence": 0.718
+        },
+        {
+          "text": "had ",
+          "confidence": 0.998
+        },
+        {
+          "text": "the.",
+          "confidence": 0.587
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "preset-detective--s1--quarter-last-word",
+    "line": "[sighs] The rain hadn't stopped in three days. [pause] Neither had the phone.",
+    "primary": {
+      "transcript": "The rain hadn't stopped in 3 days. Neither had the...",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.996
+        },
+        {
+          "text": " rain",
+          "confidence": 0.992
+        },
+        {
+          "text": " hadn't",
+          "confidence": 0.987
+        },
+        {
+          "text": " stopped",
+          "confidence": 0.997
+        },
+        {
+          "text": " in",
+          "confidence": 0.998
+        },
+        {
+          "text": " 3",
+          "confidence": 0.853
+        },
+        {
+          "text": " days.",
+          "confidence": 0.82
+        },
+        {
+          "text": " Neither ",
+          "confidence": 0.716
+        },
+        {
+          "text": "had ",
+          "confidence": 0.999
+        },
+        {
+          "text": "the...",
+          "confidence": 0.224
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "The rain hadn't stopped in 3 days. Neither had the...",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.996
+        },
+        {
+          "text": " rain",
+          "confidence": 0.992
+        },
+        {
+          "text": " hadn't",
+          "confidence": 0.988
+        },
+        {
+          "text": " stopped",
+          "confidence": 0.997
+        },
+        {
+          "text": " in",
+          "confidence": 0.998
+        },
+        {
+          "text": " 3",
+          "confidence": 0.855
+        },
+        {
+          "text": " days.",
+          "confidence": 0.819
+        },
+        {
+          "text": " Neither ",
+          "confidence": 0.712
+        },
+        {
+          "text": "had ",
+          "confidence": 0.999
+        },
+        {
+          "text": "the...",
+          "confidence": 0.452
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "preset-detective--s1--half-last-word",
+    "line": "[sighs] The rain hadn't stopped in three days. [pause] Neither had the phone.",
+    "primary": {
+      "transcript": "The rain hadn't stopped in 3 days. Neither had the...",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.996
+        },
+        {
+          "text": " rain",
+          "confidence": 0.992
+        },
+        {
+          "text": " hadn't",
+          "confidence": 0.988
+        },
+        {
+          "text": " stopped",
+          "confidence": 0.997
+        },
+        {
+          "text": " in",
+          "confidence": 0.998
+        },
+        {
+          "text": " 3",
+          "confidence": 0.858
+        },
+        {
+          "text": " days.",
+          "confidence": 0.818
+        },
+        {
+          "text": " Neither ",
+          "confidence": 0.715
+        },
+        {
+          "text": "had ",
+          "confidence": 0.999
+        },
+        {
+          "text": "the...",
+          "confidence": 0.482
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "The rain hadn't stopped in 3 days. Neither had the phone.",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.996
+        },
+        {
+          "text": " rain",
+          "confidence": 0.992
+        },
+        {
+          "text": " hadn't",
+          "confidence": 0.988
+        },
+        {
+          "text": " stopped",
+          "confidence": 0.997
+        },
+        {
+          "text": " in",
+          "confidence": 0.998
+        },
+        {
+          "text": " 3",
+          "confidence": 0.858
+        },
+        {
+          "text": " days.",
+          "confidence": 0.818
+        },
+        {
+          "text": " Neither ",
+          "confidence": 0.715
+        },
+        {
+          "text": "had ",
+          "confidence": 0.999
+        },
+        {
+          "text": "the ",
+          "confidence": 0.97
+        },
+        {
+          "text": "phone.",
+          "confidence": 0.686
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "preset-detective--s1--three-quarter-last-word",
+    "line": "[sighs] The rain hadn't stopped in three days. [pause] Neither had the phone.",
+    "primary": {
+      "transcript": "The rain hadn't stopped in 3 days. Neither had the phone.",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.996
+        },
+        {
+          "text": " rain",
+          "confidence": 0.992
+        },
+        {
+          "text": " hadn't",
+          "confidence": 0.988
+        },
+        {
+          "text": " stopped",
+          "confidence": 0.997
+        },
+        {
+          "text": " in",
+          "confidence": 0.998
+        },
+        {
+          "text": " 3",
+          "confidence": 0.858
+        },
+        {
+          "text": " days.",
+          "confidence": 0.818
+        },
+        {
+          "text": " Neither ",
+          "confidence": 0.715
+        },
+        {
+          "text": "had ",
+          "confidence": 0.999
+        },
+        {
+          "text": "the ",
+          "confidence": 0.992
+        },
+        {
+          "text": "phone.",
+          "confidence": 0.889
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "The rain hadn't stopped in 3 days. Neither had the phone.",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.996
+        },
+        {
+          "text": " rain",
+          "confidence": 0.992
+        },
+        {
+          "text": " hadn't",
+          "confidence": 0.988
+        },
+        {
+          "text": " stopped",
+          "confidence": 0.997
+        },
+        {
+          "text": " in",
+          "confidence": 0.998
+        },
+        {
+          "text": " 3",
+          "confidence": 0.858
+        },
+        {
+          "text": " days.",
+          "confidence": 0.818
+        },
+        {
+          "text": " Neither ",
+          "confidence": 0.715
+        },
+        {
+          "text": "had ",
+          "confidence": 0.999
+        },
+        {
+          "text": "the ",
+          "confidence": 0.992
+        },
+        {
+          "text": "phone.",
+          "confidence": 0.805
+        }
+      ]
+    },
+    "expectedPrimary": true,
+    "expectedEligible": false,
+    "expectedCandidate": true
+  },
+  {
+    "key": "preset-herald--s1--complete",
+    "line": "[clears throat] Hear ye, hear ye! By order of the crown, <emphasis>all</emphasis> shall gather in the square at noon!",
+    "primary": {
+      "transcript": "Hear ye, hear ye, by order of the crown, all shall gather in the square at noon.",
+      "spans": [
+        {
+          "text": "Hear",
+          "confidence": 0.956
+        },
+        {
+          "text": " ye,",
+          "confidence": 0.8
+        },
+        {
+          "text": " hear",
+          "confidence": 0.951
+        },
+        {
+          "text": " ye,",
+          "confidence": 0.755
+        },
+        {
+          "text": " by",
+          "confidence": 0.626
+        },
+        {
+          "text": " order",
+          "confidence": 0.982
+        },
+        {
+          "text": " of the",
+          "confidence": 0.999
+        },
+        {
+          "text": " crown,",
+          "confidence": 0.758
+        },
+        {
+          "text": " all",
+          "confidence": 0.715
+        },
+        {
+          "text": " shall gather",
+          "confidence": 0.999
+        },
+        {
+          "text": " in",
+          "confidence": 0.987
+        },
+        {
+          "text": " the",
+          "confidence": 0.999
+        },
+        {
+          "text": " square",
+          "confidence": 0.988
+        },
+        {
+          "text": " at",
+          "confidence": 0.937
+        },
+        {
+          "text": " noon.",
+          "confidence": 0.957
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "Hear ye, hear ye, by order of the crown, all shall gather in the square at noon.",
+      "spans": [
+        {
+          "text": "Hear",
+          "confidence": 0.956
+        },
+        {
+          "text": " ye,",
+          "confidence": 0.8
+        },
+        {
+          "text": " hear",
+          "confidence": 0.951
+        },
+        {
+          "text": " ye,",
+          "confidence": 0.755
+        },
+        {
+          "text": " by",
+          "confidence": 0.626
+        },
+        {
+          "text": " order",
+          "confidence": 0.982
+        },
+        {
+          "text": " of the",
+          "confidence": 0.999
+        },
+        {
+          "text": " crown,",
+          "confidence": 0.758
+        },
+        {
+          "text": " all",
+          "confidence": 0.715
+        },
+        {
+          "text": " shall gather",
+          "confidence": 0.999
+        },
+        {
+          "text": " in",
+          "confidence": 0.987
+        },
+        {
+          "text": " the",
+          "confidence": 0.999
+        },
+        {
+          "text": " square",
+          "confidence": 0.988
+        },
+        {
+          "text": " at",
+          "confidence": 0.937
+        },
+        {
+          "text": " noon.",
+          "confidence": 0.961
+        }
+      ]
+    },
+    "expectedPrimary": true,
+    "expectedEligible": false,
+    "expectedCandidate": true
+  },
+  {
+    "key": "preset-herald--s1--before-last-word",
+    "line": "[clears throat] Hear ye, hear ye! By order of the crown, <emphasis>all</emphasis> shall gather in the square at noon!",
+    "primary": {
+      "transcript": "Hear ye, hear ye, by order of the crown, all shall gather in the square.",
+      "spans": [
+        {
+          "text": "Hear",
+          "confidence": 0.956
+        },
+        {
+          "text": " ye,",
+          "confidence": 0.8
+        },
+        {
+          "text": " hear",
+          "confidence": 0.951
+        },
+        {
+          "text": " ye,",
+          "confidence": 0.755
+        },
+        {
+          "text": " by",
+          "confidence": 0.626
+        },
+        {
+          "text": " order",
+          "confidence": 0.982
+        },
+        {
+          "text": " of the",
+          "confidence": 0.999
+        },
+        {
+          "text": " crown,",
+          "confidence": 0.758
+        },
+        {
+          "text": " all",
+          "confidence": 0.725
+        },
+        {
+          "text": " shall gather",
+          "confidence": 0.999
+        },
+        {
+          "text": " in",
+          "confidence": 0.993
+        },
+        {
+          "text": " the",
+          "confidence": 0.999
+        },
+        {
+          "text": " square.",
+          "confidence": 0.658
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "Hear ye, hear ye, by order of the crown, all shall gather in the square at...",
+      "spans": [
+        {
+          "text": "Hear",
+          "confidence": 0.956
+        },
+        {
+          "text": " ye,",
+          "confidence": 0.8
+        },
+        {
+          "text": " hear",
+          "confidence": 0.951
+        },
+        {
+          "text": " ye,",
+          "confidence": 0.755
+        },
+        {
+          "text": " by",
+          "confidence": 0.626
+        },
+        {
+          "text": " order",
+          "confidence": 0.982
+        },
+        {
+          "text": " of the",
+          "confidence": 0.999
+        },
+        {
+          "text": " crown,",
+          "confidence": 0.758
+        },
+        {
+          "text": " all",
+          "confidence": 0.727
+        },
+        {
+          "text": " shall gather",
+          "confidence": 0.999
+        },
+        {
+          "text": " in",
+          "confidence": 0.989
+        },
+        {
+          "text": " the",
+          "confidence": 0.999
+        },
+        {
+          "text": " square",
+          "confidence": 0.99
+        },
+        {
+          "text": " at...",
+          "confidence": 0.24
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "preset-herald--s1--quarter-last-word",
+    "line": "[clears throat] Hear ye, hear ye! By order of the crown, <emphasis>all</emphasis> shall gather in the square at noon!",
+    "primary": {
+      "transcript": "Hear ye, hear ye, by order of the crown, all shall gather in the square at...",
+      "spans": [
+        {
+          "text": "Hear",
+          "confidence": 0.956
+        },
+        {
+          "text": " ye,",
+          "confidence": 0.8
+        },
+        {
+          "text": " hear",
+          "confidence": 0.951
+        },
+        {
+          "text": " ye,",
+          "confidence": 0.755
+        },
+        {
+          "text": " by",
+          "confidence": 0.626
+        },
+        {
+          "text": " order",
+          "confidence": 0.982
+        },
+        {
+          "text": " of the",
+          "confidence": 0.999
+        },
+        {
+          "text": " crown,",
+          "confidence": 0.758
+        },
+        {
+          "text": " all",
+          "confidence": 0.721
+        },
+        {
+          "text": " shall gather",
+          "confidence": 0.999
+        },
+        {
+          "text": " in",
+          "confidence": 0.989
+        },
+        {
+          "text": " the",
+          "confidence": 0.999
+        },
+        {
+          "text": " square",
+          "confidence": 0.988
+        },
+        {
+          "text": " at...",
+          "confidence": 0.227
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "Hear ye, hear ye, by order of the crown, all shall gather in the square at...",
+      "spans": [
+        {
+          "text": "Hear",
+          "confidence": 0.956
+        },
+        {
+          "text": " ye,",
+          "confidence": 0.8
+        },
+        {
+          "text": " hear",
+          "confidence": 0.951
+        },
+        {
+          "text": " ye,",
+          "confidence": 0.755
+        },
+        {
+          "text": " by",
+          "confidence": 0.626
+        },
+        {
+          "text": " order",
+          "confidence": 0.982
+        },
+        {
+          "text": " of the",
+          "confidence": 0.999
+        },
+        {
+          "text": " crown,",
+          "confidence": 0.758
+        },
+        {
+          "text": " all",
+          "confidence": 0.723
+        },
+        {
+          "text": " shall gather",
+          "confidence": 0.999
+        },
+        {
+          "text": " in",
+          "confidence": 0.989
+        },
+        {
+          "text": " the",
+          "confidence": 0.999
+        },
+        {
+          "text": " square",
+          "confidence": 0.988
+        },
+        {
+          "text": " at...",
+          "confidence": 0.235
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "preset-herald--s1--half-last-word",
+    "line": "[clears throat] Hear ye, hear ye! By order of the crown, <emphasis>all</emphasis> shall gather in the square at noon!",
+    "primary": {
+      "transcript": "Hear ye, hear ye, by order of the crown, all shall gather in the square at noon.",
+      "spans": [
+        {
+          "text": "Hear",
+          "confidence": 0.956
+        },
+        {
+          "text": " ye,",
+          "confidence": 0.8
+        },
+        {
+          "text": " hear",
+          "confidence": 0.951
+        },
+        {
+          "text": " ye,",
+          "confidence": 0.755
+        },
+        {
+          "text": " by",
+          "confidence": 0.626
+        },
+        {
+          "text": " order",
+          "confidence": 0.982
+        },
+        {
+          "text": " of the",
+          "confidence": 0.999
+        },
+        {
+          "text": " crown,",
+          "confidence": 0.758
+        },
+        {
+          "text": " all",
+          "confidence": 0.72
+        },
+        {
+          "text": " shall gather",
+          "confidence": 0.999
+        },
+        {
+          "text": " in",
+          "confidence": 0.988
+        },
+        {
+          "text": " the",
+          "confidence": 0.999
+        },
+        {
+          "text": " square",
+          "confidence": 0.988
+        },
+        {
+          "text": " at",
+          "confidence": 0.935
+        },
+        {
+          "text": " noon.",
+          "confidence": 0.865
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "Hear ye, hear ye, by order of the crown, all shall gather in the square at noon.",
+      "spans": [
+        {
+          "text": "Hear",
+          "confidence": 0.956
+        },
+        {
+          "text": " ye,",
+          "confidence": 0.8
+        },
+        {
+          "text": " hear",
+          "confidence": 0.951
+        },
+        {
+          "text": " ye,",
+          "confidence": 0.755
+        },
+        {
+          "text": " by",
+          "confidence": 0.626
+        },
+        {
+          "text": " order",
+          "confidence": 0.982
+        },
+        {
+          "text": " of the",
+          "confidence": 0.999
+        },
+        {
+          "text": " crown,",
+          "confidence": 0.758
+        },
+        {
+          "text": " all",
+          "confidence": 0.716
+        },
+        {
+          "text": " shall gather",
+          "confidence": 0.999
+        },
+        {
+          "text": " in",
+          "confidence": 0.984
+        },
+        {
+          "text": " the",
+          "confidence": 0.94
+        },
+        {
+          "text": " square",
+          "confidence": 0.988
+        },
+        {
+          "text": " at",
+          "confidence": 0.941
+        },
+        {
+          "text": " noon.",
+          "confidence": 0.805
+        }
+      ]
+    },
+    "expectedPrimary": true,
+    "expectedEligible": false,
+    "expectedCandidate": true
+  },
+  {
+    "key": "preset-herald--s1--three-quarter-last-word",
+    "line": "[clears throat] Hear ye, hear ye! By order of the crown, <emphasis>all</emphasis> shall gather in the square at noon!",
+    "primary": {
+      "transcript": "Hear ye, hear ye, by order of the crown, all shall gather in the square at noon.",
+      "spans": [
+        {
+          "text": "Hear",
+          "confidence": 0.956
+        },
+        {
+          "text": " ye,",
+          "confidence": 0.8
+        },
+        {
+          "text": " hear",
+          "confidence": 0.951
+        },
+        {
+          "text": " ye,",
+          "confidence": 0.755
+        },
+        {
+          "text": " by",
+          "confidence": 0.626
+        },
+        {
+          "text": " order",
+          "confidence": 0.982
+        },
+        {
+          "text": " of the",
+          "confidence": 0.999
+        },
+        {
+          "text": " crown,",
+          "confidence": 0.758
+        },
+        {
+          "text": " all",
+          "confidence": 0.715
+        },
+        {
+          "text": " shall gather",
+          "confidence": 0.999
+        },
+        {
+          "text": " in",
+          "confidence": 0.987
+        },
+        {
+          "text": " the",
+          "confidence": 0.999
+        },
+        {
+          "text": " square",
+          "confidence": 0.988
+        },
+        {
+          "text": " at",
+          "confidence": 0.937
+        },
+        {
+          "text": " noon.",
+          "confidence": 0.94
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "Hear ye, hear ye, by order of the crown, all shall gather in the square at noon.",
+      "spans": [
+        {
+          "text": "Hear",
+          "confidence": 0.956
+        },
+        {
+          "text": " ye,",
+          "confidence": 0.8
+        },
+        {
+          "text": " hear",
+          "confidence": 0.951
+        },
+        {
+          "text": " ye,",
+          "confidence": 0.755
+        },
+        {
+          "text": " by",
+          "confidence": 0.626
+        },
+        {
+          "text": " order",
+          "confidence": 0.982
+        },
+        {
+          "text": " of the",
+          "confidence": 0.999
+        },
+        {
+          "text": " crown,",
+          "confidence": 0.758
+        },
+        {
+          "text": " all",
+          "confidence": 0.715
+        },
+        {
+          "text": " shall gather",
+          "confidence": 0.999
+        },
+        {
+          "text": " in",
+          "confidence": 0.987
+        },
+        {
+          "text": " the",
+          "confidence": 0.999
+        },
+        {
+          "text": " square",
+          "confidence": 0.988
+        },
+        {
+          "text": " at",
+          "confidence": 0.937
+        },
+        {
+          "text": " noon.",
+          "confidence": 0.944
+        }
+      ]
+    },
+    "expectedPrimary": true,
+    "expectedEligible": false,
+    "expectedCandidate": true
+  },
+  {
+    "key": "preset-emma--s1--complete",
+    "line": "Okay. Coffee first. [sighs] Then I'll pretend I read the agenda.",
+    "primary": {
+      "transcript": "Okay, coffee first. Then I'll pretend I read the agenda.",
+      "spans": [
+        {
+          "text": "Okay,",
+          "confidence": 0.922
+        },
+        {
+          "text": " coffee",
+          "confidence": 0.952
+        },
+        {
+          "text": " first.",
+          "confidence": 0.922
+        },
+        {
+          "text": " Then ",
+          "confidence": 0.641
+        },
+        {
+          "text": "I'll ",
+          "confidence": 0.998
+        },
+        {
+          "text": "pretend ",
+          "confidence": 0.93
+        },
+        {
+          "text": "I ",
+          "confidence": 0.998
+        },
+        {
+          "text": "read ",
+          "confidence": 0.999
+        },
+        {
+          "text": "the ",
+          "confidence": 0.998
+        },
+        {
+          "text": "agenda.",
+          "confidence": 0.913
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "Okay, coffee first. Then I'll pretend I read the agenda.",
+      "spans": [
+        {
+          "text": "Okay,",
+          "confidence": 0.922
+        },
+        {
+          "text": " coffee",
+          "confidence": 0.952
+        },
+        {
+          "text": " first.",
+          "confidence": 0.922
+        },
+        {
+          "text": " Then ",
+          "confidence": 0.641
+        },
+        {
+          "text": "I'll ",
+          "confidence": 0.998
+        },
+        {
+          "text": "pretend ",
+          "confidence": 0.956
+        },
+        {
+          "text": "I ",
+          "confidence": 0.998
+        },
+        {
+          "text": "read ",
+          "confidence": 0.999
+        },
+        {
+          "text": "the ",
+          "confidence": 0.998
+        },
+        {
+          "text": "agenda.",
+          "confidence": 0.968
+        }
+      ]
+    },
+    "expectedPrimary": true,
+    "expectedEligible": false,
+    "expectedCandidate": true
+  },
+  {
+    "key": "preset-emma--s1--before-last-word",
+    "line": "Okay. Coffee first. [sighs] Then I'll pretend I read the agenda.",
+    "primary": {
+      "transcript": "Okay, coffee first. Then I'll pretend I read the...",
+      "spans": [
+        {
+          "text": "Okay,",
+          "confidence": 0.922
+        },
+        {
+          "text": " coffee",
+          "confidence": 0.952
+        },
+        {
+          "text": " first.",
+          "confidence": 0.922
+        },
+        {
+          "text": " Then ",
+          "confidence": 0.641
+        },
+        {
+          "text": "I'll ",
+          "confidence": 0.997
+        },
+        {
+          "text": "pretend ",
+          "confidence": 0.981
+        },
+        {
+          "text": "I ",
+          "confidence": 0.983
+        },
+        {
+          "text": "read ",
+          "confidence": 0.984
+        },
+        {
+          "text": "the...",
+          "confidence": 0.197
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "Okay, coffee first. Then I'll pretend I read the...",
+      "spans": [
+        {
+          "text": "Okay,",
+          "confidence": 0.922
+        },
+        {
+          "text": " coffee",
+          "confidence": 0.952
+        },
+        {
+          "text": " first.",
+          "confidence": 0.922
+        },
+        {
+          "text": " Then ",
+          "confidence": 0.641
+        },
+        {
+          "text": "I'll ",
+          "confidence": 0.997
+        },
+        {
+          "text": "pretend ",
+          "confidence": 0.999
+        },
+        {
+          "text": "I ",
+          "confidence": 0.99
+        },
+        {
+          "text": "read ",
+          "confidence": 0.991
+        },
+        {
+          "text": "the...",
+          "confidence": 0.243
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "preset-emma--s1--quarter-last-word",
+    "line": "Okay. Coffee first. [sighs] Then I'll pretend I read the agenda.",
+    "primary": {
+      "transcript": "Okay, coffee first. Then I'll pretend I read the...",
+      "spans": [
+        {
+          "text": "Okay,",
+          "confidence": 0.922
+        },
+        {
+          "text": " coffee",
+          "confidence": 0.952
+        },
+        {
+          "text": " first.",
+          "confidence": 0.922
+        },
+        {
+          "text": " Then ",
+          "confidence": 0.641
+        },
+        {
+          "text": "I'll ",
+          "confidence": 0.997
+        },
+        {
+          "text": "pretend ",
+          "confidence": 0.974
+        },
+        {
+          "text": "I ",
+          "confidence": 0.993
+        },
+        {
+          "text": "read ",
+          "confidence": 0.994
+        },
+        {
+          "text": "the...",
+          "confidence": 0.247
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "Okay, coffee first. Then I'll pretend I read the...",
+      "spans": [
+        {
+          "text": "Okay,",
+          "confidence": 0.922
+        },
+        {
+          "text": " coffee",
+          "confidence": 0.952
+        },
+        {
+          "text": " first.",
+          "confidence": 0.922
+        },
+        {
+          "text": " Then ",
+          "confidence": 0.641
+        },
+        {
+          "text": "I'll ",
+          "confidence": 0.997
+        },
+        {
+          "text": "pretend ",
+          "confidence": 0.987
+        },
+        {
+          "text": "I ",
+          "confidence": 0.992
+        },
+        {
+          "text": "read ",
+          "confidence": 0.993
+        },
+        {
+          "text": "the...",
+          "confidence": 0.259
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "preset-emma--s1--half-last-word",
+    "line": "Okay. Coffee first. [sighs] Then I'll pretend I read the agenda.",
+    "primary": {
+      "transcript": "Okay, coffee first. Then I'll pretend I read the agenda.",
+      "spans": [
+        {
+          "text": "Okay,",
+          "confidence": 0.922
+        },
+        {
+          "text": " coffee",
+          "confidence": 0.952
+        },
+        {
+          "text": " first.",
+          "confidence": 0.922
+        },
+        {
+          "text": " Then ",
+          "confidence": 0.641
+        },
+        {
+          "text": "I'll ",
+          "confidence": 0.997
+        },
+        {
+          "text": "pretend ",
+          "confidence": 0.974
+        },
+        {
+          "text": "I ",
+          "confidence": 0.994
+        },
+        {
+          "text": "read ",
+          "confidence": 0.995
+        },
+        {
+          "text": "the ",
+          "confidence": 0.969
+        },
+        {
+          "text": "agenda.",
+          "confidence": 0.45
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "Okay, coffee first. Then I'll pretend I read the agenda.",
+      "spans": [
+        {
+          "text": "Okay,",
+          "confidence": 0.922
+        },
+        {
+          "text": " coffee",
+          "confidence": 0.952
+        },
+        {
+          "text": " first.",
+          "confidence": 0.922
+        },
+        {
+          "text": " Then ",
+          "confidence": 0.641
+        },
+        {
+          "text": "I'll ",
+          "confidence": 0.997
+        },
+        {
+          "text": "pretend ",
+          "confidence": 0.984
+        },
+        {
+          "text": "I read ",
+          "confidence": 0.993
+        },
+        {
+          "text": "the ",
+          "confidence": 0.973
+        },
+        {
+          "text": "agenda.",
+          "confidence": 0.437
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": true,
+    "expectedCandidate": false
+  },
+  {
+    "key": "preset-emma--s1--three-quarter-last-word",
+    "line": "Okay. Coffee first. [sighs] Then I'll pretend I read the agenda.",
+    "primary": {
+      "transcript": "Okay, coffee first. Then I'll pretend I read the agenda.",
+      "spans": [
+        {
+          "text": "Okay,",
+          "confidence": 0.922
+        },
+        {
+          "text": " coffee",
+          "confidence": 0.952
+        },
+        {
+          "text": " first.",
+          "confidence": 0.922
+        },
+        {
+          "text": " Then ",
+          "confidence": 0.641
+        },
+        {
+          "text": "I'll ",
+          "confidence": 0.998
+        },
+        {
+          "text": "pretend ",
+          "confidence": 0.946
+        },
+        {
+          "text": "I ",
+          "confidence": 0.997
+        },
+        {
+          "text": "read ",
+          "confidence": 0.999
+        },
+        {
+          "text": "the ",
+          "confidence": 0.995
+        },
+        {
+          "text": "agenda.",
+          "confidence": 0.757
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "Okay, coffee first. Then I'll pretend I read the agenda.",
+      "spans": [
+        {
+          "text": "Okay,",
+          "confidence": 0.922
+        },
+        {
+          "text": " coffee",
+          "confidence": 0.952
+        },
+        {
+          "text": " first.",
+          "confidence": 0.922
+        },
+        {
+          "text": " Then ",
+          "confidence": 0.641
+        },
+        {
+          "text": "I'll ",
+          "confidence": 0.997
+        },
+        {
+          "text": "pretend ",
+          "confidence": 0.979
+        },
+        {
+          "text": "I ",
+          "confidence": 0.994
+        },
+        {
+          "text": "read ",
+          "confidence": 0.998
+        },
+        {
+          "text": "the ",
+          "confidence": 0.995
+        },
+        {
+          "text": "agenda.",
+          "confidence": 0.893
+        }
+      ]
+    },
+    "expectedPrimary": true,
+    "expectedEligible": false,
+    "expectedCandidate": true
+  },
+  {
+    "key": "preset-the-duke--s1--complete",
+    "line": "Oh, you came all this way to stop me? [laughs] How delightfully brave of you.",
+    "primary": {
+      "transcript": "Oh, you came all this way to stop me? How delightfully brave of you.",
+      "spans": [
+        {
+          "text": "Oh,",
+          "confidence": 0.985
+        },
+        {
+          "text": " you",
+          "confidence": 0.997
+        },
+        {
+          "text": " came",
+          "confidence": 0.998
+        },
+        {
+          "text": " all this",
+          "confidence": 0.999
+        },
+        {
+          "text": " way",
+          "confidence": 1.0
+        },
+        {
+          "text": " to stop",
+          "confidence": 0.999
+        },
+        {
+          "text": " me?",
+          "confidence": 0.816
+        },
+        {
+          "text": " How ",
+          "confidence": 0.88
+        },
+        {
+          "text": "delightfully ",
+          "confidence": 0.999
+        },
+        {
+          "text": "brave ",
+          "confidence": 0.998
+        },
+        {
+          "text": "of ",
+          "confidence": 0.996
+        },
+        {
+          "text": "you.",
+          "confidence": 0.82
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "Oh, you came all this way to stop me? How delightfully brave of you.",
+      "spans": [
+        {
+          "text": "Oh,",
+          "confidence": 0.985
+        },
+        {
+          "text": " you",
+          "confidence": 0.997
+        },
+        {
+          "text": " came",
+          "confidence": 0.998
+        },
+        {
+          "text": " all this",
+          "confidence": 0.999
+        },
+        {
+          "text": " way",
+          "confidence": 1.0
+        },
+        {
+          "text": " to stop",
+          "confidence": 0.999
+        },
+        {
+          "text": " me?",
+          "confidence": 0.816
+        },
+        {
+          "text": " How ",
+          "confidence": 0.88
+        },
+        {
+          "text": "delightfully ",
+          "confidence": 0.999
+        },
+        {
+          "text": "brave ",
+          "confidence": 0.998
+        },
+        {
+          "text": "of ",
+          "confidence": 0.996
+        },
+        {
+          "text": "you.",
+          "confidence": 0.82
+        }
+      ]
+    },
+    "expectedPrimary": true,
+    "expectedEligible": false,
+    "expectedCandidate": true
+  },
+  {
+    "key": "preset-the-duke--s1--before-last-word",
+    "line": "Oh, you came all this way to stop me? [laughs] How delightfully brave of you.",
+    "primary": {
+      "transcript": "Oh, you came all this way to stop me? How delightfully brave of you.",
+      "spans": [
+        {
+          "text": "Oh,",
+          "confidence": 0.985
+        },
+        {
+          "text": " you",
+          "confidence": 0.997
+        },
+        {
+          "text": " came",
+          "confidence": 0.998
+        },
+        {
+          "text": " all this",
+          "confidence": 0.999
+        },
+        {
+          "text": " way",
+          "confidence": 1.0
+        },
+        {
+          "text": " to stop",
+          "confidence": 0.999
+        },
+        {
+          "text": " me?",
+          "confidence": 0.811
+        },
+        {
+          "text": " How ",
+          "confidence": 0.883
+        },
+        {
+          "text": "delightfully ",
+          "confidence": 0.997
+        },
+        {
+          "text": "brave ",
+          "confidence": 0.996
+        },
+        {
+          "text": "of ",
+          "confidence": 0.887
+        },
+        {
+          "text": "you.",
+          "confidence": 0.502
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "Oh, you came all this way to stop me? How delightfully brave of.",
+      "spans": [
+        {
+          "text": "Oh,",
+          "confidence": 0.985
+        },
+        {
+          "text": " you",
+          "confidence": 0.997
+        },
+        {
+          "text": " came",
+          "confidence": 0.998
+        },
+        {
+          "text": " all this",
+          "confidence": 0.999
+        },
+        {
+          "text": " way",
+          "confidence": 1.0
+        },
+        {
+          "text": " to stop",
+          "confidence": 0.999
+        },
+        {
+          "text": " me?",
+          "confidence": 0.81
+        },
+        {
+          "text": " How ",
+          "confidence": 0.883
+        },
+        {
+          "text": "delightfully ",
+          "confidence": 0.999
+        },
+        {
+          "text": "brave ",
+          "confidence": 0.996
+        },
+        {
+          "text": "of.",
+          "confidence": 0.708
+        }
+      ]
+    },
+    "expectedPrimary": true,
+    "expectedEligible": false,
+    "expectedCandidate": true
+  },
+  {
+    "key": "preset-the-duke--s1--quarter-last-word",
+    "line": "Oh, you came all this way to stop me? [laughs] How delightfully brave of you.",
+    "primary": {
+      "transcript": "Oh, you came all this way to stop me? How delightfully brave of you.",
+      "spans": [
+        {
+          "text": "Oh,",
+          "confidence": 0.985
+        },
+        {
+          "text": " you",
+          "confidence": 0.997
+        },
+        {
+          "text": " came",
+          "confidence": 0.998
+        },
+        {
+          "text": " all this",
+          "confidence": 0.999
+        },
+        {
+          "text": " way",
+          "confidence": 1.0
+        },
+        {
+          "text": " to stop",
+          "confidence": 0.999
+        },
+        {
+          "text": " me?",
+          "confidence": 0.813
+        },
+        {
+          "text": " How ",
+          "confidence": 0.9
+        },
+        {
+          "text": "delightfully ",
+          "confidence": 0.999
+        },
+        {
+          "text": "brave ",
+          "confidence": 0.996
+        },
+        {
+          "text": "of ",
+          "confidence": 0.988
+        },
+        {
+          "text": "you.",
+          "confidence": 0.83
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "Oh, you came all this way to stop me? How delightfully brave of you.",
+      "spans": [
+        {
+          "text": "Oh,",
+          "confidence": 0.985
+        },
+        {
+          "text": " you",
+          "confidence": 0.997
+        },
+        {
+          "text": " came",
+          "confidence": 0.998
+        },
+        {
+          "text": " all this",
+          "confidence": 0.999
+        },
+        {
+          "text": " way",
+          "confidence": 1.0
+        },
+        {
+          "text": " to stop",
+          "confidence": 0.999
+        },
+        {
+          "text": " me?",
+          "confidence": 0.815
+        },
+        {
+          "text": " How ",
+          "confidence": 0.898
+        },
+        {
+          "text": "delightfully ",
+          "confidence": 0.998
+        },
+        {
+          "text": "brave ",
+          "confidence": 0.996
+        },
+        {
+          "text": "of ",
+          "confidence": 0.929
+        },
+        {
+          "text": "you.",
+          "confidence": 0.843
+        }
+      ]
+    },
+    "expectedPrimary": true,
+    "expectedEligible": false,
+    "expectedCandidate": true
+  },
+  {
+    "key": "preset-the-duke--s1--half-last-word",
+    "line": "Oh, you came all this way to stop me? [laughs] How delightfully brave of you.",
+    "primary": {
+      "transcript": "Oh, you came all this way to stop me? How delightfully brave of you.",
+      "spans": [
+        {
+          "text": "Oh,",
+          "confidence": 0.985
+        },
+        {
+          "text": " you",
+          "confidence": 0.997
+        },
+        {
+          "text": " came",
+          "confidence": 0.998
+        },
+        {
+          "text": " all this",
+          "confidence": 0.999
+        },
+        {
+          "text": " way",
+          "confidence": 1.0
+        },
+        {
+          "text": " to stop",
+          "confidence": 0.999
+        },
+        {
+          "text": " me?",
+          "confidence": 0.815
+        },
+        {
+          "text": " How ",
+          "confidence": 0.877
+        },
+        {
+          "text": "delightfully ",
+          "confidence": 0.999
+        },
+        {
+          "text": "brave ",
+          "confidence": 0.998
+        },
+        {
+          "text": "of ",
+          "confidence": 0.993
+        },
+        {
+          "text": "you.",
+          "confidence": 0.829
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "Oh, you came all this way to stop me? How delightfully brave of you.",
+      "spans": [
+        {
+          "text": "Oh,",
+          "confidence": 0.985
+        },
+        {
+          "text": " you",
+          "confidence": 0.997
+        },
+        {
+          "text": " came",
+          "confidence": 0.998
+        },
+        {
+          "text": " all this",
+          "confidence": 0.999
+        },
+        {
+          "text": " way",
+          "confidence": 1.0
+        },
+        {
+          "text": " to stop",
+          "confidence": 0.999
+        },
+        {
+          "text": " me?",
+          "confidence": 0.816
+        },
+        {
+          "text": " How ",
+          "confidence": 0.902
+        },
+        {
+          "text": "delightfully ",
+          "confidence": 0.999
+        },
+        {
+          "text": "brave ",
+          "confidence": 0.997
+        },
+        {
+          "text": "of ",
+          "confidence": 0.993
+        },
+        {
+          "text": "you.",
+          "confidence": 0.857
+        }
+      ]
+    },
+    "expectedPrimary": true,
+    "expectedEligible": false,
+    "expectedCandidate": true
+  },
+  {
+    "key": "preset-the-duke--s1--three-quarter-last-word",
+    "line": "Oh, you came all this way to stop me? [laughs] How delightfully brave of you.",
+    "primary": {
+      "transcript": "Oh, you came all this way to stop me? How delightfully brave of you.",
+      "spans": [
+        {
+          "text": "Oh,",
+          "confidence": 0.985
+        },
+        {
+          "text": " you",
+          "confidence": 0.997
+        },
+        {
+          "text": " came",
+          "confidence": 0.998
+        },
+        {
+          "text": " all this",
+          "confidence": 0.999
+        },
+        {
+          "text": " way",
+          "confidence": 1.0
+        },
+        {
+          "text": " to stop",
+          "confidence": 0.999
+        },
+        {
+          "text": " me?",
+          "confidence": 0.816
+        },
+        {
+          "text": " How ",
+          "confidence": 0.877
+        },
+        {
+          "text": "delightfully ",
+          "confidence": 0.999
+        },
+        {
+          "text": "brave ",
+          "confidence": 0.998
+        },
+        {
+          "text": "of ",
+          "confidence": 0.995
+        },
+        {
+          "text": "you.",
+          "confidence": 0.911
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "Oh, you came all this way to stop me? How delightfully brave of you.",
+      "spans": [
+        {
+          "text": "Oh,",
+          "confidence": 0.985
+        },
+        {
+          "text": " you",
+          "confidence": 0.997
+        },
+        {
+          "text": " came",
+          "confidence": 0.998
+        },
+        {
+          "text": " all this",
+          "confidence": 0.999
+        },
+        {
+          "text": " way",
+          "confidence": 1.0
+        },
+        {
+          "text": " to stop",
+          "confidence": 0.999
+        },
+        {
+          "text": " me?",
+          "confidence": 0.816
+        },
+        {
+          "text": " How ",
+          "confidence": 0.905
+        },
+        {
+          "text": "delightfully ",
+          "confidence": 0.999
+        },
+        {
+          "text": "brave ",
+          "confidence": 0.866
+        },
+        {
+          "text": "of ",
+          "confidence": 0.997
+        },
+        {
+          "text": "you.",
+          "confidence": 0.843
+        }
+      ]
+    },
+    "expectedPrimary": true,
+    "expectedEligible": false,
+    "expectedCandidate": true
+  },
+  {
+    "key": "preset-nana--s1--complete",
+    "line": "[warm, gentle bedtime voice] Once there was a lighthouse keeper who talked to the moon. [pause] And one night, the moon talked back.",
+    "primary": {
+      "transcript": "Once, there was a lighthouse keeper, who talked to the moon, and one night, the moon talked back.",
+      "spans": [
+        {
+          "text": "Once,",
+          "confidence": 0.77
+        },
+        {
+          "text": " there",
+          "confidence": 0.738
+        },
+        {
+          "text": " was a",
+          "confidence": 0.999
+        },
+        {
+          "text": " lighthouse",
+          "confidence": 0.989
+        },
+        {
+          "text": " keeper,",
+          "confidence": 0.677
+        },
+        {
+          "text": " who",
+          "confidence": 0.808
+        },
+        {
+          "text": " talked",
+          "confidence": 0.993
+        },
+        {
+          "text": " to",
+          "confidence": 0.997
+        },
+        {
+          "text": " the",
+          "confidence": 0.999
+        },
+        {
+          "text": " moon,",
+          "confidence": 0.509
+        },
+        {
+          "text": " and",
+          "confidence": 0.568
+        },
+        {
+          "text": " one",
+          "confidence": 0.997
+        },
+        {
+          "text": " night,",
+          "confidence": 0.564
+        },
+        {
+          "text": " the",
+          "confidence": 0.667
+        },
+        {
+          "text": " moon",
+          "confidence": 0.98
+        },
+        {
+          "text": " talked",
+          "confidence": 0.984
+        },
+        {
+          "text": " back.",
+          "confidence": 0.331
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "Once, there was a lighthouse keeper, who talked to the moon, and one night, the moon talked back.",
+      "spans": [
+        {
+          "text": "Once,",
+          "confidence": 0.77
+        },
+        {
+          "text": " there",
+          "confidence": 0.738
+        },
+        {
+          "text": " was a",
+          "confidence": 0.999
+        },
+        {
+          "text": " lighthouse",
+          "confidence": 0.989
+        },
+        {
+          "text": " keeper,",
+          "confidence": 0.677
+        },
+        {
+          "text": " who",
+          "confidence": 0.808
+        },
+        {
+          "text": " talked",
+          "confidence": 0.993
+        },
+        {
+          "text": " to",
+          "confidence": 0.997
+        },
+        {
+          "text": " the",
+          "confidence": 0.999
+        },
+        {
+          "text": " moon,",
+          "confidence": 0.509
+        },
+        {
+          "text": " and",
+          "confidence": 0.568
+        },
+        {
+          "text": " one",
+          "confidence": 0.997
+        },
+        {
+          "text": " night,",
+          "confidence": 0.566
+        },
+        {
+          "text": " the",
+          "confidence": 0.672
+        },
+        {
+          "text": " moon",
+          "confidence": 0.981
+        },
+        {
+          "text": " talked",
+          "confidence": 0.986
+        },
+        {
+          "text": " back.",
+          "confidence": 0.703
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": true,
+    "expectedCandidate": false
+  },
+  {
+    "key": "preset-nana--s1--before-last-word",
+    "line": "[warm, gentle bedtime voice] Once there was a lighthouse keeper who talked to the moon. [pause] And one night, the moon talked back.",
+    "primary": {
+      "transcript": "Once, there was a lighthouse keeper, who talked to the moon, and one night, the moon talked.",
+      "spans": [
+        {
+          "text": "Once,",
+          "confidence": 0.77
+        },
+        {
+          "text": " there",
+          "confidence": 0.738
+        },
+        {
+          "text": " was a",
+          "confidence": 0.999
+        },
+        {
+          "text": " lighthouse",
+          "confidence": 0.989
+        },
+        {
+          "text": " keeper,",
+          "confidence": 0.677
+        },
+        {
+          "text": " who",
+          "confidence": 0.808
+        },
+        {
+          "text": " talked",
+          "confidence": 0.993
+        },
+        {
+          "text": " to",
+          "confidence": 0.997
+        },
+        {
+          "text": " the",
+          "confidence": 0.999
+        },
+        {
+          "text": " moon,",
+          "confidence": 0.509
+        },
+        {
+          "text": " and",
+          "confidence": 0.568
+        },
+        {
+          "text": " one",
+          "confidence": 0.997
+        },
+        {
+          "text": " night,",
+          "confidence": 0.547
+        },
+        {
+          "text": " the",
+          "confidence": 0.671
+        },
+        {
+          "text": " moon",
+          "confidence": 0.976
+        },
+        {
+          "text": " talked.",
+          "confidence": 0.192
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "Once, there was a lighthouse keeper, who talked to the moon, and one night, the moon talked.",
+      "spans": [
+        {
+          "text": "Once,",
+          "confidence": 0.77
+        },
+        {
+          "text": " there",
+          "confidence": 0.738
+        },
+        {
+          "text": " was a",
+          "confidence": 0.999
+        },
+        {
+          "text": " lighthouse",
+          "confidence": 0.989
+        },
+        {
+          "text": " keeper,",
+          "confidence": 0.677
+        },
+        {
+          "text": " who",
+          "confidence": 0.808
+        },
+        {
+          "text": " talked",
+          "confidence": 0.993
+        },
+        {
+          "text": " to",
+          "confidence": 0.997
+        },
+        {
+          "text": " the",
+          "confidence": 0.999
+        },
+        {
+          "text": " moon,",
+          "confidence": 0.509
+        },
+        {
+          "text": " and",
+          "confidence": 0.568
+        },
+        {
+          "text": " one",
+          "confidence": 0.997
+        },
+        {
+          "text": " night,",
+          "confidence": 0.544
+        },
+        {
+          "text": " the",
+          "confidence": 0.654
+        },
+        {
+          "text": " moon",
+          "confidence": 0.98
+        },
+        {
+          "text": " talked.",
+          "confidence": 0.538
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "preset-nana--s1--quarter-last-word",
+    "line": "[warm, gentle bedtime voice] Once there was a lighthouse keeper who talked to the moon. [pause] And one night, the moon talked back.",
+    "primary": {
+      "transcript": "Once, there was a lighthouse keeper, who talked to the moon, and one night, the moon talked.",
+      "spans": [
+        {
+          "text": "Once,",
+          "confidence": 0.77
+        },
+        {
+          "text": " there",
+          "confidence": 0.738
+        },
+        {
+          "text": " was a",
+          "confidence": 0.999
+        },
+        {
+          "text": " lighthouse",
+          "confidence": 0.989
+        },
+        {
+          "text": " keeper,",
+          "confidence": 0.677
+        },
+        {
+          "text": " who",
+          "confidence": 0.808
+        },
+        {
+          "text": " talked",
+          "confidence": 0.993
+        },
+        {
+          "text": " to",
+          "confidence": 0.997
+        },
+        {
+          "text": " the",
+          "confidence": 0.999
+        },
+        {
+          "text": " moon,",
+          "confidence": 0.509
+        },
+        {
+          "text": " and",
+          "confidence": 0.568
+        },
+        {
+          "text": " one",
+          "confidence": 0.997
+        },
+        {
+          "text": " night,",
+          "confidence": 0.552
+        },
+        {
+          "text": " the",
+          "confidence": 0.663
+        },
+        {
+          "text": " moon",
+          "confidence": 0.984
+        },
+        {
+          "text": " talked.",
+          "confidence": 0.424
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "Once, there was a lighthouse keeper, who talked to the moon, and one night, the moon talked.",
+      "spans": [
+        {
+          "text": "Once,",
+          "confidence": 0.77
+        },
+        {
+          "text": " there",
+          "confidence": 0.738
+        },
+        {
+          "text": " was a",
+          "confidence": 0.999
+        },
+        {
+          "text": " lighthouse",
+          "confidence": 0.989
+        },
+        {
+          "text": " keeper,",
+          "confidence": 0.677
+        },
+        {
+          "text": " who",
+          "confidence": 0.808
+        },
+        {
+          "text": " talked",
+          "confidence": 0.993
+        },
+        {
+          "text": " to",
+          "confidence": 0.997
+        },
+        {
+          "text": " the",
+          "confidence": 0.999
+        },
+        {
+          "text": " moon,",
+          "confidence": 0.509
+        },
+        {
+          "text": " and",
+          "confidence": 0.568
+        },
+        {
+          "text": " one",
+          "confidence": 0.997
+        },
+        {
+          "text": " night,",
+          "confidence": 0.55
+        },
+        {
+          "text": " the",
+          "confidence": 0.666
+        },
+        {
+          "text": " moon",
+          "confidence": 0.984
+        },
+        {
+          "text": " talked.",
+          "confidence": 0.597
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "preset-nana--s1--half-last-word",
+    "line": "[warm, gentle bedtime voice] Once there was a lighthouse keeper who talked to the moon. [pause] And one night, the moon talked back.",
+    "primary": {
+      "transcript": "Once, there was a lighthouse keeper, who talked to the moon, and one night, the moon talked back.",
+      "spans": [
+        {
+          "text": "Once,",
+          "confidence": 0.77
+        },
+        {
+          "text": " there",
+          "confidence": 0.738
+        },
+        {
+          "text": " was a",
+          "confidence": 0.999
+        },
+        {
+          "text": " lighthouse",
+          "confidence": 0.989
+        },
+        {
+          "text": " keeper,",
+          "confidence": 0.677
+        },
+        {
+          "text": " who",
+          "confidence": 0.808
+        },
+        {
+          "text": " talked",
+          "confidence": 0.993
+        },
+        {
+          "text": " to",
+          "confidence": 0.997
+        },
+        {
+          "text": " the",
+          "confidence": 0.999
+        },
+        {
+          "text": " moon,",
+          "confidence": 0.509
+        },
+        {
+          "text": " and",
+          "confidence": 0.568
+        },
+        {
+          "text": " one",
+          "confidence": 0.997
+        },
+        {
+          "text": " night,",
+          "confidence": 0.556
+        },
+        {
+          "text": " the",
+          "confidence": 0.647
+        },
+        {
+          "text": " moon",
+          "confidence": 0.983
+        },
+        {
+          "text": " talked",
+          "confidence": 0.97
+        },
+        {
+          "text": " back.",
+          "confidence": 0.212
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "Once, there was a lighthouse keeper, who talked to the moon, and one night, the moon talked back.",
+      "spans": [
+        {
+          "text": "Once,",
+          "confidence": 0.77
+        },
+        {
+          "text": " there",
+          "confidence": 0.738
+        },
+        {
+          "text": " was a",
+          "confidence": 0.999
+        },
+        {
+          "text": " lighthouse",
+          "confidence": 0.989
+        },
+        {
+          "text": " keeper,",
+          "confidence": 0.677
+        },
+        {
+          "text": " who",
+          "confidence": 0.808
+        },
+        {
+          "text": " talked",
+          "confidence": 0.993
+        },
+        {
+          "text": " to",
+          "confidence": 0.997
+        },
+        {
+          "text": " the",
+          "confidence": 0.999
+        },
+        {
+          "text": " moon,",
+          "confidence": 0.509
+        },
+        {
+          "text": " and",
+          "confidence": 0.568
+        },
+        {
+          "text": " one",
+          "confidence": 0.997
+        },
+        {
+          "text": " night,",
+          "confidence": 0.554
+        },
+        {
+          "text": " the",
+          "confidence": 0.647
+        },
+        {
+          "text": " moon",
+          "confidence": 0.981
+        },
+        {
+          "text": " talked",
+          "confidence": 0.975
+        },
+        {
+          "text": " back.",
+          "confidence": 0.602
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": true,
+    "expectedCandidate": false
+  },
+  {
+    "key": "preset-nana--s1--three-quarter-last-word",
+    "line": "[warm, gentle bedtime voice] Once there was a lighthouse keeper who talked to the moon. [pause] And one night, the moon talked back.",
+    "primary": {
+      "transcript": "Once, there was a lighthouse keeper, who talked to the moon, and one night, the moon talked back.",
+      "spans": [
+        {
+          "text": "Once,",
+          "confidence": 0.77
+        },
+        {
+          "text": " there",
+          "confidence": 0.738
+        },
+        {
+          "text": " was a",
+          "confidence": 0.999
+        },
+        {
+          "text": " lighthouse",
+          "confidence": 0.989
+        },
+        {
+          "text": " keeper,",
+          "confidence": 0.677
+        },
+        {
+          "text": " who",
+          "confidence": 0.808
+        },
+        {
+          "text": " talked",
+          "confidence": 0.993
+        },
+        {
+          "text": " to",
+          "confidence": 0.997
+        },
+        {
+          "text": " the",
+          "confidence": 0.999
+        },
+        {
+          "text": " moon,",
+          "confidence": 0.509
+        },
+        {
+          "text": " and",
+          "confidence": 0.568
+        },
+        {
+          "text": " one",
+          "confidence": 0.997
+        },
+        {
+          "text": " night,",
+          "confidence": 0.563
+        },
+        {
+          "text": " the",
+          "confidence": 0.659
+        },
+        {
+          "text": " moon talked",
+          "confidence": 0.982
+        },
+        {
+          "text": " back.",
+          "confidence": 0.447
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "Once, there was a lighthouse keeper, who talked to the moon, and one night, the moon talked back.",
+      "spans": [
+        {
+          "text": "Once,",
+          "confidence": 0.77
+        },
+        {
+          "text": " there",
+          "confidence": 0.738
+        },
+        {
+          "text": " was a",
+          "confidence": 0.999
+        },
+        {
+          "text": " lighthouse",
+          "confidence": 0.989
+        },
+        {
+          "text": " keeper,",
+          "confidence": 0.677
+        },
+        {
+          "text": " who",
+          "confidence": 0.808
+        },
+        {
+          "text": " talked",
+          "confidence": 0.993
+        },
+        {
+          "text": " to",
+          "confidence": 0.997
+        },
+        {
+          "text": " the",
+          "confidence": 0.999
+        },
+        {
+          "text": " moon,",
+          "confidence": 0.509
+        },
+        {
+          "text": " and",
+          "confidence": 0.568
+        },
+        {
+          "text": " one",
+          "confidence": 0.997
+        },
+        {
+          "text": " night,",
+          "confidence": 0.561
+        },
+        {
+          "text": " the",
+          "confidence": 0.66
+        },
+        {
+          "text": " moon",
+          "confidence": 0.98
+        },
+        {
+          "text": " talked",
+          "confidence": 0.984
+        },
+        {
+          "text": " back.",
+          "confidence": 0.672
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": true,
+    "expectedCandidate": false
+  },
+  {
+    "key": "numeric-model-default--s2--complete",
+    "line": "[gasps] The value is -12.5 units. Revenue rose 12.5%.",
+    "primary": {
+      "transcript": "The value is - 12.5 units. Revenue rose 12.5%.",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.998
+        },
+        {
+          "text": " value is",
+          "confidence": 0.997
+        },
+        {
+          "text": " -",
+          "confidence": 0.637
+        },
+        {
+          "text": " 12.5",
+          "confidence": 0.682
+        },
+        {
+          "text": " units.",
+          "confidence": 0.946
+        },
+        {
+          "text": " Revenue ",
+          "confidence": 0.94
+        },
+        {
+          "text": "rose ",
+          "confidence": 0.669
+        },
+        {
+          "text": "12.5%.",
+          "confidence": 0.94
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "The value is - 12.5 units. Revenue rose 12.5%.",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.998
+        },
+        {
+          "text": " value is",
+          "confidence": 0.997
+        },
+        {
+          "text": " -",
+          "confidence": 0.637
+        },
+        {
+          "text": " 12.5",
+          "confidence": 0.682
+        },
+        {
+          "text": " units.",
+          "confidence": 0.946
+        },
+        {
+          "text": " Revenue ",
+          "confidence": 0.94
+        },
+        {
+          "text": "rose ",
+          "confidence": 0.669
+        },
+        {
+          "text": "12.5%.",
+          "confidence": 0.942
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "numeric-model-default--s2--before-last-word",
+    "line": "[gasps] The value is -12.5 units. Revenue rose 12.5%.",
+    "primary": {
+      "transcript": "The value is - 12.5 units. Revenue rose 12.5.",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.998
+        },
+        {
+          "text": " value is",
+          "confidence": 0.997
+        },
+        {
+          "text": " -",
+          "confidence": 0.637
+        },
+        {
+          "text": " 12.5",
+          "confidence": 0.682
+        },
+        {
+          "text": " units.",
+          "confidence": 0.946
+        },
+        {
+          "text": " Revenue ",
+          "confidence": 0.94
+        },
+        {
+          "text": "rose ",
+          "confidence": 0.669
+        },
+        {
+          "text": "12.5.",
+          "confidence": 0.427
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "The value is - 12.5 units. Revenue rose 12.5.",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.998
+        },
+        {
+          "text": " value is",
+          "confidence": 0.997
+        },
+        {
+          "text": " -",
+          "confidence": 0.637
+        },
+        {
+          "text": " 12.5",
+          "confidence": 0.682
+        },
+        {
+          "text": " units.",
+          "confidence": 0.946
+        },
+        {
+          "text": " Revenue ",
+          "confidence": 0.94
+        },
+        {
+          "text": "rose ",
+          "confidence": 0.669
+        },
+        {
+          "text": "12.5.",
+          "confidence": 0.585
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "numeric-model-default--s2--quarter-last-word",
+    "line": "[gasps] The value is -12.5 units. Revenue rose 12.5%.",
+    "primary": {
+      "transcript": "The value is - 12.5 units. Revenue rose 12.5%...",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.998
+        },
+        {
+          "text": " value is",
+          "confidence": 0.997
+        },
+        {
+          "text": " -",
+          "confidence": 0.637
+        },
+        {
+          "text": " 12.5",
+          "confidence": 0.682
+        },
+        {
+          "text": " units.",
+          "confidence": 0.946
+        },
+        {
+          "text": " Revenue ",
+          "confidence": 0.94
+        },
+        {
+          "text": "rose ",
+          "confidence": 0.669
+        },
+        {
+          "text": "12.5%...",
+          "confidence": 0.371
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "The value is - 12.5 units. Revenue rose 12.5%...",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.998
+        },
+        {
+          "text": " value is",
+          "confidence": 0.997
+        },
+        {
+          "text": " -",
+          "confidence": 0.637
+        },
+        {
+          "text": " 12.5",
+          "confidence": 0.682
+        },
+        {
+          "text": " units.",
+          "confidence": 0.946
+        },
+        {
+          "text": " Revenue ",
+          "confidence": 0.94
+        },
+        {
+          "text": "rose ",
+          "confidence": 0.669
+        },
+        {
+          "text": "12.5%...",
+          "confidence": 0.492
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "numeric-model-default--s2--half-last-word",
+    "line": "[gasps] The value is -12.5 units. Revenue rose 12.5%.",
+    "primary": {
+      "transcript": "The value is - 12.5 units. Revenue rose 12.5%...",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.998
+        },
+        {
+          "text": " value is",
+          "confidence": 0.997
+        },
+        {
+          "text": " -",
+          "confidence": 0.637
+        },
+        {
+          "text": " 12.5",
+          "confidence": 0.682
+        },
+        {
+          "text": " units.",
+          "confidence": 0.946
+        },
+        {
+          "text": " Revenue ",
+          "confidence": 0.94
+        },
+        {
+          "text": "rose ",
+          "confidence": 0.669
+        },
+        {
+          "text": "12.5%...",
+          "confidence": 0.482
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "The value is - 12.5 units. Revenue rose 12.5%.",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.998
+        },
+        {
+          "text": " value is",
+          "confidence": 0.997
+        },
+        {
+          "text": " -",
+          "confidence": 0.637
+        },
+        {
+          "text": " 12.5",
+          "confidence": 0.682
+        },
+        {
+          "text": " units.",
+          "confidence": 0.946
+        },
+        {
+          "text": " Revenue ",
+          "confidence": 0.94
+        },
+        {
+          "text": "rose ",
+          "confidence": 0.669
+        },
+        {
+          "text": "12.5%.",
+          "confidence": 0.869
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "numeric-model-default--s2--three-quarter-last-word",
+    "line": "[gasps] The value is -12.5 units. Revenue rose 12.5%.",
+    "primary": {
+      "transcript": "The value is - 12.5 units. Revenue rose 12.5%.",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.998
+        },
+        {
+          "text": " value is",
+          "confidence": 0.997
+        },
+        {
+          "text": " -",
+          "confidence": 0.637
+        },
+        {
+          "text": " 12.5",
+          "confidence": 0.682
+        },
+        {
+          "text": " units.",
+          "confidence": 0.946
+        },
+        {
+          "text": " Revenue ",
+          "confidence": 0.94
+        },
+        {
+          "text": "rose ",
+          "confidence": 0.669
+        },
+        {
+          "text": "12.5%.",
+          "confidence": 0.942
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "The value is - 12.5 units. Revenue rose 12.5%.",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.998
+        },
+        {
+          "text": " value is",
+          "confidence": 0.997
+        },
+        {
+          "text": " -",
+          "confidence": 0.637
+        },
+        {
+          "text": " 12.5",
+          "confidence": 0.682
+        },
+        {
+          "text": " units.",
+          "confidence": 0.946
+        },
+        {
+          "text": " Revenue ",
+          "confidence": 0.94
+        },
+        {
+          "text": "rose ",
+          "confidence": 0.669
+        },
+        {
+          "text": "12.5%.",
+          "confidence": 0.945
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "numeric-mia--s2--complete",
+    "line": "[gasps] The value is -12.5 units. Revenue rose 12.5%.",
+    "primary": {
+      "transcript": "The value is minus 12.5 units. Revenue rose 12.5%.",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.849
+        },
+        {
+          "text": " value",
+          "confidence": 0.962
+        },
+        {
+          "text": " is",
+          "confidence": 0.998
+        },
+        {
+          "text": " minus",
+          "confidence": 0.933
+        },
+        {
+          "text": " 12.5",
+          "confidence": 0.984
+        },
+        {
+          "text": " units.",
+          "confidence": 0.932
+        },
+        {
+          "text": " Revenue ",
+          "confidence": 0.973
+        },
+        {
+          "text": "rose ",
+          "confidence": 0.756
+        },
+        {
+          "text": "12.5%.",
+          "confidence": 0.925
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "The value is minus 12.5 units. Revenue rose 12.5%.",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.849
+        },
+        {
+          "text": " value",
+          "confidence": 0.962
+        },
+        {
+          "text": " is",
+          "confidence": 0.998
+        },
+        {
+          "text": " minus",
+          "confidence": 0.933
+        },
+        {
+          "text": " 12.5",
+          "confidence": 0.984
+        },
+        {
+          "text": " units.",
+          "confidence": 0.932
+        },
+        {
+          "text": " Revenue ",
+          "confidence": 0.973
+        },
+        {
+          "text": "rose ",
+          "confidence": 0.756
+        },
+        {
+          "text": "12.5%.",
+          "confidence": 0.935
+        }
+      ]
+    },
+    "expectedPrimary": true,
+    "expectedEligible": false,
+    "expectedCandidate": true
+  },
+  {
+    "key": "numeric-mia--s2--before-last-word",
+    "line": "[gasps] The value is -12.5 units. Revenue rose 12.5%.",
+    "primary": {
+      "transcript": "The value is minus 12.5 units. Revenue rose 12...",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.849
+        },
+        {
+          "text": " value",
+          "confidence": 0.962
+        },
+        {
+          "text": " is",
+          "confidence": 0.998
+        },
+        {
+          "text": " minus",
+          "confidence": 0.933
+        },
+        {
+          "text": " 12.5",
+          "confidence": 0.984
+        },
+        {
+          "text": " units.",
+          "confidence": 0.932
+        },
+        {
+          "text": " Revenue ",
+          "confidence": 0.972
+        },
+        {
+          "text": "rose ",
+          "confidence": 0.701
+        },
+        {
+          "text": "12...",
+          "confidence": 0.2
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "The value is minus 12.5 units. Revenue rose 12...",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.849
+        },
+        {
+          "text": " value",
+          "confidence": 0.962
+        },
+        {
+          "text": " is",
+          "confidence": 0.998
+        },
+        {
+          "text": " minus",
+          "confidence": 0.933
+        },
+        {
+          "text": " 12.5",
+          "confidence": 0.984
+        },
+        {
+          "text": " units.",
+          "confidence": 0.932
+        },
+        {
+          "text": " Revenue ",
+          "confidence": 0.974
+        },
+        {
+          "text": "rose ",
+          "confidence": 0.578
+        },
+        {
+          "text": "12...",
+          "confidence": 0.219
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "numeric-mia--s2--quarter-last-word",
+    "line": "[gasps] The value is -12.5 units. Revenue rose 12.5%.",
+    "primary": {
+      "transcript": "The value is minus 12.5 units. Revenue rose, 12...",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.849
+        },
+        {
+          "text": " value",
+          "confidence": 0.962
+        },
+        {
+          "text": " is",
+          "confidence": 0.998
+        },
+        {
+          "text": " minus",
+          "confidence": 0.933
+        },
+        {
+          "text": " 12.5",
+          "confidence": 0.984
+        },
+        {
+          "text": " units.",
+          "confidence": 0.932
+        },
+        {
+          "text": " Revenue ",
+          "confidence": 0.972
+        },
+        {
+          "text": "rose, ",
+          "confidence": 0.531
+        },
+        {
+          "text": "12...",
+          "confidence": 0.276
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "The value is minus 12.5 units. Revenue rose 12...",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.849
+        },
+        {
+          "text": " value",
+          "confidence": 0.962
+        },
+        {
+          "text": " is",
+          "confidence": 0.998
+        },
+        {
+          "text": " minus",
+          "confidence": 0.933
+        },
+        {
+          "text": " 12.5",
+          "confidence": 0.984
+        },
+        {
+          "text": " units.",
+          "confidence": 0.932
+        },
+        {
+          "text": " Revenue ",
+          "confidence": 0.973
+        },
+        {
+          "text": "rose ",
+          "confidence": 0.779
+        },
+        {
+          "text": "12...",
+          "confidence": 0.265
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "numeric-mia--s2--half-last-word",
+    "line": "[gasps] The value is -12.5 units. Revenue rose 12.5%.",
+    "primary": {
+      "transcript": "The value is minus 12.5 units. Revenue rose 12.5...",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.849
+        },
+        {
+          "text": " value",
+          "confidence": 0.962
+        },
+        {
+          "text": " is",
+          "confidence": 0.998
+        },
+        {
+          "text": " minus",
+          "confidence": 0.933
+        },
+        {
+          "text": " 12.5",
+          "confidence": 0.984
+        },
+        {
+          "text": " units.",
+          "confidence": 0.932
+        },
+        {
+          "text": " Revenue ",
+          "confidence": 0.973
+        },
+        {
+          "text": "rose ",
+          "confidence": 0.74
+        },
+        {
+          "text": "12.5...",
+          "confidence": 0.289
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "The value is minus 12.5 units. Revenue rose 12.5...",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.849
+        },
+        {
+          "text": " value",
+          "confidence": 0.962
+        },
+        {
+          "text": " is",
+          "confidence": 0.998
+        },
+        {
+          "text": " minus",
+          "confidence": 0.933
+        },
+        {
+          "text": " 12.5",
+          "confidence": 0.984
+        },
+        {
+          "text": " units.",
+          "confidence": 0.932
+        },
+        {
+          "text": " Revenue ",
+          "confidence": 0.973
+        },
+        {
+          "text": "rose ",
+          "confidence": 0.73
+        },
+        {
+          "text": "12.5...",
+          "confidence": 0.298
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "numeric-mia--s2--three-quarter-last-word",
+    "line": "[gasps] The value is -12.5 units. Revenue rose 12.5%.",
+    "primary": {
+      "transcript": "The value is minus 12.5 units. Revenue rose 12.5%...",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.849
+        },
+        {
+          "text": " value",
+          "confidence": 0.962
+        },
+        {
+          "text": " is",
+          "confidence": 0.998
+        },
+        {
+          "text": " minus",
+          "confidence": 0.933
+        },
+        {
+          "text": " 12.5",
+          "confidence": 0.984
+        },
+        {
+          "text": " units.",
+          "confidence": 0.932
+        },
+        {
+          "text": " Revenue ",
+          "confidence": 0.972
+        },
+        {
+          "text": "rose ",
+          "confidence": 0.761
+        },
+        {
+          "text": "12.5%...",
+          "confidence": 0.395
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "The value is minus 12.5 units. Revenue rose 12.5%...",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.849
+        },
+        {
+          "text": " value",
+          "confidence": 0.962
+        },
+        {
+          "text": " is",
+          "confidence": 0.998
+        },
+        {
+          "text": " minus",
+          "confidence": 0.933
+        },
+        {
+          "text": " 12.5",
+          "confidence": 0.984
+        },
+        {
+          "text": " units.",
+          "confidence": 0.932
+        },
+        {
+          "text": " Revenue ",
+          "confidence": 0.972
+        },
+        {
+          "text": "rose ",
+          "confidence": 0.761
+        },
+        {
+          "text": "12.5%...",
+          "confidence": 0.378
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "numeric-the-duke--s2--complete",
+    "line": "[gasps] The value is -12.5 units. Revenue rose 12.5%.",
+    "primary": {
+      "transcript": "The value is -12.5 units. Revenue rows, 12.5%.",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.882
+        },
+        {
+          "text": " value is",
+          "confidence": 0.998
+        },
+        {
+          "text": " -12.5",
+          "confidence": 0.592
+        },
+        {
+          "text": " units.",
+          "confidence": 0.915
+        },
+        {
+          "text": " Revenue ",
+          "confidence": 0.899
+        },
+        {
+          "text": "rows, ",
+          "confidence": 0.752
+        },
+        {
+          "text": "12.5%.",
+          "confidence": 0.943
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "The value is -12.5 units. Revenue rows, 12.5%.",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.882
+        },
+        {
+          "text": " value is",
+          "confidence": 0.998
+        },
+        {
+          "text": " -12.5",
+          "confidence": 0.592
+        },
+        {
+          "text": " units.",
+          "confidence": 0.915
+        },
+        {
+          "text": " Revenue ",
+          "confidence": 0.899
+        },
+        {
+          "text": "rows, ",
+          "confidence": 0.752
+        },
+        {
+          "text": "12.5%.",
+          "confidence": 0.944
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "numeric-the-duke--s2--before-last-word",
+    "line": "[gasps] The value is -12.5 units. Revenue rose 12.5%.",
+    "primary": {
+      "transcript": "The value is -12.5 units. Revenue rows, 12.",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.882
+        },
+        {
+          "text": " value is",
+          "confidence": 0.998
+        },
+        {
+          "text": " -12.5",
+          "confidence": 0.592
+        },
+        {
+          "text": " units.",
+          "confidence": 0.9
+        },
+        {
+          "text": " Revenue ",
+          "confidence": 0.887
+        },
+        {
+          "text": "rows, ",
+          "confidence": 0.716
+        },
+        {
+          "text": "12.",
+          "confidence": 0.482
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "The value is -12.5 units. Revenue, rows, 12.",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.882
+        },
+        {
+          "text": " value is",
+          "confidence": 0.998
+        },
+        {
+          "text": " -12.5",
+          "confidence": 0.592
+        },
+        {
+          "text": " units.",
+          "confidence": 0.899
+        },
+        {
+          "text": " Revenue, ",
+          "confidence": 0.687
+        },
+        {
+          "text": "rows, ",
+          "confidence": 0.708
+        },
+        {
+          "text": "12.",
+          "confidence": 0.542
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "numeric-the-duke--s2--quarter-last-word",
+    "line": "[gasps] The value is -12.5 units. Revenue rose 12.5%.",
+    "primary": {
+      "transcript": "The value is -12.5 units. Revenue, rows, 12...",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.882
+        },
+        {
+          "text": " value is",
+          "confidence": 0.998
+        },
+        {
+          "text": " -12.5",
+          "confidence": 0.592
+        },
+        {
+          "text": " units.",
+          "confidence": 0.915
+        },
+        {
+          "text": " Revenue, ",
+          "confidence": 0.697
+        },
+        {
+          "text": "rows, ",
+          "confidence": 0.752
+        },
+        {
+          "text": "12...",
+          "confidence": 0.247
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "The value is -12.5 units. Revenue rows, 12....",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.882
+        },
+        {
+          "text": " value is",
+          "confidence": 0.998
+        },
+        {
+          "text": " -12.5",
+          "confidence": 0.592
+        },
+        {
+          "text": " units.",
+          "confidence": 0.915
+        },
+        {
+          "text": " Revenue ",
+          "confidence": 0.898
+        },
+        {
+          "text": "rows, ",
+          "confidence": 0.753
+        },
+        {
+          "text": "12....",
+          "confidence": 0.307
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "numeric-the-duke--s2--half-last-word",
+    "line": "[gasps] The value is -12.5 units. Revenue rose 12.5%.",
+    "primary": {
+      "transcript": "The value is -12.5 units. Revenue rows, 12.5.",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.882
+        },
+        {
+          "text": " value is",
+          "confidence": 0.998
+        },
+        {
+          "text": " -12.5",
+          "confidence": 0.592
+        },
+        {
+          "text": " units.",
+          "confidence": 0.915
+        },
+        {
+          "text": " Revenue ",
+          "confidence": 0.899
+        },
+        {
+          "text": "rows, ",
+          "confidence": 0.752
+        },
+        {
+          "text": "12.5.",
+          "confidence": 0.504
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "The value is -12.5 units. Revenue rows, 12.5.",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.882
+        },
+        {
+          "text": " value is",
+          "confidence": 0.998
+        },
+        {
+          "text": " -12.5",
+          "confidence": 0.592
+        },
+        {
+          "text": " units.",
+          "confidence": 0.915
+        },
+        {
+          "text": " Revenue ",
+          "confidence": 0.899
+        },
+        {
+          "text": "rows, ",
+          "confidence": 0.752
+        },
+        {
+          "text": "12.5.",
+          "confidence": 0.676
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  },
+  {
+    "key": "numeric-the-duke--s2--three-quarter-last-word",
+    "line": "[gasps] The value is -12.5 units. Revenue rose 12.5%.",
+    "primary": {
+      "transcript": "The value is -12.5 units. Revenue rows, 12.5 per...",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.882
+        },
+        {
+          "text": " value is",
+          "confidence": 0.998
+        },
+        {
+          "text": " -12.5",
+          "confidence": 0.592
+        },
+        {
+          "text": " units.",
+          "confidence": 0.915
+        },
+        {
+          "text": " Revenue ",
+          "confidence": 0.899
+        },
+        {
+          "text": "rows, ",
+          "confidence": 0.752
+        },
+        {
+          "text": "12.5 ",
+          "confidence": 0.933
+        },
+        {
+          "text": "per...",
+          "confidence": 0.129
+        }
+      ]
+    },
+    "confirmation": {
+      "transcript": "The value is -12.5 units. Revenue rows, 12.5%...",
+      "spans": [
+        {
+          "text": "The",
+          "confidence": 0.882
+        },
+        {
+          "text": " value is",
+          "confidence": 0.998
+        },
+        {
+          "text": " -12.5",
+          "confidence": 0.592
+        },
+        {
+          "text": " units.",
+          "confidence": 0.915
+        },
+        {
+          "text": " Revenue ",
+          "confidence": 0.899
+        },
+        {
+          "text": "rows, ",
+          "confidence": 0.752
+        },
+        {
+          "text": "12.5%...",
+          "confidence": 0.495
+        }
+      ]
+    },
+    "expectedPrimary": false,
+    "expectedEligible": false,
+    "expectedCandidate": false
+  }
+]

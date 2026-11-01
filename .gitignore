@@ -10,7 +10,12 @@ eval/data/
 *.wav
 DerivedData/
 dist/
+/Vendor/WordRecognition/
+!Tests/DramaEngineTests/Fixtures/*.wav
 .DS_Store
 .claude/
 __pycache__/
 App/Icon/AppIcon.iconset/
+
+# Local speech experiments and generated audit recordings.
+/.audit/cue-reliability/

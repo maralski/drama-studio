@@ -68,6 +68,7 @@ public enum Drama3Prompt: Sendable {
 
     /// Token 252196; the design instruction names it between consecutive lines.
     public static let audioSeparator = "<|audio_separator|>"
+    package static let designSpeakerTag = "<|speaker:0|>"
 
     /// A voice reference as the prompt holds it.
     public struct Reference: Sendable, Equatable {
@@ -117,6 +118,15 @@ public enum Drama3Prompt: Sendable {
         return "<|speaker:0|> " + text
     }
 
+    private static func designedTurn(_ text: String) -> String {
+        var body = UnicodeWhitespace.stripLeading(text)
+        let source = body as NSString
+        if let tag = speakerTag.firstMatch(in: body, options: .anchored, range: NSRange(location: 0, length: source.length)) {
+            body = UnicodeWhitespace.stripLeading(source.substring(from: tag.range.location + tag.range.length))
+        }
+        return "\(designSpeakerTag): \(body)"
+    }
+
     static func checkCodes(_ codes: [[Int32]], _ location: String) throws {
         guard codes.count == ModelConstants.numCodebooks, let frames = codes.first?.count, frames >= 1,
               codes.allSatisfy({ $0.count == frames }),
@@ -157,7 +167,7 @@ public enum Drama3Prompt: Sendable {
     /// Rows plus the number of leading rows that make up the system message
     /// (instruction and references), which every chunk of a request shares.
     /// A `character` replaces the instruction with its design prompt and
-    /// speaks every turn as `Name: text` instead of a speaker tag.
+    /// identifies every turn with the same speaker token as the description.
     package static func buildWithPrefix(text: String, tokenizer: Tokenizer, references: [Reference] = [], character: Character? = nil,
                                        history: [HistoryTurn] = []) throws -> (rows: [Frame], prefixRows: Int) {
         let (segments, systemSegments) = try layout(text: text, references: references, character: character, history: history)
@@ -183,7 +193,9 @@ public enum Drama3Prompt: Sendable {
             guard references.isEmpty else { throw PromptError.voiceConflict }
             try validate(character)
         }
-        let turnText: (String) -> String = { character?.turn($0) ?? withSpeakerTag($0) }
+        let turnText: (String) -> String = {
+            character == nil ? withSpeakerTag($0) : designedTurn($0)
+        }
         let instruction = character?.systemPrompt ?? (references.isEmpty ? ttsInstruction : referenceInstruction)
         var segments: [Segment] = [.text("<|im_start|>system\n"), .text(instruction)]
         for (index, ref) in references.enumerated() {

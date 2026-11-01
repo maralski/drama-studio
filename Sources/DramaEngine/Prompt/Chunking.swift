@@ -19,7 +19,9 @@ public enum Drama3Chunking: Sendable {
     static let clauseMarks = Set(",:，：、".unicodeScalars)
     static let spaces = Set(" ".unicodeScalars)
     // Never split inside special tokens, paired tags such as <whisper>…</whisper>, or [bracketed] cues.
-    static let protectedSpan = try! NSRegularExpression(pattern: "<\\|[^|>]*\\|>|<([A-Za-z][\\w-]*)\\b[^>]*>.*?</\\1>|\\[[^\\[\\]]*\\]", options: .dotMatchesLineSeparators)
+    static let protectedSpan = try! NSRegularExpression(pattern: #"<\|[^|>]*\|>|\[[^\[\]]*\]"#)
+    static let passageTag = try! NSRegularExpression(pattern: #"</?([A-Za-z][\w-]*)\b[^>]*>"#)
+    static let pairedPassage = try! NSRegularExpression(pattern: #"^(<([A-Za-z][\w-]*)\b[^>]*>)(.*)(</\2>)$"#, options: .dotMatchesLineSeparators)
 
     typealias Piece = (text: [Unicode.Scalar], protected: Bool)
 
@@ -35,8 +37,30 @@ public enum Drama3Chunking: Sendable {
         var u = 0
         for (i, sc) in scalars.enumerated() { utf16ToScalar[u] = i; u += sc.utf16.count }
         utf16ToScalar[u] = scalars.count
-        for m in protectedSpan.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
-            let start = utf16ToScalar[m.range.location]!, end = utf16ToScalar[m.range.location + m.range.length]!
+        let full = NSRange(location: 0, length: ns.length)
+        let atomic = protectedSpan.matches(in: text, range: full).map(\.range)
+        var ranges = atomic
+        var stack: [(name: String, range: NSRange)] = []
+        for tag in passageTag.matches(in: text, range: full) {
+            if atomic.contains(where: { NSIntersectionRange($0, tag.range).length > 0 }) { continue }
+            let token = ns.substring(with: tag.range)
+            let name = ns.substring(with: tag.range(at: 1))
+            ranges.append(tag.range)
+            if token.hasPrefix("</") {
+                if let open = stack.last, open.name == name {
+                    stack.removeLast()
+                    if stack.isEmpty { ranges.append(NSRange(location: open.range.location, length: NSMaxRange(tag.range) - open.range.location)) }
+                }
+            } else if !token.hasSuffix("/>") { stack.append((name, tag.range)) }
+        }
+        var merged: [NSRange] = []
+        for range in ranges.sorted(by: { $0.location == $1.location ? $0.length > $1.length : $0.location < $1.location }) {
+            if let previous = merged.last, range.location < NSMaxRange(previous) {
+                merged[merged.count - 1] = NSUnionRange(previous, range)
+            } else { merged.append(range) }
+        }
+        for range in merged {
+            let start = utf16ToScalar[range.location]!, end = utf16ToScalar[NSMaxRange(range)]!
             if start > last { pieces.append((Array(scalars[last..<start]), false)) }
             pieces.append((Array(scalars[start..<end]), true))
             last = end
@@ -99,10 +123,20 @@ public enum Drama3Chunking: Sendable {
     }
 
     /// One chunk per sentence: cut at sentence ends only and keep protected
-    /// spans whole. An explicit `minBytes` folds shorter fragments together.
+    /// tokens whole. Passage tags are balanced and reopened around each
+    /// sentence. An explicit `minBytes` folds shorter fragments together.
     package static func splitSentences(_ text: String, minBytes: Int = 1) -> [String] {
         if UnicodeWhitespace.strip(text).isEmpty { return [] }
-        let pieces = breakAtMarks(protectedPieces(text), 0, sentenceEnds)
+        let pieces = breakAtMarks(protectedPieces(text), 0, sentenceEnds).flatMap { piece -> [Piece] in
+            let value = string(piece.text)
+            let ns = value as NSString
+            guard piece.protected, let match = pairedPassage.firstMatch(in: value, range: NSRange(location: 0, length: ns.length)) else { return [piece] }
+            let opening = ns.substring(with: match.range(at: 1))
+            let body = ns.substring(with: match.range(at: 3))
+            let closing = ns.substring(with: match.range(at: 4))
+            let sentences = splitSentences(body)
+            return sentences.isEmpty ? [piece] : sentences.map { (Array((opening + $0 + closing).unicodeScalars), true) }
+        }
         let closers = Set("\"'”’})".unicodeScalars)
         var chunks: [[Unicode.Scalar]] = []
         var current: [Unicode.Scalar] = []
@@ -116,7 +150,8 @@ public enum Drama3Chunking: Sendable {
             }
             current += piece
             let stripped = Array(UnicodeWhitespace.strip(string(current)).unicodeScalars)
-            if utf8Len(stripped) >= minBytes && sentenceEnds.contains(current.last ?? " ") { chunks.append(current); current = [] }
+            let passageEnd = protected && sentenceEnds.contains(DirectorsNote.spokenWords(string(piece)).unicodeScalars.last ?? " ")
+            if utf8Len(stripped) >= minBytes && (sentenceEnds.contains(current.last ?? " ") || passageEnd) { chunks.append(current); current = [] }
         }
         if !current.isEmpty {
             if let last = chunks.last, utf8Len(Array(UnicodeWhitespace.strip(string(current)).unicodeScalars)) < minBytes { chunks[chunks.count - 1] = last + current }
@@ -128,8 +163,8 @@ public enum Drama3Chunking: Sendable {
     /// The chunks of `text` under the default sentence chunking, in order.
     ///
     /// Text is cut at sentence ends (`.`, `!`, `?`, `;`, `…`, a newline, or a
-    /// CJK one). Decimals such as 3.14, `[cues]`, `<tags>…</tags>`, and
-    /// `<|special|>` tokens are never cut. Short sentences stay separate so
+    /// CJK one). Decimals such as 3.14, `[cues]`, and `<|special|>` tokens
+    /// are never cut. Paired passage tags are reopened for each sentence. Short sentences stay separate so
     /// an end-of-speech after one cannot omit the next. With `<|speaker:N|>`
     /// tags each tagged segment is split on its own and every chunk keeps its
     /// tag; text before the first tag is speaker 0.

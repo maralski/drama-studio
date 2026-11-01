@@ -11,11 +11,15 @@
 #   DS_CODEC_BUNDLE_URL     with DS_CODEC_BUNDLE_SHA256, the Core ML codec zip
 #   DS_CODEC_BUNDLE_SHA256  the setup window downloads; unset in development
 #                           builds, which convert the codec with Python instead
+#   DS_WORD_CHECK_AUDIT_DIR retain rejected word-check audio locally for debugging;
+#                           omit in shipping builds
 set -euo pipefail
 
 root=${0:A:h:h}
 cd "$root"
 
+python3 tools/bootstrap_word_recognition.py
+swift build -c release --product drama-word-recognizer
 swift build -c release --product DramaStudio
 swift build -c release --product drama-mcp
 swift build -c release --product drama-say
@@ -28,6 +32,7 @@ mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$bin/DramaStudio" "$app/Contents/MacOS/DramaStudio"
 cp "$bin/drama-mcp" "$app/Contents/MacOS/drama-mcp"
 cp "$bin/drama-say" "$app/Contents/MacOS/drama-say"
+python3 tools/stage_word_recognition.py --bin "$bin" --app "$app"
 
 cp -R "$bin/$resources" "$app/Contents/Resources/$resources"
 cp LICENSE NOTICE LICENSE-FISH-AUDIO THIRD_PARTY_NOTICES "$app/Contents/Resources/"
@@ -140,9 +145,16 @@ if [[ -n $usage_endpoint ]]; then
     fi
     plutil -insert DSUsageEndpoint -string "$usage_endpoint" "$app/Contents/Info.plist"
 fi
+if [[ -n ${DS_WORD_CHECK_AUDIT_DIR:-} ]]; then
+    plutil -insert DSWordCheckAuditDirectory -string "$DS_WORD_CHECK_AUDIT_DIR" "$app/Contents/Info.plist"
+fi
 plutil -lint "$app/Contents/Info.plist" >/dev/null
 
 identity=${SIGN_IDENTITY:--}
+sign_options=()
+if [[ $identity != - ]]; then sign_options=(--options runtime --timestamp); fi
+codesign --force $sign_options --sign "$identity" "$app/Contents/Frameworks/whisper.framework"
+codesign --force $sign_options --sign "$identity" "$app/Contents/MacOS/drama-word-recognizer"
 if [[ $identity == - ]]; then
     codesign --force --deep --sign - "$app"
 else
@@ -171,11 +183,15 @@ codesign --verify --deep --strict "$app"
 mv "$bin/$resources" "$bin/$resources.hidden"
 trap 'mv "$bin/$resources.hidden" "$bin/$resources"' EXIT
 if "$app/Contents/MacOS/DramaStudio" --check-resources 2>/dev/null; then
-    print "Built $app"
+    python3 tools/check_word_recognition.py --app "$app" --audio Tests/DramaEngineTests/Fixtures/terminal-monday.wav --expect-transcript "The meeting begins on Monday."
+    python3 tools/check_word_recognition.py --app "$app" --audio Tests/DramaEngineTests/Fixtures/golden-instead-of-garden.wav --expect-transcript "The Gordon gate is closed."
+    python3 tools/check_word_recognition.py --app "$app" --audio Tests/DramaEngineTests/Fixtures/terminal-monday.wav --language es
+    if [[ ${DS_VERIFY_NATIVE_WORD_CHECKS:-0} == 1 ]]; then
+        "$app/Contents/MacOS/DramaStudio" --check-words Tests/DramaEngineTests/Fixtures/terminal-monday.wav "The meeting begins on Monday." accepted
+        "$app/Contents/MacOS/DramaStudio" --check-words Tests/DramaEngineTests/Fixtures/golden-instead-of-garden.wav "The garden gate is closed." rejected
+    fi
+    print "Built and checked $app"
 else
-    print -u2 "WARNING: DramaEngine's Bundle.module does not resolve inside the signed app."
-    print -u2 "         The Metal kernels ship in Contents/Resources/$resources; the engine must look"
-    print -u2 "         there (Bundle.main.resourceURL) before falling back to Bundle.module."
-    print -u2 "         The preview engine does not need them, so the app still runs."
-    print "Built $app (engine resources unresolved)"
+    print -u2 "ERROR: DramaEngine's kernels or word-verification resources do not resolve inside the signed app."
+    exit 1
 fi

@@ -8,6 +8,84 @@ import XCTest
 
 @MainActor
 final class AppLayoutTests: XCTestCase {
+    func testTakeBrowserLayouts() async throws {
+        guard let output = ProcessInfo.processInfo.environment["DRAMA_TAKES_AUDIT"], AppHome.override != nil else {
+            throw XCTSkip("Set DRAMA_TAKES_AUDIT and an isolated DRAMA_STUDIO_HOME to render take layouts.")
+        }
+        let directory = URL(filePath: output)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let scratch = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: scratch) }
+        let model = SessionModel(synthesizer: MockSynthesizer(pace: .instant), library: VoiceLibrary(directory: scratch),
+                                 pronunciationURL: scratch.appending(path: "pronunciation.json"))
+        model.playsWhileGenerating = false
+        func finish() async throws {
+            for _ in 0..<500 where model.state.isGenerating { try await Task.sleep(for: .milliseconds(10)) }
+            XCTAssertFalse(model.state.isGenerating)
+        }
+        model.script = "A short line for comparing takes."
+        model.generate()
+        try await finish()
+        try await renderTakeBrowser(model, width: 480, name: "one-take", in: directory)
+        for _ in 0..<11 {
+            model.retake(note: "Speak softly and warmly, with a long pause before the last sentence and a gentle finish.")
+            try await finish()
+        }
+        XCTAssertEqual(model.visibleTakes.count, 12)
+        model.script += " Revised."
+        for width in [480.0, 740, 1100] {
+            try await renderTakeBrowser(model, width: width, name: "script-\(Int(width))", in: directory)
+        }
+        model.open(NarrationDocument(title: "Take browser audit", source: .pptx, segments: [
+            .init(index: 1, label: "Slide 3: Questions, discussion and the next steps for the quarterly review", text: "Ask anything. Email us.")
+        ]))
+        for _ in 0..<12 {
+            model.generate()
+            try await finish()
+        }
+        XCTAssertEqual(model.visibleTakes.count, 12)
+        model.editorText += " Revised."
+        for width in [480.0, 740, 1100] {
+            try await renderTakeBrowser(model, width: width, name: "document-\(Int(width))", in: directory)
+        }
+        let first = try XCTUnwrap(model.visibleTakes.first)
+        let last = try XCTUnwrap(model.visibleTakes.last)
+        model.selectTake(first.id)
+        model.stopPreview()
+        XCTAssertEqual(model.visibleExportTakeID, last.id, "Auditioning must preserve the exported take")
+        try await renderTakeBrowser(model, width: 740, name: "document-first-take", in: directory)
+        model.useSelectedTakeForExport()
+        XCTAssertEqual(model.visibleExportTakeID, first.id)
+        model.selectTake(last.id)
+        model.stopPreview()
+        try await renderTakeBrowser(model, width: 740, name: "document-export-first", in: directory)
+        try await renderTakeBrowser(model, width: 740, name: "document-expanded", in: directory, panelHeight: 320)
+        XCTAssertTrue(model.saveProject(to: directory.appending(path: "Take deletion demo.dramaproj")))
+    }
+
+    private func renderTakeBrowser(_ model: SessionModel, width: Double, name: String, in directory: URL, panelHeight: CGFloat? = nil) async throws {
+        let host = NSHostingView(rootView: VStack(spacing: 0) {
+            TransportBar(model: model)
+            TakesStrip(model: model, resizable: panelHeight != nil).frame(height: panelHeight)
+        }.frame(width: width).background(Color(nsColor: .windowBackgroundColor)))
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: width, height: 500), styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        defer { window.close() }
+        for _ in 0..<5 {
+            host.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(30))
+        }
+        let size = host.fittingSize
+        XCTAssertEqual(size.width, width, accuracy: 1)
+        XCTAssertLessThan(size.height, 480, "The browser must leave space for the script editor")
+        window.setContentSize(size)
+        host.layoutSubtreeIfNeeded()
+        let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+        try XCTUnwrap(bitmap.representation(using: .png, properties: [:])).write(to: directory.appending(path: "\(name).png"))
+    }
+
     func testSetupFitsUsageContentAndCapsLongErrors() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         let model = SessionModel(synthesizer: MockSynthesizer(), library: VoiceLibrary(directory: directory),

@@ -75,7 +75,7 @@ enum SettingHelp: String, CaseIterable, Identifiable {
         case .referenceClip: "Reference Clip"
         case .voiceTranscript: "Transcript"
         case .voiceConsent: "Consent"
-        case .newTake: "New Take"
+        case .newTake: "Generating Takes"
         case .directorsNote: "Director's Note"
         case .keepTake: "Use for Export"
         case .quickPreview: "Quick Preview"
@@ -96,7 +96,7 @@ enum SettingHelp: String, CaseIterable, Identifiable {
         case .speakerVoice:
             "Picks who speaks for this speaker: a library voice, the model's default, a surprise voice, or a designed one. Model default lets the model choose a voice of its own for every take. Voices apply in speaker order, so a speaker's voice is used only when every earlier speaker has one too, and a script with several speakers uses library voices only."
         case .performanceCues:
-            "Cues tell the model how to deliver a line, such as [laughs] or [sighs], or wrap a passage in tags such as <whisper>\u{2026}</whisper>. Insert Cue puts the cue at the cursor, or around the selected text for a passage cue. Cues are plain script text, so you can also type them by hand."
+            "Cues direct delivery with markers such as [laughs] or passage tags such as <whisper>\u{2026}</whisper>. Insert Cue puts a marker at the cursor or wraps the selected passage. Normal generation requires macOS 26 and an installed local speech model, checks words before playback, and stops if retries cannot verify them. Quick preview is unchecked; listen before export to judge the acting and cue sounds."
         case .examples:
             "The Examples menu has a line for each opening style, which goes in at the cursor, and a cast of ready-made characters. Choosing a character replaces the script with its line and casts its designed voice. Use them to hear what cues and voice design can do before you write your own."
         case .sections:
@@ -106,9 +106,9 @@ enum SettingHelp: String, CaseIterable, Identifiable {
         case .projects:
             "Save Project preserves all takes, their original text and voice assignments, and your export selections. Save updates the current project; Save Project As creates a copy, and a background recovery draft protects edits between saves. Older projects open with an audio verification warning because they did not store generation history. Library voice assignments still refer to your local voice library."
         case .surpriseMe:
-            "Lets the model invent a voice for this speaker. The first take you generate sets that voice, and later takes and retakes keep it. Pick Surprise me again for a different voice, or click Save Voice to Library to save it to the library."
+            "Lets the model invent a voice for this speaker. The first checked take sets that voice, and later takes and retakes keep it. Pick Surprise me again for a different voice, or click Save Voice to Library to save it to the library."
         case .voiceDesign:
-            "Casts a voice from a description instead of a recording: a name, how the voice sounds, and an optional scene. Try a Line speaks a sample in that voice, and if you then click Use Voice without changing the design, the voice you heard is the voice you get. Designed voices cast scripts with one speaker, so click Save Voice to Library to save one to the library for a screenplay."
+            "Casts a voice from a description instead of a recording: a name, how the voice sounds, and an optional scene. Try a Line speaks a sample in that voice, and if you then click Use Voice without changing the design, the voice you heard is the voice you get. Try a Line checks the spoken words even when Quick preview is enabled on the main screen. Designed voices cast scripts with one speaker, so click Save Voice to Library to save one to the library for a screenplay."
         case .referenceClip:
             "A short recording of the voice you want, from a file or recorded here. Use 5 to 20 seconds of clean speech with no music or background noise. In testing, cloned voices scored 0.87 speaker similarity to their clip, against about 0.55 for the model's own voices."
         case .voiceTranscript:
@@ -116,15 +116,15 @@ enum SettingHelp: String, CaseIterable, Identifiable {
         case .voiceConsent:
             "Confirms that the voice is yours or that the speaker agreed to have it cloned. Drama Studio won't add a voice until you check it. The Fish Audio Community License forbids imitating an identifiable person without their consent."
         case .newTake:
-            "Generates the script again with a fresh random seed, so you hear a different read of the same text, voices, and settings. Each take joins the takes strip below the transport, where you can replay it, retake it with a note, or keep it for export. Generating after an edit preserves earlier takes and marks them as outdated."
+            "Click Generate or Generate All again for a fresh take of the same text, voices, and settings. Scroll the grid to browse takes, click a card to audition it, and choose Use for Export to change the exported take. The trash button deletes a take after confirmation, replacing the export take with the newest remaining take when needed. Generating after an edit preserves earlier takes and marks them as outdated."
         case .directorsNote:
             "Tells the performer how to read the line again, such as softer and warmer or slower, with more pauses. Retake reads the whole script once more with the note written in, after the takes so far, so the model hears what to change. Retakes work on scripts with one speaker."
         case .keepTake:
             "Click a take to audition it, then Use for Export to choose the audio and captions to export. The Export badge and status identify the output. Auditioning another take does not change it."
         case .quickPreview:
-            "Makes faster rough takes for checking casting, cues, and pacing. It can drop words because it skips retries, uses a shorter time limit, and stops after two seconds of silence. Turn it off for the take you export."
+            "Makes faster rough takes for checking casting, cues, and pacing. It skips word verification and retries, uses a shorter time limit, and stops after two seconds of silence, so it can drop words. Only checked takes become automatic voice references or retake history, and voice auditions always use checked generation. Turn Quick Preview off for the take you export."
         case .expressiveness:
-            "Sets how much the delivery varies from one take to the next. The default, in the middle, is the model vendor's own sampling, temperature 0.7 and top-p 0.7; lower is steadier and flatter. The top is the sampling of Fish Audio's own demo, which kept every sentence of the cue lines in the reliability study and needed fewer retries, at a small cost in slurred words on plain prose. Move it up for lines with cues or for livelier delivery, and leave it in the middle for narration you export."
+            "Sets how much the delivery varies from one take to the next. The default, in the middle, uses temperature 0.7 and top-p 0.7, with steadier delivery below and more variation above. Normal generation checks the spoken words and may try a broader delivery when a cue attempt fails that check. Listen before export to judge the performance."
         case .playbackSpeed:
             "Plays the audio faster or slower without changing its pitch, from 0.75x to 1.5x. It changes playback only: exports, captions, and projects keep the original timing. The scrubber and the sentence highlight follow the audio at every speed, and the setting is remembered."
         case .streaming:

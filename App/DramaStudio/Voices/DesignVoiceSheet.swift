@@ -83,13 +83,29 @@ struct DesignVoiceSheet: View {
                         .disabled(draft.design == nil || DirectorsNote.spokenWords(draft.line).isEmpty || model.state.isGenerating)
                         if model.isAuditioning {
                             ProgressView().controlSize(.small)
-                            Text("Generating the line\u{2026}").foregroundStyle(.secondary)
+                            if case .generating(let chunk, let count, _) = model.state {
+                                Text("Generating sentence \(chunk) of \(count)\u{2026}").foregroundStyle(.secondary)
+                            } else {
+                                Text("Preparing voice\u{2026}").foregroundStyle(.secondary)
+                            }
+                            Button("Stop") { model.cancelAudition() }
                         } else if heardThisDesign {
-                            Label("Use Voice keeps the voice you just heard.", systemImage: "checkmark.circle")
-                                .foregroundStyle(.secondary)
+                            Button(model.isPlayingAudition ? "Stop" : "Play Again") {
+                                if model.isPlayingAudition { model.stopPreview() }
+                                else { model.replayAudition() }
+                            }
+                        } else if case .failed(let message) = model.state {
+                            Text(message).foregroundStyle(.red)
                         }
                     }
                     .font(.callout)
+                    if model.isAuditioning, model.telemetry.retries > 0 {
+                        Text("Retried \(model.telemetry.retries) short readings.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    } else if heardThisDesign {
+                        Label("Use Voice keeps the voice you just heard.", systemImage: "checkmark.circle")
+                            .font(.callout).foregroundStyle(.secondary)
+                    }
                 } header: {
                     Text("Try it")
                 } footer: {

@@ -7,6 +7,7 @@ import XCTest
 final class AppSettingHelpTests: XCTestCase {
     /// Fields the app sets itself, and why none of them is a control.
     private let hiddenConfigFields: [String: String] = [
+        "wordVerification": "Normal generation requires local word checks; Quick preview explicitly skips them.",
         "temperature": "Derived from Expressiveness.",
         "topP": "Derived from Expressiveness.",
         "topK": "Derived from Expressiveness: the vendor's 30 up to the middle, off above it as in the Space.",
@@ -15,7 +16,7 @@ final class AppSettingHelpTests: XCTestCase {
         "chunking": "Fixed by measurement: one sentence per turn cut mean WER from 0.141 to 0.063.",
         "stopAfterSilenceSeconds": "Normal takes wait for end of speech; Quick preview opts into 2 s of silence for speed and may cut words after a pause.",
         "minSpokenRatio": "Fixed by measurement at 0.6; Quick preview sets it to 0.",
-        "maxRetries": "Fixed at 2 alongside the retry threshold.",
+        "maxRetries": "At most five replacement attempts, each subject to local word verification.",
         "stopOnLoop": "Fixed by measurement: it ends laughter loops and no speech run tripped it.",
         "retryWithoutEOSBelow": "Fixed by measurement at 1.0 alongside the retry threshold; Quick preview turns retries off.",
         "capSecondsPerCue": "Fixed by measurement at 1.5 s, so a cue's time does not cut its words off at the cap.",
@@ -70,6 +71,7 @@ final class AppSettingHelpTests: XCTestCase {
         XCTAssertEqual(preview.stopAfterSilenceSeconds, 2)
         XCTAssertEqual(preview.frameCap, .fromText(margin: 1.2, floorSeconds: 1.0))
         var expected = GenerationConfig()
+        expected.wordVerification = .uncheckedPreview
         expected.stopAfterSilenceSeconds = 2
         expected.minSpokenRatio = 0
         expected.frameCap = .fromText(margin: 1.2, floorSeconds: 1.0)

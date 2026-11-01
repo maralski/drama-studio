@@ -315,6 +315,8 @@ func generate(_ args: Args) throws {
         FileHandle.standardError.write("codec probe: Core ML\n".data(using: .utf8)!)
     } else {
         config.stopAfterSilenceSeconds = nil
+        config.wordVerification = .uncheckedPreview
+        FileHandle.standardError.write("unchecked diagnostic generation: no decoded audio is available for word verification\n".data(using: .utf8)!)
     }
     var all: [Frame] = []
     var audio: [Float] = []
@@ -579,5 +581,6 @@ case "generate": try generate(args)
 case "decode": try decodeCommand(args)
 case "codec-bench": try codecBench(args)
 case "serve": try serve(args)
+case "check-words": exit(WordCheckDiagnostic.run(Array(args.positional.dropFirst())))
 default: fail("usage: drama <dump|bench|kbench|dbench|fbench|profile|trace|tune|pack|schedule-ab|generate|decode|codec-bench|serve> [options]")
 }

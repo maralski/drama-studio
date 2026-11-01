@@ -51,10 +51,6 @@ struct TransportBar: View {
     private var playbackButtons: some View {
         HStack(spacing: 10) {
             generateButton
-            Button("New Take", systemImage: "dice") { model.generate() }
-                .labelStyle(.iconOnly)
-                .disabled(!model.canTakeAgain)
-                .help("Generate the script again for a different read; the takes so far stay below")
             Button(model.state.isPlaying ? "Pause" : "Play", systemImage: model.state.isPlaying ? "pause.fill" : "play.fill") {
                 model.togglePlayback()
             }

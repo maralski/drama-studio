@@ -1,0 +1,11 @@
+{
+  "source": "Locally generated fictional Detective voice, opening gasp cue, seed2. Human listener reported The golden gate is closed for scripted The garden gate is closed.",
+  "expected_script": "The garden gate is closed.",
+  "human_transcription": "The golden gate is closed",
+  "native_transcript": "The garden gate is closed.",
+  "independent_english_whisper_transcript": "The Gordon gate is closed.",
+  "sample_rate": 44100,
+  "user_confirmation_reference": "confirmed-word-substitution.json",
+  "wav_sha256": "f155a9618fd8ac8986a43dea2cabf43dc2ed4f16f4cadce2190f540be9cb714b",
+  "pcm_sha256": "01d9648a7df0c5566f2baccaefbe9ab0479bcdf47b1582a6a3245bef6484adb7"
+}

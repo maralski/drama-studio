@@ -21,8 +21,8 @@ final class SessionModel {
     var quickPreview = false
     /// Absent means `.modelDefault`.
     private(set) var speakerVoices: [Int: VoiceChoice] = [:]
-    /// The first take made with a surprise or designed voice, reused so later takes keep that voice.
-    private(set) var sessionVoices: [VoiceChoice: Take] = [:] {
+    /// Legacy references remain in saved projects, but only checked audio conditions new speech.
+    private var recordedVoices: [VoiceChoice: RecordedVoice] = [:] {
         didSet {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.sortedKeys]
@@ -31,6 +31,9 @@ final class SessionModel {
                 return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
             }
         }
+    }
+    var sessionVoices: [VoiceChoice: Take] {
+        recordedVoices.compactMapValues { $0.hasCurrentWordCheck ? $0.take : nil }
     }
     private var sessionVoiceFingerprints: [VoiceChoice: String] = [:]
     private(set) var projectURL: URL?
@@ -44,7 +47,7 @@ final class SessionModel {
     var projectName: String { projectURL?.deletingPathExtension().lastPathComponent ?? title }
 
     private var projectRevision: ProjectRevision {
-        ProjectRevision(source: source, voices: speakerVoices, sessionVoices: sessionVoices, screenplay: screenplayMode,
+        ProjectRevision(source: source, voices: speakerVoices, recordedVoices: recordedVoices, screenplay: screenplayMode,
                         expressiveness: expressiveness, quickPreview: quickPreview,
                         takes: takes.map(\.id), sections: sectionTakes.mapValues { $0.takes.map(\.id) },
                         exportTake: keptTakeID, sectionExports: sectionTakes.mapValues(\.chosenID))
@@ -75,6 +78,8 @@ final class SessionModel {
     private(set) var sectionTakes: [NarrationDocument.Segment.ID: SectionTakes] = [:]
     /// The last line tried in the design sheet.
     private(set) var audition: Audition?
+    private(set) var isPlayingAudition = false
+    @ObservationIgnored private(set) var auditionAudio: [Float] = []
     private(set) var recentProjects = RecentProjects.load()
     var playbackRate: Double {
         didSet {
@@ -311,7 +316,6 @@ final class SessionModel {
         if let document { return !SectionRequests.queue(document).isEmpty }
         return (try? prepared.get()) != nil
     }
-    var canTakeAgain: Bool { canGenerate && !audio.isEmpty }
     var canNarrateSection: Bool { !state.isGenerating && selectedSegment.map { !SectionRequests.spokenText(of: $0).isEmpty } ?? false }
     var canPlay: Bool { !audio.isEmpty }
     var canExport: Bool { !exportSamples.isEmpty && !state.isGenerating }
@@ -478,7 +482,7 @@ final class SessionModel {
         var run = run
         run.recordsVoice = casting.recordsVoice
         let request = SectionRequests.request(for: segment, in: document, casting: casting,
-                                              takes: sectionTakes.mapValues(\.chosen.take), config: config)
+                                              takes: sectionTakes.compactMapValues { $0.chosen.hasCurrentWordCheck ? $0.chosen.take : nil }, config: config)
         start(request, as: .sections(run))
     }
 
@@ -486,7 +490,7 @@ final class SessionModel {
     func retake(note: String) {
         guard canRetake, let note = DirectorsNote.clean(note), case .success(let script) = prepared else { return }
         let casting = casting
-        let matching = takes.filter { !$0.isIncomplete && $0.basis == currentPlainBasis }
+        let matching = takes.filter { $0.hasCurrentWordCheck && !$0.isIncomplete && $0.basis == currentPlainBasis }
         let voice = casting.voiceTake.flatMap { $0 == matching.first?.take ? nil : $0 }
         start(SpeechRequest(text: script.text, references: casting.references, character: casting.character, note: note,
                             previousTakes: (voice.map { [$0] } ?? []) + matching.map(\.take), config: config),
@@ -498,7 +502,11 @@ final class SessionModel {
     func tryLine(_ line: String, as design: VoiceDesign) {
         guard !state.isGenerating, !DirectorsNote.spokenWords(line).isEmpty else { return }
         audition = nil
-        start(SpeechRequest(text: line, character: design, config: config), as: .audition(design))
+        // This audio can become the voice reference, so a rough preview must
+        // not supply a transcript for words it may have omitted.
+        var auditionConfig = GenerationConfig.make(expressiveness: expressiveness, quickPreview: false)
+        auditionConfig.streaming = config.streaming
+        start(SpeechRequest(text: line, character: design, config: auditionConfig), as: .audition(design))
     }
 
     var isAuditioning: Bool {
@@ -509,12 +517,18 @@ final class SessionModel {
         if isAuditioning { stopGeneration() }
         stopPreview()
         audition = nil
+        auditionAudio = []
+    }
+
+    func replayAudition() {
+        guard !state.isGenerating, audition != nil, !auditionAudio.isEmpty else { return }
+        playAudition(auditionAudio)
     }
 
     /// Casts the design; when it is the one just tried, the voice heard becomes its session voice.
     func useDesign(_ design: VoiceDesign, for speaker: Speaker) {
         setVoice(.designed(design), for: speaker)
-        if let audition, audition.design == design { sessionVoices[.designed(design)] = audition.take }
+        if let audition, audition.design == design { recordedVoices[.designed(design)] = RecordedVoice(take: audition.take, wordsChecked: true) }
         cancelAudition()
     }
 
@@ -541,6 +555,7 @@ final class SessionModel {
             beginRun()
         case .audition:
             stopPlayback(resetTo: 0)
+            auditionAudio = []
         case .sections:
             break
         }
@@ -666,9 +681,12 @@ final class SessionModel {
                     recompose()
                 }
             case .audition(let design)?:
-                audition = Audition(design: design, take: result.take)
+                audition = result.wordCoverage == .recognized ? Audition(design: design, take: result.take) : nil
                 settleAfterGeneration(audio.isEmpty ? .idle : .ready)
-                playAudition(result.samples)
+                if auditionAudio.isEmpty {
+                    auditionAudio = result.samples
+                    playAudition(auditionAudio)
+                }
             case nil:
                 break
             }
@@ -685,7 +703,16 @@ final class SessionModel {
         switch job {
         case .take?: autoplayFrom = audio.isEmpty ? 0 : nil
         case .sections(let run)?: autoplayFrom = run.startsPlayback && audio.count == run.audioStart ? run.audioStart : nil
-        case .audition?, nil: return
+        case .audition?:
+            let offset = auditionAudio.count
+            auditionAudio += samples
+            if previewPlayer.isPlaying {
+                previewPlayer.feed(auditionAudio)
+            } else {
+                playAudition(auditionAudio, from: offset)
+            }
+            return
+        case nil: return
         }
         if let index = liveChunks[chunk] {
             let span = liveSpans[index]
@@ -700,9 +727,10 @@ final class SessionModel {
         }
     }
 
-    private func playAudition(_ samples: [Float]) {
+    private func playAudition(_ samples: [Float], from offset: Int = 0) {
         do {
-            try previewPlayer.play(samples, from: 0)
+            try previewPlayer.play(samples, from: offset)
+            isPlayingAudition = true
         } catch {
             notice = "Couldn't start audio output: \(error.localizedDescription)"
         }
@@ -715,16 +743,20 @@ final class SessionModel {
     }
 
     private func addTake(_ result: SpeechResult, note: String?, recordsVoice: VoiceChoice?) {
-        if let recordsVoice, sessionVoices[recordsVoice] == nil { sessionVoices[recordsVoice] = result.take }
-        let take = SessionTake(number: (takes.last?.number ?? 0) + 1, note: note, take: result.take, samples: result.samples, sentences: sentences(of: result), basis: recordedBasis(for: recordsVoice))
+        if result.wordCoverage == .recognized, let recordsVoice, sessionVoices[recordsVoice] == nil {
+            recordedVoices[recordsVoice] = RecordedVoice(take: result.take, wordsChecked: true)
+        }
+        let take = SessionTake(number: (takes.last?.number ?? 0) + 1, note: note, take: result.take, samples: result.samples, sentences: sentences(of: result), basis: recordedBasis(for: recordsVoice), wordsChecked: result.wordCoverage == .recognized)
         takes.append(take)
         selectedTakeID = take.id
         if keptTakeID == nil { keptTakeID = take.id }
     }
 
     private func addSectionTake(_ result: SpeechResult, run: SectionRun) {
-        if let choice = run.recordsVoice, sessionVoices[choice] == nil { sessionVoices[choice] = result.take }
-        let take = SessionTake(number: sectionTakes[run.current]?.nextNumber ?? 1, note: nil, take: result.take, samples: result.samples, sentences: sentences(of: result), basis: recordedBasis(for: run.recordsVoice))
+        if result.wordCoverage == .recognized, let choice = run.recordsVoice, sessionVoices[choice] == nil {
+            recordedVoices[choice] = RecordedVoice(take: result.take, wordsChecked: true)
+        }
+        let take = SessionTake(number: sectionTakes[run.current]?.nextNumber ?? 1, note: nil, take: result.take, samples: result.samples, sentences: sentences(of: result), basis: recordedBasis(for: run.recordsVoice), wordsChecked: result.wordCoverage == .recognized)
         sectionSelections[run.current] = take.id
         if sectionTakes[run.current] == nil {
             sectionTakes[run.current] = SectionTakes(first: take)
@@ -767,6 +799,39 @@ final class SessionModel {
         }
     }
 
+    func deleteTake(_ id: SessionTake.ID) {
+        guard !state.isGenerating else { return }
+        if document != nil {
+            guard let section = sectionTakes.first(where: { $0.value.takes.contains { $0.id == id } })?.key,
+                  let history = sectionTakes[section] else { return }
+            let changesExport = history.chosenID == id
+            if previewingTakeID == id { stopPreview() }
+            if changesExport { stopPlayback(resetTo: 0) }
+            let remaining = history.removing(id)
+            sectionTakes[section] = remaining
+            if sectionSelections[section] == id { sectionSelections[section] = remaining?.chosenID }
+            if changesExport {
+                recompose()
+                result = nil
+                generationClock = nil
+                state = audio.isEmpty ? .idle : .ready
+            }
+        } else {
+            guard takes.contains(where: { $0.id == id }) else { return }
+            let changesSelection = selectedTakeID == id
+            if changesSelection { stopPlayback(resetTo: 0) }
+            takes.removeAll { $0.id == id }
+            if keptTakeID == id { keptTakeID = takes.last?.id }
+            if changesSelection {
+                selectedTakeID = takes.last?.id
+                audio = takes.last?.samples ?? []
+                state = audio.isEmpty ? .idle : .ready
+            }
+            result = nil
+            generationClock = nil
+        }
+    }
+
 
 
     private func generationEnded(run ended: Int, error: Error?) {
@@ -776,6 +841,11 @@ final class SessionModel {
         if let error {
             if !(error is CancellationError) { recordUsage(.generationFailed) }
             preservePartialTake()
+            if case .audition? = job {
+                stopPreview()
+                audition = nil
+                auditionAudio = []
+            }
             stopPlayback(resetTo: nil)
             settleAfterGeneration(.failed(Self.describe(error)))
             recompose()
@@ -927,7 +997,7 @@ final class SessionModel {
         let old = speakerVoices[index] ?? .modelDefault
         guard old != choice else { return }
         speakerVoices[index] = choice == .modelDefault ? nil : choice
-        if !speakerVoices.values.contains(old) { sessionVoices[old] = nil }
+        if !speakerVoices.values.contains(old) { recordedVoices[old] = nil }
     }
 
     func setVoice(_ choice: VoiceChoice, for speaker: Speaker) {
@@ -986,6 +1056,7 @@ final class SessionModel {
     }
 
     func stopPreview() {
+        isPlayingAudition = false
         previewingTakeID = nil
         previewPlayer.stop()
         previewingVoice = nil
@@ -1044,7 +1115,7 @@ final class SessionModel {
                                          sectionExports: sectionTakes.mapValues(\.chosenID),
                                          selectedTake: selectedTakeID, exportTake: keptTakeID,
                                          sectionSelections: sectionSelections, selectedSegment: selectedSegmentID, originalProjectURL: projectURL, voices: speakerVoices,
-                                         sessionVoices: sessionVoices, screenplayMode: screenplayMode)
+                                         recordedVoices: recordedVoices, screenplayMode: screenplayMode)
         let all = takes + sectionTakes.values.flatMap(\.takes)
         return ProjectSnapshot(project: project, audio: exportSamples,
                                archivedAudio: Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0.samples) }))
@@ -1094,7 +1165,7 @@ final class SessionModel {
                 sectionSelections = archive.sectionSelections
                 if let selected = archive.selectedSegment, document?.segments.contains(where: { $0.id == selected }) == true { selectedSegmentID = selected }
                 speakerVoices = archive.voices
-                sessionVoices = archive.sessionVoices
+                recordedVoices = archive.recordedVoices ?? (archive.sessionVoices ?? [:]).mapValues { RecordedVoice(take: $0, wordsChecked: false) }
                 screenplayMode = archive.screenplayMode
                 if document != nil { recompose() }
                 else { self.audio = takes.first { $0.id == selectedTakeID }?.samples ?? keptTake?.samples ?? [] }
@@ -1115,7 +1186,7 @@ final class SessionModel {
         replaceSource(with: project.document.map(ScriptSource.document) ?? .plain(project.script))
         clearNarration()
         speakerVoices = project.casting.mapValues { .library($0) }
-        sessionVoices = [:]
+        recordedVoices = [:]
         expressiveness = project.expressiveness
         quickPreview = project.quickPreview
         screenplayMode = project.document == nil && Screenplay.looksLikeScreenplay(project.script)
@@ -1185,6 +1256,9 @@ struct SessionTake: Identifiable, Equatable {
     var sentences: [NarrationTake.Sentence] = []
     var basis: TakesBasis? = nil
     var isIncomplete = false
+    var wordsChecked = false
+    var wordCheckRevision: Int? = WordVerificationPolicy.currentRevision
+    var hasCurrentWordCheck: Bool { wordsChecked && wordCheckRevision == WordVerificationPolicy.currentRevision }
     var duration: TimeInterval { Double(samples.count) / Double(ModelConstants.sampleRate) }
 }
 

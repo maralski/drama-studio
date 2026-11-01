@@ -40,15 +40,17 @@ final class CueStreamingTests: XCTestCase {
         }
     }
 
-    func testQuickPreviewAndExplicitlyDisabledRetriesKeepCuePartials() async throws {
+    func testQuickPreviewAndExplicitlyUncheckedRequestsKeepCuePartials() async throws {
         var quick = GenerationConfig.make(expressiveness: 0.5, quickPreview: true)
         quick.streaming = .lowLatency(stepFrames: 16)
         var noAttempts = GenerationConfig()
         noAttempts.streaming = .lowLatency(stepFrames: 16)
         noAttempts.maxRetries = 0
+        noAttempts.wordVerification = .uncheckedPreview
         var noThreshold = GenerationConfig()
         noThreshold.streaming = .lowLatency(stepFrames: 16)
         noThreshold.minSpokenRatio = 0
+        noThreshold.wordVerification = .uncheckedPreview
         for config in [quick, noAttempts, noThreshold] {
             let count = try await partials(for: SpeechRequest(text: "[laughs] " + line, config: config))
             XCTAssertGreaterThan(count, 0)
@@ -99,9 +101,11 @@ final class CueStreamingTests: XCTestCase {
         var noAttempts = GenerationConfig()
         noAttempts.streaming = .lowLatency(stepFrames: 16)
         noAttempts.maxRetries = 0
+        noAttempts.wordVerification = .uncheckedPreview
         var noThreshold = GenerationConfig()
         noThreshold.streaming = .lowLatency(stepFrames: 16)
         noThreshold.minSpokenRatio = 0
+        noThreshold.wordVerification = .uncheckedPreview
         for config in [quick, noAttempts, noThreshold] {
             let count = try await partials(for: SpeechRequest(text: line, references: [voice], config: config))
             XCTAssertGreaterThan(count, 0)

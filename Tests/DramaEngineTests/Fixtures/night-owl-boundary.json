@@ -1,0 +1,7 @@
+{
+  "source": "Night Owl directed preset, retained exact accepted raw sentence units",
+  "boundary_samples": 94208,
+  "pcm_sha256": "91d3209e9ff4a7e46505a0e34bb664d13275ce75af8edb031a89a8c08dc63111",
+  "human_judgment": "yes Please close it quietly is clear",
+  "scope": "Critical first current word confirmed clear. No separate naturalness judgment inferred."
+}

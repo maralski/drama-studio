@@ -70,7 +70,7 @@ final class APITakeTests: XCTestCase {
         XCTAssertEqual(third.status, .ok, text(third))
         request = try await lastRequest()
         XCTAssertEqual(request.previousTakes.map(\.text), ["Captain: [low] Ye want to know? Pray.",
-                                                           "Captain: Direction: angrier\nLine: [angrier] Ye want to know? [angrier] Pray."],
+                                                           "Captain: Direction: angrier\nLine: [angrier] [low] Ye want to know? [angrier] Pray."],
                        "naming the latest take brings the line's first take, the voice, along")
         let thirdID = try XCTUnwrap(third.headers["X-Drama-Take-Id"])
         let thirdTake = await send("GET", "/v1/takes/\(thirdID)")

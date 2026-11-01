@@ -43,9 +43,9 @@ final class PromptTests: XCTestCase {
                        ["The quick brown fox jumps over the lazy dog.", "She sells sea shells by the sea shore."])
         XCTAssertEqual(Drama3Chunking.splitSentences("Pi is 3.14159! Really? Yes."), ["Pi is 3.14159!", "Really?", "Yes."])
         XCTAssertEqual(Drama3Chunking.splitSentences("She paused [sighs. no] and <whisper>left. quietly</whisper>. Then ran."),
-                       ["She paused [sighs. no] and <whisper>left. quietly</whisper>.", "Then ran."])
+                       ["She paused [sighs. no] and <whisper>left.</whisper>", "<whisper>quietly</whisper>.", "Then ran."])
         XCTAssertEqual(Drama3Chunking.splitSentences("She paused [sighs. no] and <whisper>left. quietly</whisper>. Then she ran all the way home."),
-                       ["She paused [sighs. no] and <whisper>left. quietly</whisper>.", "Then she ran all the way home."])
+                       ["She paused [sighs. no] and <whisper>left.</whisper>", "<whisper>quietly</whisper>.", "Then she ran all the way home."])
         XCTAssertEqual(Drama3Chunking.splitSentencesTagged("<|speaker:0|> Hi there, friend. How are you? <|speaker:1|> Fine thanks, and you?"),
                        ["<|speaker:0|> Hi there, friend.", "<|speaker:0|> How are you?", "<|speaker:1|> Fine thanks, and you?"])
         XCTAssertEqual(Drama3Chunking.splitSentences("   "), [])
@@ -62,7 +62,7 @@ final class PromptTests: XCTestCase {
 
     func testSentenceBoundariesPreserveProtectedSpansAndSpeakerTags() {
         XCTAssertEqual(Drama3Chunking.splitSentencesTagged("First. <|speaker:2|> [pause. wait] <whisper>Stay. quiet.</whisper> Now. Pi is 3.14. Go."),
-                       ["<|speaker:0|> First.", "<|speaker:2|> [pause. wait] <whisper>Stay. quiet.</whisper> Now.", "<|speaker:2|> Pi is 3.14.", "<|speaker:2|> Go."])
+                       ["<|speaker:0|> First.", "<|speaker:2|> [pause. wait] <whisper>Stay.</whisper>", "<|speaker:2|> <whisper>quiet.</whisper>", "<|speaker:2|> Now.", "<|speaker:2|> Pi is 3.14.", "<|speaker:2|> Go."])
         XCTAssertEqual(Drama3Chunking.splitSentences("Hello <|special.token|> there. Bye."),
                        ["Hello <|special.token|> there.", "Bye."])
     }
@@ -72,6 +72,15 @@ final class PromptTests: XCTestCase {
         XCTAssertEqual(Drama3Chunking.splitSentences("Really?! Yes!"), ["Really?!", "Yes!"])
         XCTAssertEqual(Drama3Chunking.splitSentences("She said \"Stay.\" Then left."), ["She said \"Stay.\"", "Then left."])
         XCTAssertEqual(Drama3Chunking.splitSentences("Tail ends “here.” Next."), ["Tail ends “here.”", "Next."])
+    }
+
+    func testPassageTagsAreBalancedAcrossSentencesIncludingNestedCues() {
+        XCTAssertEqual(Drama3Chunking.splitSentencesTagged("<slow>First sentence. Second sentence.</slow>"),
+                       ["<slow>First sentence.</slow>", "<slow>Second sentence.</slow>"])
+        XCTAssertEqual(Drama3Chunking.splitSentencesTagged("<slow>One. <slow>Two.</slow> Three.</slow>"),
+                       ["<slow>One.</slow>", "<slow><slow>Two.</slow></slow>", "<slow>Three.</slow>"])
+        XCTAssertEqual(Drama3Chunking.splitSentencesTagged("<whisper>Wait [pause. please] here. <emphasis>Now!</emphasis></whisper> Go."),
+                       ["<whisper>Wait [pause. please] here.</whisper>", "<whisper><emphasis>Now!</emphasis></whisper>", "Go."])
     }
 
     func testHistoryCandidates() {

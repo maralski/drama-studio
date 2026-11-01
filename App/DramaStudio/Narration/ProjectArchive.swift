@@ -3,6 +3,13 @@
 import DramaEngine
 import Foundation
 
+struct RecordedVoice: Codable, Sendable, Equatable {
+    var take: Take
+    var wordsChecked: Bool
+    var wordCheckRevision: Int? = WordVerificationPolicy.currentRevision
+    var hasCurrentWordCheck: Bool { wordsChecked && wordCheckRevision == WordVerificationPolicy.currentRevision }
+}
+
 struct ArchivedTake: Codable, Sendable, Equatable {
     var id: UUID
     var number: Int
@@ -11,6 +18,8 @@ struct ArchivedTake: Codable, Sendable, Equatable {
     var sentences: [NarrationTake.Sentence]
     var basis: TakesBasis?
     var isIncomplete: Bool
+    var wordsChecked: Bool?
+    var wordCheckRevision: Int?
 
     init(_ value: SessionTake) {
         id = value.id
@@ -20,6 +29,8 @@ struct ArchivedTake: Codable, Sendable, Equatable {
         sentences = value.sentences
         basis = value.basis
         isIncomplete = value.isIncomplete
+        wordsChecked = value.wordsChecked
+        wordCheckRevision = value.wordCheckRevision
     }
 
     var audioPath: String { "audio/take-\(id.uuidString).wav" }
@@ -27,7 +38,8 @@ struct ArchivedTake: Codable, Sendable, Equatable {
     func restore(in bundle: URL) throws -> SessionTake {
         SessionTake(id: id, number: number, note: note, take: take,
                     samples: try StudioProject.readSamples(from: bundle.appending(path: audioPath)),
-                    sentences: sentences, basis: basis, isIncomplete: isIncomplete)
+                    sentences: sentences, basis: basis, isIncomplete: isIncomplete, wordsChecked: wordsChecked == true,
+                    wordCheckRevision: wordCheckRevision)
     }
 }
 
@@ -41,7 +53,8 @@ struct ProjectArchive: Codable, Sendable, Equatable {
     var selectedSegment: UUID?
     var originalProjectURL: URL?
     var voices: [Int: VoiceChoice]
-    var sessionVoices: [VoiceChoice: Take]
+    var sessionVoices: [VoiceChoice: Take]? = nil
+    var recordedVoices: [VoiceChoice: RecordedVoice]? = nil
     var screenplayMode: Bool
 
     func restoreTakes(in bundle: URL) throws -> [UUID: SessionTake] {

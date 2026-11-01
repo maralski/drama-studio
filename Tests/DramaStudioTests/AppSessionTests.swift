@@ -86,12 +86,12 @@ final class AppSessionTests: XCTestCase {
 
     func testStreamingSettingTurnsLowLatencyOff() {
         let session = makeSession()
-        UserDefaults.standard.set(false, forKey: SessionModel.streamsAudioKey)
-        defer { UserDefaults.standard.removeObject(forKey: SessionModel.streamsAudioKey) }
+        AppHome.defaults.set(false, forKey: SessionModel.streamsAudioKey)
+        defer { AppHome.defaults.removeObject(forKey: SessionModel.streamsAudioKey) }
         XCTAssertEqual(session.config.streaming, .sentence)
     }
 
-    func testRequestFollowsTheControlsAndNewTakeNeedsATake() async {
+    func testRequestFollowsTheControls() {
         let session = makeSession()
         session.script = "One line to say."
         var expected = GenerationConfig()
@@ -102,11 +102,6 @@ final class AppSessionTests: XCTestCase {
         expected = .make(expressiveness: 1, quickPreview: true)
         expected.streaming = .defaultLowLatency
         XCTAssertEqual(session.config, expected)
-
-        XCTAssertFalse(session.canTakeAgain, "nothing to take again yet")
-        session.generate()
-        await waitUntil { !session.state.isGenerating }
-        XCTAssertTrue(session.canTakeAgain)
     }
 
     func testStopKeepsPartialAudioAndDropsLateEvents() async {

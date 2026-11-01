@@ -1,0 +1,11 @@
+{
+  "audio": "captain-joined-refray.wav",
+  "wav_sha256": "b297570c53098a4687e42fd8f8ced3414c03e263feadf7e5c4cc5b29f32be94e",
+  "pcm_sha256": "3126423d82dc1e0b7b02ecbace24d6de5f516f6cde938ee63e1596fac80c5788",
+  "line": "[low and menacing] Ye want to know what's out past the reef? [pause] Pray ye never find out.",
+  "boundary_sample": 206848,
+  "user_reply": "ye want to know what's out past the refray. never find out. The word \"refray\" doesn't make sense",
+  "question_call_id": "call_72b87320a5d84769a720ca4e3f5d42c9",
+  "expected_matches": false,
+  "qualification": "Whole joined recording human-rejected despite both complete chunks individually matching recognition."
+}

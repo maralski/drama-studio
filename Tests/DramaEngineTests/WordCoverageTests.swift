@@ -1,0 +1,121 @@
+// Copyright 2026 Peter Marelas
+// SPDX-License-Identifier: Apache-2.0
+import XCTest
+@testable import DramaEngine
+
+final class WordCoverageTests: XCTestCase {
+    private let english = Locale(identifier: "en_US")
+
+    func testMissingOpeningSentenceIsRejectedEvenWithALongReaction() {
+        XCTAssertFalse(WordCoverage.matches(line: "[clears throat] The garden gate is closed. The meeting begins on Monday.",
+                                            transcript: "The meeting begins on Monday.", locale: english))
+    }
+
+    func testEveryWordIncludingNegationAndRepetitionsIsRequiredInOrder() {
+        let line = "No, no, he did not leave the gate open."
+        for heard in ["No he did not leave the gate open", "No no he did leave the gate open",
+                      "No no he did not leave the open gate", "No no he did not leave the gate open again"] {
+            XCTAssertFalse(WordCoverage.matches(line: line, transcript: heard, locale: english), heard)
+        }
+        XCTAssertTrue(WordCoverage.matches(line: line, transcript: line, locale: english))
+    }
+
+    func testReactionsOnlyPermitExtraNonverbalSoundsWithoutDeletingRequiredWords() {
+        XCTAssertTrue(WordCoverage.matches(line: "[laughs] He left.", transcript: "Ha ha! He left.", locale: english))
+        XCTAssertTrue(WordCoverage.matches(line: "[laughs] He left.", transcript: "Hah! He left.", locale: english))
+        XCTAssertFalse(WordCoverage.matches(line: "[laughs] He left.", transcript: "Ha ha! Left.", locale: english))
+        XCTAssertFalse(WordCoverage.matches(line: "He left.", transcript: "Ha ha! He left.", locale: english))
+        XCTAssertFalse(WordCoverage.matches(line: "[laughs] He left.", transcript: "Ha ha! She left.", locale: english))
+        XCTAssertTrue(WordCoverage.matches(line: "[clears throat] He left.", transcript: "Ahem. He left.", locale: english))
+        XCTAssertFalse(WordCoverage.matches(line: "[clears throat] He left.", transcript: "Ahem. Left.", locale: english))
+        XCTAssertFalse(WordCoverage.matches(line: "[clears throat] Ahem, he left.", transcript: "He left.", locale: english))
+    }
+
+    func testCommonEnglishContractionsDoNotLoseNegation() {
+        XCTAssertTrue(WordCoverage.matches(line: "I can't leave. What's the plan?", transcript: "I cannot leave. What is the plan?", locale: english))
+        XCTAssertTrue(WordCoverage.matches(line: "What's the plan?", transcript: "whats the plan?", locale: english))
+        XCTAssertFalse(WordCoverage.matches(line: "What's the plan?", transcript: "what the plan?", locale: english))
+        XCTAssertFalse(WordCoverage.matches(line: "I can't leave.", transcript: "I can leave.", locale: english))
+    }
+
+    func testMarkupIsNotSpeechButTaggedWordsAreStillRequired() {
+        let line = "<|speaker:2|> [icy calm] <whisper>Wait here.</whisper> Then <emphasis>go.</emphasis>"
+        XCTAssertTrue(WordCoverage.matches(line: line, transcript: "Wait here. Then go.", locale: english))
+        XCTAssertFalse(WordCoverage.matches(line: line, transcript: "Wait here.", locale: english))
+        XCTAssertFalse(WordCoverage.matches(line: "[laughs]", transcript: "ha ha", locale: english))
+    }
+
+    func testTestedContractionsNumbersAndUnicodeNamesAreEquivalent() {
+        XCTAssertTrue(WordCoverage.matches(line: "I’m here. You don't have 24 tickets, Élodie.",
+                                           transcript: "I am here. You do not have twenty-four tickets, Elodie.", locale: english))
+        XCTAssertFalse(WordCoverage.matches(line: "You don't have 24 tickets, Élodie.",
+                                            transcript: "You have twenty-four tickets, Élodie.", locale: english))
+        XCTAssertFalse(WordCoverage.matches(line: "Peter and Élodie are here.", transcript: "Peter is here.", locale: english))
+    }
+
+    func testAnUncertainMatchingWordCannotCertifySpeech() {
+        let line = "[clears throat] The garden gate is closed."
+        XCTAssertFalse(WordCoverage.matches(line: line, transcript: "The garden gate is closed.", locale: english, uncertainSpans: ["garden"]))
+        XCTAssertTrue(WordCoverage.matches(line: line, transcript: "Ha! The garden gate is closed.", locale: english, uncertainSpans: ["Ha!"]))
+        XCTAssertFalse(WordCoverage.matches(line: line, transcript: "The garden gate is closed.", locale: english, uncertainSpans: ["closed."]))
+        XCTAssertFalse(WordCoverage.matches(line: "[laughs] He left.", transcript: "He left.", locale: english, uncertainSpans: ["He"]))
+    }
+
+    func testWrittenTitlesAreEquivalentButAnAcronymIsNotANameTitle() throws {
+        try WordCoverage.prepare()
+        XCTAssertTrue(WordCoverage.matches(line: "His name is Mister Hops.", transcript: "His name is Mr. Hops.", locale: english))
+        XCTAssertTrue(WordCoverage.matches(line: "Doctor Elodie is here.", transcript: "Dr. Elodie is here.", locale: english))
+        XCTAssertFalse(WordCoverage.matches(line: "MR results are ready.", transcript: "Mister results are ready.", locale: english))
+        XCTAssertFalse(WordCoverage.matches(line: "His name is Mister Hops.", transcript: "His name is Mr. Jones.", locale: english))
+    }
+
+    func testExplicitRecognizerReactionAnnotationsMatchOnlyRequestedCueFamilies() {
+        for (cue, annotation) in [("gasps", "*gasp*"), ("gasps", "(gasps)"), ("gasps", "[Gasping]"),
+                                  ("laughs", "(laughter)"), ("chuckles", "*chuckling*"),
+                                  ("sighs", "(sigh)"), ("coughs", "[coughing]"),
+                                  ("clears throat", "(clears throat)"), ("hesitates", "*hesitation*"),
+                                  ("pause", "(pause)"), ("whispers", "(whispering)")] {
+            XCTAssertTrue(WordCoverage.matches(line: "[\(cue)] Please wait here.",
+                                               transcript: "\(annotation) Please wait here.", locale: english), cue + annotation)
+        }
+        XCTAssertTrue(WordCoverage.matches(line: "<whisper>Please wait here.</whisper>",
+                                           transcript: "(whispering) Please wait here.", locale: english))
+        for (line, heard) in [("Please wait here.", "*gasp* Please wait here."),
+                              ("[laughs] Please wait here.", "*gasp* Please wait here."),
+                              ("[gasps] Please wait here.", "Gasp, please wait here."),
+                              ("[gasps] Please say gasp.", "*gasp* Please say."),
+                              ("[gasps] He waits here.", "(gasps) Waits here."),
+                              ("[gasps] No, no, he did not wait.", "(gasps) No, he did not wait."),
+                              ("[gasps] The garden gate is closed.", "(gasps) The golden gate is closed."),
+                              ("[gasps] The garden gate is closed.", "(gasps) The Gordon gate is closed.")] {
+            XCTAssertFalse(WordCoverage.matches(line: line, transcript: heard, locale: english), line + heard)
+        }
+        XCTAssertFalse(WordCoverage.matches(line: "[gasps] Please wait here.", transcript: "(gasps) Please wait here.",
+                                            locale: english, uncertainSpans: ["Please"]))
+        XCTAssertTrue(WordCoverage.matches(line: "[gasps] Please wait here.", transcript: "(gasps) Please wait here.",
+                                           locale: english, uncertainSpans: ["(gasps)"]))
+    }
+
+    func testOldConfigurationDefaultsToRequiredChecks() throws {
+        let old = Data(#"{"temperature":0.7,"maxRetries":0,"minSpokenRatio":0}"#.utf8)
+        let config = try JSONDecoder().decode(GenerationConfig.self, from: old)
+        XCTAssertEqual(config.wordVerification, .required)
+        XCTAssertEqual(config.maxRetries, 0)
+        XCTAssertEqual(try GenerationPlan(text: "Hello.", references: [], config: config).streaming, .sentence)
+        XCTAssertEqual(GenerationConfig.make(expressiveness: 0.5, quickPreview: true).wordVerification, .uncheckedPreview)
+    }
+
+    func testNumericSignsDecimalsAndPercentCannotDisappear() {
+        XCTAssertEqual(WordCoverage.tokens(".5%", locale: english), ["zero", "point", "five", "percent"])
+        for (written, spoken) in [("-12", "minus twelve"), ("−12.5", "minus twelve point five"),
+                                  ("+12.5", "plus twelve point five"), ("12.5%", "twelve point five percent"),
+                                  (".5%", "zero point five percent")] {
+            XCTAssertTrue(WordCoverage.matches(line: "The result is \(written).", transcript: "The result is \(spoken).", locale: english), written)
+        }
+        XCTAssertFalse(WordCoverage.matches(line: "The temperature is -12 degrees.", transcript: "The temperature is twelve degrees.", locale: english))
+        XCTAssertFalse(WordCoverage.matches(line: "The result is +12.", transcript: "The result is twelve.", locale: english))
+        XCTAssertFalse(WordCoverage.matches(line: "Revenue rose 12.5%.", transcript: "Revenue rose twelve five.", locale: english))
+        XCTAssertFalse(WordCoverage.matches(line: "Revenue rose 12.5%.", transcript: "Revenue rose twelve point five.", locale: english))
+        XCTAssertFalse(WordCoverage.matches(line: "The result is 12.5.", transcript: "The result is twelve five.", locale: english))
+    }
+}

@@ -19,6 +19,8 @@ final class StreamingBenchTests: XCTestCase {
         func config(seed: UInt64) -> GenerationConfig {
             var config = GenerationConfig()
             config.seed = seed
+            // Keep this decoding diagnostic comparable across delivery modes.
+            config.wordVerification = .uncheckedPreview
             switch self {
             case .decodeAfter: config.stopAfterSilenceSeconds = nil
             case .sentence: config.stopAfterSilenceSeconds = 2

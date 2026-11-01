@@ -134,7 +134,7 @@ zip_gb=$(printf '%.1f' $(( zip_bytes / 1e9 )))
 
 ## Requirements
 
-- macOS 15 or later on Apple silicon. Verified only on an M3 Max with 128 GB.
+- macOS 26 or later on Apple silicon for checked generation, with an installed on-device speech model. Verified only on an M3 Max with 128 GB.
 - 64 GB of unified memory or more recommended: the engine maps about 41 GB of weights.
 - About 49 GB of free disk: 41.5 GB of weights, the codec zip and models, and the packed-weight cache. The setup window checks before it downloads.
 

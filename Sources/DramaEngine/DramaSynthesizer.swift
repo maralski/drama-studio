@@ -181,14 +181,15 @@ public actor DramaSynthesizer: SpeechSynthesizer {
     }
 
     private func run(_ request: SpeechRequest, continuation: AsyncThrowingStream<SpeechEvent, Error>.Continuation) async throws {
+        let plan = try GenerationPlan(request)
+        let verifier = try LocalWordVerifier.prepare(plan: plan, config: request.config, shouldContinue: { !Task.isCancelled })
         continuation.yield(.loadingModel(progress: 0, detail: "Loading Drama 3"))
         try await load { detail in continuation.yield(.loadingModel(progress: 0, detail: detail)) }
         continuation.yield(.loadingModel(progress: 1, detail: "Ready"))
         let generator = FrameGenerator(model: model!, tokenizer: tokenizer!)
         let codec = self.codec!
         generator.codec = { codes, window in try Self.decodeBlocking(codec, codes: codes, window: window) }
-        let plan = try GenerationPlan(request)
-        let results = try generator.generate(plan: plan, config: request.config, shouldContinue: { !Task.isCancelled }) { event in
+        let results = try generator.generate(plan: plan, config: request.config, verifier: verifier, shouldContinue: { !Task.isCancelled }) { event in
             switch event {
             case .chunkStarted(let i, let n, let text): continuation.yield(.chunkStarted(index: i, count: n, text: text))
             case .prefilled(let rows): continuation.yield(.prefill(rows: rows))
@@ -199,19 +200,14 @@ public actor DramaSynthesizer: SpeechSynthesizer {
             }
         }
         try Task.checkCancellation()
-        var timings = SpeechTimings()
-        for r in results {
-            timings.prefillSeconds += r.prefillSeconds
-            timings.decodeSeconds += r.decodeSeconds
-            timings.codecSeconds += r.codecSeconds
-            timings.promptRows += r.promptRows
-            timings.framesGenerated += r.frames.count
-        }
+        let timings = generator.timings
         let allFrames = results.flatMap(\.frames)
         let allSamples = results.flatMap(\.samples)
         let eos = results.allSatisfy(\.finishedByEOS)
         let take = Take(text: plan.turnText, codes: (0..<ModelConstants.numCodebooks).map { c in allFrames.map { $0[1 + c] } })
         let sentences = results.map { SpokenSentence(text: plan.chunks[$0.index].line, frames: $0.frames.count) }
-        continuation.yield(.finished(SpeechResult(take: take, samples: allSamples, timings: timings, finishedByEOS: eos, sentences: sentences)))
+        guard !results.isEmpty else { throw PromptError.emptyText("spoken words") }
+        continuation.yield(.finished(SpeechResult(take: take, samples: allSamples, timings: timings, finishedByEOS: eos, sentences: sentences,
+                                                wordCoverage: request.config.wordVerification == .required ? .recognized : .unchecked)))
     }
 }

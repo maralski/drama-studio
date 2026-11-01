@@ -326,6 +326,9 @@ public final class APIService: Sendable {
             var headers = format == .pcm ? Self.pcmHeaders(contentType: format.contentType) : ["Content-Type": format.contentType]
             headers["X-Drama-Take-Id"] = takeID.uuidString
             headers["X-Drama-Frames"] = String(result.take.frameCount)
+            headers["X-Drama-Word-Coverage"] = result.wordCoverage.rawValue
+            headers["X-Drama-Generated-Frames"] = String(result.timings.framesGenerated)
+            headers["X-Drama-Verification-Seconds"] = String(format: "%.3f", result.timings.verificationSeconds)
             headers["X-Drama-Seconds"] = String(format: "%.3f", Double(result.samples.count) / Double(AudioEncoding.sampleRate))
             headers["X-Drama-Generation-Seconds"] = String(format: "%.3f", Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18)
             return APIResponse(status: .ok, headers: headers, body: .data(try AudioEncoding.encode(result.samples, as: format)))
@@ -354,6 +357,7 @@ public final class APIService: Sendable {
                 if let result = try await forward(request, framing: framing, job: job, into: out, sentences: &sentences) {
                     await remember(result.take)
                     Self.send(framing.done(["take_id": takeID.uuidString, "frames": result.take.frameCount,
+                                            "word_coverage": result.wordCoverage.rawValue,
                                             "seconds": Self.seconds(result.samples)]), to: out)
                 }
                 await jobs.release(job)

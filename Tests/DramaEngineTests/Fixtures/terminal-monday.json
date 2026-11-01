@@ -1,0 +1,8 @@
+{
+  "source": "Locally generated model-default emphasis cue, seed 3, sentence 2; retained endpoint-confidence failure.",
+  "line": "The meeting begins on Monday.",
+  "sha256": "9ce06390997069b7746a07380f4080e4f47ea4e907b1691e5189465b25fe11d7",
+  "sample_rate": 44100,
+  "cut_before_final_word_samples": 90846,
+  "cut_inside_final_word_samples": 107604
+}

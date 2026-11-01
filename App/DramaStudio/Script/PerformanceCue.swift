@@ -31,8 +31,7 @@ struct PerformanceCue: Identifiable, Hashable {
     var opening: String { form == .marker ? "[\(tag)]" : "<\(tag)>" }
     var closing: String { form == .marker ? "" : "</\(tag)>" }
 
-    /// The cue study's best defaults still lost a clause in 2 of 40 runs.
-    static let reliabilityNote = "Cues still cost a clause in about one take in twenty, most often right after a sentence end. Listen before you export."
+    static let reliabilityNote = "Normal generation checks the spoken words locally and retries when they do not match. Quick preview is unchecked. Listen before export to judge the performance."
 
     static let all: [PerformanceCue] = [
         PerformanceCue(tag: "laughs", title: "Laughs", kind: .reaction),

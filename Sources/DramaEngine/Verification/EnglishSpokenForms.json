@@ -1,0 +1,98 @@
+{
+  "contractions": {
+    "aren't": "are not",
+    "can't": "can not",
+    "couldn't": "could not",
+    "didn't": "did not",
+    "doesn't": "does not",
+    "don't": "do not",
+    "hadn't": "had not",
+    "hasn't": "has not",
+    "haven't": "have not",
+    "he's": "he is",
+    "i'll": "i will",
+    "i'm": "i am",
+    "i've": "i have",
+    "isn't": "is not",
+    "it's": "it is",
+    "let's": "let us",
+    "she's": "she is",
+    "shouldn't": "should not",
+    "that's": "that is",
+    "there's": "there is",
+    "they'll": "they will",
+    "they're": "they are",
+    "they've": "they have",
+    "wasn't": "was not",
+    "we'll": "we will",
+    "we're": "we are",
+    "we've": "we have",
+    "weren't": "were not",
+    "what's": "what is",
+    "whats": "what is",
+    "who's": "who is",
+    "won't": "will not",
+    "wouldn't": "would not",
+    "you'll": "you will",
+    "you're": "you are",
+    "you've": "you have"
+  },
+  "reaction_annotations": [
+    {
+      "cue_pattern": "\\[gasps?\\]",
+      "label_pattern": "gasp(?:s|ing)?"
+    },
+    {
+      "cue_pattern": "\\[laugh(?:s|ing|ter)?\\]",
+      "label_pattern": "laugh(?:s|ing|ter)?"
+    },
+    {
+      "cue_pattern": "\\[chuckl(?:e|es|ing)\\]",
+      "label_pattern": "chuckl(?:e|es|ing)"
+    },
+    {
+      "cue_pattern": "\\[sighs?\\]",
+      "label_pattern": "sigh(?:s|ing)?"
+    },
+    {
+      "cue_pattern": "\\[coughs?\\]",
+      "label_pattern": "cough(?:s|ing)?"
+    },
+    {
+      "cue_pattern": "\\[clears? throat\\]",
+      "label_pattern": "(?:(?:clears?|clearing)\\s+(?:the\\s+)?throat|throat\\s+clearing)"
+    },
+    {
+      "cue_pattern": "\\[hesitat(?:e|es|ing|ion)\\]",
+      "label_pattern": "hesitat(?:e|es|ing|ion)"
+    },
+    {
+      "cue_pattern": "\\[pauses?\\]",
+      "label_pattern": "pause(?:s)?"
+    },
+    {
+      "cue_pattern": "(?:\\[whispers?\\]|<whisper>)",
+      "label_pattern": "whisper(?:s|ing)?"
+    }
+  ],
+  "reaction_pattern": "^(?:ha|he|ho)+h?$",
+  "reaction_words": [
+    "laughing",
+    "laughter",
+    "laughs",
+    "uh",
+    "um",
+    "hmm",
+    "ah",
+    "huh",
+    "ahem"
+  ],
+  "titles": {
+    "Dr": "Doctor",
+    "Mr": "Mister",
+    "Mrs": "Missus",
+    "dr": "Doctor",
+    "mr": "Mister",
+    "mrs": "Missus"
+  }
+}

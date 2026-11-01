@@ -20,6 +20,9 @@ struct DramaStudioApp: App {
 
     init() {
         if CommandLine.arguments.contains("--check-resources") { exit(Self.checkResources()) }
+        if CommandLine.arguments.dropFirst().first == "--check-words" {
+            exit(WordCheckDiagnostic.run(Array(CommandLine.arguments.dropFirst(2))))
+        }
         let model = SessionModel(synthesizer: ModelSetup.makeSynthesizer(), library: VoiceLibrary())
         let server = APIServerController(session: model)
         let presence = AppPresence()
@@ -99,6 +102,7 @@ struct DramaStudioApp: App {
     /// by compiling the Metal kernels it ships.
     private static func checkResources() -> Int32 {
         do {
+            try WordCoverage.prepare()
             let context = try MetalContext()
             print("DramaEngine resources OK; kernels compiled for \(context.device.name)")
             return 0

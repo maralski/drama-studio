@@ -69,7 +69,7 @@ private struct CastSection: View {
                     .accessibilityLabel("Voice for \(speaker.name)")
                     if model.canKeepVoice(for: speaker) {
                         Button("Save Voice to Library", systemImage: "square.and.arrow.down") { model.keepVoice(for: speaker) }
-                            .help("Save the voice of the first take to the library, so it stays the same in later sessions")
+                            .help("Save the checked voice to the library for later sessions")
                     }
                 }
                 ForEach(model.casting.ignored) { ignored in

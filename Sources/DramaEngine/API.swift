@@ -38,6 +38,9 @@ public enum ModelConstants: Sendable {
 /// the frame cap and loop guard. Silence stopping is opt-in because a quiet
 /// pause can precede words the model has not generated yet.
 public struct GenerationConfig: Sendable, Codable, Equatable {
+    /// Normal generation checks decoded speech locally before releasing it.
+    /// Preview deliberately permits unchecked, partially streamed audio.
+    public var wordVerification: WordVerification = .required
     /// Sampling temperature. Default 0.7, the vendor's value.
     public var temperature: Double = 0.7
     /// Top-k candidates kept before sampling. Default 30. 4097, the number
@@ -67,6 +70,7 @@ public struct GenerationConfig: Sendable, Codable, Equatable {
     /// chunks feed back as history.
     public var chunkBytes: Int = 300
     /// How text is cut into generation turns. Default ``Chunking/sentences``.
+    /// Required word verification always uses sentence turns.
     public var chunking: Chunking = .sentences
     /// Stop a chunk once its decoded audio has been silent for this many
     /// seconds. `nil`, the default, lets the model reach the end of speech,
@@ -80,8 +84,9 @@ public struct GenerationConfig: Sendable, Codable, Equatable {
     /// evaluation set every good run scored at
     /// least 0.72 and every failed run at most 0.65. 0 turns retries off.
     public var minSpokenRatio: Double = 0.6
-    /// The most times one chunk is generated again. Default 2.
-    public var maxRetries: Int = 2
+    /// The most times one chunk is generated again. Default 5. Replacements
+    /// must pass word recognition, including its uncertainty check.
+    public var maxRetries: Int = 5
     /// Stop a chunk once its main tokens settle into a repeating cycle, the
     /// shape of a laughter loop. Default true. On the reliability study's two
     /// laughter loops the last 48 main tokens repeated the tokens 17 or 34
@@ -110,11 +115,42 @@ public struct GenerationConfig: Sendable, Codable, Equatable {
     /// The measured defaults.
     public init() {}
 
+    public enum WordVerification: String, Sendable, Codable {
+        case required, uncheckedPreview
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case wordVerification, temperature, topK, topP, frameCap, seed, chunkBytes, chunking
+        case stopAfterSilenceSeconds, minSpokenRatio, maxRetries, stopOnLoop, retryWithoutEOSBelow
+        case capSecondsPerCue, streaming
+    }
+
+    public init(from decoder: Decoder) throws {
+        self.init()
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        wordVerification = try values.decodeIfPresent(WordVerification.self, forKey: .wordVerification) ?? .required
+        temperature = try values.decodeIfPresent(Double.self, forKey: .temperature) ?? temperature
+        topK = try values.decodeIfPresent(Int.self, forKey: .topK) ?? topK
+        topP = try values.decodeIfPresent(Double.self, forKey: .topP) ?? topP
+        frameCap = try values.decodeIfPresent(FrameCap.self, forKey: .frameCap) ?? frameCap
+        seed = try values.decodeIfPresent(UInt64.self, forKey: .seed)
+        chunkBytes = try values.decodeIfPresent(Int.self, forKey: .chunkBytes) ?? chunkBytes
+        chunking = try values.decodeIfPresent(Chunking.self, forKey: .chunking) ?? chunking
+        stopAfterSilenceSeconds = try values.decodeIfPresent(Double.self, forKey: .stopAfterSilenceSeconds)
+        minSpokenRatio = try values.decodeIfPresent(Double.self, forKey: .minSpokenRatio) ?? minSpokenRatio
+        maxRetries = try values.decodeIfPresent(Int.self, forKey: .maxRetries) ?? maxRetries
+        stopOnLoop = try values.decodeIfPresent(Bool.self, forKey: .stopOnLoop) ?? stopOnLoop
+        retryWithoutEOSBelow = try values.decodeIfPresent(Double.self, forKey: .retryWithoutEOSBelow) ?? retryWithoutEOSBelow
+        capSecondsPerCue = try values.decodeIfPresent(Double.self, forKey: .capSecondsPerCue) ?? capSecondsPerCue
+        streaming = try values.decodeIfPresent(StreamingMode.self, forKey: .streaming) ?? streaming
+    }
+
     /// How text is cut into generation turns.
     public enum Chunking: String, Sendable, Codable, CaseIterable {
         /// The reference's policy: about ``GenerationConfig/chunkBytes`` per
         /// turn, at most three speakers. It often stops after the first
-        /// sentence of a turn; it is here for comparison.
+        /// sentence of a turn; it is here for unchecked comparison. Required
+        /// word verification overrides this choice with sentence turns.
         case reference
         /// One sentence per turn, with the previous turns as history. The
         /// default. ``Drama3Chunking/splitSentencesTagged(_:)`` shows the cut.
@@ -158,6 +194,7 @@ public extension GenerationConfig {
             config.topK = 4097
         }
         if quickPreview {
+            config.wordVerification = .uncheckedPreview
             config.stopAfterSilenceSeconds = 2
             config.minSpokenRatio = 0
             config.frameCap = .fromText(margin: 1.2, floorSeconds: 1.0)
@@ -275,7 +312,7 @@ public struct Take: Sendable, Codable, Hashable {
 
 /// A character cast from a description instead of a reference clip.
 public struct VoiceDesign: Sendable, Codable, Hashable {
-    /// The character's name, which the prompt writes before every line.
+    /// The character's display name, retained in recorded take metadata.
     public var name: String
     /// What the voice sounds like, for example "gravelly old male voice,
     /// weathered and slow".
@@ -293,12 +330,17 @@ public struct VoiceDesign: Sendable, Codable, Hashable {
         var lines: [String] = []
         if let scene = scene.map(UnicodeWhitespace.strip), !scene.isEmpty { lines.append("Scene: \(scene)") }
         lines.append("Characters:")
-        lines.append("- \(UnicodeWhitespace.strip(name)): \(UnicodeWhitespace.strip(description))")
+        lines.append("- \(Drama3Prompt.designSpeakerTag): \(UnicodeWhitespace.strip(description))")
         lines.append("Voice every line of the script in order, with \(Drama3Prompt.audioSeparator) between consecutive lines.")
         return lines.joined(separator: "\n")
     }
 
     package func turn(_ text: String) -> String { "\(UnicodeWhitespace.strip(name)): \(text)" }
+
+    package func removingName(from text: String) -> String {
+        let prefix = turn("")
+        return text.hasPrefix(prefix) ? String(text.dropFirst(prefix.count)) : text
+    }
 }
 
 /// One thing to speak, in one voice, with one configuration.
@@ -347,6 +389,8 @@ public struct SpeechTimings: Sendable, Equatable {
     public var decodeSeconds: Double = 0
     /// Seconds spent in the codec turning frames into audio.
     public var codecSeconds: Double = 0
+    /// Seconds spent independently recognizing and comparing generated words.
+    public var verificationSeconds: Double = 0
     /// Prompt rows read, summed over chunks.
     public var promptRows: Int = 0
     /// Frames generated, retries included.
@@ -400,6 +444,12 @@ public struct SpokenSentence: Sendable, Codable, Equatable {
 
 /// A finished request.
 public struct SpeechResult: Sendable {
+    /// Required generation checks each chunk and every complete adjacent-chunk join.
+    /// This is bounded context coverage, not a whole-file transcript for long takes.
+    /// A recognition match is evidence of word coverage, not an acting-quality
+    /// or zero-error guarantee. Mock and preview audio are unchecked.
+    public enum WordCoverage: String, Sendable { case recognized, unchecked }
+    public var wordCoverage: WordCoverage
     /// The whole request as one take: its turn text and every chunk's codes in order.
     public var take: Take
     /// All of the request's audio, 44.1 kHz mono.
@@ -412,7 +462,8 @@ public struct SpeechResult: Sendable {
     /// Every chunk in order; their frames add up to the take's.
     public var sentences: [SpokenSentence]
     /// Creates a result.
-    public init(take: Take, samples: [Float], timings: SpeechTimings, finishedByEOS: Bool, sentences: [SpokenSentence] = []) {
+    public init(take: Take, samples: [Float], timings: SpeechTimings, finishedByEOS: Bool, sentences: [SpokenSentence] = [], wordCoverage: WordCoverage = .unchecked) {
+        self.wordCoverage = wordCoverage
         self.take = take
         self.samples = samples
         self.timings = timings

@@ -152,7 +152,7 @@ public enum DramaSetup: Sendable {
     /// `convert_codec.py` inside DramaEngine's resource bundle; nil when the
     /// bundle is missing.
     public static var conversionScript: URL? {
-        MetalContext.resourceBundle().url(forResource: "CodecConversion", withExtension: nil)?.appending(path: "convert_codec.py")
+        EngineResources.bundle().url(forResource: "CodecConversion", withExtension: nil)?.appending(path: "convert_codec.py")
     }
 
     /// The shell command that builds the codec models from `location`'s
@@ -297,7 +297,7 @@ public enum DramaSetup: Sendable {
         }
         let source: String
         do { source = try MetalContext.kernelSources() } catch {
-            return SetupItem(component: .tuning, state: .missing(fix: "Ship DramaEngine's resource bundle, \(MetalContext.resourceBundleName), with the app."),
+            return SetupItem(component: .tuning, state: .missing(fix: "Ship DramaEngine's resource bundle, \(EngineResources.bundleName), with the app."),
                              url: nil, summary: "The Metal kernel sources are missing: \(error).")
         }
         guard let location, let key = try? TuningKey(chip: device.name, kernelDigest: MetalContext.digest(source), location: location) else {
@@ -313,7 +313,7 @@ public enum DramaSetup: Sendable {
     static func runConversion(python: URL, location: ModelLocation, codecDirectory: URL, progress: @escaping @Sendable (String) -> Void) async throws {
         let command = codecConversionCommand(python: python, location: location, codecDirectory: codecDirectory)
         guard let script = conversionScript else {
-            throw DramaSetupError.conversionFailed(command: command, status: -1, output: "convert_codec.py is missing from \(MetalContext.resourceBundleName).")
+            throw DramaSetupError.conversionFailed(command: command, status: -1, output: "convert_codec.py is missing from \(EngineResources.bundleName).")
         }
         let run = ConversionRun(progress: progress)
         run.process.executableURL = python

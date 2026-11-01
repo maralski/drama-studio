@@ -12,7 +12,8 @@ cloning a real person's voice without their consent is not permitted.
 
 ## Install
 
-You need a Mac with Apple silicon and macOS 15 or later. Drama Studio has
+You need a Mac with Apple silicon and macOS 26 or later for checked generation,
+with an installed on-device speech model for the script's language. Drama Studio has
 been verified only on an M3 Max with 128 GB. Use a Mac with 64 GB of unified
 memory or more: the engine maps about 41 GB of model weights. You also need
 about 49 GB of free disk and a fast connection for the first run.
@@ -78,13 +79,37 @@ HTTPS and the published checksum for authenticity.
 - **Script editor** with import of `.txt`, `.md`, `.rtf`, `.rtfd`, `.html`,
   `.docx`, `.srt` and `.vtt`, drag and drop, and a screenplay mode that turns
   `Name: line` dialogue into Drama 3 speaker tags (up to 16 speakers).
-- **Takes**: a New Take button that generates the script again with a fresh
-  seed, a Quick preview toggle that skips retries and tightens the frame cap
+- **Takes**: Generate or Generate All produces a fresh take each time. A
+  scrolling grid shows take durations, notes, export choices and outdated audio.
+  Other controls include a Quick preview toggle that skips retries and tightens the frame cap
   for faster rough takes, an Expressiveness slider under Advanced (one control
   over temperature, top-p and top-k, with the vendor's defaults in the middle
   and the Hugging Face Space's sampling at the top), and an
   insert menu for performance cues such as `[laughs]`, `[sighs]` and
   `<whisper>…</whisper>`. Each chunk's frame cap follows the length of its text.
+  Normal generation checks each decoded sentence with local, audio-only speech
+  recognition before playback or reuse as history. It also checks each complete
+  adjacent pair before releasing the next sentence, so a bad join retries only
+  the unplayed sentence within the same attempt limit. Each raw sentence must
+  pass both recognizers with the existing native confidence checks. For a pair
+  of those exact verified sentences, the native checker may mark only the first
+  nonterminal word of the second sentence uncertain while both full transcripts
+  still match. That narrow boundary case uses the raw sentence's confidence;
+  ambiguous word positions, missing confidence, or other uncertain words fail.
+  Arbitrary-file checks have no such generated-sentence evidence. These bounded windows
+  cover every generated join within one request; they do not establish a global
+  transcript for a long recording or certify joins between separate requests. Missing or uncertain words
+  trigger a bounded retry; exhaustion fails instead of creating a completed take.
+  Checked generation requires macOS 26, an installed Apple on-device speech
+  model for the script's language, and the bundled independent recognizer.
+  Both audio-only recognizers must find every scripted word before a sentence
+  is accepted. A disagreement retries generation; an unavailable checker stops
+  generation. These checks reduce word errors but cannot guarantee recognition
+  accuracy or acting quality. Quick preview remains explicitly unchecked.
+  Preview takes and older takes without word-check history are kept for playback
+  and export, but do not automatically become voice references or retake history.
+  Voice auditions always use checked generation.
+  Recognition checks word coverage, not acting quality or perfect cue execution.
 - **Document narration**: a PowerPoint deck, a PDF or an EPUB opens as
   sections, one per slide, page or chapter, and narrates section by section
   with the same voice throughout. Exports are the whole narration, one file
@@ -132,12 +157,35 @@ cd tools && uv venv --python 3.12 .venv && uv pip install --python .venv/bin/pyt
 ## Build and run
 
 ```bash
+python3 tools/bootstrap_word_recognition.py  # downloads and checks pinned framework and local speech models
 swift build -c release
+python3 tools/stage_word_recognition.py --bin .build/release
 tools/make_app.sh            # assembles dist/DramaStudio.app, with drama-mcp and drama-say in Contents/MacOS
 open dist/DramaStudio.app
 ```
 
 Command line:
+
+The app build stages the recognition runtime automatically. CLI builds and tests
+need the bootstrap and staging steps above. The English and multilingual models
+use about 975 MB on disk; recognition runs locally with no script hints. English
+uses `small.en`; other supported languages use `small`. Only the selected model
+is loaded. Recognition requires both an installed Apple model and a supported
+independent model language. Older native-only checks remain recorded in project
+files, but their audio is excluded from automatic checked-reference reuse.
+
+Run the retained wrong-word and complete-ending controls with
+`swift test -c release --filter LocalWordVerifierTests`. On macOS 26 these controls
+fail if required local assets are missing; they do not skip that failure.
+
+`tools/make_cli.sh` assembles a signed, relocatable CLI runtime in
+`dist/drama-cli`, including the helper, framework, resource bundle, models and
+licenses. Set `DS_VERIFY_NATIVE_WORD_CHECKS=1` when running either packaging
+script to require the installed native model and exercise the full dual check
+on the retained complete-ending and wrong-word recordings. Packaging always
+tests the independent runtime. The full offline check can also be rerun with
+`drama check-words <WAV> <script> <accepted|rejected>`, or with the app executable's
+`--check-words` flag. These commands do not load the speech generation model.
 
 ```bash
 .build/release/drama tune                      # once per Mac, about 30 s; the app does it on first load
@@ -686,9 +734,9 @@ reference clip for the cloned runs.
 | one sentence per turn | 0.063 | 86% | 100% | 30 frames | 0.867 |
 | sentence per turn, silence stop, short-chunk retry (previous defaults) | 0.016 | 92% | 100% | 2 frames | 0.867 |
 
-The app now fixes the chunking and retry policies at the shipped defaults; the
-`drama` CLI still reaches them through `--chunking`, `--no-retry` and
-`--max-frames`.
+The app uses the shipped chunking and retry policies. The `drama` CLI exposes
+`--chunking` for unchecked comparisons; checked generation always uses sentence
+turns. `--no-retry` and `--max-frames` remain available.
 
 Uncloned outputs score 0.54 to 0.56 against the reference clip, so the cloned
 0.87 is the voice carrying over, not the metric's floor. The only misses in the
@@ -843,9 +891,13 @@ after the opening and omit the rest of that chunk.
 `GenerationConfig.streaming` requests when decoded audio leaves the engine.
 When `maxRetries` and `minSpokenRatio` are positive, every request uses
 `.sentence` mode. Each chunk is decoded and checked before its selected attempt
-leaves the engine. This applies to every voice, plain text, and performance cues.
+leaves the engine. Checked generation also verifies both complete neighboring
+chunks together before exposing their join. A mismatch retries only the current
+unplayed chunk within the existing attempt limit. Already emitted audio stays
+fixed. This applies to every voice, plain text, and performance cues.
 
-With retries disabled, `.lowLatency(stepFrames: 64)` sends partial audio every
+With explicitly unchecked preview and retries disabled,
+`.lowLatency(stepFrames: 64)` sends partial audio every
 64 generated frames, about 3 seconds. The CPU decodes those frames while the GPU
 generates the next ones. Such a chunk cannot be replaced after playback begins.
 Quick Preview opts into this tradeoff.
@@ -855,9 +907,22 @@ frame cap and loop guard. It does not treat silence as completion, because a
 voice can pause before the remaining words. Quick Preview enables the two-second
 silence stop. Explicit silence probes run at fixed frame checkpoints and finish
 before sampling resumes, so decode timing cannot change the stop frame.
-Retry checks use text-derived duration and stop reason; they do not compare the
-spoken words with the script. Reference pace affects the time allowance, not the
-minimum amount of speech a retry must contain.
+Normal generation checks the decoded words with on-device speech recognition.
+Missing, changed, or uncertain words trigger a retry before audio enters playback
+or generation history. Cue retries alternate the requested sampling with broader replacements and
+ask for precise enunciation. Exhausted retries report a failure. Reference pace affects
+the time allowance, not the words that must be spoken.
+
+Explicit recognition labels such as `*gasp*` or `(gasps)` count as nonverbal
+annotations only when the script requests that cue family. Ordinary spoken
+words remain required. The native checker selects an installed regional locale
+from your macOS language preferences, with a deterministic fallback.
+
+Acceptance policy revision 5 records the verified-sentence boundary rule.
+Archived takes retain their original check revision; playback does not upgrade
+their verification history. Opt-in local audits record the exact PCM identities,
+unit indices, token and confidence-span positions used by the boundary check.
+
 
 The decode reuses the windows a full decode of the chunk would run
 (`DecodeWindow.covering`), so a chunk's partials join into exactly its audio.

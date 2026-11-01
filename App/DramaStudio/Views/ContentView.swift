@@ -46,16 +46,7 @@ struct ContentView: View {
             .navigationSplitViewColumnWidth(min: 200, ideal: 260, max: 340)
         } detail: {
             HStack(spacing: 0) {
-                VStack(spacing: 0) {
-                    ScriptEditorView(model: model)
-                        .frame(minHeight: 0, maxHeight: .infinity)
-                    VStack(spacing: 0) {
-                        TransportBar(model: model)
-                        if !model.visibleTakes.isEmpty { TakesStrip(model: model) }
-                    }
-                    .fixedSize(horizontal: false, vertical: true)
-                    .layoutPriority(1)
-                }
+                editorWorkspace
                 .frame(minWidth: 480)
                 if showsInspector && availableWidth >= 1100 {
                     Divider()
@@ -92,6 +83,29 @@ struct ContentView: View {
         }
         .modifier(ProjectRecovery(model: model))
         .onSpaceKey { model.togglePlayback() }
+    }
+
+    @ViewBuilder
+    private var editorWorkspace: some View {
+        if model.visibleTakes.isEmpty {
+            editorAndTransport
+        } else {
+            VSplitView {
+                editorAndTransport.frame(minHeight: 220)
+                TakesStrip(model: model, resizable: true)
+                    .frame(minHeight: model.document == nil ? 300 : 180,
+                           idealHeight: model.document == nil ? 340 : 240)
+            }
+        }
+    }
+
+    private var editorAndTransport: some View {
+        VStack(spacing: 0) {
+            ScriptEditorView(model: model)
+                .frame(minHeight: 0, maxHeight: .infinity)
+            TransportBar(model: model)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 

@@ -6,7 +6,7 @@ import Foundation
 struct ProjectRevision: Equatable {
     var source: ScriptSource
     var voices: [Int: VoiceChoice]
-    var sessionVoices: [VoiceChoice: Take]
+    var recordedVoices: [VoiceChoice: RecordedVoice]
     var screenplay: Bool
     var expressiveness: Double
     var quickPreview: Bool

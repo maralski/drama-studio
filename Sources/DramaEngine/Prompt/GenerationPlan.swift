@@ -6,13 +6,15 @@ import Foundation
 /// chunk, and the earlier takes that precede them as history.
 package struct GenerationPlan: Sendable, Equatable {
     package var references: [Drama3Prompt.Reference]
-    /// Set only for the design layout, where the builder writes `Name: `.
+    /// Set only for the design layout, where the builder tags speaker zero.
     package var character: Drama3Prompt.Character?
     package var history: [Take]
     package var chunks: [Chunk]
     package var streaming: StreamingMode
     /// The whole request's user turn, as its take records it.
     package var turnText: String
+    /// The user's cleaned direction, separate from the script and prompt text.
+    package var direction: String?
 
     package static let historyTakes = 2
 
@@ -43,6 +45,7 @@ package struct GenerationPlan: Sendable, Equatable {
                 note: String? = nil, config: GenerationConfig) throws {
         if character != nil && !references.isEmpty { throw PromptError.voiceConflict }
         let note = note.flatMap(DirectorsNote.clean)
+        direction = note
         let body: String
         if let note {
             guard !DirectorsNote.sentences(text).isEmpty else { throw PromptError.emptyText("line") }
@@ -51,34 +54,33 @@ package struct GenerationPlan: Sendable, Equatable {
             body = text
         }
         streaming = config.streaming
-        if config.maxRetries > 0, config.minSpokenRatio > 0 {
+        if config.wordVerification == .required || (config.maxRetries > 0 && config.minSpokenRatio > 0) {
             streaming = .sentence
         }
-        var turn: (String) -> String = { $0 }
         self.references = references
         self.character = nil
         if references.isEmpty, let voice = previousTakes.first {
             self.references = [Drama3Prompt.Reference(transcript: DirectorsNote.spokenText(ofTurn: voice.text, character: character), codes: voice.codes)]
-            if let character { turn = character.turn }
         } else if references.isEmpty {
             self.character = character
         }
-        if note != nil {
-            chunks = [Chunk(turn: turn(body), line: text)]
-        } else {
-            var pieces: [String]
-            switch config.chunking {
-            case .reference: pieces = Drama3Chunking.split(text, maxBytes: config.chunkBytes)
-            case .sentences: pieces = Drama3Chunking.splitSentencesTagged(text)
-            }
-            if pieces.isEmpty { pieces = [text] }
-            chunks = pieces.map { Chunk(turn: turn($0), line: $0) }
+        var pieces: [String]
+        switch config.wordVerification == .required ? .sentences : config.chunking {
+        case .reference: pieces = Drama3Chunking.split(text, maxBytes: config.chunkBytes)
+        case .sentences: pieces = Drama3Chunking.splitSentencesTagged(text)
+        }
+        if pieces.isEmpty { pieces = [text] }
+        chunks = pieces.map { piece in
+            Chunk(turn: note.map { DirectorsNote.retakeText(line: piece, note: $0) } ?? piece, line: piece)
         }
         let turnText = character?.turn(body) ?? body
         self.turnText = turnText
         // A take of the very turn being generated, as history, makes the model
         // replay that take's audio: measured envelope correlation 0.93 to 0.99.
         history = Array(previousTakes.filter { $0.text != turnText }.suffix(Self.historyTakes))
+        if let character {
+            history = history.map { Take(text: character.removingName(from: $0.text), codes: $0.codes) }
+        }
     }
 
     package init(_ request: SpeechRequest) throws {

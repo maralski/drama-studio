@@ -14,7 +14,7 @@ enum ProjectError: LocalizedError, Equatable {
 }
 
 struct StudioProject: Codable, Sendable, Equatable {
-    static let currentVersion = 2
+    static let currentVersion = 4
     static let fileExtension = "dramaproj"
 
     var version = currentVersion
