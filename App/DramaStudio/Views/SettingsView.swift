@@ -5,19 +5,23 @@ import DramaEngine
 import DramaServer
 import SwiftUI
 
+enum SettingsTab: Hashable { case general, updates, pronunciation }
+
 struct SettingsView: View {
     let server: APIServerController
     let setup: SetupCoordinator
+    @Binding var selection: SettingsTab
+    @State private var modelStatus: ModelSetup.Status?
 
     var body: some View {
-        TabView {
-            Tab("General", systemImage: "gearshape") {
-                GeneralSettingsView(server: server, setup: setup)
+        TabView(selection: $selection) {
+            Tab("General", systemImage: "gearshape", value: SettingsTab.general) {
+                GeneralSettingsView(server: server, setup: setup, status: $modelStatus)
             }
-            Tab("Updates", systemImage: "arrow.down.circle") {
+            Tab("Updates", systemImage: "arrow.down.circle", value: SettingsTab.updates) {
                 UpdateSettingsView()
             }
-            Tab("Pronunciation", systemImage: "character.book.closed") {
+            Tab("Pronunciation", systemImage: "character.book.closed", value: SettingsTab.pronunciation) {
                 PronunciationSettingsView()
             }
         }
@@ -33,7 +37,7 @@ private struct GeneralSettingsView: View {
     @AppStorage(APIServerController.startsWithAppKey) private var startsWithApp = true
     @AppStorage(APIServerController.portKey) private var port = Int(APIService.defaultPort)
     @AppStorage(SessionModel.streamsAudioKey) private var streamsAudio = true
-    @State private var status: ModelSetup.Status = .missing
+    @Binding var status: ModelSetup.Status?
     @State private var codecReady = true
 
     var body: some View {
@@ -50,7 +54,7 @@ private struct GeneralSettingsView: View {
                     Button("Use Default Location") { modelPath = "" }
                         .disabled(modelPath.isEmpty)
                 }
-                if let problem = status.problem {
+                if let problem = status?.problem {
                     Text(problem).font(.caption).foregroundStyle(.secondary)
                 }
                 if !codecReady, let command = codecCommand {
@@ -90,10 +94,15 @@ private struct GeneralSettingsView: View {
         }
         .formStyle(.grouped)
         .task(id: modelPath) {
-            status = ModelSetup.status(customPath: modelPath)
-            codecReady = DramaCodec.modelsExist(in: AppHome.codec)
+            let path = modelPath
+            let result = await Task.detached {
+                (ModelSetup.status(customPath: path), DramaCodec.modelsExist(in: AppHome.codec))
+            }.value
+            guard !Task.isCancelled else { return }
+            status = result.0
+            codecReady = result.1
         }
-        .onChange(of: modelPath) { setup.resume() }
+        .onChange(of: modelPath) { status = nil; setup.resume() }
     }
 
     private var codecCommand: String? {
@@ -103,6 +112,7 @@ private struct GeneralSettingsView: View {
     private var location: String {
         switch status {
         case .ready(let url), .incomplete(let url): url.path
+        case nil: modelPath.isEmpty ? AppHome.models.path : modelPath
         case .missing: modelPath.isEmpty ? "\(AppHome.models.path) (not downloaded)" : modelPath
         }
     }
@@ -110,6 +120,7 @@ private struct GeneralSettingsView: View {
     @ViewBuilder
     private var statusLabel: some View {
         switch status {
+        case nil: Label("Checking…", systemImage: "clock").foregroundStyle(.secondary)
         case .ready: Label("Ready", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
         case .incomplete: Label("Incomplete", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
         case .missing: Label("Not found", systemImage: "xmark.circle.fill").foregroundStyle(.red)

@@ -6,11 +6,12 @@ import SwiftUI
 struct TakesStrip: View {
     let model: SessionModel
     @State private var note = ""
+    @State private var chipsHeight: CGFloat = 30
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ScrollView(.horizontal) {
-                HStack(spacing: 6) {
+            ScrollView(.vertical) {
+                WrappingFlow(spacing: 6) {
                     if let section = model.selectedSegment, model.document != nil {
                         Text(section.label).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
@@ -21,11 +22,13 @@ struct TakesStrip: View {
                     }
                 }
                 .padding(2)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { chipsHeight = $0 }
             }
+            .frame(height: min(chipsHeight, 120))
             .scrollIndicators(.never)
             .fixedSize(horizontal: false, vertical: true)
-            .defaultScrollAnchor(.leading, for: .alignment)
-            .defaultScrollAnchor(.trailing, for: .sizeChanges)
+            .defaultScrollAnchor(.top, for: .alignment)
+            .defaultScrollAnchor(.bottom, for: .sizeChanges)
             HStack {
                 Text(model.exportSummary).font(.caption).foregroundStyle(.secondary)
                 if model.previewingTakeID != nil {
@@ -50,7 +53,7 @@ struct TakesStrip: View {
                     .help("Read the line again with this note, after the takes so far")
                 Spacer()
             }
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), alignment: .leading)], alignment: .leading, spacing: 6) {
+            WrappingFlow(spacing: 6) {
                     ForEach(Examples.notes, id: \.self) { suggestion in
                         Button(suggestion) { note = suggestion }
                             .buttonStyle(.bordered)

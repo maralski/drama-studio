@@ -4,6 +4,10 @@ Read-only review, 2026-10-18, for the cue-dropout investigation (`REPORT.md`
 in `eval/reliability/`, section "Performance cues: investigation"). Sources
 were read in full at the pins named below; quotes are under fifteen words.
 
+This review describes the pinned implementations on 18 October 2026. Its
+references to our defaults predate later changes to retries, silence stopping
+and short-sentence handling. See the README and `GenerationConfig` for current behavior.
+
 ## Overview
 
 Nobody else cuts a line as finely as we do, and nobody else checks that the

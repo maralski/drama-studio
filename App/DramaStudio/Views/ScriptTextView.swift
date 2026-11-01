@@ -11,6 +11,7 @@ struct ScriptTextView: NSViewRepresentable {
     @Binding var selection: TextSelection?
     /// UTF-16 range of the sentence being spoken.
     var highlight: NSRange?
+    var clearRevision: UInt64 = 0
 
     static let highlightColor = NSColor.systemYellow.withAlphaComponent(0.35)
 
@@ -73,8 +74,16 @@ struct ScriptTextView: NSViewRepresentable {
         coordinator.parent = self
         coordinator.isUpdating = true
         defer { coordinator.isUpdating = false }
+        let clearing = coordinator.clearRevision != clearRevision && text.isEmpty
+        coordinator.clearRevision = clearRevision
         if textView.string != text {
-            textView.string = text
+            if clearing {
+                textView.breakUndoCoalescing()
+                textView.insertText("", replacementRange: NSRange(location: 0, length: (textView.string as NSString).length))
+                textView.breakUndoCoalescing()
+            } else {
+                textView.string = text
+            }
             coordinator.shown = nil
         }
         if let range = Self.nsRange(of: selection, in: text), textView.selectedRange() != range, range.upperBound <= (text as NSString).length {
@@ -107,11 +116,13 @@ struct ScriptTextView: NSViewRepresentable {
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: ScriptTextView
         var isUpdating = false
+        var clearRevision: UInt64
         /// The highlight currently drawn, so an unchanged one costs nothing.
         var shown: NSRange??
 
         init(parent: ScriptTextView) {
             self.parent = parent
+            clearRevision = parent.clearRevision
         }
 
         func textDidChange(_ notification: Notification) {

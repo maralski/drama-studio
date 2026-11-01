@@ -166,4 +166,4 @@ The tests cover onboarding choices, existing installs, default-off collection,
 persistence, revocation, cancellation, discarded pre-consent data, the outgoing
 app payload, and Worker validation, concurrent aggregation, missing configuration, batch limits
 and delivery failures in the local Workers runtime. Outbound requests are intercepted
-by the test harness, so tests cannot send metrics to New Relic.
+by the test runner, so tests cannot send metrics to New Relic.

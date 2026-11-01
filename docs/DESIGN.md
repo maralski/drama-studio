@@ -76,7 +76,9 @@ bytes and previous chunks are fed back as history turns.
 ```
 Sources/DramaEngine        Swift library: loader, tokenizer, Metal graph, sampler
 Sources/DramaEngine/Kernels/*.metal
-Sources/drama              CLI: generate, dump (for the eval suite), bench, tune, profile, kbench, decode
+Sources/drama              CLI: generate, dump (for the eval suite), bench, tune, profile, kbench, decode, serve
+Sources/DramaServer        Loopback HTTP API and voice/take storage
+Sources/DramaMCP           MCP client bridge and drama-say support
 App/DramaStudio            SwiftUI app target (SwiftPM executable, bundled by tools/make_app.sh)
 eval/                      Python oracle (vendored fish-speech modules) and the faithfulness suite
 Sources/DramaEngine/CodecConversion   coremltools export of the DAC encoder and decoder (convert_codec.py, dac_reference), shipped as an engine resource
@@ -94,12 +96,18 @@ Sources/DramaEngine/CodecConversion   coremltools export of the DAC encoder and 
   layers, GDN conv and recurrent states for the 30 linear layers, the main-token
   history window (16) for repetition-aware sampling, and the current position.
   All GPU buffers, allocated once for the requested capacity.
-- `GenerationConfig`: temperature, topK, topP, maxNewFrames, seed.
-- `Precision` knob: fp32 activations everywhere, with an optional `mimicBF16`
-  mode that rounds at the points where the reference rounds (Linear outputs,
-  residual stream). The eval suite decides which mode ships.
+- `GenerationConfig`: sampling, frame caps, chunking, retry and streaming
+  settings. `Sources/DramaEngine/API.swift` defines the current fields and defaults.
+- Activations use fp32. The internal `mimicBF16` diagnostic rounds at the
+  reference's rounding points; it is not a user-selectable quality mode.
 
 ## Kernel list
+
+The generic kernels below also support prefill and diagnostics. The current
+one-row decode path uses fused MoE and tower operations, concurrent dispatch
+with dependency barriers, and losslessly packed projections where supported.
+See `Model/TowerDecode.swift`, `Model/PackedWeights.swift` and the README's
+"Decode, second pass" measurements for those paths.
 
 Elementwise and norms: `rmsnorm_zc` (also per-head for q/k), `gated_rmsnorm`,
 `silu_mul`, `sigmoid_gate_mul`, `residual_add`, `embed_mix`.
@@ -199,7 +207,9 @@ CPU (oracle). Levels:
 - The engine runs in fp32 after widening bf16 weights; the `mimicBF16` knob
   exists but was not evaluated, because the fp32 path already matches the fp32
   oracle at 1e-6 and sits far below the bf16 noise floor.
-- Weights read in place from the Hugging Face cache; disk is nearly full.
+- Weights are read in place from the chosen model folder, the app download,
+  or a Hugging Face cache snapshot. Selected decode projections also use the
+  lossless packed-weight cache described in the README.
 - Experts stay FP8 in memory; exact to the release and half the bytes.
 - Only candidate logits are computed; the reference discards the rest.
 - Kernel schedules are tuned per machine, not shipped as constants, after a

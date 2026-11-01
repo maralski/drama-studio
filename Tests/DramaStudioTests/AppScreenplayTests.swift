@@ -32,6 +32,21 @@ final class AppScreenplayTests: XCTestCase {
         XCTAssertFalse(Screenplay.looksLikeScreenplay("A: x\nB: y\nprose\nprose\nprose"))
     }
 
+    func testNamesAndDialogueRespectUnicodeAndFormatBoundaries() throws {
+        for name in ["Élodie", "E\u{301}lodie", String(repeating: "E\u{301}", count: 40), "李", "O’Neil", "Jean-Luc", String(repeating: "A", count: 40)] {
+            let prepared = try Screenplay.prepare("\(name): Hello.\n\(name): Goodbye.", asScreenplay: true).get()
+            XCTAssertEqual(prepared.speakers.map(\.name), [name])
+            XCTAssertEqual(prepared.text, "<|speaker:0|>Hello.\n<|speaker:0|>Goodbye.")
+        }
+        for line in ["Alex:Hello.", "1Alex: Hello.", String(repeating: "A", count: 41) + ": Hello."] {
+            XCTAssertEqual(Screenplay.prepare(line, asScreenplay: true), .failure(.noDialogue))
+        }
+    }
+
+    func testNamesWithoutSpokenWordsAreRejected() {
+        XCTAssertEqual(Screenplay.prepare("Alex:\nSam:", asScreenplay: true), .failure(.noDialogue))
+    }
+
     func testURLsAndTimesAreNotDialogue() {
         XCTAssertEqual(Screenplay.prepare("See http://fish.audio at 10:30 today.", asScreenplay: true), .failure(.noDialogue))
     }

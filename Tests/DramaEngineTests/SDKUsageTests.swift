@@ -11,6 +11,7 @@ func speak(_ text: String, cloning clip: URL, transcript: String,
     let voice = try await engine.encodeReference(audioURL: clip, transcript: transcript, name: "Narrator")
     var request = SpeechRequest(text: text, references: [voice])
     request.config.streaming = .defaultLowLatency
+    request.config.maxRetries = 0
     var audio = StreamedAudio()
     var streamed: [Float] = []
     for try await event in engine.synthesize(request) {

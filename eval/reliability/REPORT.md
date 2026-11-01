@@ -1,5 +1,10 @@
 # Speech reliability study: full against balanced
 
+This is a historical experiment record. The balanced mode was removed after
+this study. Later releases changed retry, silence-stop and sentence-splitting
+policies. Tables below retain the configuration used for each experiment;
+see `Sources/DramaEngine/API.swift` and the README for current defaults.
+
 Question: does every sentence come out as speech, every time, in the full
 model and in the int8 "balanced" mode, under different conditions?
 
@@ -194,7 +199,7 @@ each condition's own flags, so the four expressiveness-slider conditions ran
 under the Space's sampling too; everything else as the study ran it: sentence
 chunking, the CLI's fixed 600-frame cap, the Core ML silence stop, the
 duration retry. Binary built from this branch (main at 1048a42 plus the
-harness flag), so the three cue guards shipped after the study (loop guard,
+test-runner flag), so the three cue guards shipped after the study (loop guard,
 eos-gated retry, cap per cue) were on; the rows they are compared with ran
 before those guards, which matters for the cue and control rows and is
 checked below for prose. One engine process at a time, slices one after
@@ -335,7 +340,7 @@ reading costs 190 ms, about 7 frames at 38 frames/s, so a stop fires 7 to 23
 frames after the audio holds 2 s of silence: the cadence rounds up to the
 next multiple of 16, then the reading lands.
 
-Measured on the cue harness, variant he2 (the shipped defaults), eight lines,
+Measured on the cue tests, variant he2 (the shipped defaults), eight lines,
 seeds 1 to 5, each binary the only engine process, load average 3 to 11 from
 other sessions (`eval/out/cues-before`, `eval/out/cues-after`;
 `eval/cues/probe_latency.py` prints the table):
@@ -472,7 +477,7 @@ because the readings before the expected end are most of them.
 
 ### Lateness and coverage
 
-The cue harness (`eval/cues/run.py`, eight cue lines) and the six prose
+The cue test runner (`eval/cues/run.py`, eight cue lines) and the six prose
 lines, seeds 1 to 5, through `eval/probe_cadence_harness.sh`;
 `eval/cues/probe_latency.py` prints the lateness. Variant a has no loop
 guard and no eos retry, so the stop matters most there:
@@ -498,7 +503,7 @@ Under the shipped defaults (variant he2):
 The cadence sets the lateness: a reading every 32 frames puts the stop
 about 35 frames late against 17, and every 64 frames triples the chunks
 that run to their cap while already silent. The A/A rows give the
-harness's own spread: today's cadence run twice scores 34 and 33 of 40 cue
+test runner's own spread: today's cadence run twice scores 34 and 33 of 40 cue
 lines under variant a and 38 and 34 under he2, with only 29 or 30 of 40
 generations byte-identical between its own runs. Where a stop lands
 depends on when its reading finishes, not only on the seed, and every
@@ -555,14 +560,14 @@ waiting readings (`SilenceProbePolicy.shipped`). On the paragraph it gives
 back nearly all of the 2.1 to 2.4 ms per frame the probe cost the GPU (8.5
 percent of frames per second down to 1.0), cuts the probe's CPU from about
 a third of the decode to a fifth, keeps every frame of a generation the
-same until a stop lands, and on all three harness sets scores within the
+same until a stop lands, and on all three test sets scores within the
 spread of today's cadence run against itself. The cadences of 32 and 64
 frames were not taken: they recover less speed and make the stop two to
 three times later.
 
 Not done: the GPU cost is measured on one paragraph at one seed; a chunk
 expected to last under about 4 s never reaches the gate, so short lines
-keep today's few readings. The harness's run-to-run spread (four lines of
+keep today's few readings. The test runner's run-to-run spread (four lines of
 40 between two runs of the same setting) is measured and reported, not
 removed; a stop decision that does not depend on timing would need the
 generation loop to wait for each reading, which costs the GPU the time the

@@ -73,6 +73,13 @@ struct ContentView: View {
                     .help("Import a script, or a PowerPoint, PDF, or EPUB document to narrate by section (⌘O)")
             }
             ToolbarItem(placement: .primaryAction) {
+                Button(model.document == nil ? "Clear Script" : "Clear Section", systemImage: "eraser") {
+                    model.clearScriptInput()
+                }
+                .disabled(model.editorText.isEmpty || model.state.isGenerating)
+                .help("Clear the editor text. Existing takes remain available.")
+            }
+            ToolbarItem(placement: .primaryAction) {
                 Menu("Examples", systemImage: "text.badge.star") { ExampleMenuItems(model: model) }
                     .help("Insert an example line or cast a character")
             }
