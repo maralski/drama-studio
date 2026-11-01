@@ -39,7 +39,12 @@ struct ScriptEditorView: View {
         }
         .navigationTitle(model.projectName)
         .background(ProjectWindowState(model: model).frame(width: 0, height: 0))
-        .task(id: modelPath) { modelStatus = ModelSetup.status(customPath: modelPath) }
+        .task(id: modelPath) {
+            let path = modelPath
+            let status = await Task.detached { ModelSetup.status(customPath: path) }.value
+            guard !Task.isCancelled else { return }
+            modelStatus = status
+        }
         .overlay {
             if isDropTarget {
                 RoundedRectangle(cornerRadius: 8).strokeBorder(Color.accentColor, lineWidth: 3).padding(4)
@@ -53,7 +58,7 @@ struct ScriptEditorView: View {
     }
 
     private func editor(highlight: SpokenHighlight?) -> some View {
-        ScriptTextView(text: $model.editorText, selection: $model.selection, highlight: locator.range(of: highlight, in: model.editorText))
+        ScriptTextView(text: $model.editorText, selection: $model.selection, highlight: locator.range(of: highlight, in: model.editorText), clearRevision: model.clearInputRevision)
             .background(Color(nsColor: .textBackgroundColor))
             .overlay(alignment: .topLeading) {
                 if model.editorText.isEmpty && model.document == nil {
@@ -111,6 +116,7 @@ private struct ScriptFooter: View {
                 case .failure(let error):
                     Label(error.localizedDescription, systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.red)
+                    HelpButton(.screenplayMode)
                 }
             }
             Spacer()

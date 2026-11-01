@@ -7,9 +7,13 @@ import SwiftUI
 struct DramaStudioApp: App {
     static let mainWindowID = "main"
 
-    @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
+    @State private var settingsTab: SettingsTab = .general
 
-    private func updateWindow() { openWindow(id: "updates") }
+    private func showUpdates() {
+        settingsTab = .updates
+        openSettings()
+    }
 
     @NSApplicationDelegateAdaptor(StudioAppDelegate.self) private var appDelegate
     @State private var model: SessionModel
@@ -48,7 +52,7 @@ struct DramaStudioApp: App {
             ContentView(model: model, setup: setup)
                 .environment(server)
                 .environment(updater)
-                .onChange(of: updater.readyVersion) { if updater.readyVersion != nil { updateWindow() } }
+                .onChange(of: updater.readyVersion) { if updater.readyVersion != nil { showUpdates() } }
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in updater.discardOnQuit() }
                 .task { await updater.start() }
                 .defaultAppStorage(AppHome.defaults)
@@ -61,7 +65,7 @@ struct DramaStudioApp: App {
             CommandGroup(after: .appInfo) {
                 Button("Check for Updates…") {
                     NSApp.activate()
-                    updateWindow()
+                    showUpdates()
                     Task { await updater.check() }
                 }
                 .disabled(updater.busy)
@@ -81,15 +85,9 @@ struct DramaStudioApp: App {
         .defaultSize(width: 760, height: 500)
         .windowResizability(.contentMinSize)
 
-        Window("Software Update", id: "updates") {
-            UpdateSettingsView()
-                .modifier(UpdateConfirmation())
-                .environment(updater)
-                .frame(width: 520, height: 260)
-        }
-
         Settings {
-            SettingsView(server: server, setup: setup)
+            SettingsView(server: server, setup: setup, selection: $settingsTab)
+                .modifier(UpdateConfirmation())
                 .environment(updater)
                 .defaultAppStorage(AppHome.defaults)
         }
@@ -166,6 +164,8 @@ struct StudioCommands: Commands {
         CommandMenu("Script") {
             Menu("Insert Cue") { CueMenuItems(model: model) }
             Menu("Examples") { ExampleMenuItems(model: model) }
+            Button(model.document == nil ? "Clear Script" : "Clear Section") { model.clearScriptInput() }
+                .disabled(model.editorText.isEmpty || model.state.isGenerating)
             Toggle("Screenplay Mode", isOn: $model.screenplayMode)
                 .keyboardShortcut("p", modifiers: [.command, .shift])
                 .disabled(model.document != nil)

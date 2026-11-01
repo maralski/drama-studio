@@ -6,6 +6,7 @@ import Foundation
 /// Help window both read from here; case order is the Help window's order.
 enum SettingHelp: String, CaseIterable, Identifiable {
     case gettingStarted
+    case requirements
     case screenplayMode
     case speakerVoice
     case performanceCues
@@ -41,7 +42,7 @@ enum SettingHelp: String, CaseIterable, Identifiable {
 
     var group: Group {
         switch self {
-        case .gettingStarted: .start
+        case .requirements, .gettingStarted: .start
         case .screenplayMode, .speakerVoice, .performanceCues, .examples, .sections, .pronunciation, .projects: .script
         case .surpriseMe, .voiceDesign, .referenceClip, .voiceTranscript, .voiceConsent: .voices
         case .newTake, .directorsNote, .keepTake, .quickPreview, .expressiveness, .playbackSpeed: .takes
@@ -62,7 +63,8 @@ enum SettingHelp: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .gettingStarted: "Getting Started"
+        case .requirements: "System requirements"
+        case .gettingStarted: "Getting started"
         case .screenplayMode: "Screenplay Mode"
         case .speakerVoice: "Speaker Voice"
         case .performanceCues: "Performance Cues"
@@ -89,10 +91,12 @@ enum SettingHelp: String, CaseIterable, Identifiable {
 
     var text: String {
         switch self {
+        case .requirements:
+            "Requires an Apple silicon Mac and macOS 15 or later. Allow about 49 GB of free disk for initial setup, plus space for audio and projects. A network connection is needed for downloads and update checks; generation runs locally. Use 64 GB or more of unified memory. This is a recommendation, not a tested minimum: the engine maps about 41.5 GB of weights, and generation has been verified on an M3 Max with 128 GB. Lower-memory Macs may swap heavily or fail to load. The studio window needs at least 900 by 640 points."
         case .gettingStarted:
             "Type or paste a script in the editor, or click Import Script to open a text, Word, or subtitle file. Add a voice from the sidebar by choosing a clip or recording one, then pick it for a speaker under Cast. Click Generate to hear the take while it is made. When you like it, click Export to save it as WAV or M4A."
         case .screenplayMode:
-            "Treats lines written as \u{201C}Name: line\u{201D} as dialogue and gives each name its own speaker, up to 16. Each speaker then gets a voice picker under Cast. It turns on by itself when an imported script looks like a screenplay. Turn it off to have the names read aloud as plain text."
+            "Write each speaker's name, a colon, a space, then the spoken words. For example:\n\nAlex: Hello there.\nSam: Good morning.\n\nUse up to 16 speakers. Names must start with a letter and can contain letters, numbers, spaces, apostrophes, periods and hyphens, up to 40 characters. A line without a name continues the previous speaker; text before the first named speaker belongs to Narrator. Names are case-insensitive. Each speaker gets a voice picker under Cast. Imported dialogue can turn this mode on automatically. Turn it off to read ordinary prose or have the names spoken aloud."
         case .speakerVoice:
             "Picks who speaks for this speaker: a library voice, the model's default, a surprise voice, or a designed one. Model default lets the model choose a voice of its own for every take. Voices apply in speaker order, so a speaker's voice is used only when every earlier speaker has one too, and a script with several speakers uses library voices only."
         case .performanceCues:
@@ -130,7 +134,7 @@ enum SettingHelp: String, CaseIterable, Identifiable {
         case .streaming:
             "Plays completed chunks while the rest of the script generates. Normal generation checks each chunk and can retry an incomplete attempt before you hear it. Quick Preview skips retries and can start playback before a chunk finishes. Turn streaming off to wait for completed chunks even in Quick Preview."
         case .modelLocation:
-            "Where Drama Studio looks for the Drama 3 weights, about 41.5 GB. By default it uses the Hugging Face cache, where \u{201C}hf download fishaudio/drama-3\u{201D} puts them. Choose a folder only if you keep the model somewhere else, such as an external drive. Restart Drama Studio after changing it."
+            "Where Drama Studio looks for the Drama 3 weights, about 41.5 GB. It checks your chosen folder first, then its own download, then the newest Hugging Face cache snapshot. Choose Folder selects an existing model; Use Default Location returns to automatic discovery and download. Setup checks the new location and attaches the engine without requiring a restart."
         case .license:
             "Drama Studio is written by Peter Marelas and its code is under the Apache License 2.0. It runs Fish Audio's Drama 3 model, whose weights are under the Fish Audio Community License, and the parts of Drama Studio derived from Fish Audio's code stay under that license too. Everything runs on this Mac, and scripts and voices are not uploaded. Clone a real person's voice only with their consent, and read the license for what else it allows."
         }

@@ -38,6 +38,10 @@ generates the next ones. A chunk's partials, in order, join into exactly the
 samples of its `audio` event: on the Core ML codec, 600 frames decoded in
 64-frame steps differ from one full decode by a maximum absolute error of 0.
 
+The following measurements describe the earlier asynchronous streaming
+implementation, before universal retry buffering and deterministic optional
+silence probes. They are historical results, not current latency guarantees.
+
 Measured on an M3 Max with a two-sentence line through the HTTP API, the
 first audio byte came after 4.49 s in low-latency mode against 12.95 s when
 every chunk was decoded after the whole request. The CPU decode slows

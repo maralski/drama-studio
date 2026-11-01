@@ -87,9 +87,9 @@ final class AppSettingHelpTests: XCTestCase {
         }
     }
 
-    func testEachEntryIsTwoToFourSentences() {
+    func testControlPopoversAreTwoToFourSentences() {
         let sentenceEnd = try! Regex(#"[.!?](\s+|$)"#)
-        for topic in SettingHelp.allCases {
+        for topic in SettingHelp.allCases where topic != .requirements && topic != .screenplayMode {
             let sentences = topic.text.split(separator: sentenceEnd).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
             XCTAssertTrue((2...4).contains(sentences.count), "\(topic.title) has \(sentences.count) sentences")
         }

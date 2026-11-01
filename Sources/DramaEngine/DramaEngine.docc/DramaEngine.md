@@ -16,13 +16,14 @@ Cloning a real person's voice without their consent is not permitted.
 
 ### Requirements
 
-- An Apple silicon Mac with a lot of unified memory. The weights are 41.5 GB and are
-  memory-mapped, not copied, plus about 2 GB of state and codec. Only a 128 GB M3 Max has been tested.
+- An Apple silicon Mac. Use 64 GB or more of unified memory; this is a
+  recommendation, not a tested minimum. Only a 128 GB M3 Max has been tested.
+  Allow about 49 GB of free disk for model files and setup caches.
 - macOS 15 or later, and Xcode 26 or its command line tools.
 - The model in the Hugging Face cache and the Core ML codec models built once from
   it. See <doc:GettingTheModel>.
 
-### Speak a sentence in a minute
+### Generate speech
 
 Add the package, check the install, and create the engine:
 
@@ -49,6 +50,7 @@ func speak(_ text: String, cloning clip: URL, transcript: String,
     let voice = try await engine.encodeReference(audioURL: clip, transcript: transcript, name: "Narrator")
     var request = SpeechRequest(text: text, references: [voice])
     request.config.streaming = .defaultLowLatency
+    request.config.maxRetries = 0
     var audio = StreamedAudio()
     var streamed: [Float] = []
     for try await event in engine.synthesize(request) {
@@ -63,6 +65,9 @@ let (result, _) = try await speak("Hello there. Good to see you.", cloning: URL(
 print("\(result.take.durationSeconds) s of audio")
 ```
 
+This example disables retries so partial audio can arrive before a chunk
+finishes. Keep retries enabled when completeness matters more than early playback.
+
 `streamed` grows by about 3 s of 44.1 kHz mono audio at a time while the
 model generates. In a player, schedule each `newSamples(from:)` result as it
 arrives instead of collecting them.
@@ -73,8 +78,7 @@ ahead of time to move that cost out of the first request.
 
 ### What the package exposes
 
-The public surface is small on purpose. The table names every public type and
-what it is for.
+The table lists the main public types and their uses.
 
 | Area | Types |
 | --- | --- |

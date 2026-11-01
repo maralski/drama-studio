@@ -1,5 +1,6 @@
 // Copyright 2026 Peter Marelas
 // SPDX-License-Identifier: Apache-2.0
+import Accelerate
 import SwiftUI
 
 struct WaveformScrubber: View {
@@ -31,7 +32,14 @@ struct WaveformScrubber: View {
         .frame(maxWidth: .infinity)
         .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 5))
         .overlay { GeometryReader { scrubArea(width: $0.size.width) } }
-        .task(id: model.audio.count) { peaks = Self.peaks(of: model.audio, bins: 160) }
+        .task(id: model.audioRevision) {
+            let samples = model.audio
+            let result = await Task.detached(priority: .userInitiated) {
+                Self.peaks(of: samples, bins: 160)
+            }.value
+            guard !Task.isCancelled else { return }
+            peaks = result
+        }
         .accessibilityElement()
         .accessibilityLabel("Playback position")
         .accessibilityValue("\(TransportBar.clock(position)) of \(TransportBar.clock(model.audio.count))")
@@ -69,11 +77,16 @@ struct WaveformScrubber: View {
             .disabled(!model.canPlay)
     }
 
-    static func peaks(of samples: [Float], bins: Int) -> [Float] {
+    nonisolated static func peaks(of samples: [Float], bins: Int) -> [Float] {
         guard !samples.isEmpty, bins > 0 else { return [] }
         let size = max(1, (samples.count + bins - 1) / bins)
-        let raw = stride(from: 0, to: samples.count, by: size).map { start in
-            samples[start..<min(start + size, samples.count)].reduce(0) { max($0, abs($1)) }
+        let raw: [Float] = samples.withUnsafeBufferPointer { buffer in
+            stride(from: 0, to: samples.count, by: size).map { start in
+                var peak: Float = 0
+                vDSP_maxmgv(buffer.baseAddress! + start, 1, &peak,
+                           vDSP_Length(min(size, samples.count - start)))
+                return peak
+            }
         }
         let loudest = raw.max() ?? 0
         return loudest > 0 ? raw.map { $0 / loudest } : raw

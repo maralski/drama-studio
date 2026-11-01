@@ -4,7 +4,6 @@ import SwiftUI
 
 struct UpdateSettingsView: View {
     @Environment(AppUpdater.self) private var updater
-    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         @Bindable var updater = updater
@@ -18,7 +17,7 @@ struct UpdateSettingsView: View {
                 Button("Check for Updates") { Task { await updater.check() } }
                     .disabled(updater.busy || updater.readyVersion != nil)
                 if updater.readyVersion != nil {
-                    Button("Review Update…") { openWindow(id: "updates"); updater.showsReady = true }
+                    Button("Review Update…") { updater.showsReady = true }
                         .disabled(updater.busy)
                 }
             }
