@@ -7,9 +7,23 @@ adds one, and a patch release changes neither.
 
 ## Unreleased
 
+## 1.1.0
+
+- Display takes in a resizable, scrolling card panel and add take deletion.
+  Remove the redundant dice generation action.
+- Check generated words locally before releasing normal speech, including
+  designed-voice previews and adjacent sentence boundaries. Retry rejected
+  attempts and report exhaustion instead of creating a completed take.
+  Quick Preview remains unchecked.
+- Keep voice-design auditions and main generation on the same checked path,
+  improve retry directions, and preserve cue reactions during word comparison.
+- Checked generation requires macOS 26 and an installed on-device speech
+  model for the script language. Bundle the independent word recognizer.
+- Known limitations: some Mia and Hila requests can still exhaust retries.
+  Voice and cue reliability is not guaranteed for every input.
 - Keep model status across settings tabs and show a neutral state while checking.
   Use Settings > Updates for all update controls and installation confirmation.
-- Add Clear Script and Clear Section actions, compact wrapping take controls,
+- Add Clear Script and Clear Section actions, resizable take cards,
   and screenplay errors with format examples and help.
 - Reuse parsed script status across UI controls and calculate waveform peaks
   away from the main thread. Refresh waveforms when equal-length takes change.
