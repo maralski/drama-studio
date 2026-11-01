@@ -5,6 +5,17 @@ DramaEngine follows [semantic versioning](https://semver.org). The version is
 release removes a public symbol or changes what one means, a minor release
 adds one, and a patch release changes neither.
 
+## Unreleased
+
+- Keep model status across settings tabs and show a neutral state while checking.
+  Use Settings > Updates for all update controls and installation confirmation.
+- Add Clear Script and Clear Section actions, compact wrapping take controls,
+  and screenplay errors with format examples and help.
+- Reuse parsed script status across UI controls and calculate waveform peaks
+  away from the main thread. Refresh waveforms when equal-length takes change.
+- Document system requirements and distinguish recommended memory from tested
+  hardware. Correct model-location help and partial-streaming examples.
+
 ## 1.0.3
 
 - Fit setup windows to their content instead of inheriting the editor's large

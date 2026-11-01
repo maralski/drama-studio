@@ -6,7 +6,7 @@ kernels for the Mac.
 ## Overview
 
 The engine reads three things from disk: the Drama 3 snapshot from Hugging
-Face, two Core ML codec models built from that snapshot's `codec.pth`, and a
+Face, three Core ML codec models built from that snapshot's `codec.pth`, and a
 kernel schedule tuned for the Mac on the first load. ``DramaSetup`` reports
 each one and builds the last two.
 
@@ -19,10 +19,11 @@ each one and builds the last two.
 
 ### Memory
 
-The weights are memory-mapped, not copied. A loaded engine keeps about 40 GB
-resident: the 39.6 GB of weights plus about 2 GB of state and codec. Only a
-128 GB M3 Max has been tested; how a Mac with less unified memory than the
-weights behaves has not been measured.
+The weights are memory-mapped, not copied. The snapshot contains about 39.6 GB of
+weight shards, with additional memory needed for state, codec and packed weights.
+Use 64 GB or more of unified memory. Only a 128 GB M3 Max has been tested;
+64 GB is a recommendation, not a measured minimum. Reserve about 49 GB of free
+disk for initial setup, plus space for audio and projects.
 
 ### Download the snapshot
 

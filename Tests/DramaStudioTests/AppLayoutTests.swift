@@ -88,7 +88,7 @@ final class AppLayoutTests: XCTestCase {
 
     func testSetupFitsUsageContentAndCapsLongErrors() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
-        let model = SessionModel(synthesizer: MockSynthesizer(), library: VoiceLibrary(directory: directory),
+        let model = SessionModel(synthesizer: MockSynthesizer(pace: .instant), library: VoiceLibrary(directory: directory),
                                  pronunciationURL: directory.appending(path: "pronunciation.json"))
         let mac = FakeMac()
         mac.facts.termsAccepted = true
@@ -129,7 +129,7 @@ final class AppLayoutTests: XCTestCase {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let scratch = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: scratch) }
-        let model = SessionModel(synthesizer: MockSynthesizer(), library: VoiceLibrary(directory: scratch),
+        let model = SessionModel(synthesizer: MockSynthesizer(pace: .instant), library: VoiceLibrary(directory: scratch),
                                  pronunciationURL: scratch.appending(path: "pronunciation.json"))
         model.playsWhileGenerating = false
         let mac = FakeMac()
@@ -139,18 +139,29 @@ final class AppLayoutTests: XCTestCase {
 
         try await render(ContentView(model: model, setup: setup).environment(server),
                          name: "studio-empty", size: ContentView.minimumSize, in: directory)
+        model.script = "Ordinary prose without named dialogue."
+        model.screenplayMode = true
+        try await render(ContentView(model: model, setup: setup).environment(server),
+                         name: "studio-screenplay-error", size: ContentView.minimumSize, in: directory)
+        model.screenplayMode = false
         model.script = "A short line for the window layout audit."
         model.generate()
         for _ in 0..<500 where model.state.isGenerating { try await Task.sleep(for: .milliseconds(10)) }
         XCTAssertFalse(model.state.isGenerating)
         try await render(ContentView(model: model, setup: setup).environment(server),
                          name: "studio-script", size: ContentView.minimumSize, in: directory)
+        for _ in 0..<7 {
+            model.generate()
+            for _ in 0..<500 where model.state.isGenerating { try await Task.sleep(for: .milliseconds(10)) }
+        }
+        try await render(ContentView(model: model, setup: setup).environment(server),
+                         name: "studio-eight-takes", size: ContentView.minimumSize, in: directory)
         try await render(TransportBar(model: model).environment(server), name: "transport-narrow", size: CGSize(width: 480, height: 180), in: directory)
         try await render(InspectorView(model: model), name: "inspector-inline", size: CGSize(width: 280, height: 640), in: directory)
         try await render(AddVoiceSheet(model: model), name: "add-voice", size: CGSize(width: 480, height: 560), in: directory)
         try await render(DesignVoiceSheet(model: model, speaker: Speaker(index: 0, name: "Narrator")),
                          name: "design-voice", size: CGSize(width: 520, height: 580), in: directory)
-        try await render(SettingsView(server: server, setup: setup),
+        try await render(SettingsView(server: server, setup: setup, selection: .constant(.general)),
                          name: "settings", size: CGSize(width: 560, height: 460), in: directory)
         try await render(PronunciationSettingsView(), name: "pronunciation", size: CGSize(width: 560, height: 460), in: directory)
         try await render(HelpWindowView(), name: "help", size: CGSize(width: 600, height: 400), in: directory)
@@ -206,7 +217,7 @@ final class AppLayoutTests: XCTestCase {
     private func render<V: View>(_ view: V, name: String, size: CGSize?, in directory: URL) async throws {
         let host = NSHostingView(rootView: view.environment(AppUpdater()).frame(width: size?.width, height: size?.height)
             .background(Color(nsColor: .windowBackgroundColor)))
-        host.sizingOptions = []
+        host.sizingOptions = size == nil ? [.intrinsicContentSize] : []
         let initialSize = size ?? CGSize(width: 740, height: 600)
         let window = NSWindow(contentRect: CGRect(origin: .zero, size: initialSize), styleMask: [.borderless],
                               backing: .buffered, defer: false)
@@ -226,6 +237,7 @@ final class AppLayoutTests: XCTestCase {
         } else {
             window.setContentSize(host.fittingSize)
             host.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(50))
         }
         let capture = Process()
         capture.executableURL = URL(filePath: "/usr/sbin/screencapture")

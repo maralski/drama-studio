@@ -12,11 +12,24 @@ cloning a real person's voice without their consent is not permitted.
 
 ## Install
 
-You need a Mac with Apple silicon and macOS 26 or later for checked generation,
-with an installed on-device speech model for the script's language. Drama Studio has
-been verified only on an M3 Max with 128 GB. Use a Mac with 64 GB of unified
-memory or more: the engine maps about 41 GB of model weights. You also need
-about 49 GB of free disk and a fast connection for the first run.
+### System requirements
+
+- Apple silicon Mac. Checked generation requires macOS 26 or later and an installed
+  on-device speech model for the script language. Unchecked preview targets macOS 15.
+  Intel Macs are not supported by the engine.
+- About 49 GB of free disk for the model, codec and setup caches. Allow more
+  space for generated audio, saved projects and app updates.
+- 64 GB or more of unified memory is recommended. This is not a verified
+  minimum. Generation has been tested on an M3 Max with 128 GB. An M1 Mac Mini
+  with 16 GB failed twice with a GPU out-of-memory error before producing audio,
+  despite paging. See the [hardware test](docs/ui-verification.md#16-gib-mac-mini-hardware-test).
+  32 GB and 64 GB Macs remain untested. The engine maps about 41 GB of model weights.
+- A display that can fit a 900 by 640 point studio window.
+- An internet connection for the initial downloads and update checks.
+  Speech generation runs locally after setup.
+
+The setup memory override tests the warning only. It does not simulate a
+lower-memory Mac or establish that generation works on one.
 
 1. Download `DramaStudio-<version>.dmg` from the
    [latest release](https://github.com/maralski/drama-studio/releases/latest).
@@ -51,6 +64,25 @@ Drama Studio uses that copy and skips the 41.5 GB download. If you are below
 continue at your own risk.
 
 
+## Editing scripts
+
+Use **Clear Script** in the toolbar or Script menu to empty the editor.
+For an imported document, **Clear Section** empties only the selected section.
+Existing takes stay available and may need regeneration after the text changes.
+Use Edit > Undo to restore cleared text. Clearing is disabled during generation.
+
+Screenplay Mode requires a speaker name, a colon and a space before dialogue:
+
+```text
+Alex: Hello there.
+Sam: Good morning.
+```
+
+A line without a name continues the previous speaker. Text before the first
+named speaker belongs to Narrator. Up to 16 speakers are supported. If the
+script has no named dialogue, turn Screenplay Mode off for plain narration,
+or use the help button beside the error for the format and examples.
+
 ## App updates
 
 Drama Studio checks GitHub for a newer stable release at launch and downloads
@@ -58,11 +90,12 @@ it in the background. Automatic checks and downloads are on by default. Turn
 them off in **Settings > Updates**, or use **Drama Studio > Check for Updates**
 to check manually at any time.
 
-Once the download is verified, the Software Update window offers **Install and
+Once the download is verified, **Settings > Updates** offers **Install and
 Restart**. Save your project and finish generation or API requests before
-confirming. **Later** leaves the running app unchanged; return to the update
-window when ready. Quitting normally does not install an update. A deferred
-update is downloaded again on the next automatic or manual check.
+confirming. **Later** leaves the running app unchanged; click **Review Update**
+in Settings > Updates when ready. Check for Updates opens the same tab.
+There is no separate Software Update window. Quitting normally does not install
+an update. A deferred update is downloaded again on the next automatic or manual check.
 
 Updates require the app to be installed in a folder you can write to, such as
 Applications or your user's Applications folder. Apps running from a mounted
@@ -130,13 +163,10 @@ HTTPS and the published checksum for authenticity.
   bar (the waveform-and-microphone icon) with the API still serving. The menu
   shows the model state, the API address, and the current job. ⌘Q quits.
 
-## Requirements
+## Build requirements
 
-These are for building from source. To use the app, see [Install](#install).
-
-- Apple silicon Mac with plenty of unified memory. The weights are 41.5 GB and
-  are mapped, not copied, plus about 2 GB of state and codec; only a 128 GB M3
-  Max has been tested.
+The [system requirements](#system-requirements) also apply to source builds.
+Install the following tools and model files:
 - macOS 15 or newer, Xcode 26 command line tools.
 - The model in the Hugging Face cache:
 
@@ -558,8 +588,8 @@ drama-say --retake "$TAKE" --note "softer and warmer"
 ```
 
 With no `-o`, it plays the line as it generates: it sends `stream: true` and
-plays each chunk when it arrives, so the first words sound about 2.5 seconds
-after the command starts. `-o FILE` writes a WAV, M4A or PCM file, chosen by
+plays each completed chunk when it arrives. Startup time depends on model
+loading, the script, the voice and retries; it is not a fixed delay. `-o FILE` writes a WAV, M4A or PCM file, chosen by
 the extension, and `-o -` writes raw PCM to standard output. With no text and
 no `-f`, it reads the text from standard input. `-v '?'` lists the voice
 library. `--verbose` prints the take id that `--retake` takes. `drama-say
@@ -574,7 +604,7 @@ wait, and 1 on any other error, after printing the server's message.
 `DramaEngine` is a Swift library, version 1.0.3 (`DramaEngineVersion.string`,
 `CHANGELOG.md`). Add this repository as a package dependency and the
 `DramaEngine` product to a target; the app, the server and the CLI are not
-needed. The public surface is `ModelLocation` and `DramaSetup` for the
+needed. The public API includes `ModelLocation` and `DramaSetup` for the
 install, `DramaSynthesizer` (an actor) behind the `SpeechSynthesizer`
 protocol, `SpeechRequest` with `ReferenceVoice`, `VoiceDesign`, `Take` and
 `GenerationConfig`, the streamed `SpeechEvent`s with `StreamedAudio` and
@@ -592,6 +622,7 @@ let engine = DramaSynthesizer(location: location, codecDirectory: DramaCodec.def
 let voice = try await engine.encodeReference(audioURL: clip, transcript: "What the clip says.", name: "Narrator")
 var request = SpeechRequest(text: "Hello there.", references: [voice])
 request.config.streaming = .defaultLowLatency
+request.config.maxRetries = 0 // Allow partial playback before a chunk is validated.
 var audio = StreamedAudio()
 for try await event in engine.synthesize(request) {
     play(audio.newSamples(from: event))
@@ -662,6 +693,10 @@ for try await event in engine.synthesize(request) {
   extra in `App/DramaStudio/Server`.
 - `eval/`: the faithfulness suite (see `docs/EVAL.md`).
 
+Current UI checks and responsiveness measurements are in
+[UI verification](docs/ui-verification.md). Historical engine experiments below
+record their original configurations; they are not current latency guarantees.
+
 Design notes and decisions are in `docs/DESIGN.md`; the decision trail of the
 build is `.audit/drama-studio.tsv`.
 
@@ -695,10 +730,10 @@ PyTorch implementation does the same on the same text and seeds. The
 sentence-per-turn mode and the retry rule below exist for that reason.
 See `eval/README.md` for how to reproduce every number.
 
-## The Neural Engine, honestly
+## Core ML codec execution
 
-The codec goes through Core ML because Core ML is the only route to the
-Neural Engine. On this machine (macOS 26.5, M3 Max) that route did not pay off:
+The codec uses Core ML to access Apple's inference backends. In the recorded
+experiments on macOS 26.5 and an M3 Max, the Neural Engine was slower than the CPU:
 
 - The decoder's Neural Engine compile for the 512-frame shape ran for more than
   35 minutes without finishing; the 64-frame shape compiled in about 7 minutes
@@ -1034,7 +1069,7 @@ later load reads it and measures nothing. `drama tune` runs it from the
 command line and prints the table (about 30 s here); the app shows "Tuning
 kernels for this Mac" once; `drama schedule-ab` times any two schedule files
 against each other inside one process. The idea is Magnitude's (tune,
-validate, cache per device); the kernels, the domains and the harness are
+validate, cache per device); the kernels, the domains and the measurement scripts are
 this project's. Nothing in the numerics changes beyond summation order: the
 tuned engine scores hidden 5.8e-7, candidate logits 3.0e-7 and tower logits
 4.4e-7 against the float32 oracle with top-1 1.0 (`eval/out/perf/compare_tuned_final.txt`),
@@ -1049,10 +1084,10 @@ hand-picked values: the GEMM tile, the MoE tile and the GDN split never
 cleared the 5 percent bar, and the narrow-projection GEMV tile and the 4-way
 prefill attention split, 80 and 5 percent faster per kernel, moved the whole
 128- and 300-row forwards by 1.2 and 0.4 percent, under the margin, so the
-whole-forward check reverted them. Two earlier versions of the harness would
+whole-forward check reverted them. Two earlier versions of the measurement script would
 have shipped a slower prefill: random activations route evenly over the 256
-experts and favour a small MoE row tile that was 9 percent faster on the
-harness and 5 to 12 percent slower in the real prefill, and a 2 percent
+experts and favour a small MoE row tile that was 9 percent faster in the
+measurement script and 5 to 12 percent slower in the real prefill, and a 2 percent
 minimum gain measured at 128 and 32 rows let through a tile that lost 9
 percent at 300 rows. Both are in `.audit/autotune.tsv`, and the isolation
 that caught the second is `eval/out/perf/schedule_ab_1.txt`.

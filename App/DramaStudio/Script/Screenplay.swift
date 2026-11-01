@@ -23,7 +23,7 @@ enum ScriptError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .empty: "The script is empty."
-        case .noDialogue: "Screenplay mode found no \u{201C}Name: line\u{201D} dialogue."
+        case .noDialogue: "Screenplay Mode needs dialogue such as \"Alex: Hello.\" Add a name, a colon and a space before the spoken words, or turn Screenplay Mode off. See Screenplay Mode help for examples."
         case .tooManySpeakers(let names): "Drama 3 supports \(Screenplay.maxSpeakers) speakers; this script has \(names.count): \(names.joined(separator: ", "))."
         }
     }
@@ -60,11 +60,11 @@ enum Screenplay {
         }
 
         for line in script.split(whereSeparator: \.isNewline).map({ $0.trimmingCharacters(in: .whitespaces) }) where !line.isEmpty {
-            if let match = line.firstMatch(of: dialogueLine) {
+            if let match = dialogue(in: line) {
                 sawDialogue = true
-                let index = speaker(named: String(match.1).trimmingCharacters(in: .whitespaces))
+                let index = speaker(named: match.name.trimmingCharacters(in: .whitespaces))
                 current = index
-                let spoken = (match.2.map(String.init) ?? "").trimmingCharacters(in: .whitespaces)
+                let spoken = match.spoken.trimmingCharacters(in: .whitespaces)
                 if !spoken.isEmpty { turns.append((index, spoken)) }
             } else {
                 let index = current ?? speaker(named: "Narrator")
@@ -77,7 +77,7 @@ enum Screenplay {
             }
         }
 
-        guard sawDialogue else { return .failure(.noDialogue) }
+        guard sawDialogue, !turns.isEmpty else { return .failure(.noDialogue) }
         guard names.count <= maxSpeakers else { return .failure(.tooManySpeakers(names)) }
         let text = turns.map { "<|speaker:\($0.speaker)|>\($0.text)" }.joined(separator: "\n")
         return .success(PreparedScript(text: text, speakers: names.enumerated().map { Speaker(index: $0.offset, name: $0.element) }))
@@ -87,7 +87,7 @@ enum Screenplay {
     /// so an imported file can switch Screenplay Mode on by itself.
     static func looksLikeScreenplay(_ text: String) -> Bool {
         let lines = text.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-        let names = lines.compactMap { $0.firstMatch(of: dialogueLine).map { String($0.1).lowercased() } }
+        let names = lines.compactMap { dialogue(in: $0)?.name.lowercased() }
         return Set(names).count >= 2 && names.count * 2 >= lines.count
     }
 
@@ -95,6 +95,18 @@ enum Screenplay {
         Set(text.matches(of: speakerTag).compactMap { Int($0.1) }).sorted()
     }
 
-    nonisolated(unsafe) private static let dialogueLine = #/^(\p{L}[\p{L}\p{N} .'’-]{0,39}?)\s*(?:\([^)]*\))?\s*:(?:\s+(.*))?$/#
+    private static func dialogue(in line: String) -> (name: String, spoken: String)? {
+        // Swift Regex preserves grapheme-cluster matching for Unicode names.
+        if !line.utf8.allSatisfy({ $0 < 128 }) {
+            return line.firstMatch(of: unicodeDialogueLine).map { (String($0.1), $0.2.map(String.init) ?? "") }
+        }
+        let text = line as NSString
+        guard let match = dialogueLine.firstMatch(in: line, range: NSRange(location: 0, length: text.length)) else { return nil }
+        let spoken = match.range(at: 2)
+        return (text.substring(with: match.range(at: 1)), spoken.location == NSNotFound ? "" : text.substring(with: spoken))
+    }
+
+    nonisolated(unsafe) private static let unicodeDialogueLine = #/^(\p{L}[\p{L}\p{N} .'’-]{0,39}?)\s*(?:\([^)]*\))?\s*:(?:\s+(.*))?$/#
+    private static let dialogueLine = try! NSRegularExpression(pattern: #"^(\p{L}[\p{L}\p{N} .'’-]{0,39}?)\s*(?:\([^)]*\))?\s*:(?:\s+(.*))?$"#)
     nonisolated(unsafe) private static let speakerTag = #/<\|speaker:(\d+)\|>/#
 }

@@ -8,7 +8,9 @@ import SwiftUI
 @MainActor @Observable
 final class SessionModel {
     /// What is narrated: a plain script or a document read section by section.
-    var source: ScriptSource = .plain("")
+    var source: ScriptSource = .plain("") {
+        didSet { preparedCache = nil; titleCache = nil }
+    }
     /// The plain script; setting it makes the source plain.
     var script: String {
         get { source.plainText }
@@ -16,7 +18,12 @@ final class SessionModel {
     }
     var document: NarrationDocument? { source.document }
     var selectedSegmentID: NarrationDocument.Segment.ID?
-    var screenplayMode = false
+    var screenplayMode = false {
+        didSet { preparedCache = nil }
+    }
+    @ObservationIgnored private var titleCache: String?
+    private(set) var clearInputRevision: UInt64 = 0
+    @ObservationIgnored private var preparedCache: Result<PreparedScript, ScriptError>?
     var expressiveness = GenerationConfig.defaultExpressiveness
     var quickPreview = false
     /// Absent means `.modelDefault`.
@@ -59,7 +66,10 @@ final class SessionModel {
 
     private(set) var state: PlaybackState = .idle
     private(set) var telemetry = GenerationTelemetry()
-    private(set) var audio: [Float] = []
+    private(set) var audio: [Float] = [] {
+        didSet { audioRevision &+= 1 }
+    }
+    private(set) var audioRevision: UInt64 = 0
     private(set) var result: SpeechResult?
     private(set) var playhead = 0
     /// Wall time of the current or last generation, from Generate to the end of the run.
@@ -127,7 +137,13 @@ final class SessionModel {
     }
 
     var prepared: Result<PreparedScript, ScriptError> {
-        Screenplay.prepare(script, asScreenplay: screenplayMode)
+        // Read the inputs so views still observe edits when the result is cached.
+        let text = script
+        let screenplay = screenplayMode
+        if let preparedCache { return preparedCache }
+        let result = Screenplay.prepare(text, asScreenplay: screenplay)
+        preparedCache = result
+        return result
     }
 
     /// The text in the editor: the plain script, or the selected section of a document.
@@ -142,6 +158,13 @@ final class SessionModel {
                 source = .document(document)
             }
         }
+    }
+
+    func clearScriptInput() {
+        guard !state.isGenerating, !editorText.isEmpty else { return }
+        editorText = ""
+        selection = nil
+        clearInputRevision &+= 1
     }
 
     var selectedSegment: NarrationDocument.Segment? {
@@ -166,13 +189,26 @@ final class SessionModel {
     }
 
     var title: String {
-        document?.title ?? Self.suggestedName(for: script)
+        if let document { return document.title }
+        let text = script
+        if let titleCache { return titleCache }
+        let name = Self.suggestedName(for: text)
+        titleCache = name
+        return name
     }
 
+    private static let titleToken = try! NSRegularExpression(pattern: #"<\|[^|]*\|>|<[^>]*>|\[[^\]]*\]|[\p{L}\p{N}][\p{L}\p{N}\p{M}]*"#)
+
     static func suggestedName(for script: String) -> String {
-        let words = script.replacingOccurrences(of: #"<\|[^|]*\|>|<[^>]*>|\[[^\]]*\]"#, with: " ", options: .regularExpression)
-            .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
-            .prefix(5)
+        var words: [String] = []
+        let text = script as NSString
+        titleToken.enumerateMatches(in: script, range: NSRange(location: 0, length: text.length)) { match, _, stop in
+            guard let match else { return }
+            let token = text.substring(with: match.range)
+            guard token.first != "<", token.first != "[" else { return }
+            words.append(token)
+            if words.count == 5 { stop.pointee = true }
+        }
         return words.isEmpty ? "Drama Studio Take" : words.joined(separator: " ")
     }
 
@@ -318,7 +354,11 @@ final class SessionModel {
     }
     var canNarrateSection: Bool { !state.isGenerating && selectedSegment.map { !SectionRequests.spokenText(of: $0).isEmpty } ?? false }
     var canPlay: Bool { !audio.isEmpty }
-    var canExport: Bool { !exportSamples.isEmpty && !state.isGenerating }
+    var canExport: Bool {
+        guard !state.isGenerating else { return false }
+        if document != nil { return chosenSections.contains { !$0.take.samples.isEmpty } }
+        return !(keptTake?.samples ?? audio).isEmpty
+    }
     var canExportSections: Bool { document != nil && !narrationTakes.isEmpty && !state.isGenerating }
     var canExportCaptions: Bool { !captionTakes.isEmpty && !state.isGenerating }
     var canExportSlidePackage: Bool { document?.source == .pptx && canExportSections }
