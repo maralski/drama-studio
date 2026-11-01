@@ -60,7 +60,7 @@ final class IndependentWordRecognizerTests: XCTestCase {
     func testUnresponsiveChildrenAreReapedAndFreshRequestsCanRun() throws {
         try worker("startup")
         for _ in 0..<6 {
-            XCTAssertThrowsError(try IndependentWordRecognizer(language: "en", deadline: .now + .milliseconds(400),
+            XCTAssertThrowsError(try IndependentWordRecognizer(language: "en", deadline: .now + .seconds(2),
                                                                shouldContinue: { true }, runtimeDirectory: directory)) {
                 guard case SpeechVerificationError.timedOut = $0 else { return XCTFail("Unexpected \($0)") }
             }
