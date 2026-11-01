@@ -131,7 +131,6 @@ final class AppResponsivenessTests: XCTestCase {
                 XCTAssertEqual(try model.prepared.get().speakers.count, 2)
                 _ = model.casting
                 _ = model.canRetake
-                _ = model.canTakeAgain
                 _ = model.castSpeakers
                 _ = model.projectName
                 host.layoutSubtreeIfNeeded()
