@@ -25,7 +25,6 @@ final class SessionModel {
     private(set) var clearInputRevision: UInt64 = 0
     @ObservationIgnored private var preparedCache: Result<PreparedScript, ScriptError>?
     var expressiveness = GenerationConfig.defaultExpressiveness
-    var quickPreview = false
     /// Absent means `.modelDefault`.
     private(set) var speakerVoices: [Int: VoiceChoice] = [:]
     /// Legacy references remain in saved projects, but only checked audio conditions new speech.
@@ -55,7 +54,7 @@ final class SessionModel {
 
     private var projectRevision: ProjectRevision {
         ProjectRevision(source: source, voices: speakerVoices, recordedVoices: recordedVoices, screenplay: screenplayMode,
-                        expressiveness: expressiveness, quickPreview: quickPreview,
+                        expressiveness: expressiveness,
                         takes: takes.map(\.id), sections: sectionTakes.mapValues { $0.takes.map(\.id) },
                         exportTake: keptTakeID, sectionExports: sectionTakes.mapValues(\.chosenID))
     }
@@ -183,7 +182,7 @@ final class SessionModel {
 
     /// No seed, so every generation draws a fresh one.
     var config: GenerationConfig {
-        var config = GenerationConfig.make(expressiveness: expressiveness, quickPreview: quickPreview)
+        var config = GenerationConfig.make(expressiveness: expressiveness)
         if AppHome.defaults.object(forKey: Self.streamsAudioKey) as? Bool ?? true { config.streaming = .defaultLowLatency }
         return config
     }
@@ -542,11 +541,7 @@ final class SessionModel {
     func tryLine(_ line: String, as design: VoiceDesign) {
         guard !state.isGenerating, !DirectorsNote.spokenWords(line).isEmpty else { return }
         audition = nil
-        // This audio can become the voice reference, so a rough preview must
-        // not supply a transcript for words it may have omitted.
-        var auditionConfig = GenerationConfig.make(expressiveness: expressiveness, quickPreview: false)
-        auditionConfig.streaming = config.streaming
-        start(SpeechRequest(text: line, character: design, config: auditionConfig), as: .audition(design))
+        start(SpeechRequest(text: line, character: design, config: config), as: .audition(design))
     }
 
     var isAuditioning: Bool {
@@ -1149,7 +1144,7 @@ final class SessionModel {
 
     var projectSnapshot: ProjectSnapshot {
         var project = StudioProject(title: title, script: script, document: document, casting: libraryCasting,
-                                    expressiveness: expressiveness, quickPreview: quickPreview, takes: captionTakes)
+                                    expressiveness: expressiveness, takes: captionTakes)
         project.archive = ProjectArchive(plainTakes: takes.map(ArchivedTake.init),
                                          sectionTakes: sectionTakes.mapValues { $0.takes.map(ArchivedTake.init) },
                                          sectionExports: sectionTakes.mapValues(\.chosenID),
@@ -1228,7 +1223,6 @@ final class SessionModel {
         speakerVoices = project.casting.mapValues { .library($0) }
         recordedVoices = [:]
         expressiveness = project.expressiveness
-        quickPreview = project.quickPreview
         screenplayMode = project.document == nil && Screenplay.looksLikeScreenplay(project.script)
         for stored in project.takes where stored.sampleRange.upperBound <= audio.count && !stored.sampleRange.isEmpty {
             let take = SessionTake(number: 1, note: nil, take: stored.take ?? Take(text: "", codes: []),

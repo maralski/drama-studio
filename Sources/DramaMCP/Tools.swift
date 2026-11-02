@@ -82,7 +82,6 @@ extension MCPTool {
                 ],
                 "output_path": ["type": "string", "description": "Where to write the WAV. Defaults to ~/Library/Application Support/DramaStudio/Output/<timestamp>.wav."],
                 "expressiveness": ["type": "number", "minimum": 0, "maximum": 1, "description": "0 reads flat and steady, 0.5 is the vendor's sampling, 1 is the Fish Audio demo's sampling: lively, keeps every sentence of cue lines, a few more slurred words on prose. Default 0.5."],
-                "quick_preview": ["type": "boolean", "description": "Faster rough take: no retries and a tighter length cap."],
                 "play": ["type": "boolean", "description": "Play the result through the speakers."],
             ],
             "required": ["text"],
@@ -94,7 +93,7 @@ extension MCPTool {
             }
             if arguments["character"] != nil, arguments["voice"] != nil { throw ToolInputError(message: "Pass voice or character, not both.") }
             var body: [String: JSON] = ["input": .string(text), "response_format": "wav"]
-            for key in ["voice", "character", "expressiveness", "quick_preview"] { body[key] = arguments[key] }
+            for key in ["voice", "character", "expressiveness"] { body[key] = arguments[key] }
             return try await speak(body, arguments, context)
         }
     )

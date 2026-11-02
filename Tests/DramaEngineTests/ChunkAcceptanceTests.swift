@@ -80,7 +80,7 @@ final class ChunkAcceptanceTests: XCTestCase {
     }
 
     func testOnlyRejectedCueAttemptsBroadenSamplingWithoutChangingTheRequestPolicy() {
-        let original = GenerationConfig.make(expressiveness: 0.25, quickPreview: false)
+        let original = GenerationConfig.make(expressiveness: 0.25)
         XCTAssertEqual(FrameGenerator.sampling(config: original, text: "[coughs] Keep the gate closed.", attempt: 0), original)
         XCTAssertEqual(FrameGenerator.sampling(config: original, text: "Keep the gate closed.", attempt: 1), original)
         var replacement = original
@@ -91,7 +91,8 @@ final class ChunkAcceptanceTests: XCTestCase {
         XCTAssertEqual(FrameGenerator.sampling(config: original, text: "[coughs] Keep the gate closed.", attempt: 2), original)
         XCTAssertEqual(FrameGenerator.sampling(config: original, text: "[coughs] Keep the gate closed.", attempt: 3), replacement)
         XCTAssertEqual(FrameGenerator.sampling(config: original, text: "<whisper>Keep the gate closed.</whisper>", attempt: 4), original)
-        let preview = GenerationConfig.make(expressiveness: 0.25, quickPreview: true)
+        var preview = GenerationConfig.make(expressiveness: 0.25)
+        preview.wordVerification = .uncheckedPreview
         XCTAssertEqual(FrameGenerator.sampling(config: preview, text: "[coughs] Keep the gate closed.", attempt: 1), preview)
     }
 
@@ -116,7 +117,8 @@ final class ChunkAcceptanceTests: XCTestCase {
     }
 
     func testExplicitPreviewKeepsUncheckedStreamingBehavior() throws {
-        let config = GenerationConfig.make(expressiveness: 0.5, quickPreview: true)
+        var config = GenerationConfig()
+        config.wordVerification = .uncheckedPreview
         let accepted = try ChunkAttempts.run(index: 0, maxRetries: 0, expectedSeconds: 2, config: config,
                                              shouldContinue: { true }, attempt: { self.result($0) },
                                              verify: { _ in XCTFail("Preview is unchecked"); return false }, retry: { _, _ in })

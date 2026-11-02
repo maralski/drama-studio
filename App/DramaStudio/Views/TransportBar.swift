@@ -36,10 +36,6 @@ struct TransportBar: View {
             HStack(spacing: 8) {
                 StatusLine(model: model)
                 if let server { APIChip(server: server) }
-                Toggle(isOn: $model.quickPreview) { HelpLabel("Quick preview", help: .quickPreview) }
-                    .toggleStyle(.checkbox)
-                    .controlSize(.small)
-                    .disabled(model.state.isGenerating)
             }
         }
         .padding(.horizontal, 16)

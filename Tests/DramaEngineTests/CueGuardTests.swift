@@ -8,9 +8,8 @@ final class CueGuardTests: XCTestCase {
         (0..<frames).map { Int32(100 + $0 % period) }
     }
 
-    func testLoopGuardShipsOnIncludingQuickPreview() {
+    func testLoopGuardShipsOn() {
         XCTAssertTrue(GenerationConfig().stopOnLoop)
-        XCTAssertTrue(GenerationConfig.make(expressiveness: 0.5, quickPreview: true).stopOnLoop)
     }
 
     func testAPeriodSeventeenCycleIsALoopOnceWindowAndLagFit() {
@@ -59,7 +58,8 @@ final class CueGuardTests: XCTestCase {
     }
 
     func testRetriesOffNeverRetryEvenALoop() {
-        let preview = GenerationConfig.make(expressiveness: 0.5, quickPreview: true)
+        var preview = GenerationConfig()
+        preview.minSpokenRatio = 0
         XCTAssertFalse(FrameGenerator.shouldRetry(end: .loopGuard, spokenSeconds: 9, expectedSeconds: 3, config: preview))
         XCTAssertFalse(FrameGenerator.shouldRetry(end: .frameCap, spokenSeconds: 0.3, expectedSeconds: 3, config: preview))
     }

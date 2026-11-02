@@ -10,7 +10,7 @@ public enum SpeechVerificationError: Error, LocalizedError, Sendable {
     public var errorDescription: String? {
         switch self {
         case .unavailable(let reason):
-            return "Cannot check the generated words: \(reason). Quick preview is available for unchecked audio."
+            return "Cannot check the generated words: \(reason)."
         case .exhausted(let sentence, let attempts):
             return "Sentence \(sentence) did not pass the spoken-word check after \(attempts) attempts. Generation stopped without creating a completed take."
         case .timedOut:

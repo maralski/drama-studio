@@ -132,7 +132,7 @@ private struct TakeCard: View {
                         if isOutdated { Label("Outdated", systemImage: "clock.badge.exclamationmark") }
                         if !take.hasCurrentWordCheck {
                             Text(take.isIncomplete ? "Incomplete" : (take.wordsChecked ? "Earlier word check" : "Unchecked"))
-                                .help(take.isIncomplete ? "Generation ended before the whole script was completed." : "This take has not passed the current spoken-word checks. Generate with Quick Preview off for checked audio.")
+                                .help(take.isIncomplete ? "Generation ended before the whole script was completed." : "This take has not passed the current spoken-word checks. Generate a new take for checked audio.")
                         }
                     }
                     .font(.caption).foregroundStyle(.secondary)

@@ -22,7 +22,6 @@ public struct SayCommand: Sendable, Equatable {
     public var voice: Voice = .studio
     public var output: Output = .play
     public var expressiveness: Double?
-    public var quickPreview = false
     public var seed: UInt64?
     public var note: String?
     public var retakeOf: String?
@@ -52,7 +51,6 @@ public struct SayCommand: Sendable, Equatable {
         case .standardOutput: body["response_format"] = "pcm"
         }
         if let expressiveness { body["expressiveness"] = .double(expressiveness) }
-        if quickPreview { body["quick_preview"] = true }
         if let seed { body["seed"] = .int(Int(seed)) }
         if let note { body["note"] = .string(note) }
         if let retakeOf { body["previous_takes"] = [["take_id": .string(retakeOf)]] }
@@ -81,7 +79,6 @@ public struct SayUsageError: Error, Equatable {
       -o FILE                 write FILE instead of playing (.wav, .m4a, .pcm)
       -o -                    write raw 16-bit mono 44.1 kHz PCM to standard output
       --expressiveness 0..1   0 flat, 0.5 default, 1 lively
-      --quick                 faster rough take
       --seed N                fixed sampler seed
       --note TEXT             director's note; with --retake, for that take
       --retake TAKE_ID        generate a take again; without text, its own line
@@ -192,7 +189,6 @@ extension SayCommand {
                 }
                 draft.command.expressiveness = number
             },
-            "--quick": .toggle { $0.command.quickPreview = true },
             "--seed": .value { draft, value in
                 guard let seed = UInt64(value), seed <= Int64.max else {
                     throw SayUsageError(message: "--seed takes a whole number from 0 to \(Int64.max).")

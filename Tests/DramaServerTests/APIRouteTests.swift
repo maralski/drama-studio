@@ -150,10 +150,11 @@ final class APIRouteTests: XCTestCase {
         XCTAssertEqual(m4a.headers["Content-Type"], "audio/mp4")
         XCTAssertEqual(String(decoding: (m4a.bodyData ?? Data()).dropFirst(4).prefix(4), as: UTF8.self), "ftyp")
 
-        _ = await send("POST", "/v1/audio/speech", json: ["input": "Wild.", "expressiveness": 1, "quick_preview": true])
+        _ = await send("POST", "/v1/audio/speech", json: ["input": "Wild.", "expressiveness": 1])
         let request = await engine.requests.last
-        XCTAssertEqual(request?.config, GenerationConfig.make(expressiveness: 1, quickPreview: true))
-        XCTAssertEqual(request?.config.stopAfterSilenceSeconds, 2, "quick_preview explicitly enables silence stopping")
+        XCTAssertEqual(request?.config, GenerationConfig.make(expressiveness: 1))
+        XCTAssertNil(request?.config.stopAfterSilenceSeconds)
+        XCTAssertEqual(request?.config.wordVerification, .required)
     }
 
     func testTTSAliasTakesText() async {

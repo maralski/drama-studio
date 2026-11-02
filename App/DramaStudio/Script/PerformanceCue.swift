@@ -31,7 +31,7 @@ struct PerformanceCue: Identifiable, Hashable {
     var opening: String { form == .marker ? "[\(tag)]" : "<\(tag)>" }
     var closing: String { form == .marker ? "" : "</\(tag)>" }
 
-    static let reliabilityNote = "Normal generation checks the spoken words locally and retries when they do not match. Quick preview is unchecked. Listen before export to judge the performance."
+    static let reliabilityNote = "Normal generation checks the spoken words locally and retries when they do not match. Listen before export to judge the performance."
 
     static let all: [PerformanceCue] = [
         PerformanceCue(tag: "laughs", title: "Laughs", kind: .reaction),

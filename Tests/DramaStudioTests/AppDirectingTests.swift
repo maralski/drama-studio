@@ -103,47 +103,6 @@ final class AppDirectingTests: XCTestCase {
         XCTAssertEqual(synthesizer.requests[2].previousTakes, [], "picking Surprise me again gives a fresh surprise")
     }
 
-    func testUncheckedFirstTakeCannotAnchorANormalRetake() async throws {
-        let session = makeSession()
-        session.setVoice(.designed(design), forSpeaker: 0)
-        session.quickPreview = true
-        await finish(session.generate, in: session)
-        XCTAssertFalse(try XCTUnwrap(session.takes.last).wordsChecked)
-        XCTAssertTrue(session.sessionVoices.isEmpty)
-
-        session.quickPreview = false
-        await finish({ session.retake(note: "softer") }, in: session)
-        XCTAssertEqual(synthesizer.requests[1].previousTakes, [])
-        XCTAssertEqual(synthesizer.requests[1].character, design)
-        let checked = try XCTUnwrap(session.takes.last)
-        XCTAssertTrue(checked.wordsChecked)
-        XCTAssertEqual(session.sessionVoices[.designed(design)], checked.take)
-        await finish(session.generate, in: session)
-        XCTAssertEqual(synthesizer.requests[2].previousTakes, [checked.take])
-    }
-
-    func testUncheckedSectionCannotBecomeTheNextSectionsVoice() async throws {
-        let session = makeSession()
-        let document = NarrationDocument(title: "Cues", source: .text, segments: [
-            .init(index: 0, label: "First", text: "[gasps] The first door is open."),
-            .init(index: 1, label: "Second", text: "<slow>The second door is closed.</slow>"),
-            .init(index: 2, label: "Third", text: "Please wait for me outside.")
-        ])
-        session.open(document)
-        session.setVoice(.designed(design), forSpeaker: 0)
-        session.quickPreview = true
-        await finish({ session.narrateSection(document.segments[0].id) }, in: session)
-        XCTAssertTrue(session.sessionVoices.isEmpty)
-        XCTAssertFalse(try XCTUnwrap(session.chosenTake(for: document.segments[0].id)).wordsChecked)
-        session.quickPreview = false
-        await finish({ session.narrateSection(document.segments[1].id) }, in: session)
-        XCTAssertEqual(synthesizer.requests[1].previousTakes, [])
-        let checked = try XCTUnwrap(session.chosenTake(for: document.segments[1].id))
-        XCTAssertTrue(checked.wordsChecked)
-        await finish({ session.narrateSection(document.segments[2].id) }, in: session)
-        XCTAssertEqual(synthesizer.requests[2].previousTakes, [checked.take])
-    }
-
     func testLegacyProjectPreservesAudioAndUnverifiedVoiceWithoutReusingThem() async throws {
         let session = makeSession()
         session.setVoice(.designed(design), forSpeaker: 0)
@@ -415,7 +374,6 @@ final class AppDirectingTests: XCTestCase {
         let duke = try XCTUnwrap(Examples.cast.first { $0.design.name == "The Duke" })
         let session = makeSession(script: duke.line)
         session.expressiveness = 0.75
-        session.quickPreview = false
         await finish({ session.tryLine(duke.line, as: duke.design) }, in: session)
         session.setVoice(.designed(duke.design), forSpeaker: 0)
         await finish(session.generate, in: session)
@@ -428,9 +386,8 @@ final class AppDirectingTests: XCTestCase {
         XCTAssertEqual(preview.references, main.references)
     }
 
-    func testDesignPreviewChecksWordsEvenWhenTheMainQuickPreviewIsEnabled() async throws {
+    func testDesignPreviewChecksWords() async throws {
         let session = makeSession()
-        session.quickPreview = true
         session.expressiveness = 0.25
         await finish({ session.tryLine("[gasps] Please keep the door closed.", as: design) }, in: session)
         let sent = try XCTUnwrap(synthesizer.requests.last)
@@ -440,8 +397,7 @@ final class AppDirectingTests: XCTestCase {
         XCTAssertNil(sent.config.stopAfterSilenceSeconds)
         XCTAssertEqual(sent.config.frameCap, .fromText(margin: 1.5, floorSeconds: 2))
         XCTAssertEqual(sent.config.temperature, 0.6, accuracy: 0.001)
-        XCTAssertTrue(session.quickPreview)
-        XCTAssertEqual(session.config.wordVerification, .uncheckedPreview)
+        XCTAssertEqual(session.config.wordVerification, .required)
     }
 
     func testEveryVoicePresetUsesStructuredSpeakerIdentity() throws {

@@ -14,7 +14,6 @@ audio arrives before that.
 Normal takes wait for the model's end of speech, subject to the text-derived
 frame cap and loop guard. ``GenerationConfig/stopAfterSilenceSeconds`` is
 `nil` by default because a silence stop can cut words after a quiet pause.
-Quick preview explicitly uses a 2 s silence stop and disables retries.
 
 A slow reference voice extends the frame budget and the progress estimate.
 The retry check uses the script's length at 16 characters per second instead,

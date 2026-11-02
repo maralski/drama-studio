@@ -9,7 +9,6 @@ struct ProjectRevision: Equatable {
     var recordedVoices: [VoiceChoice: RecordedVoice]
     var screenplay: Bool
     var expressiveness: Double
-    var quickPreview: Bool
     var takes: [UUID]
     var sections: [UUID: [UUID]]
     var exportTake: UUID?

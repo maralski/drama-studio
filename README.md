@@ -114,8 +114,7 @@ HTTPS and the published checksum for authenticity.
   `Name: line` dialogue into Drama 3 speaker tags (up to 16 speakers).
 - **Takes**: Generate or Generate All produces a fresh take each time. A
   scrolling grid shows take durations, notes, export choices and outdated audio.
-  Other controls include a Quick preview toggle that skips retries and tightens the frame cap
-  for faster rough takes, an Expressiveness slider under Advanced (one control
+  Other controls include an Expressiveness slider under Advanced (one control
   over temperature, top-p and top-k, with the vendor's defaults in the middle
   and the Hugging Face Space's sampling at the top), and an
   insert menu for performance cues such as `[laughs]`, `[sighs]` and
@@ -138,8 +137,8 @@ HTTPS and the published checksum for authenticity.
   Both audio-only recognizers must find every scripted word before a sentence
   is accepted. A disagreement retries generation; an unavailable checker stops
   generation. These checks reduce word errors but cannot guarantee recognition
-  accuracy or acting quality. Quick preview remains explicitly unchecked.
-  Preview takes and older takes without word-check history are kept for playback
+  accuracy or acting quality.
+  Older takes without word-check history are kept for playback
   and export, but do not automatically become voice references or retake history.
   Voice auditions always use checked generation.
   Recognition checks word coverage, not acting quality or perfect cue execution.
@@ -395,9 +394,8 @@ The speech body takes these fields:
 | `references` | Clips to clone on the fly: `[{audio_path or audio_base64, text}]`. |
 | `speaker_voices` | Library voices per speaker for a multi-speaker script: `{"0": "Narrator", "1": "<id>"}`, with no gaps from speaker 0. |
 | `response_format` | `wav` (default, 16-bit), `pcm` (raw 16-bit little-endian), or `m4a`. |
-| `stream` | `true` streams completed chunks. With `quick_preview`, PCM arrives about every 3 s of generated audio. |
+| `stream` | `true` streams completed, checked chunks. |
 | `expressiveness` | 0 to 1, default 0.5: the app's Expressiveness slider. 0.5 is the vendor's sampling, 1 the Hugging Face Space's. |
-| `quick_preview` | `true` skips retries and tightens the length cap. |
 | `seed` | A fixed sampler seed, for repeatable takes. |
 | `character` | A voice designed from a description instead of a clip: `{name, description, scene?}`. |
 | `note` | A director's note, such as `"softer and warmer"`. The line is generated again as one turn, with the note as a direction and as a cue before every sentence. |
@@ -437,8 +435,7 @@ curl -sS -H "$AUTH" localhost:8780/v1/audio/speech \
 
 All three streaming routes send completed chunks when retries are enabled.
 The engine validates each attempt before releasing audio, so a rejected attempt
-can be replaced for any voice. Quick Preview disables retries and sends partial
-audio every 64 frames, about 3 seconds, while generation continues.
+can be replaced for any voice.
 
 The audio is always 16-bit little-endian mono at 44.1 kHz, as the
 `X-Drama-Format: pcm_s16le_mono` and `X-Drama-Sample-Rate: 44100` headers say.
@@ -457,7 +454,7 @@ curl -sSN -H "$AUTH" localhost:8780/v1/audio/speech \
 ```
 
 **Server-Sent Events.** `GET /v1/audio/speech/stream` takes its fields as query
-parameters: `input` (required), `voice`, `expressiveness`, `quick_preview`,
+parameters: `input` (required), `voice`, `expressiveness`,
 `seed`, and `character_name`, `character_description` and `character_scene`
 for a designed voice. `apply_pronunciation=false` turns off the pronunciation
 rules, as in the speech body. It answers with `Content-Type: text/event-stream`
@@ -480,7 +477,7 @@ curl -sSN -H "$AUTH" "localhost:8780/v1/audio/speech/stream?input=Hello%20there.
 ```
 
 **Live text input.** `POST /v1/audio/speech/live` is for an agent that writes
-text a piece at a time. It takes `voice`, `expressiveness`, `quick_preview`,
+text a piece at a time. It takes `voice`, `expressiveness`,
 `seed` and the `character_*` fields as query parameters, and the text as the
 request body:
 
@@ -544,7 +541,7 @@ repository's `dist/DramaStudio.app`. `DRAMA_API_URL` overrides
 
 | Tool | Does |
 | --- | --- |
-| `synthesize_speech` | `text`, with optional `voice` or `character` (`{name, description, scene?}`), `output_path`, `expressiveness`, `quick_preview`, and `play`. Writes a WAV, by default to `~/Library/Application Support/DramaStudio/Output/<timestamp>.wav`. Returns the path, seconds, frames, generation seconds, and `take_id`. `play` plays it with `afplay`. |
+| `synthesize_speech` | `text`, with optional `voice` or `character` (`{name, description, scene?}`), `output_path`, `expressiveness`, and `play`. Writes a WAV, by default to `~/Library/Application Support/DramaStudio/Output/<timestamp>.wav`. Returns the path, seconds, frames, generation seconds, and `take_id`. `play` plays it with `afplay`. |
 | `retake_with_note` | `take_id` and `note`, with optional `output_path` and `play`. Generates that take's line again in the same voice with the note. Returns what `synthesize_speech` returns, with the new `take_id`. |
 | `list_voices` | The voice library. |
 | `add_voice` | Clones `audio_path` with its `transcript` under `name`. |
@@ -935,13 +932,12 @@ With explicitly unchecked preview and retries disabled,
 `.lowLatency(stepFrames: 64)` sends partial audio every
 64 generated frames, about 3 seconds. The CPU decodes those frames while the GPU
 generates the next ones. Such a chunk cannot be replaced after playback begins.
-Quick Preview opts into this tradeoff.
 
 Normal generation waits for the model's end-of-speech signal, subject to its
 frame cap and loop guard. It does not treat silence as completion, because a
-voice can pause before the remaining words. Quick Preview enables the two-second
-silence stop. Explicit silence probes run at fixed frame checkpoints and finish
-before sampling resumes, so decode timing cannot change the stop frame.
+voice can pause before the remaining words. Explicit silence probes run at fixed
+frame checkpoints and finish before sampling resumes, so decode timing cannot
+change the stop frame.
 Normal generation checks the decoded words with on-device speech recognition.
 Missing, changed, or uncertain words trigger a retry before audio enters playback
 or generation history. Cue retries alternate the requested sampling with broader replacements and

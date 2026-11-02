@@ -23,7 +23,6 @@ struct StudioProject: Codable, Sendable, Equatable {
     var document: NarrationDocument?
     var casting: [Int: UUID] = [:]
     var expressiveness: Double
-    var quickPreview: Bool
     var takes: [NarrationTake] = []
     var archive: ProjectArchive?
 

@@ -40,9 +40,7 @@ final class CueStreamingTests: XCTestCase {
         }
     }
 
-    func testQuickPreviewAndExplicitlyUncheckedRequestsKeepCuePartials() async throws {
-        var quick = GenerationConfig.make(expressiveness: 0.5, quickPreview: true)
-        quick.streaming = .lowLatency(stepFrames: 16)
+    func testExplicitlyUncheckedRequestsKeepCuePartials() async throws {
         var noAttempts = GenerationConfig()
         noAttempts.streaming = .lowLatency(stepFrames: 16)
         noAttempts.maxRetries = 0
@@ -51,7 +49,7 @@ final class CueStreamingTests: XCTestCase {
         noThreshold.streaming = .lowLatency(stepFrames: 16)
         noThreshold.minSpokenRatio = 0
         noThreshold.wordVerification = .uncheckedPreview
-        for config in [quick, noAttempts, noThreshold] {
+        for config in [noAttempts, noThreshold] {
             let count = try await partials(for: SpeechRequest(text: "[laughs] " + line, config: config))
             XCTAssertGreaterThan(count, 0)
         }
@@ -96,8 +94,6 @@ final class CueStreamingTests: XCTestCase {
     func testSlowReferenceKeepsLowLatencyWhenRetriesAreDisabled() async throws {
         let voice = ReferenceVoice(name: "Slow narrator", transcript: "Hey there my name is Joey and I love you",
                                    codes: Array(repeating: Array(repeating: 1, count: 142), count: 10))
-        var quick = GenerationConfig.make(expressiveness: 0.5, quickPreview: true)
-        quick.streaming = .lowLatency(stepFrames: 16)
         var noAttempts = GenerationConfig()
         noAttempts.streaming = .lowLatency(stepFrames: 16)
         noAttempts.maxRetries = 0
@@ -106,7 +102,7 @@ final class CueStreamingTests: XCTestCase {
         noThreshold.streaming = .lowLatency(stepFrames: 16)
         noThreshold.minSpokenRatio = 0
         noThreshold.wordVerification = .uncheckedPreview
-        for config in [quick, noAttempts, noThreshold] {
+        for config in [noAttempts, noThreshold] {
             let count = try await partials(for: SpeechRequest(text: line, references: [voice], config: config))
             XCTAssertGreaterThan(count, 0)
         }

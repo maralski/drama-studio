@@ -173,7 +173,6 @@ final class AppNarrationSessionTests: XCTestCase {
         try session.library.add(voice)
         session.setVoice(.library(voice.id), forSpeaker: 1)
         session.expressiveness = 0.8
-        session.quickPreview = true
         session.generate()
         await finish(session)
         let bundle = directory.appending(path: "Deck.dramaproj")
@@ -188,7 +187,6 @@ final class AppNarrationSessionTests: XCTestCase {
         XCTAssertEqual(reopened.source, session.source)
         XCTAssertEqual(reopened.speakerVoices, [1: .library(voice.id)])
         XCTAssertEqual(reopened.expressiveness, 0.8)
-        XCTAssertTrue(reopened.quickPreview)
         XCTAssertEqual(reopened.narrationTakes, session.narrationTakes, "ranges, sentences and codes survive")
         XCTAssertEqual(reopened.audio, session.audio)
         XCTAssertEqual(reopened.state, .ready)
@@ -197,12 +195,13 @@ final class AppNarrationSessionTests: XCTestCase {
         XCTAssertEqual(reopened.chosenTake(for: session.document!.segments[1].id)?.duration, session.chosenTake(for: session.document!.segments[1].id)?.duration)
         XCTAssertEqual(reopened.recentProjects, [bundle])
 
-        reopened.quickPreview = false
         reopened.selectSegment(session.document!.segments[4].id)
         reopened.narrateSelectedSection()
         await finish(reopened)
         let last = try XCTUnwrap(synthesizer.requests.last)
-        XCTAssertEqual(last.previousTakes, [], "preview codes survive for playback and export, but cannot become checked generation history")
+        let first = try XCTUnwrap(session.chosenTake(for: session.document!.segments[0].id))
+        let second = try XCTUnwrap(session.chosenTake(for: session.document!.segments[1].id))
+        XCTAssertEqual(last.previousTakes, [first.take, second.take], "checked history survives reopening")
 
         let folder = directory.appending(path: "slides")
         reopened.exportSlidePackage(to: folder, as: .wav16)
@@ -397,7 +396,7 @@ final class AppNarrationSessionTests: XCTestCase {
         session.generate()
         await finish(session)
         var project = StudioProject(title: "Legacy", script: session.script, expressiveness: 0.5,
-                                    quickPreview: false, takes: session.captionTakes)
+                                    takes: session.captionTakes)
         project.version = 1
         let bundle = directory.appending(path: "Legacy.dramaproj")
         try project.save(to: bundle, audio: session.exportSamples)

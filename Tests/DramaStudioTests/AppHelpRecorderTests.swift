@@ -7,18 +7,19 @@ import XCTest
 final class AppSettingHelpTests: XCTestCase {
     /// Fields the app sets itself, and why none of them is a control.
     private let hiddenConfigFields: [String: String] = [
-        "wordVerification": "Normal generation requires local word checks; Quick preview explicitly skips them.",
+        "wordVerification": "Generation requires local word checks.",
+        "frameCap": "Derived from the text duration, with extra time for cues.",
         "temperature": "Derived from Expressiveness.",
         "topP": "Derived from Expressiveness.",
         "topK": "Derived from Expressiveness: the vendor's 30 up to the middle, off above it as in the Space.",
         "maxNewFrames": "The CLI's fixed cap; the app derives frameCap from the text.",
         "chunkBytes": "Only used by reference chunking, which the app never picks.",
         "chunking": "Fixed by measurement: one sentence per turn cut mean WER from 0.141 to 0.063.",
-        "stopAfterSilenceSeconds": "Normal takes wait for end of speech; Quick preview opts into 2 s of silence for speed and may cut words after a pause.",
-        "minSpokenRatio": "Fixed by measurement at 0.6; Quick preview sets it to 0.",
+        "stopAfterSilenceSeconds": "Takes wait for end of speech.",
+        "minSpokenRatio": "Fixed by measurement at 0.6.",
         "maxRetries": "At most five replacement attempts, each subject to local word verification.",
         "stopOnLoop": "Fixed by measurement: it ends laughter loops and no speech run tripped it.",
-        "retryWithoutEOSBelow": "Fixed by measurement at 1.0 alongside the retry threshold; Quick preview turns retries off.",
+        "retryWithoutEOSBelow": "Fixed by measurement at 1.0 alongside the retry threshold.",
         "capSecondsPerCue": "Fixed by measurement at 1.5 s, so a cue's time does not cut its words off at the cap.",
     ]
 
@@ -31,14 +32,14 @@ final class AppSettingHelpTests: XCTestCase {
     }
 
     func testStudioConfigKeepsTheMeasuredDefaults() {
-        XCTAssertEqual(GenerationConfig.make(expressiveness: GenerationConfig.defaultExpressiveness, quickPreview: false), GenerationConfig())
-        XCTAssertNil(GenerationConfig.make(expressiveness: 0.5, quickPreview: false).seed, "every take draws a fresh seed")
-        XCTAssertNil(GenerationConfig.make(expressiveness: 0.5, quickPreview: false).stopAfterSilenceSeconds)
+        XCTAssertEqual(GenerationConfig.make(expressiveness: GenerationConfig.defaultExpressiveness), GenerationConfig())
+        XCTAssertNil(GenerationConfig.make(expressiveness: 0.5).seed, "every take draws a fresh seed")
+        XCTAssertNil(GenerationConfig.make(expressiveness: 0.5).stopAfterSilenceSeconds)
     }
 
     func testExpressivenessRunsFromSteadyThroughTheVendorsSamplingToTheSpaces() {
         for (value, temperature, topP, topK) in [(0.0, 0.5, 0.5, 30), (0.25, 0.6, 0.6, 30), (0.5, 0.7, 0.7, 30), (0.75, 0.85, 0.8, 4097), (1.0, 1.0, 0.9, 4097)] {
-            let config = GenerationConfig.make(expressiveness: value, quickPreview: false)
+            let config = GenerationConfig.make(expressiveness: value)
             XCTAssertEqual(config.temperature, temperature, accuracy: 1e-12, "temperature at \(value)")
             XCTAssertEqual(config.topP, topP, accuracy: 1e-12, "top-p at \(value)")
             XCTAssertEqual(config.topK, topK, "top-k at \(value)")
@@ -50,32 +51,19 @@ final class AppSettingHelpTests: XCTestCase {
         space.temperature = 1.0
         space.topP = 0.9
         space.topK = 4097
-        XCTAssertEqual(GenerationConfig.make(expressiveness: 1, quickPreview: false), space)
+        XCTAssertEqual(GenerationConfig.make(expressiveness: 1), space)
     }
 
     func testExpressivenessIsMonotoneAndContinuousInTemperatureAndTopP() {
-        var previous = GenerationConfig.make(expressiveness: 0, quickPreview: false)
+        var previous = GenerationConfig.make(expressiveness: 0)
         for step in 1...100 {
-            let config = GenerationConfig.make(expressiveness: Double(step) / 100, quickPreview: false)
+            let config = GenerationConfig.make(expressiveness: Double(step) / 100)
             XCTAssertGreaterThan(config.temperature, previous.temperature)
             XCTAssertGreaterThan(config.topP, previous.topP)
             XCTAssertLessThan(config.temperature - previous.temperature, 0.01)
             XCTAssertLessThan(config.topP - previous.topP, 0.01)
             previous = config
         }
-    }
-
-    func testQuickPreviewDropsRetriesEnablesSilenceStopAndTightensTheFrameCap() {
-        let preview = GenerationConfig.make(expressiveness: 0.5, quickPreview: true)
-        XCTAssertEqual(preview.minSpokenRatio, 0)
-        XCTAssertEqual(preview.stopAfterSilenceSeconds, 2)
-        XCTAssertEqual(preview.frameCap, .fromText(margin: 1.2, floorSeconds: 1.0))
-        var expected = GenerationConfig()
-        expected.wordVerification = .uncheckedPreview
-        expected.stopAfterSilenceSeconds = 2
-        expected.minSpokenRatio = 0
-        expected.frameCap = .fromText(margin: 1.2, floorSeconds: 1.0)
-        XCTAssertEqual(preview, expected, "preview changes nothing else")
     }
 
     func testEntriesAreUnique() {

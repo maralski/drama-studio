@@ -65,20 +65,20 @@ final class APIStreamingTests: XCTestCase {
         return stream
     }
 
-    func testPCMStreamSendsPartialsThatAddUpToTheTake() async throws {
+    func testPCMStreamSendsCompletedChunksThatAddUpToTheTake() async throws {
         let response = await service.respond(to: HTTPRequest(method: "POST", path: "/v1/audio/speech",
-                                                             body: try JSONSerialization.data(withJSONObject: ["input": Self.twoSentences, "stream": true, "seed": 3, "quick_preview": true])))
+                                                             body: try JSONSerialization.data(withJSONObject: ["input": Self.twoSentences, "stream": true, "seed": 3])))
         XCTAssertEqual(response.status, .ok)
         XCTAssertNotNil(response.headers["X-Drama-Estimated-Seconds"].flatMap(Double.init))
         var chunks: [Data] = []
         for try await chunk in try body(response) { chunks.append(chunk) }
         let sent = await engine.requests
         XCTAssertEqual(sent.first?.config.streaming, .defaultLowLatency, "stream: true asks the engine for low latency")
-        XCTAssertGreaterThan(chunks.count, 2, "audio leaves before each sentence is done")
+        XCTAssertEqual(chunks.count, 2, "each checked sentence is sent once")
         XCTAssertTrue(chunks.allSatisfy { $0.count % (ModelConstants.samplesPerFrame * 2) == 0 })
 
         let file = await service.respond(to: HTTPRequest(method: "POST", path: "/v1/audio/speech",
-                                                         body: try JSONSerialization.data(withJSONObject: ["input": Self.twoSentences, "response_format": "pcm", "seed": 3, "quick_preview": true])))
+                                                         body: try JSONSerialization.data(withJSONObject: ["input": Self.twoSentences, "response_format": "pcm", "seed": 3])))
         XCTAssertEqual(chunks.reduce(Data(), +), file.bodyData, "the stream carries exactly the file's audio")
         let fileRequest = await engine.requests.last
         XCTAssertEqual(fileRequest?.config.streaming, .sentence)

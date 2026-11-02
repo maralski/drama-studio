@@ -18,7 +18,7 @@ final class AppStudioProjectTests: XCTestCase {
         }
         let project = StudioProject(
             title: "Quarterly Review", script: "<|speaker:0|>Hello.", document: document,
-            casting: [0: UUID(), 3: UUID()], expressiveness: 0.7, quickPreview: true, takes: takes
+            casting: [0: UUID(), 3: UUID()], expressiveness: 0.7, takes: takes
         )
         return (project, audio)
     }
@@ -52,11 +52,28 @@ final class AppStudioProjectTests: XCTestCase {
     }
 
     func testProjectWithoutAudioOrDocument() throws {
-        let project = StudioProject(title: "Script only", script: "Hi.", expressiveness: 0.5, quickPreview: false)
+        let project = StudioProject(title: "Script only", script: "Hi.", expressiveness: 0.5)
         let bundle = try temporaryDirectory().appending(path: "Script.dramaproj")
         try project.save(to: bundle)
         XCTAssertEqual(try StudioProject.load(from: bundle), project)
         XCTAssertEqual(try project.audio(in: bundle), [])
+    }
+
+    func testLegacyPreviewSettingIsIgnoredAndDroppedOnSave() throws {
+        let (project, audio) = try fixture()
+        let bundle = try temporaryDirectory().appending(path: "Legacy.dramaproj")
+        try project.save(to: bundle, audio: audio)
+        let manifest = bundle.appending(path: "project.json")
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: manifest)) as? [String: Any])
+        json["quickPreview"] = true
+        try JSONSerialization.data(withJSONObject: json).write(to: manifest)
+
+        let loaded = try StudioProject.load(from: bundle)
+        XCTAssertEqual(loaded, project)
+        XCTAssertEqual(try loaded.audio(in: bundle), audio)
+        try loaded.save(to: bundle, audio: audio)
+        let saved = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: manifest)) as? [String: Any])
+        XCTAssertNil(saved["quickPreview"])
     }
 
     func testNewerFormatIsRejectedWithClearError() throws {

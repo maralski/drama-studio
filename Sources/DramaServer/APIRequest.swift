@@ -58,12 +58,11 @@ public struct SpeechParameters: Sendable, Equatable {
     public var previousTakes: [TakeSource]
     public var delivery: Delivery
     public var expressiveness: Double
-    public var quickPreview: Bool
     public var seed: UInt64?
     public var applyPronunciation: Bool
 
     public var config: GenerationConfig {
-        var config = GenerationConfig.make(expressiveness: expressiveness, quickPreview: quickPreview)
+        var config = GenerationConfig.make(expressiveness: expressiveness)
         config.seed = seed
         if delivery.streams { config.streaming = .defaultLowLatency }
         return config
@@ -243,7 +242,6 @@ extension APIRequest {
         var response_format: String?
         var stream: Bool?
         var expressiveness: Double?
-        var quick_preview: Bool?
         var seed: Int64?
         var speaker_voices: [String: String]?
         var character: CharacterBody?
@@ -293,7 +291,6 @@ extension APIRequest {
         body.voice = query["voice"]
         body.expressiveness = try number("expressiveness")
         body.seed = try number("seed")
-        body.quick_preview = query["quick_preview"].map { ["1", "true", "yes"].contains($0.lowercased()) }
         if let value = query["apply_pronunciation"]?.lowercased() {
             if ["1", "true", "yes"].contains(value) { body.apply_pronunciation = true }
             else if ["0", "false", "no"].contains(value) { body.apply_pronunciation = false }
@@ -344,7 +341,6 @@ extension APIRequest {
             previousTakes: previousTakes,
             delivery: delivery,
             expressiveness: expressiveness,
-            quickPreview: decoded.quick_preview ?? false,
             seed: decoded.seed.map(UInt64.init),
             applyPronunciation: decoded.apply_pronunciation ?? true
         )

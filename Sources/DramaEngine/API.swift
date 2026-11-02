@@ -75,7 +75,7 @@ public struct GenerationConfig: Sendable, Codable, Equatable {
     /// Stop a chunk once its decoded audio has been silent for this many
     /// seconds. `nil`, the default, lets the model reach the end of speech,
     /// subject to the frame cap and loop guard. A silence stop can cut words
-    /// after a pause. Quick preview opts into 2 seconds for faster rough takes.
+    /// after a pause.
     public var stopAfterSilenceSeconds: Double? = nil
     /// Generate a chunk again when its spoken audio is shorter than this
     /// fraction of the expected spoken duration (text length at 16 characters
@@ -162,7 +162,7 @@ public extension GenerationConfig {
     /// The middle of the expressiveness range: temperature 0.7 and top-p 0.7.
     static let defaultExpressiveness = 0.5
 
-    /// The two controls the app and the API expose over the defaults. Every
+    /// The expressiveness control the app and the API expose over the defaults. Every
     /// other field keeps the measured value.
     ///
     /// - Parameters:
@@ -178,10 +178,7 @@ public extension GenerationConfig {
     ///     without a retry more often, kept every sentence of the cue lines,
     ///     and cost 0.007 of word error rate; the middle stays the default
     ///     for that cost.
-    ///   - quickPreview: Turns retries off, enables a 2 s silence stop, and
-    ///     tightens the frame cap to the expected duration times 1.2, plus 1 s,
-    ///     for faster rough takes that can stop before every word is spoken.
-    static func make(expressiveness: Double, quickPreview: Bool) -> GenerationConfig {
+    static func make(expressiveness: Double) -> GenerationConfig {
         var config = GenerationConfig()
         if expressiveness <= 0.5 {
             config.temperature = 0.5 + 0.4 * expressiveness
@@ -192,12 +189,6 @@ public extension GenerationConfig {
             config.temperature = 0.7 * (1 - t) + 1.0 * t
             config.topP = 0.7 * (1 - t) + 0.9 * t
             config.topK = 4097
-        }
-        if quickPreview {
-            config.wordVerification = .uncheckedPreview
-            config.stopAfterSilenceSeconds = 2
-            config.minSpokenRatio = 0
-            config.frameCap = .fromText(margin: 1.2, floorSeconds: 1.0)
         }
         return config
     }

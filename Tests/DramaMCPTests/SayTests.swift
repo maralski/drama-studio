@@ -46,7 +46,6 @@ final class SayTests: XCTestCase {
             (["-o", "/tmp/out.M4A", "Hi"], command { $0.output = .file(URL(filePath: "/tmp/out.M4A")); $0.source = .text("Hi") }),
             (["-o", "-", "Hi"], command { $0.output = .standardOutput; $0.source = .text("Hi") }),
             (["--expressiveness", "0.8", "Hi"], command { $0.expressiveness = 0.8; $0.source = .text("Hi") }),
-            (["--quick", "Hi"], command { $0.quickPreview = true; $0.source = .text("Hi") }),
             (["--seed", "42", "Hi"], command { $0.seed = 42; $0.source = .text("Hi") }),
             (["--note", "softer", "Hi"], command { $0.note = "softer"; $0.source = .text("Hi") }),
             (["--retake", "T1", "--note", "softer"], command { $0.retakeOf = "T1"; $0.note = "softer"; $0.source = nil }),
@@ -91,7 +90,7 @@ final class SayTests: XCTestCase {
             (["-f", "/tmp/line.txt", "Hi"], "give the text as words or with -f, not both."),
             (["--wat", "Hi"], "unknown option --wat."),
             (["-v"], "-v needs a value."),
-            (["--quick=yes", "Hi"], "--quick takes no value."),
+            (["--quick", "Hi"], "unknown option --quick."),
         ]
         for (arguments, message) in bad {
             XCTAssertThrowsError(try SayCommand.parse(arguments), "\(arguments)") { error in
@@ -116,8 +115,8 @@ final class SayTests: XCTestCase {
              ["input": "Hi", "character": ["name": "Captain", "description": "gravelly"], "response_format": "wav"]),
             (command { $0.voice = .speakers([0: "Narrator", 1: "abc"]) }, "<|speaker:0|>Hi<|speaker:1|>Yo",
              ["input": "<|speaker:0|>Hi<|speaker:1|>Yo", "speaker_voices": ["0": "Narrator", "1": "abc"], "stream": true, "response_format": "pcm"]),
-            (command { $0.expressiveness = 0.25; $0.quickPreview = true; $0.seed = 7; $0.output = .file(URL(filePath: "x.pcm")) }, "Hi",
-             ["input": "Hi", "expressiveness": 0.25, "quick_preview": true, "seed": 7, "response_format": "pcm"]),
+            (command { $0.expressiveness = 0.25; $0.seed = 7; $0.output = .file(URL(filePath: "x.pcm")) }, "Hi",
+             ["input": "Hi", "expressiveness": 0.25, "seed": 7, "response_format": "pcm"]),
             (command { $0.note = "softer"; $0.retakeOf = "T1"; $0.output = .standardOutput }, nil,
              ["note": "softer", "previous_takes": [["take_id": "T1"]], "response_format": "pcm"]),
             (command { $0.note = "angrier" }, "Hi", ["input": "Hi", "note": "angrier", "stream": true, "response_format": "pcm"]),

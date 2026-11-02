@@ -108,7 +108,7 @@ Write performance cues into the text: `[laughs]`, `[sighs]`,
 `<whisper>…</whisper>`. In the reliability study the cue lines were the one
 area where the model dropped content a few times in twenty, and `[laughs]`
 can turn into a laughter loop that the frame cap ends. 
-``GenerationConfig/make(expressiveness:quickPreview:)`` maps one 0-to-1
+``GenerationConfig/make(expressiveness:)`` maps one 0-to-1
 control onto temperature, top-p and top-k, with the vendor's sampling at 0.5
 and the Hugging Face Space's (temperature 1.0, top-p 0.9, no top-k) at 1.
 The Space's sampling kept every sentence of the cue lines in the reliability

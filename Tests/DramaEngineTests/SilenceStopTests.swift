@@ -20,15 +20,6 @@ final class SilenceStopTests: XCTestCase {
         XCTAssertTrue(config.stopOnLoop)
     }
 
-    func testQuickPreviewExplicitlyEnablesTwoSecondSilenceStop() {
-        for expressiveness in [0.0, 0.5, 1.0] {
-            XCTAssertNil(GenerationConfig.make(expressiveness: expressiveness, quickPreview: false).stopAfterSilenceSeconds)
-            let preview = GenerationConfig.make(expressiveness: expressiveness, quickPreview: true)
-            XCTAssertEqual(preview.stopAfterSilenceSeconds, 2)
-            XCTAssertEqual(preview.minSpokenRatio, 0)
-        }
-    }
-
     func testCodablePreservesDisabledAndExplicitSilenceThresholds() throws {
         for threshold in [nil, 2, 1.25] as [Double?] {
             var config = GenerationConfig()

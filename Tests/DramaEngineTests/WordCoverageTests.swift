@@ -102,7 +102,7 @@ final class WordCoverageTests: XCTestCase {
         XCTAssertEqual(config.wordVerification, .required)
         XCTAssertEqual(config.maxRetries, 0)
         XCTAssertEqual(try GenerationPlan(text: "Hello.", references: [], config: config).streaming, .sentence)
-        XCTAssertEqual(GenerationConfig.make(expressiveness: 0.5, quickPreview: true).wordVerification, .uncheckedPreview)
+        XCTAssertEqual(GenerationConfig.make(expressiveness: 0.5).wordVerification, .required)
     }
 
     func testNumericSignsDecimalsAndPercentCannotDisappear() {
