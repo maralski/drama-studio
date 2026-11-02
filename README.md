@@ -254,7 +254,7 @@ slide has no notes; a PDF's pages; an EPUB's chapters. The list shows each
 section's label, a preview, its duration once narrated, a skip box and a
 speaker picker. The editor edits the selected section.
 
-![A deck's sections, with the spoken sentence highlighted](docs/screenshots/document-sections.png)
+![Drama Studio 2.0.0 showing a deck's sections, take cards, and Save Voice to Library](docs/screenshots/document-sections.png)
 
 - Generate narrates every section that is not skipped, in order, one request
   per section, cast with that section's speaker's voice. The speaker's
@@ -290,7 +290,7 @@ speaker picker. The editor edits the selected section.
   their takes from the session. Its confirmation offers to save a project copy
   first.
 
-![The Export menu for a deck](docs/screenshots/document-export-menu.png)
+![Drama Studio 2.0.0 showing the Export menu for a deck](docs/screenshots/document-export-menu.png)
 
 On the five-slide sample deck (`python-pptx`, slide 3 without notes), the
 real engine at the default settings narrated 24.3 s of audio in 34.5 s
@@ -363,7 +363,7 @@ holds the port, a switch for starting the server with the app, and the token.
 The menu bar has Start and Stop. When the port is taken, the menu shows
 "API: Port 8780 is already in use."
 
-![The menu bar extra while an API request generates](docs/screenshots/menu-bar-extra-job.png)
+![The menu bar extra while a preview-engine API request generates](docs/screenshots/menu-bar-extra-job.png)
 
 Every route except `/v1/health` needs the bearer token from
 `~/Library/Application Support/DramaStudio/api-token`, created the first time
