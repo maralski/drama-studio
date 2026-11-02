@@ -1,5 +1,6 @@
 // Copyright 2026 Peter Marelas
 // SPDX-License-Identifier: Apache-2.0
+import CryptoKit
 import Foundation
 
 package enum CodecBundleError: Error, Equatable, CustomStringConvertible {
@@ -22,6 +23,7 @@ package enum CodecBundleError: Error, Equatable, CustomStringConvertible {
 package struct CodecBundle: Sendable, Equatable {
     package static let urlKey = "DSCodecBundleURL"
     package static let sha256Key = "DSCodecBundleSHA256"
+    private static let receiptName = "codec-bundle.sha256"
     /// The directories the zip must hold.
     package static let packageNames = DramaCodec.modelNames.map { "\($0).mlpackage" }
 
@@ -44,13 +46,36 @@ package struct CodecBundle: Sendable, Equatable {
     /// Where the zip goes in `downloads`; it is there only once verified.
     package func archive(in downloads: URL) -> URL { downloads.appending(path: url.lastPathComponent) }
 
+    package func isInstalled(in directory: URL) -> Bool {
+        guard DramaCodec.modelsExist(in: directory),
+              let installed = try? String(contentsOf: directory.appending(path: Self.receiptName), encoding: .utf8) else { return false }
+        return installed == sha256.lowercased()
+    }
+
     /// Fetches and verifies the zip unless it is already in place, and returns its path.
     package func download(into downloads: URL, with downloader: FileDownloader, progress: @escaping FileDownloader.Progress) async throws -> URL {
         let archive = archive(in: downloads)
-        if !FileManager.default.fileExists(atPath: archive.path) {
-            try await downloader.download(DownloadTarget(url: url, destination: archive, size: nil, sha256: sha256), progress: progress)
+        if FileManager.default.fileExists(atPath: archive.path) {
+            do {
+                try verify(archive)
+                return archive
+            } catch DownloadError.checksumMismatch {
+                try FileManager.default.removeItem(at: archive)
+            }
         }
+        try await downloader.download(DownloadTarget(url: url, destination: archive, size: nil, sha256: sha256), progress: progress)
         return archive
+    }
+
+    private func verify(_ archive: URL) throws {
+        let handle = try FileHandle(forReadingFrom: archive)
+        defer { try? handle.close() }
+        var hash = SHA256()
+        while let bytes = try handle.read(upToCount: 8 << 20), !bytes.isEmpty { hash.update(data: bytes) }
+        let actual = hash.finalize().map { String(format: "%02x", $0) }.joined()
+        guard actual == sha256.lowercased() else {
+            throw DownloadError.checksumMismatch(file: archive.lastPathComponent, expected: sha256, actual: actual)
+        }
     }
 
     /// Unzips `archive` with `ditto` into a staging folder beside
@@ -58,7 +83,9 @@ package struct CodecBundle: Sendable, Equatable {
     /// each into `codecDirectory` with a rename, replacing an older package
     /// and its compiled `.mlmodelc`. Leftover staging folders from an
     /// interrupted install are removed first, so running it again converges.
-    package static func install(archive: URL, into codecDirectory: URL) throws {
+    /// Records the verified archive digest only after all models are installed.
+    package func install(archive: URL, into codecDirectory: URL) throws {
+        try verify(archive)
         let fm = FileManager.default
         let parent = codecDirectory.deletingLastPathComponent()
         try fm.createDirectory(at: codecDirectory, withIntermediateDirectories: true)
@@ -82,14 +109,17 @@ package struct CodecBundle: Sendable, Equatable {
         }
 
         var isDirectory: ObjCBool = false
-        let missing = packageNames.filter { !(fm.fileExists(atPath: staging.appending(path: $0).path, isDirectory: &isDirectory) && isDirectory.boolValue) }
+        let missing = Self.packageNames.filter { !(fm.fileExists(atPath: staging.appending(path: $0).path, isDirectory: &isDirectory) && isDirectory.boolValue) }
         guard missing.isEmpty else { throw CodecBundleError.missingModels(missing) }
 
-        for name in packageNames {
+        let receipt = codecDirectory.appending(path: Self.receiptName)
+        if fm.fileExists(atPath: receipt.path) { try fm.removeItem(at: receipt) }
+        for name in Self.packageNames {
             let destination = codecDirectory.appending(path: name)
             try? fm.removeItem(at: destination.deletingPathExtension().appendingPathExtension("mlmodelc"))
             if fm.fileExists(atPath: destination.path) { try fm.removeItem(at: destination) }
             try fm.moveItem(at: staging.appending(path: name), to: destination)
         }
+        try sha256.lowercased().write(to: receipt, atomically: true, encoding: .utf8)
     }
 }

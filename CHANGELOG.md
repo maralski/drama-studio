@@ -7,6 +7,14 @@ adds one, and a patch release changes neither.
 
 ## Unreleased
 
+## 2.1.2
+
+- Compare the installed codec archive's recorded SHA-256 with the release's
+  digest at setup. Reuse matching models across app releases and download
+  changed or missing codecs. Older installs without a recorded digest need
+  one verified download. Verify cached archives before reuse and record the
+  new digest only after all three models are installed.
+
 ## 2.1.1
 
 - Show background app downloads as a horizontal progress bar that follows

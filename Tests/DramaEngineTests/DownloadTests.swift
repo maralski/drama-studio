@@ -301,21 +301,80 @@ final class DownloadTests: XCTestCase {
         return archive
     }
 
+    func testCodecInstallRecordsTheVerifiedArchiveDigest() throws {
+        let archive = try zip(packages: CodecBundle.packageNames)
+        let expected = Self.sha(try Data(contentsOf: archive))
+        let codec = root.appending(path: "Codec")
+        let bundle = CodecBundle(url: archive, sha256: expected)
+        try bundle.install(archive: archive, into: codec)
+        XCTAssertEqual(try String(contentsOf: codec.appending(path: "codec-bundle.sha256"), encoding: .utf8), expected)
+    }
+
+    func testInstalledCodecUsesDigestInsteadOfReleaseURLAndRequiresCompleteModels() throws {
+        let archive = try zip(packages: CodecBundle.packageNames)
+        let digest = Self.sha(try Data(contentsOf: archive))
+        let codec = root.appending(path: "Codec")
+        let bundle = CodecBundle(url: URL(string: "https://example.com/v1/codec.zip")!, sha256: digest)
+        try bundle.install(archive: archive, into: codec)
+        let nextRelease = CodecBundle(url: URL(string: "https://example.com/v2/codec.zip")!, sha256: digest.uppercased())
+        XCTAssertTrue(nextRelease.isInstalled(in: codec), "A new release URL with identical codec bytes needs no download")
+        XCTAssertFalse(CodecBundle(url: nextRelease.url, sha256: String(repeating: "0", count: 64)).isInstalled(in: codec))
+        try FileManager.default.removeItem(at: codec.appending(path: "codec-bundle.sha256"))
+        XCTAssertFalse(nextRelease.isInstalled(in: codec), "Legacy models without a recorded digest need a verified baseline")
+        try digest.write(to: codec.appending(path: "codec-bundle.sha256"), atomically: true, encoding: .utf8)
+        try FileManager.default.removeItem(at: codec.appending(path: "DramaCodecProbe.mlpackage"))
+        XCTAssertFalse(nextRelease.isInstalled(in: codec), "A matching receipt cannot hide a missing model")
+    }
+
+    func testCodecInstallRejectsWrongDigestWithoutChangingInstalledModelsOrReceipt() throws {
+        let archive = try zip(packages: CodecBundle.packageNames)
+        let bundle = CodecBundle(url: archive, sha256: Self.sha(try Data(contentsOf: archive)))
+        let codec = root.appending(path: "Codec")
+        try bundle.install(archive: archive, into: codec)
+        try Data("corrupt archive".utf8).write(to: archive)
+        XCTAssertThrowsError(try bundle.install(archive: archive, into: codec)) { error in
+            guard case DownloadError.checksumMismatch = error else { return XCTFail("Unexpected error: \(error)") }
+        }
+        XCTAssertTrue(bundle.isInstalled(in: codec))
+        XCTAssertEqual(try String(contentsOf: codec.appending(path: "DramaCodecProbe.mlpackage/Manifest.json"), encoding: .utf8), "{}")
+    }
+
+    func testCachedCodecWithDifferentDigestIsDownloadedAgain() async throws {
+        let target = serve(Self.payload(2000), at: "codec.zip")
+        let bundle = CodecBundle(url: target.url, sha256: target.sha256)
+        try Data("stale archive".utf8).write(to: bundle.archive(in: root))
+        let archive = try await bundle.download(into: root, with: downloader) { _, _ in }
+        XCTAssertEqual(try Data(contentsOf: archive), Self.payload(2000))
+        XCTAssertEqual(StubServer.seen.count, 1)
+    }
+
+    func testCachedCodecWithMatchingDigestSkipsDownload() async throws {
+        let data = Self.payload(2000)
+        let target = serve(data, at: "codec.zip")
+        let bundle = CodecBundle(url: target.url, sha256: target.sha256)
+        try data.write(to: bundle.archive(in: root))
+        let archive = try await bundle.download(into: root, with: downloader) { _, _ in }
+        XCTAssertEqual(try Data(contentsOf: archive), data)
+        XCTAssertTrue(StubServer.seen.isEmpty)
+    }
+
     func testCodecInstallMovesTheThreePackagesInAndDropsStaleCompiledModels() throws {
         let archive = try zip(packages: CodecBundle.packageNames)
         let codec = root.appending(path: "Support/Codec", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: codec.appending(path: "DramaCodecDecoder.mlmodelc"), withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: codec.deletingLastPathComponent().appending(path: ".codec-staging-old"), withIntermediateDirectories: true)
-        try CodecBundle.install(archive: archive, into: codec)
+        let bundle = CodecBundle(url: archive, sha256: Self.sha(try Data(contentsOf: archive)))
+        try bundle.install(archive: archive, into: codec)
         XCTAssertTrue(DramaCodec.modelsExist(in: codec))
-        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: codec.path).sorted(), CodecBundle.packageNames.sorted())
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: codec.path).sorted(), (CodecBundle.packageNames + ["codec-bundle.sha256"]).sorted())
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: codec.deletingLastPathComponent().path), ["Codec"])
     }
 
     func testCodecInstallRefusesAZipWithoutAllThreeModels() throws {
         let archive = try zip(packages: Array(CodecBundle.packageNames.prefix(2)))
         let codec = root.appending(path: "Support/Codec", directoryHint: .isDirectory)
-        XCTAssertThrowsError(try CodecBundle.install(archive: archive, into: codec)) { error in
+        let bundle = CodecBundle(url: archive, sha256: Self.sha(try Data(contentsOf: archive)))
+        XCTAssertThrowsError(try bundle.install(archive: archive, into: codec)) { error in
             XCTAssertEqual(error as? CodecBundleError, .missingModels(["DramaCodecProbe.mlpackage"]))
         }
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: codec.path), [])

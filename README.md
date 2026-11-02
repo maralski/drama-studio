@@ -107,6 +107,12 @@ signature, and requires the
 same signing identity for Developer ID builds. Ad-hoc builds rely on GitHub
 HTTPS and the published checksum for authenticity.
 
+After restart, setup compares the installed codec's recorded archive SHA-256
+with the digest shipped in the updated app. Matching codecs are reused even
+when the release URL changes. A changed digest or missing codec models triggers
+a verified download and installation. Older installs without a recorded digest
+need one verified download to establish it.
+
 ## What you get
 
 - **Script editor** with import of `.txt`, `.md`, `.rtf`, `.rtfd`, `.html`,
@@ -604,7 +610,7 @@ wait, and 1 on any other error, after printing the server's message.
 
 ## Using the engine in your own app
 
-`DramaEngine` is a Swift library, version 2.1.1 (`DramaEngineVersion.string`,
+`DramaEngine` is a Swift library, version 2.1.2 (`DramaEngineVersion.string`,
 `CHANGELOG.md`). Add this repository as a package dependency and the
 `DramaEngine` product to a target; the app, the server and the CLI are not
 needed. The public API includes `ModelLocation` and `DramaSetup` for the

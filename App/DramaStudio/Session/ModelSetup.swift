@@ -66,7 +66,8 @@ enum ModelSetup {
         let location = location(customPath: customPath)
         let report = DramaSetup.check(location: location, codecDirectory: AppHome.codec, tuningDirectory: AppHome.tuning)
         facts.weightsReady = location != nil && ![.weights, .tokenizer].contains { report[$0].isMissing }
-        facts.codecReady = report[.codecModels].state == .ready
+        facts.codecReady = CodecBundle(info: Bundle.main.infoDictionary)?.isInstalled(in: AppHome.codec)
+            ?? (report[.codecModels].state == .ready)
         facts.tuned = report[.tuning].state == .ready
         return facts
     }
@@ -137,8 +138,9 @@ extension SetupServices {
                 }
             },
             installCodec: { archive in
+                guard let bundle else { throw CodecBundleError.missingModels(CodecBundle.packageNames) }
                 try await Task.detached {
-                    try CodecBundle.install(archive: archive, into: AppHome.codec)
+                    try bundle.install(archive: archive, into: AppHome.codec)
                     try? FileManager.default.removeItem(at: archive)
                 }.value
             },

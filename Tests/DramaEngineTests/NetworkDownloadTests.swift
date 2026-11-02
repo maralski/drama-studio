@@ -78,7 +78,7 @@ final class NetworkDownloadTests: XCTestCase {
         try? FileManager.default.removeItem(at: downloads)
         try? FileManager.default.removeItem(at: codec)
         let archive = try await bundle.download(into: downloads, with: FileDownloader()) { _, _ in }
-        try CodecBundle.install(archive: archive, into: codec)
+        try bundle.install(archive: archive, into: codec)
         XCTAssertTrue(DramaCodec.modelsExist(in: codec))
         let loaded = try await DramaCodec(directory: codec)
         let frames = await loaded.decoderFrames
