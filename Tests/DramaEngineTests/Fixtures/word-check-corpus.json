@@ -1,0 +1,6794 @@
+[
+ {
+  "id": "agent.neg.s1",
+  "line": "Agent 007 reports for duty.",
+  "native": "Agent 008 reports for duty.",
+  "nativeSpans": [
+   {
+    "text": "Agent",
+    "confidence": 0.944
+   },
+   {
+    "text": " 008",
+    "confidence": 0.823
+   },
+   {
+    "text": " reports",
+    "confidence": 0.883
+   },
+   {
+    "text": " for",
+    "confidence": 0.926
+   },
+   {
+    "text": " duty.",
+    "confidence": 0.77
+   }
+  ],
+  "independent": "Agent 008 reports for duty."
+ },
+ {
+  "id": "agent.negspell.s1",
+  "line": "Agent double oh seven reports for duty.",
+  "native": "Agent 008 reports for duty.",
+  "nativeSpans": [
+   {
+    "text": "Agent",
+    "confidence": 0.944
+   },
+   {
+    "text": " 008",
+    "confidence": 0.823
+   },
+   {
+    "text": " reports",
+    "confidence": 0.883
+   },
+   {
+    "text": " for",
+    "confidence": 0.926
+   },
+   {
+    "text": " duty.",
+    "confidence": 0.77
+   }
+  ],
+  "independent": "Agent 008 reports for duty."
+ },
+ {
+  "id": "agent.pos.news",
+  "line": "Agent 007 reports for duty.",
+  "native": "Agent 007 reports for duty.",
+  "nativeSpans": [
+   {
+    "text": "Agent",
+    "confidence": 0.99
+   },
+   {
+    "text": " 007",
+    "confidence": 0.761
+   },
+   {
+    "text": " reports",
+    "confidence": 0.979
+   },
+   {
+    "text": " for",
+    "confidence": 0.961
+   },
+   {
+    "text": " duty.",
+    "confidence": 0.776
+   }
+  ],
+  "independent": "Agent 007 reports for duty."
+ },
+ {
+  "id": "agent.pos.s1",
+  "line": "Agent 007 reports for duty.",
+  "native": "Agent 007 reports for duty.",
+  "nativeSpans": [
+   {
+    "text": "Agent",
+    "confidence": 0.887
+   },
+   {
+    "text": " 007",
+    "confidence": 0.877
+   },
+   {
+    "text": " reports",
+    "confidence": 0.949
+   },
+   {
+    "text": " for",
+    "confidence": 0.921
+   },
+   {
+    "text": " duty.",
+    "confidence": 0.762
+   }
+  ],
+  "independent": "Agent 007 reports for duty."
+ },
+ {
+  "id": "agent.pos.s2",
+  "line": "Agent 007 reports for duty.",
+  "native": "Agent 007 reports for duty.",
+  "nativeSpans": [
+   {
+    "text": "Agent",
+    "confidence": 0.969
+   },
+   {
+    "text": " 007",
+    "confidence": 0.764
+   },
+   {
+    "text": " reports",
+    "confidence": 0.962
+   },
+   {
+    "text": " for",
+    "confidence": 0.957
+   },
+   {
+    "text": " duty.",
+    "confidence": 0.783
+   }
+  ],
+  "independent": "Agent 007 reports for duty."
+ },
+ {
+  "id": "agent.spell.news",
+  "line": "Agent double oh seven reports for duty.",
+  "native": "Agent 007 reports for duty.",
+  "nativeSpans": [
+   {
+    "text": "Agent",
+    "confidence": 0.99
+   },
+   {
+    "text": " 007",
+    "confidence": 0.802
+   },
+   {
+    "text": " reports",
+    "confidence": 0.981
+   },
+   {
+    "text": " for",
+    "confidence": 0.973
+   },
+   {
+    "text": " duty.",
+    "confidence": 0.728
+   }
+  ],
+  "independent": "Agent 007 reports for duty."
+ },
+ {
+  "id": "agent.spell.s1",
+  "line": "Agent double oh seven reports for duty.",
+  "native": "Asian 007 reports for duty.",
+  "nativeSpans": [
+   {
+    "text": "Asian",
+    "confidence": 0.474
+   },
+   {
+    "text": " 007",
+    "confidence": 0.867
+   },
+   {
+    "text": " reports",
+    "confidence": 0.981
+   },
+   {
+    "text": " for",
+    "confidence": 0.984
+   },
+   {
+    "text": " duty.",
+    "confidence": 0.866
+   }
+  ],
+  "independent": "Asian 007 reports for duty."
+ },
+ {
+  "id": "agent.spell.s2",
+  "line": "Agent double oh seven reports for duty.",
+  "native": "Agent 007 reports for duty.",
+  "nativeSpans": [
+   {
+    "text": "Agent",
+    "confidence": 0.99
+   },
+   {
+    "text": " 007",
+    "confidence": 0.818
+   },
+   {
+    "text": " reports",
+    "confidence": 0.988
+   },
+   {
+    "text": " for",
+    "confidence": 0.991
+   },
+   {
+    "text": " duty.",
+    "confidence": 0.915
+   }
+  ],
+  "independent": "Agent 007 reports for duty."
+ },
+ {
+  "id": "colour.neg.s1",
+  "line": "The colour of the theatre curtains was grey.",
+  "native": "The colour of the theatre curtains was green.",
+  "nativeSpans": [
+   {
+    "text": "The ",
+    "confidence": 0.952
+   },
+   {
+    "text": "colour ",
+    "confidence": 0.972
+   },
+   {
+    "text": "of ",
+    "confidence": 0.997
+   },
+   {
+    "text": "the ",
+    "confidence": 0.996
+   },
+   {
+    "text": "theatre ",
+    "confidence": 0.971
+   },
+   {
+    "text": "curtains was ",
+    "confidence": 0.996
+   },
+   {
+    "text": "green.",
+    "confidence": 0.907
+   }
+  ],
+  "independent": "The color of the theater curtains was green."
+ },
+ {
+  "id": "colour.pos.news",
+  "line": "The colour of the theatre curtains was grey.",
+  "native": "The colour of the theatre curtains was gray.",
+  "nativeSpans": [
+   {
+    "text": "The ",
+    "confidence": 0.994
+   },
+   {
+    "text": "colour ",
+    "confidence": 0.984
+   },
+   {
+    "text": "of the ",
+    "confidence": 0.998
+   },
+   {
+    "text": "theatre ",
+    "confidence": 0.981
+   },
+   {
+    "text": "curtains was ",
+    "confidence": 0.997
+   },
+   {
+    "text": "gray.",
+    "confidence": 0.934
+   }
+  ],
+  "independent": "The color of the theater curtains was gray."
+ },
+ {
+  "id": "colour.pos.s1",
+  "line": "The colour of the theatre curtains was grey.",
+  "native": "The colour of the theatre curtains was gray.",
+  "nativeSpans": [
+   {
+    "text": "The ",
+    "confidence": 0.989
+   },
+   {
+    "text": "colour ",
+    "confidence": 0.981
+   },
+   {
+    "text": "of ",
+    "confidence": 0.998
+   },
+   {
+    "text": "the ",
+    "confidence": 0.997
+   },
+   {
+    "text": "theatre ",
+    "confidence": 0.975
+   },
+   {
+    "text": "curtains ",
+    "confidence": 0.978
+   },
+   {
+    "text": "was ",
+    "confidence": 0.995
+   },
+   {
+    "text": "gray.",
+    "confidence": 0.902
+   }
+  ],
+  "independent": "The color of the theater curtains was gray."
+ },
+ {
+  "id": "colour.pos.s2",
+  "line": "The colour of the theatre curtains was grey.",
+  "native": "The colour of the theatre curtains was gray.",
+  "nativeSpans": [
+   {
+    "text": "The ",
+    "confidence": 0.996
+   },
+   {
+    "text": "colour ",
+    "confidence": 0.983
+   },
+   {
+    "text": "of ",
+    "confidence": 0.998
+   },
+   {
+    "text": "the ",
+    "confidence": 0.997
+   },
+   {
+    "text": "theatre ",
+    "confidence": 0.979
+   },
+   {
+    "text": "curtains ",
+    "confidence": 0.997
+   },
+   {
+    "text": "was ",
+    "confidence": 0.998
+   },
+   {
+    "text": "gray.",
+    "confidence": 0.839
+   }
+  ],
+  "independent": "The color of the theater curtains was gray."
+ },
+ {
+  "id": "decade.neg.s1",
+  "line": "The 1990s were a strange decade.",
+  "native": "The 1980s were a strange decade.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.992
+   },
+   {
+    "text": " 1980s",
+    "confidence": 0.994
+   },
+   {
+    "text": " were a",
+    "confidence": 0.995
+   },
+   {
+    "text": " strange",
+    "confidence": 0.996
+   },
+   {
+    "text": " decade.",
+    "confidence": 0.963
+   }
+  ],
+  "independent": "The 1980s were a strange decade."
+ },
+ {
+  "id": "decade.negspell.s1",
+  "line": "The nineteen nineties were a strange decade.",
+  "native": "The 1980s were a strange decade.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.992
+   },
+   {
+    "text": " 1980s",
+    "confidence": 0.994
+   },
+   {
+    "text": " were a",
+    "confidence": 0.995
+   },
+   {
+    "text": " strange",
+    "confidence": 0.996
+   },
+   {
+    "text": " decade.",
+    "confidence": 0.963
+   }
+  ],
+  "independent": "The 1980s were a strange decade."
+ },
+ {
+  "id": "decade.pos.news",
+  "line": "The 1990s were a strange decade.",
+  "native": "The 1990s were a strange decade.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.993
+   },
+   {
+    "text": " 1990s",
+    "confidence": 0.996
+   },
+   {
+    "text": " were a",
+    "confidence": 0.997
+   },
+   {
+    "text": " strange",
+    "confidence": 0.996
+   },
+   {
+    "text": " decade.",
+    "confidence": 0.915
+   }
+  ],
+  "independent": "The 1990s were a strange decade."
+ },
+ {
+  "id": "decade.pos.s1",
+  "line": "The 1990s were a strange decade.",
+  "native": "The 1990s were a strange decade.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.9
+   },
+   {
+    "text": " 1990s",
+    "confidence": 0.989
+   },
+   {
+    "text": " were",
+    "confidence": 0.981
+   },
+   {
+    "text": " a",
+    "confidence": 0.989
+   },
+   {
+    "text": " strange",
+    "confidence": 0.992
+   },
+   {
+    "text": " decade.",
+    "confidence": 0.924
+   }
+  ],
+  "independent": "The 1990s were a strange decade."
+ },
+ {
+  "id": "decade.pos.s2",
+  "line": "The 1990s were a strange decade.",
+  "native": "The 1990s were a strange decade.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.978
+   },
+   {
+    "text": " 1990s",
+    "confidence": 0.933
+   },
+   {
+    "text": " were",
+    "confidence": 0.979
+   },
+   {
+    "text": " a",
+    "confidence": 0.993
+   },
+   {
+    "text": " strange",
+    "confidence": 0.996
+   },
+   {
+    "text": " decade.",
+    "confidence": 0.963
+   }
+  ],
+  "independent": "The 1990s were a strange decade."
+ },
+ {
+  "id": "decade.spell.news",
+  "line": "The nineteen nineties were a strange decade.",
+  "native": "The 1990s were a strange decade.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.993
+   },
+   {
+    "text": " 1990s",
+    "confidence": 0.997
+   },
+   {
+    "text": " were",
+    "confidence": 0.996
+   },
+   {
+    "text": " a strange",
+    "confidence": 0.997
+   },
+   {
+    "text": " decade.",
+    "confidence": 0.959
+   }
+  ],
+  "independent": "The 1990s were a strange decade."
+ },
+ {
+  "id": "decade.spell.s1",
+  "line": "The nineteen nineties were a strange decade.",
+  "native": "The 1990s were a strange decade.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.987
+   },
+   {
+    "text": " 1990s",
+    "confidence": 0.994
+   },
+   {
+    "text": " were",
+    "confidence": 0.995
+   },
+   {
+    "text": " a strange",
+    "confidence": 0.997
+   },
+   {
+    "text": " decade.",
+    "confidence": 0.945
+   }
+  ],
+  "independent": "The 1990s were a strange decade."
+ },
+ {
+  "id": "decade.spell.s2",
+  "line": "The nineteen nineties were a strange decade.",
+  "native": "The 1990s were a strange decade.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.995
+   },
+   {
+    "text": " 1990s",
+    "confidence": 0.996
+   },
+   {
+    "text": " were",
+    "confidence": 0.998
+   },
+   {
+    "text": " a strange",
+    "confidence": 0.999
+   },
+   {
+    "text": " decade.",
+    "confidence": 0.498
+   }
+  ],
+  "independent": "The 1990s were a strange decade."
+ },
+ {
+  "id": "decimal.neg.s1",
+  "line": "Revenue reached 2.5 million dollars.",
+  "native": "Revenue reached $3.5 million.",
+  "nativeSpans": [
+   {
+    "text": "Revenue",
+    "confidence": 0.995
+   },
+   {
+    "text": " reached",
+    "confidence": 0.998
+   },
+   {
+    "text": " $3.5",
+    "confidence": 0.741
+   },
+   {
+    "text": " million.",
+    "confidence": 0.589
+   }
+  ],
+  "independent": "Revenue reached $3.5 million."
+ },
+ {
+  "id": "decimal.negspell.s1",
+  "line": "Revenue reached two point five million dollars.",
+  "native": "Revenue reached $3.5 million.",
+  "nativeSpans": [
+   {
+    "text": "Revenue",
+    "confidence": 0.995
+   },
+   {
+    "text": " reached",
+    "confidence": 0.998
+   },
+   {
+    "text": " $3.5",
+    "confidence": 0.741
+   },
+   {
+    "text": " million.",
+    "confidence": 0.589
+   }
+  ],
+  "independent": "Revenue reached $3.5 million."
+ },
+ {
+  "id": "decimal.pos.news",
+  "line": "Revenue reached 2.5 million dollars.",
+  "native": "Revenue reached $25 million.",
+  "nativeSpans": [
+   {
+    "text": "Revenue",
+    "confidence": 0.997
+   },
+   {
+    "text": " reached",
+    "confidence": 0.968
+   },
+   {
+    "text": " $25",
+    "confidence": 0.767
+   },
+   {
+    "text": " million.",
+    "confidence": 0.467
+   }
+  ],
+  "independent": "Revenue reached $2.5 million."
+ },
+ {
+  "id": "decimal.pos.s1",
+  "line": "Revenue reached 2.5 million dollars.",
+  "native": "Revenue reached $2.5 million.",
+  "nativeSpans": [
+   {
+    "text": "Revenue",
+    "confidence": 0.987
+   },
+   {
+    "text": " reached",
+    "confidence": 0.941
+   },
+   {
+    "text": " $2.5",
+    "confidence": 0.708
+   },
+   {
+    "text": " million.",
+    "confidence": 0.59
+   }
+  ],
+  "independent": "Revenue reached $2.5 million."
+ },
+ {
+  "id": "decimal.pos.s2",
+  "line": "Revenue reached 2.5 million dollars.",
+  "native": "Revenue reached $25 million.",
+  "nativeSpans": [
+   {
+    "text": "Revenue",
+    "confidence": 0.991
+   },
+   {
+    "text": " reached",
+    "confidence": 0.996
+   },
+   {
+    "text": " $25",
+    "confidence": 0.765
+   },
+   {
+    "text": " million.",
+    "confidence": 0.53
+   }
+  ],
+  "independent": "Revenue reached $2.5 million."
+ },
+ {
+  "id": "decimal.spell.news",
+  "line": "Revenue reached two point five million dollars.",
+  "native": "Revenue reached $25 million.",
+  "nativeSpans": [
+   {
+    "text": "Revenue",
+    "confidence": 0.996
+   },
+   {
+    "text": " reached",
+    "confidence": 0.971
+   },
+   {
+    "text": " $25",
+    "confidence": 0.749
+   },
+   {
+    "text": " million.",
+    "confidence": 0.44
+   }
+  ],
+  "independent": "Revenue reached $2.5 million."
+ },
+ {
+  "id": "decimal.spell.s1",
+  "line": "Revenue reached two point five million dollars.",
+  "native": "Revenue reached $25 million.",
+  "nativeSpans": [
+   {
+    "text": "Revenue",
+    "confidence": 0.994
+   },
+   {
+    "text": " reached",
+    "confidence": 0.993
+   },
+   {
+    "text": " $25",
+    "confidence": 0.793
+   },
+   {
+    "text": " million.",
+    "confidence": 0.429
+   }
+  ],
+  "independent": "Revenue reached $2.5 million."
+ },
+ {
+  "id": "decimal.spell.s2",
+  "line": "Revenue reached two point five million dollars.",
+  "native": "Revenue reached $25 million.",
+  "nativeSpans": [
+   {
+    "text": "Revenue",
+    "confidence": 0.983
+   },
+   {
+    "text": " reached",
+    "confidence": 0.992
+   },
+   {
+    "text": " $25",
+    "confidence": 0.801
+   },
+   {
+    "text": " million.",
+    "confidence": 0.507
+   }
+  ],
+  "independent": "Revenue reached $2.5 million."
+ },
+ {
+  "id": "drama3.neg.s1",
+  "line": "This is Drama Studio, running Fish Audio's Drama 3 model.",
+  "native": "This is Drama Studio, running Fish Audio's Drama 2 model.",
+  "nativeSpans": [
+   {
+    "text": "This",
+    "confidence": 0.998
+   },
+   {
+    "text": " is",
+    "confidence": 0.996
+   },
+   {
+    "text": " Drama",
+    "confidence": 0.925
+   },
+   {
+    "text": " Studio,",
+    "confidence": 0.746
+   },
+   {
+    "text": " running",
+    "confidence": 0.891
+   },
+   {
+    "text": " Fish",
+    "confidence": 0.602
+   },
+   {
+    "text": " Audio's",
+    "confidence": 0.531
+   },
+   {
+    "text": " Drama",
+    "confidence": 0.839
+   },
+   {
+    "text": " 2",
+    "confidence": 0.832
+   },
+   {
+    "text": " model.",
+    "confidence": 0.828
+   }
+  ],
+  "independent": "This is Drama Studio, running Fish Audio's Drama2 model."
+ },
+ {
+  "id": "drama3.negspell.s1",
+  "line": "This is Drama Studio, running Fish Audio's Drama three model.",
+  "native": "This is Drama Studio, running Fish Audio's Drama 2 model.",
+  "nativeSpans": [
+   {
+    "text": "This",
+    "confidence": 0.998
+   },
+   {
+    "text": " is",
+    "confidence": 0.996
+   },
+   {
+    "text": " Drama",
+    "confidence": 0.925
+   },
+   {
+    "text": " Studio,",
+    "confidence": 0.746
+   },
+   {
+    "text": " running",
+    "confidence": 0.891
+   },
+   {
+    "text": " Fish",
+    "confidence": 0.602
+   },
+   {
+    "text": " Audio's",
+    "confidence": 0.531
+   },
+   {
+    "text": " Drama",
+    "confidence": 0.839
+   },
+   {
+    "text": " 2",
+    "confidence": 0.832
+   },
+   {
+    "text": " model.",
+    "confidence": 0.828
+   }
+  ],
+  "independent": "This is Drama Studio, running Fish Audio's Drama2 model."
+ },
+ {
+  "id": "drama3.pos.news",
+  "line": "This is Drama Studio, running Fish Audio's Drama 3 model.",
+  "native": "This is Drama Studio, running Fish Audio's Drama 3 model.",
+  "nativeSpans": [
+   {
+    "text": "This",
+    "confidence": 0.999
+   },
+   {
+    "text": " is",
+    "confidence": 0.997
+   },
+   {
+    "text": " Drama",
+    "confidence": 0.959
+   },
+   {
+    "text": " Studio,",
+    "confidence": 0.853
+   },
+   {
+    "text": " running",
+    "confidence": 0.896
+   },
+   {
+    "text": " Fish",
+    "confidence": 0.668
+   },
+   {
+    "text": " Audio's",
+    "confidence": 0.597
+   },
+   {
+    "text": " Drama",
+    "confidence": 0.851
+   },
+   {
+    "text": " 3",
+    "confidence": 0.963
+   },
+   {
+    "text": " model.",
+    "confidence": 0.907
+   }
+  ],
+  "independent": "This is Drama Studio, running Fish Audio's Drama 3 model."
+ },
+ {
+  "id": "drama3.pos.s1",
+  "line": "This is Drama Studio, running Fish Audio's Drama 3 model.",
+  "native": "This is Drama Studio, running Fish Audio's Drama 3 model.",
+  "nativeSpans": [
+   {
+    "text": "This is",
+    "confidence": 0.998
+   },
+   {
+    "text": " Drama",
+    "confidence": 0.932
+   },
+   {
+    "text": " Studio,",
+    "confidence": 0.82
+   },
+   {
+    "text": " running",
+    "confidence": 0.808
+   },
+   {
+    "text": " Fish",
+    "confidence": 0.581
+   },
+   {
+    "text": " Audio's",
+    "confidence": 0.472
+   },
+   {
+    "text": " Drama",
+    "confidence": 0.836
+   },
+   {
+    "text": " 3",
+    "confidence": 0.97
+   },
+   {
+    "text": " model.",
+    "confidence": 0.863
+   }
+  ],
+  "independent": "This is Drama Studio, running Fish Audio's Drama 3 model."
+ },
+ {
+  "id": "drama3.pos.s2",
+  "line": "This is Drama Studio, running Fish Audio's Drama 3 model.",
+  "native": "This is Drama Studio, running Fish Audio's Drama 3 model.",
+  "nativeSpans": [
+   {
+    "text": "This is",
+    "confidence": 0.999
+   },
+   {
+    "text": " Drama",
+    "confidence": 0.952
+   },
+   {
+    "text": " Studio,",
+    "confidence": 0.788
+   },
+   {
+    "text": " running",
+    "confidence": 0.933
+   },
+   {
+    "text": " Fish",
+    "confidence": 0.639
+   },
+   {
+    "text": " Audio's",
+    "confidence": 0.545
+   },
+   {
+    "text": " Drama",
+    "confidence": 0.845
+   },
+   {
+    "text": " 3",
+    "confidence": 0.957
+   },
+   {
+    "text": " model.",
+    "confidence": 0.938
+   }
+  ],
+  "independent": "This is Drama Studio, running Fish Audio's Drama 3 model."
+ },
+ {
+  "id": "drama3.spell.news",
+  "line": "This is Drama Studio, running Fish Audio's Drama three model.",
+  "native": "This is Drama Studio, running Fish Audio's Drama 3 model.",
+  "nativeSpans": [
+   {
+    "text": "This",
+    "confidence": 0.998
+   },
+   {
+    "text": " is",
+    "confidence": 0.995
+   },
+   {
+    "text": " Drama",
+    "confidence": 0.952
+   },
+   {
+    "text": " Studio,",
+    "confidence": 0.845
+   },
+   {
+    "text": " running",
+    "confidence": 0.909
+   },
+   {
+    "text": " Fish",
+    "confidence": 0.665
+   },
+   {
+    "text": " Audio's",
+    "confidence": 0.616
+   },
+   {
+    "text": " Drama",
+    "confidence": 0.832
+   },
+   {
+    "text": " 3",
+    "confidence": 0.969
+   },
+   {
+    "text": " model.",
+    "confidence": 0.892
+   }
+  ],
+  "independent": "This is Drama Studio, running Fish Audio's Drama 3 model."
+ },
+ {
+  "id": "drama3.spell.s1",
+  "line": "This is Drama Studio, running Fish Audio's Drama three model.",
+  "native": "This is Drama Studio, running Fish Audio's Drama 3 model.",
+  "nativeSpans": [
+   {
+    "text": "This is",
+    "confidence": 0.999
+   },
+   {
+    "text": " Drama",
+    "confidence": 0.932
+   },
+   {
+    "text": " Studio,",
+    "confidence": 0.84
+   },
+   {
+    "text": " running",
+    "confidence": 0.944
+   },
+   {
+    "text": " Fish",
+    "confidence": 0.686
+   },
+   {
+    "text": " Audio's",
+    "confidence": 0.602
+   },
+   {
+    "text": " Drama",
+    "confidence": 0.842
+   },
+   {
+    "text": " 3",
+    "confidence": 0.958
+   },
+   {
+    "text": " model.",
+    "confidence": 0.892
+   }
+  ],
+  "independent": "This is Drama Studio, running Fish Audio's Drama 3 model."
+ },
+ {
+  "id": "drama3.spell.s2",
+  "line": "This is Drama Studio, running Fish Audio's Drama three model.",
+  "native": "This is Drama Studio, running Fish Audio's Drama 3 model.",
+  "nativeSpans": [
+   {
+    "text": "This",
+    "confidence": 0.997
+   },
+   {
+    "text": " is",
+    "confidence": 0.993
+   },
+   {
+    "text": " Drama",
+    "confidence": 0.924
+   },
+   {
+    "text": " Studio,",
+    "confidence": 0.8
+   },
+   {
+    "text": " running",
+    "confidence": 0.876
+   },
+   {
+    "text": " Fish",
+    "confidence": 0.614
+   },
+   {
+    "text": " Audio's",
+    "confidence": 0.533
+   },
+   {
+    "text": " Drama",
+    "confidence": 0.825
+   },
+   {
+    "text": " 3",
+    "confidence": 0.962
+   },
+   {
+    "text": " model.",
+    "confidence": 0.923
+   }
+  ],
+  "independent": "This is Drama Studio, running Fish Audio's Drama3 model."
+ },
+ {
+  "id": "flight.neg.s1",
+  "line": "Flight 747 is now boarding at gate 12.",
+  "native": "Flight 767 is now boarding at gate 12.",
+  "nativeSpans": [
+   {
+    "text": "Flight",
+    "confidence": 0.995
+   },
+   {
+    "text": " 767",
+    "confidence": 0.991
+   },
+   {
+    "text": " is",
+    "confidence": 0.997
+   },
+   {
+    "text": " now boarding",
+    "confidence": 0.998
+   },
+   {
+    "text": " at",
+    "confidence": 0.997
+   },
+   {
+    "text": " gate",
+    "confidence": 0.498
+   },
+   {
+    "text": " 12.",
+    "confidence": 0.712
+   }
+  ],
+  "independent": "Flight 767 is now boarding at gate 12."
+ },
+ {
+  "id": "flight.negspell.s1",
+  "line": "Flight seven forty-seven is now boarding at gate twelve.",
+  "native": "Flight 767 is now boarding at gate 12.",
+  "nativeSpans": [
+   {
+    "text": "Flight",
+    "confidence": 0.995
+   },
+   {
+    "text": " 767",
+    "confidence": 0.991
+   },
+   {
+    "text": " is",
+    "confidence": 0.997
+   },
+   {
+    "text": " now boarding",
+    "confidence": 0.998
+   },
+   {
+    "text": " at",
+    "confidence": 0.997
+   },
+   {
+    "text": " gate",
+    "confidence": 0.498
+   },
+   {
+    "text": " 12.",
+    "confidence": 0.712
+   }
+  ],
+  "independent": "Flight 767 is now boarding at gate 12."
+ },
+ {
+  "id": "flight.pos.news",
+  "line": "Flight 747 is now boarding at gate 12.",
+  "native": "Flight 747 is now boarding at Gate 12.",
+  "nativeSpans": [
+   {
+    "text": "Flight",
+    "confidence": 0.958
+   },
+   {
+    "text": " 747 is",
+    "confidence": 0.979
+   },
+   {
+    "text": " now",
+    "confidence": 0.987
+   },
+   {
+    "text": " boarding",
+    "confidence": 0.992
+   },
+   {
+    "text": " at",
+    "confidence": 0.98
+   },
+   {
+    "text": " Gate",
+    "confidence": 0.486
+   },
+   {
+    "text": " 12.",
+    "confidence": 0.827
+   }
+  ],
+  "independent": "Flight 747 is now boarding at Gate 12."
+ },
+ {
+  "id": "flight.pos.s1",
+  "line": "Flight 747 is now boarding at gate 12.",
+  "native": "Flight 747 is now boarding at gate 12.",
+  "nativeSpans": [
+   {
+    "text": "Flight",
+    "confidence": 0.994
+   },
+   {
+    "text": " 747",
+    "confidence": 0.995
+   },
+   {
+    "text": " is now",
+    "confidence": 0.999
+   },
+   {
+    "text": " boarding at",
+    "confidence": 0.998
+   },
+   {
+    "text": " gate",
+    "confidence": 0.567
+   },
+   {
+    "text": " 12.",
+    "confidence": 0.837
+   }
+  ],
+  "independent": "Flight 747 is now boarding at Gate 12."
+ },
+ {
+  "id": "flight.pos.s2",
+  "line": "Flight 747 is now boarding at gate 12.",
+  "native": "Flight 747 is now boarding at gate 12.",
+  "nativeSpans": [
+   {
+    "text": "Flight",
+    "confidence": 0.996
+   },
+   {
+    "text": " 747",
+    "confidence": 0.995
+   },
+   {
+    "text": " is now boarding",
+    "confidence": 0.999
+   },
+   {
+    "text": " at",
+    "confidence": 0.998
+   },
+   {
+    "text": " gate",
+    "confidence": 0.504
+   },
+   {
+    "text": " 12.",
+    "confidence": 0.83
+   }
+  ],
+  "independent": "Flight 747 is now boarding at Gate 12."
+ },
+ {
+  "id": "flight.spell.news",
+  "line": "Flight seven forty-seven is now boarding at gate twelve.",
+  "native": "Flight 747 is now boarding at gate 12.",
+  "nativeSpans": [
+   {
+    "text": "Flight",
+    "confidence": 0.973
+   },
+   {
+    "text": " 747 is",
+    "confidence": 0.991
+   },
+   {
+    "text": " now",
+    "confidence": 0.995
+   },
+   {
+    "text": " boarding",
+    "confidence": 0.994
+   },
+   {
+    "text": " at",
+    "confidence": 0.988
+   },
+   {
+    "text": " gate",
+    "confidence": 0.455
+   },
+   {
+    "text": " 12.",
+    "confidence": 0.843
+   }
+  ],
+  "independent": "Flight 747 is now boarding at Gate 12."
+ },
+ {
+  "id": "flight.spell.s1",
+  "line": "Flight seven forty-seven is now boarding at gate twelve.",
+  "native": "Flight 747 is now boarding at Gate 12.",
+  "nativeSpans": [
+   {
+    "text": "Flight 747",
+    "confidence": 0.996
+   },
+   {
+    "text": " is now boarding",
+    "confidence": 0.999
+   },
+   {
+    "text": " at",
+    "confidence": 0.998
+   },
+   {
+    "text": " Gate",
+    "confidence": 0.543
+   },
+   {
+    "text": " 12.",
+    "confidence": 0.893
+   }
+  ],
+  "independent": "Flight 747 is now boarding at Gate 12."
+ },
+ {
+  "id": "flight.spell.s2",
+  "line": "Flight seven forty-seven is now boarding at gate twelve.",
+  "native": "Flight 747 is now boarding at gate 12.",
+  "nativeSpans": [
+   {
+    "text": "Flight",
+    "confidence": 0.998
+   },
+   {
+    "text": " 747",
+    "confidence": 0.995
+   },
+   {
+    "text": " is",
+    "confidence": 0.999
+   },
+   {
+    "text": " now",
+    "confidence": 1
+   },
+   {
+    "text": " boarding at",
+    "confidence": 0.999
+   },
+   {
+    "text": " gate",
+    "confidence": 0.544
+   },
+   {
+    "text": " 12.",
+    "confidence": 0.851
+   }
+  ],
+  "independent": "Flight 747 is now boarding at Gate 12."
+ },
+ {
+  "id": "grams.neg.s1",
+  "line": "The recipe needs 250 grams of flour.",
+  "native": "The recipe needs 205 grams of flour.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.824
+   },
+   {
+    "text": " recipe",
+    "confidence": 0.998
+   },
+   {
+    "text": " needs",
+    "confidence": 0.999
+   },
+   {
+    "text": " 205",
+    "confidence": 0.997
+   },
+   {
+    "text": " grams",
+    "confidence": 0.988
+   },
+   {
+    "text": " of",
+    "confidence": 0.996
+   },
+   {
+    "text": " flour.",
+    "confidence": 0.985
+   }
+  ],
+  "independent": "The recipe needs 205 grams of flour."
+ },
+ {
+  "id": "grams.negspell.s1",
+  "line": "The recipe needs two hundred and fifty grams of flour.",
+  "native": "The recipe needs 205 grams of flour.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.824
+   },
+   {
+    "text": " recipe",
+    "confidence": 0.998
+   },
+   {
+    "text": " needs",
+    "confidence": 0.999
+   },
+   {
+    "text": " 205",
+    "confidence": 0.997
+   },
+   {
+    "text": " grams",
+    "confidence": 0.988
+   },
+   {
+    "text": " of",
+    "confidence": 0.996
+   },
+   {
+    "text": " flour.",
+    "confidence": 0.985
+   }
+  ],
+  "independent": "The recipe needs 205 grams of flour."
+ },
+ {
+  "id": "grams.pos.news",
+  "line": "The recipe needs 250 grams of flour.",
+  "native": "The recipe needs 250 grams of flour.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.995
+   },
+   {
+    "text": " recipe needs",
+    "confidence": 0.999
+   },
+   {
+    "text": " 250",
+    "confidence": 0.995
+   },
+   {
+    "text": " grams",
+    "confidence": 0.761
+   },
+   {
+    "text": " of",
+    "confidence": 0.999
+   },
+   {
+    "text": " flour.",
+    "confidence": 0.498
+   }
+  ],
+  "independent": "The recipe needs 250 grams of flour."
+ },
+ {
+  "id": "grams.pos.s1",
+  "line": "The recipe needs 250 grams of flour.",
+  "native": "The recipe needs 250 grams of flour.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.993
+   },
+   {
+    "text": " recipe needs",
+    "confidence": 0.999
+   },
+   {
+    "text": " 250",
+    "confidence": 0.989
+   },
+   {
+    "text": " grams",
+    "confidence": 0.979
+   },
+   {
+    "text": " of",
+    "confidence": 0.998
+   },
+   {
+    "text": " flour.",
+    "confidence": 0.496
+   }
+  ],
+  "independent": "The recipe needs 250 grams of flour."
+ },
+ {
+  "id": "grams.pos.s2",
+  "line": "The recipe needs 250 grams of flour.",
+  "native": "The recipe needs 250 grams of flour.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.963
+   },
+   {
+    "text": " recipe needs",
+    "confidence": 0.999
+   },
+   {
+    "text": " 250",
+    "confidence": 0.993
+   },
+   {
+    "text": " grams",
+    "confidence": 0.979
+   },
+   {
+    "text": " of",
+    "confidence": 0.998
+   },
+   {
+    "text": " flour.",
+    "confidence": 0.945
+   }
+  ],
+  "independent": "The recipe needs 250 grams of flour."
+ },
+ {
+  "id": "grams.spell.news",
+  "line": "The recipe needs two hundred and fifty grams of flour.",
+  "native": "The recipe needs 250 grams of flour.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.993
+   },
+   {
+    "text": " recipe needs",
+    "confidence": 0.999
+   },
+   {
+    "text": " 250",
+    "confidence": 0.963
+   },
+   {
+    "text": " grams",
+    "confidence": 0.955
+   },
+   {
+    "text": " of",
+    "confidence": 0.999
+   },
+   {
+    "text": " flour.",
+    "confidence": 0.985
+   }
+  ],
+  "independent": "The recipe needs 250 grams of flour."
+ },
+ {
+  "id": "grams.spell.s1",
+  "line": "The recipe needs two hundred and fifty grams of flour.",
+  "native": "The recipe needs 250 grams of flour.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.936
+   },
+   {
+    "text": " recipe",
+    "confidence": 0.998
+   },
+   {
+    "text": " needs",
+    "confidence": 0.999
+   },
+   {
+    "text": " 250",
+    "confidence": 0.948
+   },
+   {
+    "text": " grams",
+    "confidence": 0.842
+   },
+   {
+    "text": " of",
+    "confidence": 0.998
+   },
+   {
+    "text": " flour.",
+    "confidence": 0.977
+   }
+  ],
+  "independent": "The recipe needs 250 grams of flour."
+ },
+ {
+  "id": "grams.spell.s2",
+  "line": "The recipe needs two hundred and fifty grams of flour.",
+  "native": "The recipe needs 250 grams of flour.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.993
+   },
+   {
+    "text": " recipe",
+    "confidence": 0.999
+   },
+   {
+    "text": " needs",
+    "confidence": 0.998
+   },
+   {
+    "text": " 250",
+    "confidence": 0.952
+   },
+   {
+    "text": " grams",
+    "confidence": 0.992
+   },
+   {
+    "text": " of",
+    "confidence": 0.999
+   },
+   {
+    "text": " flour.",
+    "confidence": 0.989
+   }
+  ],
+  "independent": "The recipe needs 250 grams of flour."
+ },
+ {
+  "id": "harbor.neg.s1",
+  "line": "A storm rolls in over the harbor at dusk.",
+  "native": "A storm rolls in over the harvest at dusk.",
+  "nativeSpans": [
+   {
+    "text": "A",
+    "confidence": 0.927
+   },
+   {
+    "text": " storm",
+    "confidence": 0.994
+   },
+   {
+    "text": " rolls",
+    "confidence": 0.997
+   },
+   {
+    "text": " in",
+    "confidence": 0.996
+   },
+   {
+    "text": " over the",
+    "confidence": 0.997
+   },
+   {
+    "text": " harvest",
+    "confidence": 0.998
+   },
+   {
+    "text": " at",
+    "confidence": 0.989
+   },
+   {
+    "text": " dusk.",
+    "confidence": 0.962
+   }
+  ],
+  "independent": "A storm rolls in over the harvest at dusk."
+ },
+ {
+  "id": "harbor.pos.news",
+  "line": "A storm rolls in over the harbor at dusk.",
+  "native": "A storm rolls in over the harbour at dusk.",
+  "nativeSpans": [
+   {
+    "text": "A ",
+    "confidence": 0.984
+   },
+   {
+    "text": "storm ",
+    "confidence": 0.991
+   },
+   {
+    "text": "rolls ",
+    "confidence": 0.998
+   },
+   {
+    "text": "in ",
+    "confidence": 0.995
+   },
+   {
+    "text": "over ",
+    "confidence": 0.994
+   },
+   {
+    "text": "the ",
+    "confidence": 0.997
+   },
+   {
+    "text": "harbour ",
+    "confidence": 0.974
+   },
+   {
+    "text": "at ",
+    "confidence": 0.992
+   },
+   {
+    "text": "dusk.",
+    "confidence": 0.882
+   }
+  ],
+  "independent": "A storm rolls in over the harbor at dusk."
+ },
+ {
+  "id": "harbor.pos.s1",
+  "line": "A storm rolls in over the harbor at dusk.",
+  "native": "A storm rolls in over the harbour at dusk.",
+  "nativeSpans": [
+   {
+    "text": "A ",
+    "confidence": 0.941
+   },
+   {
+    "text": "storm ",
+    "confidence": 0.988
+   },
+   {
+    "text": "rolls ",
+    "confidence": 0.991
+   },
+   {
+    "text": "in ",
+    "confidence": 0.99
+   },
+   {
+    "text": "over ",
+    "confidence": 0.995
+   },
+   {
+    "text": "the ",
+    "confidence": 0.993
+   },
+   {
+    "text": "harbour ",
+    "confidence": 0.976
+   },
+   {
+    "text": "at ",
+    "confidence": 0.98
+   },
+   {
+    "text": "dusk.",
+    "confidence": 0.872
+   }
+  ],
+  "independent": "A storm rolls in over the harbor at dusk."
+ },
+ {
+  "id": "harbor.pos.s2",
+  "line": "A storm rolls in over the harbor at dusk.",
+  "native": "A storm rolls in over the harbour at dusk.",
+  "nativeSpans": [
+   {
+    "text": "A ",
+    "confidence": 0.94
+   },
+   {
+    "text": "storm ",
+    "confidence": 0.988
+   },
+   {
+    "text": "rolls in ",
+    "confidence": 0.995
+   },
+   {
+    "text": "over ",
+    "confidence": 0.996
+   },
+   {
+    "text": "the ",
+    "confidence": 0.998
+   },
+   {
+    "text": "harbour ",
+    "confidence": 0.979
+   },
+   {
+    "text": "at ",
+    "confidence": 0.992
+   },
+   {
+    "text": "dusk.",
+    "confidence": 0.954
+   }
+  ],
+  "independent": "A storm rolls in over the harbor at dusk."
+ },
+ {
+  "id": "harbour.neg.s1",
+  "line": "A storm rolls in over the harbour at dusk.",
+  "native": "A storm rolls in over the harvest at dusk.",
+  "nativeSpans": [
+   {
+    "text": "A",
+    "confidence": 0.927
+   },
+   {
+    "text": " storm",
+    "confidence": 0.994
+   },
+   {
+    "text": " rolls",
+    "confidence": 0.997
+   },
+   {
+    "text": " in",
+    "confidence": 0.996
+   },
+   {
+    "text": " over the",
+    "confidence": 0.997
+   },
+   {
+    "text": " harvest",
+    "confidence": 0.998
+   },
+   {
+    "text": " at",
+    "confidence": 0.989
+   },
+   {
+    "text": " dusk.",
+    "confidence": 0.962
+   }
+  ],
+  "independent": "A storm rolls in over the harvest at dusk."
+ },
+ {
+  "id": "harbour.pos.news",
+  "line": "A storm rolls in over the harbour at dusk.",
+  "native": "A storm rolls in over the harbour at dusk.",
+  "nativeSpans": [
+   {
+    "text": "A ",
+    "confidence": 0.986
+   },
+   {
+    "text": "storm ",
+    "confidence": 0.989
+   },
+   {
+    "text": "rolls ",
+    "confidence": 0.998
+   },
+   {
+    "text": "in ",
+    "confidence": 0.995
+   },
+   {
+    "text": "over ",
+    "confidence": 0.993
+   },
+   {
+    "text": "the ",
+    "confidence": 0.997
+   },
+   {
+    "text": "harbour ",
+    "confidence": 0.97
+   },
+   {
+    "text": "at ",
+    "confidence": 0.992
+   },
+   {
+    "text": "dusk.",
+    "confidence": 0.975
+   }
+  ],
+  "independent": "A storm rolls in over the harbor at dusk."
+ },
+ {
+  "id": "harbour.pos.s1",
+  "line": "A storm rolls in over the harbour at dusk.",
+  "native": "A storm rolls in over the harbour at dusk.",
+  "nativeSpans": [
+   {
+    "text": "A ",
+    "confidence": 0.885
+   },
+   {
+    "text": "storm ",
+    "confidence": 0.986
+   },
+   {
+    "text": "rolls ",
+    "confidence": 0.828
+   },
+   {
+    "text": "in ",
+    "confidence": 0.993
+   },
+   {
+    "text": "over ",
+    "confidence": 0.996
+   },
+   {
+    "text": "the ",
+    "confidence": 0.995
+   },
+   {
+    "text": "harbour ",
+    "confidence": 0.959
+   },
+   {
+    "text": "at ",
+    "confidence": 0.992
+   },
+   {
+    "text": "dusk.",
+    "confidence": 0.937
+   }
+  ],
+  "independent": "A storm rolls in over the harbor at dusk."
+ },
+ {
+  "id": "harbour.pos.s2",
+  "line": "A storm rolls in over the harbour at dusk.",
+  "native": "A storm rolls in over the harbour at dusk.",
+  "nativeSpans": [
+   {
+    "text": "A ",
+    "confidence": 0.968
+   },
+   {
+    "text": "storm ",
+    "confidence": 0.981
+   },
+   {
+    "text": "rolls in ",
+    "confidence": 0.995
+   },
+   {
+    "text": "over ",
+    "confidence": 0.986
+   },
+   {
+    "text": "the ",
+    "confidence": 0.995
+   },
+   {
+    "text": "harbour ",
+    "confidence": 0.918
+   },
+   {
+    "text": "at ",
+    "confidence": 0.973
+   },
+   {
+    "text": "dusk.",
+    "confidence": 0.594
+   }
+  ],
+  "independent": "A storm rolls in over the harbor at dusk."
+ },
+ {
+  "id": "harbourline.neg.s1",
+  "line": "Here is the Harbour Line update for the third quarter.",
+  "native": "Here is the harbour line update for the 4th quarter.",
+  "nativeSpans": [
+   {
+    "text": "Here ",
+    "confidence": 0.997
+   },
+   {
+    "text": "is ",
+    "confidence": 0.998
+   },
+   {
+    "text": "the ",
+    "confidence": 0.996
+   },
+   {
+    "text": "harbour ",
+    "confidence": 0.87
+   },
+   {
+    "text": "line ",
+    "confidence": 0.786
+   },
+   {
+    "text": "update ",
+    "confidence": 0.996
+   },
+   {
+    "text": "for ",
+    "confidence": 0.997
+   },
+   {
+    "text": "the ",
+    "confidence": 0.999
+   },
+   {
+    "text": "4th ",
+    "confidence": 0.986
+   },
+   {
+    "text": "quarter.",
+    "confidence": 0.959
+   }
+  ],
+  "independent": "Here is the Harbor Line update for the fourth quarter."
+ },
+ {
+  "id": "harbourline.pos.news",
+  "line": "Here is the Harbour Line update for the third quarter.",
+  "native": "Here is the harbour line update for the 3rd quarter.",
+  "nativeSpans": [
+   {
+    "text": "Here ",
+    "confidence": 0.998
+   },
+   {
+    "text": "is ",
+    "confidence": 0.997
+   },
+   {
+    "text": "the ",
+    "confidence": 0.994
+   },
+   {
+    "text": "harbour ",
+    "confidence": 0.883
+   },
+   {
+    "text": "line ",
+    "confidence": 0.888
+   },
+   {
+    "text": "update ",
+    "confidence": 0.997
+   },
+   {
+    "text": "for ",
+    "confidence": 0.993
+   },
+   {
+    "text": "the ",
+    "confidence": 0.998
+   },
+   {
+    "text": "3rd ",
+    "confidence": 0.958
+   },
+   {
+    "text": "quarter.",
+    "confidence": 0.967
+   }
+  ],
+  "independent": "Here is the Harbor Line update for the third quarter."
+ },
+ {
+  "id": "harbourline.pos.s1",
+  "line": "Here is the Harbour Line update for the third quarter.",
+  "native": "Here is the harbour line update for the 3rd quarter.",
+  "nativeSpans": [
+   {
+    "text": "Here is ",
+    "confidence": 0.999
+   },
+   {
+    "text": "the ",
+    "confidence": 0.997
+   },
+   {
+    "text": "harbour ",
+    "confidence": 0.894
+   },
+   {
+    "text": "line ",
+    "confidence": 0.896
+   },
+   {
+    "text": "update ",
+    "confidence": 0.998
+   },
+   {
+    "text": "for ",
+    "confidence": 0.996
+   },
+   {
+    "text": "the ",
+    "confidence": 0.999
+   },
+   {
+    "text": "3rd ",
+    "confidence": 0.882
+   },
+   {
+    "text": "quarter.",
+    "confidence": 0.983
+   }
+  ],
+  "independent": "Here is the Harbor Line update for the third quarter."
+ },
+ {
+  "id": "harbourline.pos.s2",
+  "line": "Here is the Harbour Line update for the third quarter.",
+  "native": "Here is the harbour line update for the 3rd quarter.",
+  "nativeSpans": [
+   {
+    "text": "Here ",
+    "confidence": 0.997
+   },
+   {
+    "text": "is ",
+    "confidence": 0.996
+   },
+   {
+    "text": "the ",
+    "confidence": 0.992
+   },
+   {
+    "text": "harbour ",
+    "confidence": 0.879
+   },
+   {
+    "text": "line ",
+    "confidence": 0.891
+   },
+   {
+    "text": "update ",
+    "confidence": 0.998
+   },
+   {
+    "text": "for ",
+    "confidence": 0.995
+   },
+   {
+    "text": "the ",
+    "confidence": 0.998
+   },
+   {
+    "text": "3rd ",
+    "confidence": 0.869
+   },
+   {
+    "text": "quarter.",
+    "confidence": 0.893
+   }
+  ],
+  "independent": "Here is the harbor line update for the third quarter."
+ },
+ {
+  "id": "hearye.neg.s1",
+  "line": "Hear ye! By order of the queen, the harbor is closed!",
+  "native": "Hear ye, by order of the king, the harbour is closed.",
+  "nativeSpans": [
+   {
+    "text": "Hear ",
+    "confidence": 0.991
+   },
+   {
+    "text": "ye, ",
+    "confidence": 0.732
+   },
+   {
+    "text": "by ",
+    "confidence": 0.979
+   },
+   {
+    "text": "order ",
+    "confidence": 0.995
+   },
+   {
+    "text": "of the ",
+    "confidence": 0.999
+   },
+   {
+    "text": "king, ",
+    "confidence": 0.712
+   },
+   {
+    "text": "the ",
+    "confidence": 0.677
+   },
+   {
+    "text": "harbour ",
+    "confidence": 0.985
+   },
+   {
+    "text": "is ",
+    "confidence": 0.998
+   },
+   {
+    "text": "closed.",
+    "confidence": 0.92
+   }
+  ],
+  "independent": "Hear ye, by order of the king. The harbor is closed."
+ },
+ {
+  "id": "hearye.pos.news",
+  "line": "Hear ye! By order of the queen, the harbor is closed!",
+  "native": "Hear ye, by order of the queen, the harbour is closed.",
+  "nativeSpans": [
+   {
+    "text": "Hear ",
+    "confidence": 0.993
+   },
+   {
+    "text": "ye, ",
+    "confidence": 0.783
+   },
+   {
+    "text": "by ",
+    "confidence": 0.966
+   },
+   {
+    "text": "order ",
+    "confidence": 0.996
+   },
+   {
+    "text": "of ",
+    "confidence": 0.999
+   },
+   {
+    "text": "the ",
+    "confidence": 0.998
+   },
+   {
+    "text": "queen, ",
+    "confidence": 0.774
+   },
+   {
+    "text": "the ",
+    "confidence": 0.837
+   },
+   {
+    "text": "harbour ",
+    "confidence": 0.968
+   },
+   {
+    "text": "is ",
+    "confidence": 0.995
+   },
+   {
+    "text": "closed.",
+    "confidence": 0.885
+   }
+  ],
+  "independent": "Hear ye, by order of the queen, the harbor is closed."
+ },
+ {
+  "id": "hearye.pos.s1",
+  "line": "Hear ye! By order of the queen, the harbor is closed!",
+  "native": "Hear ye by order of the queen. The harbour is closed.",
+  "nativeSpans": [
+   {
+    "text": "Hear",
+    "confidence": 0.992
+   },
+   {
+    "text": " ye",
+    "confidence": 0.906
+   },
+   {
+    "text": " by",
+    "confidence": 0.989
+   },
+   {
+    "text": " order",
+    "confidence": 0.981
+   },
+   {
+    "text": " of the",
+    "confidence": 0.999
+   },
+   {
+    "text": " queen.",
+    "confidence": 0.683
+   },
+   {
+    "text": " The ",
+    "confidence": 0.41
+   },
+   {
+    "text": "harbour ",
+    "confidence": 0.982
+   },
+   {
+    "text": "is ",
+    "confidence": 0.999
+   },
+   {
+    "text": "closed.",
+    "confidence": 0.931
+   }
+  ],
+  "independent": "Hear ye, by order of the queen. The harbor is closed."
+ },
+ {
+  "id": "hearye.pos.s2",
+  "line": "Hear ye! By order of the queen, the harbor is closed!",
+  "native": "Hear ye, by order of the queen, the harbour is closed.",
+  "nativeSpans": [
+   {
+    "text": "Hear ",
+    "confidence": 0.986
+   },
+   {
+    "text": "ye, ",
+    "confidence": 0.671
+   },
+   {
+    "text": "by ",
+    "confidence": 0.945
+   },
+   {
+    "text": "order ",
+    "confidence": 0.993
+   },
+   {
+    "text": "of ",
+    "confidence": 0.999
+   },
+   {
+    "text": "the ",
+    "confidence": 0.998
+   },
+   {
+    "text": "queen, ",
+    "confidence": 0.743
+   },
+   {
+    "text": "the ",
+    "confidence": 0.756
+   },
+   {
+    "text": "harbour ",
+    "confidence": 0.984
+   },
+   {
+    "text": "is ",
+    "confidence": 0.998
+   },
+   {
+    "text": "closed.",
+    "confidence": 0.756
+   }
+  ],
+  "independent": "Hear ye, by order of the queen. The harbor is closed."
+ },
+ {
+  "id": "hundred.neg.s1",
+  "line": "About 100 people came to the show.",
+  "native": "About 200 people came to the show.",
+  "nativeSpans": [
+   {
+    "text": "About",
+    "confidence": 0.867
+   },
+   {
+    "text": " 200",
+    "confidence": 0.992
+   },
+   {
+    "text": " people",
+    "confidence": 0.981
+   },
+   {
+    "text": " came",
+    "confidence": 0.971
+   },
+   {
+    "text": " to",
+    "confidence": 0.963
+   },
+   {
+    "text": " the",
+    "confidence": 0.965
+   },
+   {
+    "text": " show.",
+    "confidence": 0.859
+   }
+  ],
+  "independent": "About 200 people came to the show."
+ },
+ {
+  "id": "hundred.negspell.s1",
+  "line": "About a hundred people came to the show.",
+  "native": "About 200 people came to the show.",
+  "nativeSpans": [
+   {
+    "text": "About",
+    "confidence": 0.867
+   },
+   {
+    "text": " 200",
+    "confidence": 0.992
+   },
+   {
+    "text": " people",
+    "confidence": 0.981
+   },
+   {
+    "text": " came",
+    "confidence": 0.971
+   },
+   {
+    "text": " to",
+    "confidence": 0.963
+   },
+   {
+    "text": " the",
+    "confidence": 0.965
+   },
+   {
+    "text": " show.",
+    "confidence": 0.859
+   }
+  ],
+  "independent": "About 200 people came to the show."
+ },
+ {
+  "id": "hundred.pos.news",
+  "line": "About 100 people came to the show.",
+  "native": "About 100 people came to the show.",
+  "nativeSpans": [
+   {
+    "text": "About",
+    "confidence": 0.965
+   },
+   {
+    "text": " 100",
+    "confidence": 0.987
+   },
+   {
+    "text": " people",
+    "confidence": 0.998
+   },
+   {
+    "text": " came",
+    "confidence": 0.996
+   },
+   {
+    "text": " to",
+    "confidence": 0.997
+   },
+   {
+    "text": " the",
+    "confidence": 0.987
+   },
+   {
+    "text": " show.",
+    "confidence": 0.914
+   }
+  ],
+  "independent": "About 100 people came to the show."
+ },
+ {
+  "id": "hundred.pos.s1",
+  "line": "About 100 people came to the show.",
+  "native": "About 100 people came to the show.",
+  "nativeSpans": [
+   {
+    "text": "About",
+    "confidence": 0.731
+   },
+   {
+    "text": " 100",
+    "confidence": 0.852
+   },
+   {
+    "text": " people",
+    "confidence": 0.972
+   },
+   {
+    "text": " came",
+    "confidence": 0.967
+   },
+   {
+    "text": " to",
+    "confidence": 0.975
+   },
+   {
+    "text": " the",
+    "confidence": 0.969
+   },
+   {
+    "text": " show.",
+    "confidence": 0.847
+   }
+  ],
+  "independent": "About a hundred people came to the show."
+ },
+ {
+  "id": "hundred.pos.s2",
+  "line": "About 100 people came to the show.",
+  "native": "About 100 people came to the show.",
+  "nativeSpans": [
+   {
+    "text": "About",
+    "confidence": 0.939
+   },
+   {
+    "text": " 100",
+    "confidence": 0.947
+   },
+   {
+    "text": " people",
+    "confidence": 0.996
+   },
+   {
+    "text": " came",
+    "confidence": 0.994
+   },
+   {
+    "text": " to",
+    "confidence": 0.995
+   },
+   {
+    "text": " the",
+    "confidence": 0.991
+   },
+   {
+    "text": " show.",
+    "confidence": 0.932
+   }
+  ],
+  "independent": "About a hundred people came to the show."
+ },
+ {
+  "id": "hundred.spell.news",
+  "line": "About a hundred people came to the show.",
+  "native": "About 100 people came to the show.",
+  "nativeSpans": [
+   {
+    "text": "About",
+    "confidence": 0.84
+   },
+   {
+    "text": " 100",
+    "confidence": 0.909
+   },
+   {
+    "text": " people",
+    "confidence": 0.987
+   },
+   {
+    "text": " came to",
+    "confidence": 0.984
+   },
+   {
+    "text": " the",
+    "confidence": 0.981
+   },
+   {
+    "text": " show.",
+    "confidence": 0.926
+   }
+  ],
+  "independent": "About a hundred people came to the show."
+ },
+ {
+  "id": "hundred.spell.s1",
+  "line": "About a hundred people came to the show.",
+  "native": "About 100 people came to the show.",
+  "nativeSpans": [
+   {
+    "text": "About",
+    "confidence": 0.88
+   },
+   {
+    "text": " 100",
+    "confidence": 0.966
+   },
+   {
+    "text": " people",
+    "confidence": 0.987
+   },
+   {
+    "text": " came",
+    "confidence": 0.978
+   },
+   {
+    "text": " to",
+    "confidence": 0.974
+   },
+   {
+    "text": " the",
+    "confidence": 0.973
+   },
+   {
+    "text": " show.",
+    "confidence": 0.8
+   }
+  ],
+  "independent": "About a hundred people came to the show."
+ },
+ {
+  "id": "hundred.spell.s2",
+  "line": "About a hundred people came to the show.",
+  "native": "About 100 people came to the show.",
+  "nativeSpans": [
+   {
+    "text": "About",
+    "confidence": 0.909
+   },
+   {
+    "text": " 100",
+    "confidence": 0.939
+   },
+   {
+    "text": " people",
+    "confidence": 0.991
+   },
+   {
+    "text": " came",
+    "confidence": 0.984
+   },
+   {
+    "text": " to",
+    "confidence": 0.982
+   },
+   {
+    "text": " the",
+    "confidence": 0.983
+   },
+   {
+    "text": " show.",
+    "confidence": 0.852
+   }
+  ],
+  "independent": "About a hundred people came to the show."
+ },
+ {
+  "id": "money.neg.s1",
+  "line": "It costs $4.99 a month.",
+  "native": "It costs 999 a month.",
+  "nativeSpans": [
+   {
+    "text": "It",
+    "confidence": 0.94
+   },
+   {
+    "text": " costs",
+    "confidence": 0.932
+   },
+   {
+    "text": " 999",
+    "confidence": 0.601
+   },
+   {
+    "text": " a",
+    "confidence": 0.987
+   },
+   {
+    "text": " month.",
+    "confidence": 0.932
+   }
+  ],
+  "independent": "It costs $9.99 a month."
+ },
+ {
+  "id": "money.negspell.s1",
+  "line": "It costs four ninety-nine a month.",
+  "native": "It costs 999 a month.",
+  "nativeSpans": [
+   {
+    "text": "It",
+    "confidence": 0.94
+   },
+   {
+    "text": " costs",
+    "confidence": 0.932
+   },
+   {
+    "text": " 999",
+    "confidence": 0.601
+   },
+   {
+    "text": " a",
+    "confidence": 0.987
+   },
+   {
+    "text": " month.",
+    "confidence": 0.932
+   }
+  ],
+  "independent": "It costs $9.99 a month."
+ },
+ {
+  "id": "money.pos.news",
+  "line": "It costs $4.99 a month.",
+  "native": "It costs $4.99 a month.",
+  "nativeSpans": [
+   {
+    "text": "It",
+    "confidence": 0.989
+   },
+   {
+    "text": " costs",
+    "confidence": 0.99
+   },
+   {
+    "text": " $4.99",
+    "confidence": 0.961
+   },
+   {
+    "text": " a",
+    "confidence": 0.993
+   },
+   {
+    "text": " month.",
+    "confidence": 0.972
+   }
+  ],
+  "independent": "It costs $4.99 a month."
+ },
+ {
+  "id": "money.pos.s1",
+  "line": "It costs $4.99 a month.",
+  "native": "It costs $4.99 a month.",
+  "nativeSpans": [
+   {
+    "text": "It",
+    "confidence": 0.886
+   },
+   {
+    "text": " costs",
+    "confidence": 0.983
+   },
+   {
+    "text": " $4.99",
+    "confidence": 0.786
+   },
+   {
+    "text": " a",
+    "confidence": 0.993
+   },
+   {
+    "text": " month.",
+    "confidence": 0.958
+   }
+  ],
+  "independent": "It costs $4.99 a month."
+ },
+ {
+  "id": "money.pos.s2",
+  "line": "It costs $4.99 a month.",
+  "native": "It costs $4.99 a month.",
+  "nativeSpans": [
+   {
+    "text": "It",
+    "confidence": 0.946
+   },
+   {
+    "text": " costs",
+    "confidence": 0.975
+   },
+   {
+    "text": " $4.99",
+    "confidence": 0.738
+   },
+   {
+    "text": " a",
+    "confidence": 0.994
+   },
+   {
+    "text": " month.",
+    "confidence": 0.908
+   }
+  ],
+  "independent": "It costs $4.99 a month."
+ },
+ {
+  "id": "money.spell.news",
+  "line": "It costs four ninety-nine a month.",
+  "native": "It costs $4.99 a month.",
+  "nativeSpans": [
+   {
+    "text": "It",
+    "confidence": 0.978
+   },
+   {
+    "text": " costs",
+    "confidence": 0.985
+   },
+   {
+    "text": " $4.99",
+    "confidence": 0.72
+   },
+   {
+    "text": " a",
+    "confidence": 0.997
+   },
+   {
+    "text": " month.",
+    "confidence": 0.98
+   }
+  ],
+  "independent": "It costs $4.99 a month."
+ },
+ {
+  "id": "money.spell.s1",
+  "line": "It costs four ninety-nine a month.",
+  "native": "It costs $4.99 a month.",
+  "nativeSpans": [
+   {
+    "text": "It",
+    "confidence": 0.967
+   },
+   {
+    "text": " costs",
+    "confidence": 0.985
+   },
+   {
+    "text": " $4.99",
+    "confidence": 0.696
+   },
+   {
+    "text": " a",
+    "confidence": 0.997
+   },
+   {
+    "text": " month.",
+    "confidence": 0.98
+   }
+  ],
+  "independent": "It costs $4.99 a month."
+ },
+ {
+  "id": "money.spell.s2",
+  "line": "It costs four ninety-nine a month.",
+  "native": "It costs $4.99 a month.",
+  "nativeSpans": [
+   {
+    "text": "It",
+    "confidence": 0.894
+   },
+   {
+    "text": " costs",
+    "confidence": 0.958
+   },
+   {
+    "text": " $4.99",
+    "confidence": 0.766
+   },
+   {
+    "text": " a",
+    "confidence": 0.993
+   },
+   {
+    "text": " month.",
+    "confidence": 0.969
+   }
+  ],
+  "independent": "It costs $4.99 a month."
+ },
+ {
+  "id": "morning.neg.s1",
+  "line": "Good morning, everyone. Here is our shipping update.",
+  "native": "Good morning, everyone. Here is our sales update.",
+  "nativeSpans": [
+   {
+    "text": "Good",
+    "confidence": 0.992
+   },
+   {
+    "text": " morning,",
+    "confidence": 0.673
+   },
+   {
+    "text": " everyone.",
+    "confidence": 0.952
+   },
+   {
+    "text": " Here ",
+    "confidence": 0.86
+   },
+   {
+    "text": "is ",
+    "confidence": 0.996
+   },
+   {
+    "text": "our ",
+    "confidence": 0.995
+   },
+   {
+    "text": "sales ",
+    "confidence": 0.99
+   },
+   {
+    "text": "update.",
+    "confidence": 0.931
+   }
+  ],
+  "independent": "Good morning, everyone. Here is our sales update."
+ },
+ {
+  "id": "morning.pos.news",
+  "line": "Good morning, everyone. Here is our shipping update.",
+  "native": "Good morning everyone. Here is our shipping update.",
+  "nativeSpans": [
+   {
+    "text": "Good",
+    "confidence": 0.994
+   },
+   {
+    "text": " morning",
+    "confidence": 0.988
+   },
+   {
+    "text": " everyone.",
+    "confidence": 0.942
+   },
+   {
+    "text": " Here ",
+    "confidence": 0.893
+   },
+   {
+    "text": "is ",
+    "confidence": 0.996
+   },
+   {
+    "text": "our ",
+    "confidence": 0.995
+   },
+   {
+    "text": "shipping ",
+    "confidence": 0.992
+   },
+   {
+    "text": "update.",
+    "confidence": 0.949
+   }
+  ],
+  "independent": "Good morning everyone. Here is our shipping update."
+ },
+ {
+  "id": "morning.pos.s1",
+  "line": "Good morning, everyone. Here is our shipping update.",
+  "native": "Good morning, everyone. Here is our shipping update.",
+  "nativeSpans": [
+   {
+    "text": "Good",
+    "confidence": 0.993
+   },
+   {
+    "text": " morning,",
+    "confidence": 0.683
+   },
+   {
+    "text": " everyone.",
+    "confidence": 0.954
+   },
+   {
+    "text": " Here ",
+    "confidence": 0.851
+   },
+   {
+    "text": "is ",
+    "confidence": 0.997
+   },
+   {
+    "text": "our ",
+    "confidence": 0.996
+   },
+   {
+    "text": "shipping ",
+    "confidence": 0.991
+   },
+   {
+    "text": "update.",
+    "confidence": 0.945
+   }
+  ],
+  "independent": "Good morning everyone, here is our shipping update."
+ },
+ {
+  "id": "morning.pos.s2",
+  "line": "Good morning, everyone. Here is our shipping update.",
+  "native": "Good morning everyone. Here is our shipping update.",
+  "nativeSpans": [
+   {
+    "text": "Good",
+    "confidence": 0.989
+   },
+   {
+    "text": " morning",
+    "confidence": 0.976
+   },
+   {
+    "text": " everyone.",
+    "confidence": 0.946
+   },
+   {
+    "text": " Here ",
+    "confidence": 0.867
+   },
+   {
+    "text": "is ",
+    "confidence": 0.991
+   },
+   {
+    "text": "our ",
+    "confidence": 0.99
+   },
+   {
+    "text": "shipping ",
+    "confidence": 0.988
+   },
+   {
+    "text": "update.",
+    "confidence": 0.923
+   }
+  ],
+  "independent": "Good morning everyone, here is our shipping update."
+ },
+ {
+  "id": "negative.neg.s1",
+  "line": "The temperature dropped to -3 degrees overnight.",
+  "native": "The temperature dropped to -8 degrees overnight.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.893
+   },
+   {
+    "text": " temperature",
+    "confidence": 0.992
+   },
+   {
+    "text": " dropped",
+    "confidence": 0.984
+   },
+   {
+    "text": " to",
+    "confidence": 0.976
+   },
+   {
+    "text": " -8",
+    "confidence": 0.714
+   },
+   {
+    "text": " degrees",
+    "confidence": 0.957
+   },
+   {
+    "text": " overnight.",
+    "confidence": 0.951
+   }
+  ],
+  "independent": "The temperature dropped to minus eight degrees overnight."
+ },
+ {
+  "id": "negative.negspell.s1",
+  "line": "The temperature dropped to minus three degrees overnight.",
+  "native": "The temperature dropped to -8 degrees overnight.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.893
+   },
+   {
+    "text": " temperature",
+    "confidence": 0.992
+   },
+   {
+    "text": " dropped",
+    "confidence": 0.984
+   },
+   {
+    "text": " to",
+    "confidence": 0.976
+   },
+   {
+    "text": " -8",
+    "confidence": 0.714
+   },
+   {
+    "text": " degrees",
+    "confidence": 0.957
+   },
+   {
+    "text": " overnight.",
+    "confidence": 0.951
+   }
+  ],
+  "independent": "The temperature dropped to minus eight degrees overnight."
+ },
+ {
+  "id": "negative.pos.news",
+  "line": "The temperature dropped to -3 degrees overnight.",
+  "native": "The temperature dropped to -3 degrees overnight.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.994
+   },
+   {
+    "text": " temperature",
+    "confidence": 0.996
+   },
+   {
+    "text": " dropped",
+    "confidence": 0.976
+   },
+   {
+    "text": " to",
+    "confidence": 0.987
+   },
+   {
+    "text": " -3",
+    "confidence": 0.822
+   },
+   {
+    "text": " degrees",
+    "confidence": 0.911
+   },
+   {
+    "text": " overnight.",
+    "confidence": 0.962
+   }
+  ],
+  "independent": "The temperature dropped to minus 3 degrees overnight."
+ },
+ {
+  "id": "negative.pos.s1",
+  "line": "The temperature dropped to -3 degrees overnight.",
+  "native": "The temperature dropped to 3 degrees overnight.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.951
+   },
+   {
+    "text": " temperature",
+    "confidence": 0.995
+   },
+   {
+    "text": " dropped",
+    "confidence": 0.986
+   },
+   {
+    "text": " to",
+    "confidence": 0.978
+   },
+   {
+    "text": " 3",
+    "confidence": 0.479
+   },
+   {
+    "text": " degrees",
+    "confidence": 0.943
+   },
+   {
+    "text": " overnight.",
+    "confidence": 0.939
+   }
+  ],
+  "independent": "The temperature dropped to minus 3 degrees overnight."
+ },
+ {
+  "id": "negative.pos.s2",
+  "line": "The temperature dropped to -3 degrees overnight.",
+  "native": "The temperature dropped to -3 degrees overnight.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.956
+   },
+   {
+    "text": " temperature",
+    "confidence": 0.993
+   },
+   {
+    "text": " dropped",
+    "confidence": 0.991
+   },
+   {
+    "text": " to",
+    "confidence": 0.989
+   },
+   {
+    "text": " -3",
+    "confidence": 0.507
+   },
+   {
+    "text": " degrees",
+    "confidence": 0.94
+   },
+   {
+    "text": " overnight.",
+    "confidence": 0.968
+   }
+  ],
+  "independent": "The temperature dropped to minus 3 degrees overnight."
+ },
+ {
+  "id": "negative.spell.news",
+  "line": "The temperature dropped to minus three degrees overnight.",
+  "native": "The temperature dropped to -3 degrees overnight.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.994
+   },
+   {
+    "text": " temperature",
+    "confidence": 0.998
+   },
+   {
+    "text": " dropped",
+    "confidence": 0.991
+   },
+   {
+    "text": " to",
+    "confidence": 0.992
+   },
+   {
+    "text": " -3",
+    "confidence": 0.8
+   },
+   {
+    "text": " degrees",
+    "confidence": 0.928
+   },
+   {
+    "text": " overnight.",
+    "confidence": 0.96
+   }
+  ],
+  "independent": "The temperature dropped to minus 3 degrees overnight."
+ },
+ {
+  "id": "negative.spell.s1",
+  "line": "The temperature dropped to minus three degrees overnight.",
+  "native": "The temperature dropped to -3 degrees overnight.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.983
+   },
+   {
+    "text": " temperature",
+    "confidence": 0.995
+   },
+   {
+    "text": " dropped",
+    "confidence": 0.677
+   },
+   {
+    "text": " to",
+    "confidence": 0.985
+   },
+   {
+    "text": " -3",
+    "confidence": 0.78
+   },
+   {
+    "text": " degrees",
+    "confidence": 0.949
+   },
+   {
+    "text": " overnight.",
+    "confidence": 0.883
+   }
+  ],
+  "independent": "The temperature dropped to minus 3 degrees overnight."
+ },
+ {
+  "id": "negative.spell.s2",
+  "line": "The temperature dropped to minus three degrees overnight.",
+  "native": "The temperature dropped to 3 degrees overnight.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.89
+   },
+   {
+    "text": " temperature",
+    "confidence": 0.987
+   },
+   {
+    "text": " dropped",
+    "confidence": 0.966
+   },
+   {
+    "text": " to",
+    "confidence": 0.974
+   },
+   {
+    "text": " 3",
+    "confidence": 0.421
+   },
+   {
+    "text": " degrees",
+    "confidence": 0.913
+   },
+   {
+    "text": " overnight.",
+    "confidence": 0.959
+   }
+  ],
+  "independent": "The temperature dropped to minus 3 degrees overnight."
+ },
+ {
+  "id": "night.neg.s1",
+  "line": "Night falls, and a storm is coming in from the sea.",
+  "native": "Night falls, and a storm is coming in from the east.",
+  "nativeSpans": [
+   {
+    "text": "Night",
+    "confidence": 0.979
+   },
+   {
+    "text": " falls,",
+    "confidence": 0.778
+   },
+   {
+    "text": " and",
+    "confidence": 0.944
+   },
+   {
+    "text": " a",
+    "confidence": 0.997
+   },
+   {
+    "text": " storm is coming",
+    "confidence": 0.999
+   },
+   {
+    "text": " in",
+    "confidence": 0.998
+   },
+   {
+    "text": " from",
+    "confidence": 0.999
+   },
+   {
+    "text": " the",
+    "confidence": 0.998
+   },
+   {
+    "text": " east.",
+    "confidence": 0.889
+   }
+  ],
+  "independent": "Night falls and a storm is coming in from the east."
+ },
+ {
+  "id": "night.pos.news",
+  "line": "Night falls, and a storm is coming in from the sea.",
+  "native": "Night falls, and a storm is coming in from the sea.",
+  "nativeSpans": [
+   {
+    "text": "Night",
+    "confidence": 0.986
+   },
+   {
+    "text": " falls,",
+    "confidence": 0.73
+   },
+   {
+    "text": " and a",
+    "confidence": 0.998
+   },
+   {
+    "text": " storm is coming in",
+    "confidence": 0.999
+   },
+   {
+    "text": " from the",
+    "confidence": 0.998
+   },
+   {
+    "text": " sea.",
+    "confidence": 0.953
+   }
+  ],
+  "independent": "Night falls, and a storm is coming in from the sea."
+ },
+ {
+  "id": "night.pos.s1",
+  "line": "Night falls, and a storm is coming in from the sea.",
+  "native": "Night falls, and a storm is coming in from the sea.",
+  "nativeSpans": [
+   {
+    "text": "Night",
+    "confidence": 0.975
+   },
+   {
+    "text": " falls,",
+    "confidence": 0.693
+   },
+   {
+    "text": " and",
+    "confidence": 0.909
+   },
+   {
+    "text": " a",
+    "confidence": 0.998
+   },
+   {
+    "text": " storm is",
+    "confidence": 0.999
+   },
+   {
+    "text": " coming",
+    "confidence": 1
+   },
+   {
+    "text": " in from the",
+    "confidence": 0.999
+   },
+   {
+    "text": " sea.",
+    "confidence": 0.893
+   }
+  ],
+  "independent": "Night falls, and a storm is coming in from the sea."
+ },
+ {
+  "id": "night.pos.s2",
+  "line": "Night falls, and a storm is coming in from the sea.",
+  "native": "Night Falls.",
+  "nativeSpans": [
+   {
+    "text": "Night",
+    "confidence": 0.961
+   },
+   {
+    "text": " Falls.",
+    "confidence": 0.691
+   }
+  ],
+  "independent": "Night falls."
+ },
+ {
+  "id": "okay.neg.s1",
+  "line": "Okay, let's email Dr. Smith about the e-book.",
+  "native": "Okay, let's call. Dr. me is about. The.",
+  "nativeSpans": [
+   {
+    "text": "Okay,",
+    "confidence": 0.659
+   },
+   {
+    "text": " let's",
+    "confidence": 0.72
+   },
+   {
+    "text": " call.",
+    "confidence": 0.542
+   },
+   {
+    "text": " Dr.",
+    "confidence": 0.321
+   },
+   {
+    "text": " me",
+    "confidence": 0.446
+   },
+   {
+    "text": " is",
+    "confidence": 0.432
+   },
+   {
+    "text": " about.",
+    "confidence": 0.72
+   },
+   {
+    "text": " The.",
+    "confidence": 0.557
+   }
+  ],
+  "independent": "Okay, let's talk to Dr. Smith about the..."
+ },
+ {
+  "id": "okay.pos.news",
+  "line": "Okay, let's email Dr. Smith about the e-book.",
+  "native": "Okay, let's email Dr. Smith about the e-book.",
+  "nativeSpans": [
+   {
+    "text": "Okay,",
+    "confidence": 0.789
+   },
+   {
+    "text": " let's",
+    "confidence": 0.951
+   },
+   {
+    "text": " email",
+    "confidence": 0.993
+   },
+   {
+    "text": " Dr.",
+    "confidence": 0.456
+   },
+   {
+    "text": " Smith",
+    "confidence": 0.943
+   },
+   {
+    "text": " about",
+    "confidence": 0.981
+   },
+   {
+    "text": " the",
+    "confidence": 0.996
+   },
+   {
+    "text": " e-book.",
+    "confidence": 0.76
+   }
+  ],
+  "independent": "Okay, let's email Dr. Smith about the e-book."
+ },
+ {
+  "id": "okay.pos.s1",
+  "line": "Okay, let's email Dr. Smith about the e-book.",
+  "native": "Okay, let's email Dr. Smith.",
+  "nativeSpans": [
+   {
+    "text": "Okay,",
+    "confidence": 0.78
+   },
+   {
+    "text": " let's",
+    "confidence": 0.989
+   },
+   {
+    "text": " email",
+    "confidence": 0.997
+   },
+   {
+    "text": " Dr.",
+    "confidence": 0.831
+   },
+   {
+    "text": " Smith.",
+    "confidence": 0.868
+   }
+  ],
+  "independent": "Okay, let's email Dr. Smith."
+ },
+ {
+  "id": "okay.pos.s2",
+  "line": "Okay, let's email Dr. Smith about the e-book.",
+  "native": "Okay, let's email Dr. Smith about the e-book.",
+  "nativeSpans": [
+   {
+    "text": "Okay,",
+    "confidence": 0.874
+   },
+   {
+    "text": " let's",
+    "confidence": 0.979
+   },
+   {
+    "text": " email",
+    "confidence": 0.989
+   },
+   {
+    "text": " Dr.",
+    "confidence": 0.349
+   },
+   {
+    "text": " Smith",
+    "confidence": 0.956
+   },
+   {
+    "text": " about",
+    "confidence": 0.992
+   },
+   {
+    "text": " the",
+    "confidence": 0.987
+   },
+   {
+    "text": " e-book.",
+    "confidence": 0.863
+   }
+  ],
+  "independent": "Okay, let's email Dr. Smith about the eBook."
+ },
+ {
+  "id": "ordinal.neg.s1",
+  "line": "Turn left on 5th Avenue.",
+  "native": "Turn left on 6th Avenue.",
+  "nativeSpans": [
+   {
+    "text": "Turn",
+    "confidence": 0.942
+   },
+   {
+    "text": " left",
+    "confidence": 0.984
+   },
+   {
+    "text": " on",
+    "confidence": 0.982
+   },
+   {
+    "text": " 6th",
+    "confidence": 0.88
+   },
+   {
+    "text": " Avenue.",
+    "confidence": 0.9
+   }
+  ],
+  "independent": "Turn left on 6th Avenue."
+ },
+ {
+  "id": "ordinal.negspell.s1",
+  "line": "Turn left on Fifth Avenue.",
+  "native": "Turn left on 6th Avenue.",
+  "nativeSpans": [
+   {
+    "text": "Turn",
+    "confidence": 0.942
+   },
+   {
+    "text": " left",
+    "confidence": 0.984
+   },
+   {
+    "text": " on",
+    "confidence": 0.982
+   },
+   {
+    "text": " 6th",
+    "confidence": 0.88
+   },
+   {
+    "text": " Avenue.",
+    "confidence": 0.9
+   }
+  ],
+  "independent": "Turn left on 6th Avenue."
+ },
+ {
+  "id": "ordinal.pos.news",
+  "line": "Turn left on 5th Avenue.",
+  "native": "Turn left on 5th Avenue.",
+  "nativeSpans": [
+   {
+    "text": "Turn",
+    "confidence": 0.985
+   },
+   {
+    "text": " left",
+    "confidence": 0.992
+   },
+   {
+    "text": " on",
+    "confidence": 0.99
+   },
+   {
+    "text": " 5th",
+    "confidence": 0.659
+   },
+   {
+    "text": " Avenue.",
+    "confidence": 0.829
+   }
+  ],
+  "independent": "Turn left on Fifth Avenue."
+ },
+ {
+  "id": "ordinal.pos.s1",
+  "line": "Turn left on 5th Avenue.",
+  "native": "Turn left on Fifth Avenue.",
+  "nativeSpans": [
+   {
+    "text": "Turn",
+    "confidence": 0.95
+   },
+   {
+    "text": " left",
+    "confidence": 0.944
+   },
+   {
+    "text": " on",
+    "confidence": 0.961
+   },
+   {
+    "text": " Fifth",
+    "confidence": 0.819
+   },
+   {
+    "text": " Avenue.",
+    "confidence": 0.857
+   }
+  ],
+  "independent": "Turn left on Fifth Avenue."
+ },
+ {
+  "id": "ordinal.pos.s2",
+  "line": "Turn left on 5th Avenue.",
+  "native": "Turn left on 5th Avenue.",
+  "nativeSpans": [
+   {
+    "text": "Turn",
+    "confidence": 0.934
+   },
+   {
+    "text": " left",
+    "confidence": 0.986
+   },
+   {
+    "text": " on",
+    "confidence": 0.99
+   },
+   {
+    "text": " 5th",
+    "confidence": 0.796
+   },
+   {
+    "text": " Avenue.",
+    "confidence": 0.928
+   }
+  ],
+  "independent": "Turn left on Fifth Avenue."
+ },
+ {
+  "id": "ordinal.spell.news",
+  "line": "Turn left on Fifth Avenue.",
+  "native": "Turn left on Fifth Avenue.",
+  "nativeSpans": [
+   {
+    "text": "Turn",
+    "confidence": 0.972
+   },
+   {
+    "text": " left",
+    "confidence": 0.985
+   },
+   {
+    "text": " on",
+    "confidence": 0.982
+   },
+   {
+    "text": " Fifth",
+    "confidence": 0.712
+   },
+   {
+    "text": " Avenue.",
+    "confidence": 0.898
+   }
+  ],
+  "independent": "Turn left on Fifth Avenue."
+ },
+ {
+  "id": "ordinal.spell.s1",
+  "line": "Turn left on Fifth Avenue.",
+  "native": "Turn left on 5th Avenue.",
+  "nativeSpans": [
+   {
+    "text": "Turn",
+    "confidence": 0.724
+   },
+   {
+    "text": " left",
+    "confidence": 0.933
+   },
+   {
+    "text": " on",
+    "confidence": 0.929
+   },
+   {
+    "text": " 5th",
+    "confidence": 0.707
+   },
+   {
+    "text": " Avenue.",
+    "confidence": 0.876
+   }
+  ],
+  "independent": "Turn left on Fifth Avenue."
+ },
+ {
+  "id": "ordinal.spell.s2",
+  "line": "Turn left on Fifth Avenue.",
+  "native": "Turn left on Fifth Avenue.",
+  "nativeSpans": [
+   {
+    "text": "Turn",
+    "confidence": 0.905
+   },
+   {
+    "text": " left",
+    "confidence": 0.985
+   },
+   {
+    "text": " on",
+    "confidence": 0.99
+   },
+   {
+    "text": " Fifth",
+    "confidence": 0.682
+   },
+   {
+    "text": " Avenue.",
+    "confidence": 0.919
+   }
+  ],
+  "independent": "Turn left on Fifth Avenue."
+ },
+ {
+  "id": "pct.neg.s1",
+  "line": "Deliveries grew by 18% this quarter.",
+  "native": "Deliveries grew by 80% this quarter.",
+  "nativeSpans": [
+   {
+    "text": "Deliveries",
+    "confidence": 0.99
+   },
+   {
+    "text": " grew",
+    "confidence": 0.992
+   },
+   {
+    "text": " by 80%",
+    "confidence": 0.995
+   },
+   {
+    "text": " this",
+    "confidence": 0.981
+   },
+   {
+    "text": " quarter.",
+    "confidence": 0.954
+   }
+  ],
+  "independent": "Deliveries grew by 80% this quarter."
+ },
+ {
+  "id": "pct.negspell.s1",
+  "line": "Deliveries grew by eighteen percent this quarter.",
+  "native": "Deliveries grew by 80% this quarter.",
+  "nativeSpans": [
+   {
+    "text": "Deliveries",
+    "confidence": 0.99
+   },
+   {
+    "text": " grew",
+    "confidence": 0.992
+   },
+   {
+    "text": " by 80%",
+    "confidence": 0.995
+   },
+   {
+    "text": " this",
+    "confidence": 0.981
+   },
+   {
+    "text": " quarter.",
+    "confidence": 0.954
+   }
+  ],
+  "independent": "Deliveries grew by 80% this quarter."
+ },
+ {
+  "id": "pct.pos.news",
+  "line": "Deliveries grew by 18% this quarter.",
+  "native": "Deliveries grew by 18% this quarter.",
+  "nativeSpans": [
+   {
+    "text": "Deliveries",
+    "confidence": 0.997
+   },
+   {
+    "text": " grew",
+    "confidence": 0.998
+   },
+   {
+    "text": " by",
+    "confidence": 0.999
+   },
+   {
+    "text": " 18%",
+    "confidence": 0.994
+   },
+   {
+    "text": " this",
+    "confidence": 0.996
+   },
+   {
+    "text": " quarter.",
+    "confidence": 0.97
+   }
+  ],
+  "independent": "deliveries grew by 18% this quarter."
+ },
+ {
+  "id": "pct.pos.s1",
+  "line": "Deliveries grew by 18% this quarter.",
+  "native": "Deliveries grew by 18% this quarter.",
+  "nativeSpans": [
+   {
+    "text": "Deliveries",
+    "confidence": 0.98
+   },
+   {
+    "text": " grew",
+    "confidence": 0.988
+   },
+   {
+    "text": " by",
+    "confidence": 0.989
+   },
+   {
+    "text": " 18%",
+    "confidence": 0.969
+   },
+   {
+    "text": " this",
+    "confidence": 0.962
+   },
+   {
+    "text": " quarter.",
+    "confidence": 0.933
+   }
+  ],
+  "independent": "Deliveries grew by 18% this quarter."
+ },
+ {
+  "id": "pct.pos.s2",
+  "line": "Deliveries grew by 18% this quarter.",
+  "native": "Deliveries grew by 18% this quarter.",
+  "nativeSpans": [
+   {
+    "text": "Deliveries",
+    "confidence": 0.986
+   },
+   {
+    "text": " grew",
+    "confidence": 0.993
+   },
+   {
+    "text": " by",
+    "confidence": 0.996
+   },
+   {
+    "text": " 18%",
+    "confidence": 0.976
+   },
+   {
+    "text": " this",
+    "confidence": 0.986
+   },
+   {
+    "text": " quarter.",
+    "confidence": 0.964
+   }
+  ],
+  "independent": "Deliveries grew by 18% this quarter."
+ },
+ {
+  "id": "pct.spell.news",
+  "line": "Deliveries grew by eighteen percent this quarter.",
+  "native": "Deliveries grew by 18% this quarter.",
+  "nativeSpans": [
+   {
+    "text": "Deliveries",
+    "confidence": 0.996
+   },
+   {
+    "text": " grew",
+    "confidence": 0.998
+   },
+   {
+    "text": " by",
+    "confidence": 0.999
+   },
+   {
+    "text": " 18%",
+    "confidence": 0.99
+   },
+   {
+    "text": " this",
+    "confidence": 0.996
+   },
+   {
+    "text": " quarter.",
+    "confidence": 0.958
+   }
+  ],
+  "independent": "Deliveries grew by 18% this quarter."
+ },
+ {
+  "id": "pct.spell.s1",
+  "line": "Deliveries grew by eighteen percent this quarter.",
+  "native": "Deliveries grew by 18% this quarter.",
+  "nativeSpans": [
+   {
+    "text": "Deliveries",
+    "confidence": 0.996
+   },
+   {
+    "text": " grew",
+    "confidence": 0.998
+   },
+   {
+    "text": " by",
+    "confidence": 0.999
+   },
+   {
+    "text": " 18%",
+    "confidence": 0.982
+   },
+   {
+    "text": " this",
+    "confidence": 0.996
+   },
+   {
+    "text": " quarter.",
+    "confidence": 0.978
+   }
+  ],
+  "independent": "deliveries grew by 18% this quarter."
+ },
+ {
+  "id": "pct.spell.s2",
+  "line": "Deliveries grew by eighteen percent this quarter.",
+  "native": "Deliveries grew by 18% this quarter.",
+  "nativeSpans": [
+   {
+    "text": "Deliveries",
+    "confidence": 0.992
+   },
+   {
+    "text": " grew by",
+    "confidence": 0.996
+   },
+   {
+    "text": " 18%",
+    "confidence": 0.939
+   },
+   {
+    "text": " this",
+    "confidence": 0.986
+   },
+   {
+    "text": " quarter.",
+    "confidence": 0.957
+   }
+  ],
+  "independent": "Deliveries grew by 18% this quarter."
+ },
+ {
+  "id": "phone.neg.s1",
+  "line": "Call me on 555 0142 when you land.",
+  "native": "Call me on 555-0143 when you land.",
+  "nativeSpans": [
+   {
+    "text": "Call",
+    "confidence": 0.964
+   },
+   {
+    "text": " me",
+    "confidence": 0.939
+   },
+   {
+    "text": " on",
+    "confidence": 0.987
+   },
+   {
+    "text": " 555-0143",
+    "confidence": 0.549
+   },
+   {
+    "text": " when",
+    "confidence": 0.902
+   },
+   {
+    "text": " you",
+    "confidence": 0.764
+   },
+   {
+    "text": " land.",
+    "confidence": 0.908
+   }
+  ],
+  "independent": "Call me on 555-0143 when you land."
+ },
+ {
+  "id": "phone.negspell.s1",
+  "line": "Call me on five five five, oh one four two, when you land.",
+  "native": "Call me on 555-0143 when you land.",
+  "nativeSpans": [
+   {
+    "text": "Call",
+    "confidence": 0.964
+   },
+   {
+    "text": " me",
+    "confidence": 0.939
+   },
+   {
+    "text": " on",
+    "confidence": 0.987
+   },
+   {
+    "text": " 555-0143",
+    "confidence": 0.549
+   },
+   {
+    "text": " when",
+    "confidence": 0.902
+   },
+   {
+    "text": " you",
+    "confidence": 0.764
+   },
+   {
+    "text": " land.",
+    "confidence": 0.908
+   }
+  ],
+  "independent": "Call me on 555-0143 when you land."
+ },
+ {
+  "id": "phone.pos.news",
+  "line": "Call me on 555 0142 when you land.",
+  "native": "Call me on 555-0142 when you land.",
+  "nativeSpans": [
+   {
+    "text": "Call",
+    "confidence": 0.997
+   },
+   {
+    "text": " me on",
+    "confidence": 0.998
+   },
+   {
+    "text": " 555-0142",
+    "confidence": 0.893
+   },
+   {
+    "text": " when",
+    "confidence": 0.994
+   },
+   {
+    "text": " you",
+    "confidence": 0.998
+   },
+   {
+    "text": " land.",
+    "confidence": 0.854
+   }
+  ],
+  "independent": "Call me on 555-0142 when you land."
+ },
+ {
+  "id": "phone.pos.s1",
+  "line": "Call me on 555 0142 when you land.",
+  "native": "Call me on 555 0142.",
+  "nativeSpans": [
+   {
+    "text": "Call",
+    "confidence": 0.992
+   },
+   {
+    "text": " me on",
+    "confidence": 0.993
+   },
+   {
+    "text": " 555",
+    "confidence": 0.769
+   },
+   {
+    "text": " 0142.",
+    "confidence": 0.845
+   }
+  ],
+  "independent": "Call me on 555 0142."
+ },
+ {
+  "id": "phone.pos.s2",
+  "line": "Call me on 555 0142 when you land.",
+  "native": "Call me on 5550142 when you land.",
+  "nativeSpans": [
+   {
+    "text": "Call",
+    "confidence": 0.982
+   },
+   {
+    "text": " me on",
+    "confidence": 0.996
+   },
+   {
+    "text": " 5550142",
+    "confidence": 0.835
+   },
+   {
+    "text": " when",
+    "confidence": 0.993
+   },
+   {
+    "text": " you",
+    "confidence": 0.995
+   },
+   {
+    "text": " land.",
+    "confidence": 0.927
+   }
+  ],
+  "independent": "Call me on 555-0142 when you land."
+ },
+ {
+  "id": "phone.spell.news",
+  "line": "Call me on five five five, oh one four two, when you land.",
+  "native": "Call me on 5550142 when you land.",
+  "nativeSpans": [
+   {
+    "text": "Call",
+    "confidence": 0.994
+   },
+   {
+    "text": " me on",
+    "confidence": 0.998
+   },
+   {
+    "text": " 5550142",
+    "confidence": 0.746
+   },
+   {
+    "text": " when",
+    "confidence": 0.993
+   },
+   {
+    "text": " you",
+    "confidence": 0.996
+   },
+   {
+    "text": " land.",
+    "confidence": 0.938
+   }
+  ],
+  "independent": "Call me on 555-0142 when you land."
+ },
+ {
+  "id": "phone.spell.s1",
+  "line": "Call me on five five five, oh one four two, when you land.",
+  "native": "Call me on 555-0142 when you land.",
+  "nativeSpans": [
+   {
+    "text": "Call",
+    "confidence": 0.995
+   },
+   {
+    "text": " me",
+    "confidence": 0.998
+   },
+   {
+    "text": " on",
+    "confidence": 0.997
+   },
+   {
+    "text": " 555-0142",
+    "confidence": 0.676
+   },
+   {
+    "text": " when",
+    "confidence": 0.982
+   },
+   {
+    "text": " you",
+    "confidence": 0.992
+   },
+   {
+    "text": " land.",
+    "confidence": 0.966
+   }
+  ],
+  "independent": "Call me on 555-0142 when you land."
+ },
+ {
+  "id": "phone.spell.s2",
+  "line": "Call me on five five five, oh one four two, when you land.",
+  "native": "Call me on 5550142 when you land.",
+  "nativeSpans": [
+   {
+    "text": "Call",
+    "confidence": 0.794
+   },
+   {
+    "text": " me",
+    "confidence": 0.919
+   },
+   {
+    "text": " on",
+    "confidence": 0.962
+   },
+   {
+    "text": " 5550142",
+    "confidence": 0.737
+   },
+   {
+    "text": " when",
+    "confidence": 0.953
+   },
+   {
+    "text": " you",
+    "confidence": 0.978
+   },
+   {
+    "text": " land.",
+    "confidence": 0.942
+   }
+  ],
+  "independent": "Call me on 555-0142 when you land."
+ },
+ {
+  "id": "place.neg.s1",
+  "line": "She finished 2nd out of 40 runners.",
+  "native": "She finished 3rd out of 40 runners.",
+  "nativeSpans": [
+   {
+    "text": "She",
+    "confidence": 0.993
+   },
+   {
+    "text": " finished",
+    "confidence": 0.999
+   },
+   {
+    "text": " 3rd",
+    "confidence": 0.739
+   },
+   {
+    "text": " out",
+    "confidence": 0.997
+   },
+   {
+    "text": " of",
+    "confidence": 0.999
+   },
+   {
+    "text": " 40",
+    "confidence": 0.994
+   },
+   {
+    "text": " runners.",
+    "confidence": 0.943
+   }
+  ],
+  "independent": "She finished third out of 40 runners."
+ },
+ {
+  "id": "place.negspell.s1",
+  "line": "She finished second out of forty runners.",
+  "native": "She finished 3rd out of 40 runners.",
+  "nativeSpans": [
+   {
+    "text": "She",
+    "confidence": 0.993
+   },
+   {
+    "text": " finished",
+    "confidence": 0.999
+   },
+   {
+    "text": " 3rd",
+    "confidence": 0.739
+   },
+   {
+    "text": " out",
+    "confidence": 0.997
+   },
+   {
+    "text": " of",
+    "confidence": 0.999
+   },
+   {
+    "text": " 40",
+    "confidence": 0.994
+   },
+   {
+    "text": " runners.",
+    "confidence": 0.943
+   }
+  ],
+  "independent": "She finished third out of 40 runners."
+ },
+ {
+  "id": "place.pos.news",
+  "line": "She finished 2nd out of 40 runners.",
+  "native": "She finished 2nd out of 40 runners.",
+  "nativeSpans": [
+   {
+    "text": "She",
+    "confidence": 0.997
+   },
+   {
+    "text": " finished",
+    "confidence": 1
+   },
+   {
+    "text": " 2nd",
+    "confidence": 0.789
+   },
+   {
+    "text": " out",
+    "confidence": 0.998
+   },
+   {
+    "text": " of",
+    "confidence": 0.999
+   },
+   {
+    "text": " 40",
+    "confidence": 0.997
+   },
+   {
+    "text": " runners.",
+    "confidence": 0.917
+   }
+  ],
+  "independent": "She finished second out of 40 runners."
+ },
+ {
+  "id": "place.pos.s1",
+  "line": "She finished 2nd out of 40 runners.",
+  "native": "She finished 2nd out of 40 runners.",
+  "nativeSpans": [
+   {
+    "text": "She",
+    "confidence": 0.995
+   },
+   {
+    "text": " finished",
+    "confidence": 0.999
+   },
+   {
+    "text": " 2nd",
+    "confidence": 0.728
+   },
+   {
+    "text": " out",
+    "confidence": 0.998
+   },
+   {
+    "text": " of",
+    "confidence": 0.999
+   },
+   {
+    "text": " 40",
+    "confidence": 0.994
+   },
+   {
+    "text": " runners.",
+    "confidence": 0.933
+   }
+  ],
+  "independent": "She finished second out of 40 runners."
+ },
+ {
+  "id": "place.pos.s2",
+  "line": "She finished 2nd out of 40 runners.",
+  "native": "She finished 2nd out of 40 runners.",
+  "nativeSpans": [
+   {
+    "text": "She",
+    "confidence": 0.997
+   },
+   {
+    "text": " finished",
+    "confidence": 1
+   },
+   {
+    "text": " 2nd",
+    "confidence": 0.839
+   },
+   {
+    "text": " out",
+    "confidence": 0.998
+   },
+   {
+    "text": " of",
+    "confidence": 1
+   },
+   {
+    "text": " 40",
+    "confidence": 0.997
+   },
+   {
+    "text": " runners.",
+    "confidence": 0.957
+   }
+  ],
+  "independent": "She finished second out of 40 runners."
+ },
+ {
+  "id": "place.spell.news",
+  "line": "She finished second out of forty runners.",
+  "native": "She finished 2nd out of 40 runners.",
+  "nativeSpans": [
+   {
+    "text": "She",
+    "confidence": 0.997
+   },
+   {
+    "text": " finished",
+    "confidence": 1
+   },
+   {
+    "text": " 2nd",
+    "confidence": 0.806
+   },
+   {
+    "text": " out",
+    "confidence": 0.998
+   },
+   {
+    "text": " of",
+    "confidence": 0.999
+   },
+   {
+    "text": " 40",
+    "confidence": 0.995
+   },
+   {
+    "text": " runners.",
+    "confidence": 0.958
+   }
+  ],
+  "independent": "She finished second out of 40 runners."
+ },
+ {
+  "id": "place.spell.s1",
+  "line": "She finished second out of forty runners.",
+  "native": "She finished 2nd out of 40 runners.",
+  "nativeSpans": [
+   {
+    "text": "She",
+    "confidence": 0.996
+   },
+   {
+    "text": " finished",
+    "confidence": 0.999
+   },
+   {
+    "text": " 2nd",
+    "confidence": 0.936
+   },
+   {
+    "text": " out",
+    "confidence": 0.987
+   },
+   {
+    "text": " of",
+    "confidence": 0.998
+   },
+   {
+    "text": " 40",
+    "confidence": 0.995
+   },
+   {
+    "text": " runners.",
+    "confidence": 0.966
+   }
+  ],
+  "independent": "She finished second out of 40 runners."
+ },
+ {
+  "id": "place.spell.s2",
+  "line": "She finished second out of forty runners.",
+  "native": "She finished 2nd out of 40 runners.",
+  "nativeSpans": [
+   {
+    "text": "She",
+    "confidence": 0.993
+   },
+   {
+    "text": " finished",
+    "confidence": 0.999
+   },
+   {
+    "text": " 2nd",
+    "confidence": 0.763
+   },
+   {
+    "text": " out",
+    "confidence": 0.997
+   },
+   {
+    "text": " of",
+    "confidence": 0.999
+   },
+   {
+    "text": " 40",
+    "confidence": 0.994
+   },
+   {
+    "text": " runners.",
+    "confidence": 0.934
+   }
+  ],
+  "independent": "She finished second, out of 40 runners."
+ },
+ {
+  "id": "quarter.neg.s1",
+  "line": "Q3 results beat expectations.",
+  "native": "Q4 results beat expectations.",
+  "nativeSpans": [
+   {
+    "text": "Q4",
+    "confidence": 0.868
+   },
+   {
+    "text": " results",
+    "confidence": 0.842
+   },
+   {
+    "text": " beat",
+    "confidence": 0.747
+   },
+   {
+    "text": " expectations.",
+    "confidence": 0.65
+   }
+  ],
+  "independent": "Q4 results beat expectations."
+ },
+ {
+  "id": "quarter.negspell.s1",
+  "line": "Third quarter results beat expectations.",
+  "native": "Q4 results beat expectations.",
+  "nativeSpans": [
+   {
+    "text": "Q4",
+    "confidence": 0.868
+   },
+   {
+    "text": " results",
+    "confidence": 0.842
+   },
+   {
+    "text": " beat",
+    "confidence": 0.747
+   },
+   {
+    "text": " expectations.",
+    "confidence": 0.65
+   }
+  ],
+  "independent": "Q4 results beat expectations."
+ },
+ {
+  "id": "quarter.pos.news",
+  "line": "Q3 results beat expectations.",
+  "native": "Q3 results beat expectations.",
+  "nativeSpans": [
+   {
+    "text": "Q3",
+    "confidence": 0.788
+   },
+   {
+    "text": " results",
+    "confidence": 0.957
+   },
+   {
+    "text": " beat",
+    "confidence": 0.858
+   },
+   {
+    "text": " expectations.",
+    "confidence": 0.827
+   }
+  ],
+  "independent": "Q3 results beat expectations."
+ },
+ {
+  "id": "quarter.pos.s1",
+  "line": "Q3 results beat expectations.",
+  "native": "Q3 results beat expectations.",
+  "nativeSpans": [
+   {
+    "text": "Q3",
+    "confidence": 0.743
+   },
+   {
+    "text": " results",
+    "confidence": 0.825
+   },
+   {
+    "text": " beat",
+    "confidence": 0.731
+   },
+   {
+    "text": " expectations.",
+    "confidence": 0.723
+   }
+  ],
+  "independent": "Q3 results beat expectations."
+ },
+ {
+  "id": "quarter.pos.s2",
+  "line": "Q3 results beat expectations.",
+  "native": "Q3 results beat expectations.",
+  "nativeSpans": [
+   {
+    "text": "Q3",
+    "confidence": 0.796
+   },
+   {
+    "text": " results",
+    "confidence": 0.977
+   },
+   {
+    "text": " beat",
+    "confidence": 0.916
+   },
+   {
+    "text": " expectations.",
+    "confidence": 0.784
+   }
+  ],
+  "independent": "Q3 results beat expectations."
+ },
+ {
+  "id": "quarter.spell.news",
+  "line": "Third quarter results beat expectations.",
+  "native": "Third quarter results beat expectations.",
+  "nativeSpans": [
+   {
+    "text": "Third",
+    "confidence": 0.768
+   },
+   {
+    "text": " quarter",
+    "confidence": 0.889
+   },
+   {
+    "text": " results",
+    "confidence": 0.971
+   },
+   {
+    "text": " beat",
+    "confidence": 0.878
+   },
+   {
+    "text": " expectations.",
+    "confidence": 0.857
+   }
+  ],
+  "independent": "Third quarter results beat expectations."
+ },
+ {
+  "id": "quarter.spell.s1",
+  "line": "Third quarter results beat expectations.",
+  "native": "Third quarter result speed expectations.",
+  "nativeSpans": [
+   {
+    "text": "Third",
+    "confidence": 0.47
+   },
+   {
+    "text": " quarter",
+    "confidence": 0.949
+   },
+   {
+    "text": " result",
+    "confidence": 0.147
+   },
+   {
+    "text": " speed",
+    "confidence": 0.62
+   },
+   {
+    "text": " expectations.",
+    "confidence": 0.814
+   }
+  ],
+  "independent": "third quarter results beat expectations."
+ },
+ {
+  "id": "quarter.spell.s2",
+  "line": "Third quarter results beat expectations.",
+  "native": "Third quarter results beat expectations.",
+  "nativeSpans": [
+   {
+    "text": "Third",
+    "confidence": 0.541
+   },
+   {
+    "text": " quarter",
+    "confidence": 0.979
+   },
+   {
+    "text": " results",
+    "confidence": 0.977
+   },
+   {
+    "text": " beat",
+    "confidence": 0.923
+   },
+   {
+    "text": " expectations.",
+    "confidence": 0.841
+   }
+  ],
+  "independent": "third quarter results beat expectations."
+ },
+ {
+  "id": "range.neg.s1",
+  "line": "Sales rose from 15 to 50 percent.",
+  "native": "Sales rose from 50 to 15%.",
+  "nativeSpans": [
+   {
+    "text": "Sales",
+    "confidence": 0.972
+   },
+   {
+    "text": " rose",
+    "confidence": 0.991
+   },
+   {
+    "text": " from",
+    "confidence": 0.999
+   },
+   {
+    "text": " 50",
+    "confidence": 0.991
+   },
+   {
+    "text": " to",
+    "confidence": 0.995
+   },
+   {
+    "text": " 15%.",
+    "confidence": 0.935
+   }
+  ],
+  "independent": "Sales rose from 50 to 15%."
+ },
+ {
+  "id": "range.negspell.s1",
+  "line": "Sales rose from fifteen to fifty percent.",
+  "native": "Sales rose from 50 to 15%.",
+  "nativeSpans": [
+   {
+    "text": "Sales",
+    "confidence": 0.972
+   },
+   {
+    "text": " rose",
+    "confidence": 0.991
+   },
+   {
+    "text": " from",
+    "confidence": 0.999
+   },
+   {
+    "text": " 50",
+    "confidence": 0.991
+   },
+   {
+    "text": " to",
+    "confidence": 0.995
+   },
+   {
+    "text": " 15%.",
+    "confidence": 0.935
+   }
+  ],
+  "independent": "Sales rose from 50 to 15%."
+ },
+ {
+  "id": "range.pos.news",
+  "line": "Sales rose from 15 to 50 percent.",
+  "native": "Sales rose from 15 to 50%.",
+  "nativeSpans": [
+   {
+    "text": "Sales",
+    "confidence": 0.968
+   },
+   {
+    "text": " rose",
+    "confidence": 0.988
+   },
+   {
+    "text": " from",
+    "confidence": 0.997
+   },
+   {
+    "text": " 15",
+    "confidence": 0.983
+   },
+   {
+    "text": " to",
+    "confidence": 0.99
+   },
+   {
+    "text": " 50%.",
+    "confidence": 0.883
+   }
+  ],
+  "independent": "Sales rose from 15 to 50%."
+ },
+ {
+  "id": "range.pos.s1",
+  "line": "Sales rose from 15 to 50 percent.",
+  "native": "Sales rose from 15 to 50%.",
+  "nativeSpans": [
+   {
+    "text": "Sales",
+    "confidence": 0.969
+   },
+   {
+    "text": " rose",
+    "confidence": 0.996
+   },
+   {
+    "text": " from",
+    "confidence": 0.999
+   },
+   {
+    "text": " 15",
+    "confidence": 0.987
+   },
+   {
+    "text": " to",
+    "confidence": 0.996
+   },
+   {
+    "text": " 50%.",
+    "confidence": 0.892
+   }
+  ],
+  "independent": "Sales rose from 15 to 50 percent."
+ },
+ {
+  "id": "range.pos.s2",
+  "line": "Sales rose from 15 to 50 percent.",
+  "native": "Sales rose from 15 to 50%.",
+  "nativeSpans": [
+   {
+    "text": "Sales",
+    "confidence": 0.978
+   },
+   {
+    "text": " rose",
+    "confidence": 0.995
+   },
+   {
+    "text": " from",
+    "confidence": 0.999
+   },
+   {
+    "text": " 15",
+    "confidence": 0.989
+   },
+   {
+    "text": " to",
+    "confidence": 0.997
+   },
+   {
+    "text": " 50%.",
+    "confidence": 0.897
+   }
+  ],
+  "independent": "Sales rose from 15 to 50 percent."
+ },
+ {
+  "id": "range.spell.news",
+  "line": "Sales rose from fifteen to fifty percent.",
+  "native": "Sales rose from 15 to 50%.",
+  "nativeSpans": [
+   {
+    "text": "Sales",
+    "confidence": 0.964
+   },
+   {
+    "text": " rose",
+    "confidence": 0.99
+   },
+   {
+    "text": " from",
+    "confidence": 0.997
+   },
+   {
+    "text": " 15",
+    "confidence": 0.981
+   },
+   {
+    "text": " to",
+    "confidence": 0.99
+   },
+   {
+    "text": " 50%.",
+    "confidence": 0.873
+   }
+  ],
+  "independent": "Sales rose from 15 to 50%."
+ },
+ {
+  "id": "range.spell.s1",
+  "line": "Sales rose from fifteen to fifty percent.",
+  "native": "Sales rose from 15 to 50%.",
+  "nativeSpans": [
+   {
+    "text": "Sales",
+    "confidence": 0.98
+   },
+   {
+    "text": " rose",
+    "confidence": 0.995
+   },
+   {
+    "text": " from",
+    "confidence": 0.999
+   },
+   {
+    "text": " 15",
+    "confidence": 0.989
+   },
+   {
+    "text": " to",
+    "confidence": 0.994
+   },
+   {
+    "text": " 50%.",
+    "confidence": 0.911
+   }
+  ],
+  "independent": "Sales rose from 15 to 50%."
+ },
+ {
+  "id": "range.spell.s2",
+  "line": "Sales rose from fifteen to fifty percent.",
+  "native": "Sales rose from 15 to 50%.",
+  "nativeSpans": [
+   {
+    "text": "Sales",
+    "confidence": 0.973
+   },
+   {
+    "text": " rose",
+    "confidence": 0.995
+   },
+   {
+    "text": " from",
+    "confidence": 1
+   },
+   {
+    "text": " 15",
+    "confidence": 0.993
+   },
+   {
+    "text": " to",
+    "confidence": 0.998
+   },
+   {
+    "text": " 50%.",
+    "confidence": 0.925
+   }
+  ],
+  "independent": "Sales rose from 15 to 50 percent."
+ },
+ {
+  "id": "routes.neg.s1",
+  "line": "Next quarter, we open two new routes along the coast.",
+  "native": "Next quarter, we open 2 new roads along the coast.",
+  "nativeSpans": [
+   {
+    "text": "Next",
+    "confidence": 0.998
+   },
+   {
+    "text": " quarter,",
+    "confidence": 0.932
+   },
+   {
+    "text": " we",
+    "confidence": 0.995
+   },
+   {
+    "text": " open",
+    "confidence": 0.999
+   },
+   {
+    "text": " 2",
+    "confidence": 0.453
+   },
+   {
+    "text": " new roads",
+    "confidence": 0.998
+   },
+   {
+    "text": " along",
+    "confidence": 0.995
+   },
+   {
+    "text": " the",
+    "confidence": 0.999
+   },
+   {
+    "text": " coast.",
+    "confidence": 0.964
+   }
+  ],
+  "independent": "Next quarter, we open two new roads along the coast."
+ },
+ {
+  "id": "routes.pos.news",
+  "line": "Next quarter, we open two new routes along the coast.",
+  "native": "Next quarter, we open two new routes along the coast.",
+  "nativeSpans": [
+   {
+    "text": "Next",
+    "confidence": 0.999
+   },
+   {
+    "text": " quarter,",
+    "confidence": 0.929
+   },
+   {
+    "text": " we",
+    "confidence": 0.997
+   },
+   {
+    "text": " open",
+    "confidence": 0.999
+   },
+   {
+    "text": " two",
+    "confidence": 0.57
+   },
+   {
+    "text": " new routes",
+    "confidence": 0.999
+   },
+   {
+    "text": " along",
+    "confidence": 0.997
+   },
+   {
+    "text": " the",
+    "confidence": 0.999
+   },
+   {
+    "text": " coast.",
+    "confidence": 0.974
+   }
+  ],
+  "independent": "Next quarter, we open two new routes along the coast."
+ },
+ {
+  "id": "routes.pos.s1",
+  "line": "Next quarter, we open two new routes along the coast.",
+  "native": "Next quarter, we open two new routes along the coast.",
+  "nativeSpans": [
+   {
+    "text": "Next",
+    "confidence": 0.999
+   },
+   {
+    "text": " quarter,",
+    "confidence": 0.971
+   },
+   {
+    "text": " we",
+    "confidence": 0.997
+   },
+   {
+    "text": " open",
+    "confidence": 0.999
+   },
+   {
+    "text": " two",
+    "confidence": 0.699
+   },
+   {
+    "text": " new",
+    "confidence": 0.998
+   },
+   {
+    "text": " routes",
+    "confidence": 0.999
+   },
+   {
+    "text": " along",
+    "confidence": 0.997
+   },
+   {
+    "text": " the",
+    "confidence": 0.999
+   },
+   {
+    "text": " coast.",
+    "confidence": 0.955
+   }
+  ],
+  "independent": "Next quarter, we open two new routes along the coast."
+ },
+ {
+  "id": "routes.pos.s2",
+  "line": "Next quarter, we open two new routes along the coast.",
+  "native": "Next quarter.",
+  "nativeSpans": [
+   {
+    "text": "Next",
+    "confidence": 0.963
+   },
+   {
+    "text": " quarter.",
+    "confidence": 0.756
+   }
+  ],
+  "independent": "Next Quarter"
+ },
+ {
+  "id": "small.neg.s1",
+  "line": "We need 3 or 4 volunteers.",
+  "native": "We need 5 or 6 volunteers.",
+  "nativeSpans": [
+   {
+    "text": "We",
+    "confidence": 0.975
+   },
+   {
+    "text": " need",
+    "confidence": 0.993
+   },
+   {
+    "text": " 5",
+    "confidence": 0.655
+   },
+   {
+    "text": " or",
+    "confidence": 0.998
+   },
+   {
+    "text": " 6",
+    "confidence": 0.9
+   },
+   {
+    "text": " volunteers.",
+    "confidence": 0.776
+   }
+  ],
+  "independent": "We need five or six volunteers."
+ },
+ {
+  "id": "small.negspell.s1",
+  "line": "We need three or four volunteers.",
+  "native": "We need 5 or 6 volunteers.",
+  "nativeSpans": [
+   {
+    "text": "We",
+    "confidence": 0.975
+   },
+   {
+    "text": " need",
+    "confidence": 0.993
+   },
+   {
+    "text": " 5",
+    "confidence": 0.655
+   },
+   {
+    "text": " or",
+    "confidence": 0.998
+   },
+   {
+    "text": " 6",
+    "confidence": 0.9
+   },
+   {
+    "text": " volunteers.",
+    "confidence": 0.776
+   }
+  ],
+  "independent": "We need five or six volunteers."
+ },
+ {
+  "id": "small.pos.news",
+  "line": "We need 3 or 4 volunteers.",
+  "native": "We need 3 or 4 volunteers.",
+  "nativeSpans": [
+   {
+    "text": "We",
+    "confidence": 0.995
+   },
+   {
+    "text": " need",
+    "confidence": 0.998
+   },
+   {
+    "text": " 3",
+    "confidence": 0.386
+   },
+   {
+    "text": " or",
+    "confidence": 0.998
+   },
+   {
+    "text": " 4",
+    "confidence": 0.827
+   },
+   {
+    "text": " volunteers.",
+    "confidence": 0.973
+   }
+  ],
+  "independent": "We need three or four volunteers."
+ },
+ {
+  "id": "small.pos.s1",
+  "line": "We need 3 or 4 volunteers.",
+  "native": "We need 3 or 4 volunteers.",
+  "nativeSpans": [
+   {
+    "text": "We",
+    "confidence": 0.971
+   },
+   {
+    "text": " need",
+    "confidence": 0.991
+   },
+   {
+    "text": " 3",
+    "confidence": 0.786
+   },
+   {
+    "text": " or",
+    "confidence": 0.996
+   },
+   {
+    "text": " 4",
+    "confidence": 0.959
+   },
+   {
+    "text": " volunteers.",
+    "confidence": 0.902
+   }
+  ],
+  "independent": "We need three or four volunteers."
+ },
+ {
+  "id": "small.pos.s2",
+  "line": "We need 3 or 4 volunteers.",
+  "native": "We need 3 or 4 volunteers.",
+  "nativeSpans": [
+   {
+    "text": "We",
+    "confidence": 0.977
+   },
+   {
+    "text": " need",
+    "confidence": 0.996
+   },
+   {
+    "text": " 3",
+    "confidence": 0.888
+   },
+   {
+    "text": " or",
+    "confidence": 0.997
+   },
+   {
+    "text": " 4",
+    "confidence": 0.989
+   },
+   {
+    "text": " volunteers.",
+    "confidence": 0.769
+   }
+  ],
+  "independent": "We need three or four volunteers."
+ },
+ {
+  "id": "small.spell.news",
+  "line": "We need three or four volunteers.",
+  "native": "We need 3 or 4 volunteers.",
+  "nativeSpans": [
+   {
+    "text": "We",
+    "confidence": 0.996
+   },
+   {
+    "text": " need",
+    "confidence": 0.997
+   },
+   {
+    "text": " 3",
+    "confidence": 0.669
+   },
+   {
+    "text": " or",
+    "confidence": 0.998
+   },
+   {
+    "text": " 4",
+    "confidence": 0.934
+   },
+   {
+    "text": " volunteers.",
+    "confidence": 0.978
+   }
+  ],
+  "independent": "We need three or four volunteers."
+ },
+ {
+  "id": "small.spell.s1",
+  "line": "We need three or four volunteers.",
+  "native": "We need 3 or 4 volunteers.",
+  "nativeSpans": [
+   {
+    "text": "We",
+    "confidence": 0.923
+   },
+   {
+    "text": " need",
+    "confidence": 0.984
+   },
+   {
+    "text": " 3",
+    "confidence": 0.604
+   },
+   {
+    "text": " or",
+    "confidence": 0.995
+   },
+   {
+    "text": " 4",
+    "confidence": 0.888
+   },
+   {
+    "text": " volunteers.",
+    "confidence": 0.668
+   }
+  ],
+  "independent": "We need three or four volunteers."
+ },
+ {
+  "id": "small.spell.s2",
+  "line": "We need three or four volunteers.",
+  "native": "We need 3 or 4 volunteers.",
+  "nativeSpans": [
+   {
+    "text": "We",
+    "confidence": 0.947
+   },
+   {
+    "text": " need",
+    "confidence": 0.973
+   },
+   {
+    "text": " 3",
+    "confidence": 0.703
+   },
+   {
+    "text": " or",
+    "confidence": 0.979
+   },
+   {
+    "text": " 4",
+    "confidence": 0.942
+   },
+   {
+    "text": " volunteers.",
+    "confidence": 0.95
+   }
+  ],
+  "independent": "We need three or four volunteers."
+ },
+ {
+  "id": "thousands.neg.s1",
+  "line": "We sold 1,200 tickets in the first week.",
+  "native": "We sold 1300 tickets in the 1st week.",
+  "nativeSpans": [
+   {
+    "text": "We",
+    "confidence": 0.968
+   },
+   {
+    "text": " sold",
+    "confidence": 0.993
+   },
+   {
+    "text": " 1300",
+    "confidence": 0.931
+   },
+   {
+    "text": " tickets",
+    "confidence": 0.998
+   },
+   {
+    "text": " in",
+    "confidence": 0.993
+   },
+   {
+    "text": " the",
+    "confidence": 0.997
+   },
+   {
+    "text": " 1st",
+    "confidence": 0.924
+   },
+   {
+    "text": " week.",
+    "confidence": 0.94
+   }
+  ],
+  "independent": "We sold 1,300 tickets in the first week."
+ },
+ {
+  "id": "thousands.negspell.s1",
+  "line": "We sold twelve hundred tickets in the first week.",
+  "native": "We sold 1300 tickets in the 1st week.",
+  "nativeSpans": [
+   {
+    "text": "We",
+    "confidence": 0.968
+   },
+   {
+    "text": " sold",
+    "confidence": 0.993
+   },
+   {
+    "text": " 1300",
+    "confidence": 0.931
+   },
+   {
+    "text": " tickets",
+    "confidence": 0.998
+   },
+   {
+    "text": " in",
+    "confidence": 0.993
+   },
+   {
+    "text": " the",
+    "confidence": 0.997
+   },
+   {
+    "text": " 1st",
+    "confidence": 0.924
+   },
+   {
+    "text": " week.",
+    "confidence": 0.94
+   }
+  ],
+  "independent": "We sold 1,300 tickets in the first week."
+ },
+ {
+  "id": "thousands.pos.news",
+  "line": "We sold 1,200 tickets in the first week.",
+  "native": "We sold $1,200 tickets in the 1st week.",
+  "nativeSpans": [
+   {
+    "text": "We",
+    "confidence": 0.997
+   },
+   {
+    "text": " sold",
+    "confidence": 0.999
+   },
+   {
+    "text": " $1,200",
+    "confidence": 0.837
+   },
+   {
+    "text": " tickets",
+    "confidence": 0.999
+   },
+   {
+    "text": " in",
+    "confidence": 0.998
+   },
+   {
+    "text": " the",
+    "confidence": 0.999
+   },
+   {
+    "text": " 1st",
+    "confidence": 0.857
+   },
+   {
+    "text": " week.",
+    "confidence": 0.91
+   }
+  ],
+  "independent": "We sold 1,200,000 tickets in the first week."
+ },
+ {
+  "id": "thousands.pos.s1",
+  "line": "We sold 1,200 tickets in the first week.",
+  "native": "We sold 1,200 tickets in the 1st week.",
+  "nativeSpans": [
+   {
+    "text": "We",
+    "confidence": 0.91
+   },
+   {
+    "text": " sold",
+    "confidence": 0.978
+   },
+   {
+    "text": " 1,200",
+    "confidence": 0.6
+   },
+   {
+    "text": " tickets",
+    "confidence": 0.987
+   },
+   {
+    "text": " in",
+    "confidence": 0.96
+   },
+   {
+    "text": " the",
+    "confidence": 0.978
+   },
+   {
+    "text": " 1st",
+    "confidence": 0.764
+   },
+   {
+    "text": " week.",
+    "confidence": 0.884
+   }
+  ],
+  "independent": "We sold 1,200 tickets in the first week."
+ },
+ {
+  "id": "thousands.pos.s2",
+  "line": "We sold 1,200 tickets in the first week.",
+  "native": "We sold 1200 tickets in the 1st week.",
+  "nativeSpans": [
+   {
+    "text": "We",
+    "confidence": 0.993
+   },
+   {
+    "text": " sold",
+    "confidence": 0.998
+   },
+   {
+    "text": " 1200",
+    "confidence": 0.937
+   },
+   {
+    "text": " tickets",
+    "confidence": 0.999
+   },
+   {
+    "text": " in the",
+    "confidence": 0.998
+   },
+   {
+    "text": " 1st",
+    "confidence": 0.943
+   },
+   {
+    "text": " week.",
+    "confidence": 0.965
+   }
+  ],
+  "independent": "We sold 1,200 tickets in the first week."
+ },
+ {
+  "id": "thousands.spell.news",
+  "line": "We sold twelve hundred tickets in the first week.",
+  "native": "We sold 1200 tickets in the 1st week.",
+  "nativeSpans": [
+   {
+    "text": "We",
+    "confidence": 0.997
+   },
+   {
+    "text": " sold",
+    "confidence": 0.999
+   },
+   {
+    "text": " 1200",
+    "confidence": 0.956
+   },
+   {
+    "text": " tickets in the",
+    "confidence": 0.999
+   },
+   {
+    "text": " 1st",
+    "confidence": 0.968
+   },
+   {
+    "text": " week.",
+    "confidence": 0.977
+   }
+  ],
+  "independent": "We sold 1200 tickets in the first week."
+ },
+ {
+  "id": "thousands.spell.s1",
+  "line": "We sold twelve hundred tickets in the first week.",
+  "native": "We sold 1,200 tickets in the 1st week.",
+  "nativeSpans": [
+   {
+    "text": "We",
+    "confidence": 0.932
+   },
+   {
+    "text": " sold",
+    "confidence": 0.993
+   },
+   {
+    "text": " 1,200",
+    "confidence": 0.598
+   },
+   {
+    "text": " tickets",
+    "confidence": 0.998
+   },
+   {
+    "text": " in",
+    "confidence": 0.995
+   },
+   {
+    "text": " the",
+    "confidence": 0.997
+   },
+   {
+    "text": " 1st",
+    "confidence": 0.761
+   },
+   {
+    "text": " week.",
+    "confidence": 0.956
+   }
+  ],
+  "independent": "We sold 1200 tickets in the first week."
+ },
+ {
+  "id": "thousands.spell.s2",
+  "line": "We sold twelve hundred tickets in the first week.",
+  "native": "We sold 1200 tickets in the 1st week.",
+  "nativeSpans": [
+   {
+    "text": "We",
+    "confidence": 0.994
+   },
+   {
+    "text": " sold",
+    "confidence": 0.998
+   },
+   {
+    "text": " 1200",
+    "confidence": 0.929
+   },
+   {
+    "text": " tickets",
+    "confidence": 0.999
+   },
+   {
+    "text": " in",
+    "confidence": 0.997
+   },
+   {
+    "text": " the",
+    "confidence": 0.999
+   },
+   {
+    "text": " 1st",
+    "confidence": 0.969
+   },
+   {
+    "text": " week.",
+    "confidence": 0.962
+   }
+  ],
+  "independent": "We sold 1,200 tickets in the first week."
+ },
+ {
+  "id": "time.neg.s1",
+  "line": "The meeting starts at 3:30 tomorrow afternoon.",
+  "native": "The meeting starts at 430 tomorrow afternoon.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.997
+   },
+   {
+    "text": " meeting",
+    "confidence": 0.999
+   },
+   {
+    "text": " starts",
+    "confidence": 1
+   },
+   {
+    "text": " at",
+    "confidence": 0.999
+   },
+   {
+    "text": " 430",
+    "confidence": 0.664
+   },
+   {
+    "text": " tomorrow",
+    "confidence": 0.996
+   },
+   {
+    "text": " afternoon.",
+    "confidence": 0.971
+   }
+  ],
+  "independent": "The meeting starts at 4.30 tomorrow afternoon."
+ },
+ {
+  "id": "time.negspell.s1",
+  "line": "The meeting starts at three thirty tomorrow afternoon.",
+  "native": "The meeting starts at 430 tomorrow afternoon.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.997
+   },
+   {
+    "text": " meeting",
+    "confidence": 0.999
+   },
+   {
+    "text": " starts",
+    "confidence": 1
+   },
+   {
+    "text": " at",
+    "confidence": 0.999
+   },
+   {
+    "text": " 430",
+    "confidence": 0.664
+   },
+   {
+    "text": " tomorrow",
+    "confidence": 0.996
+   },
+   {
+    "text": " afternoon.",
+    "confidence": 0.971
+   }
+  ],
+  "independent": "The meeting starts at 4.30 tomorrow afternoon."
+ },
+ {
+  "id": "time.pos.news",
+  "line": "The meeting starts at 3:30 tomorrow afternoon.",
+  "native": "The meeting starts at 330 tomorrow afternoon.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.997
+   },
+   {
+    "text": " meeting starts at",
+    "confidence": 0.999
+   },
+   {
+    "text": " 330",
+    "confidence": 0.932
+   },
+   {
+    "text": " tomorrow",
+    "confidence": 0.994
+   },
+   {
+    "text": " afternoon.",
+    "confidence": 0.961
+   }
+  ],
+  "independent": "The meeting starts at 3.30 tomorrow afternoon."
+ },
+ {
+  "id": "time.pos.s1",
+  "line": "The meeting starts at 3:30 tomorrow afternoon.",
+  "native": "The meeting starts at 330 tomorrow afternoon.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.995
+   },
+   {
+    "text": " meeting",
+    "confidence": 0.998
+   },
+   {
+    "text": " starts",
+    "confidence": 1
+   },
+   {
+    "text": " at",
+    "confidence": 0.998
+   },
+   {
+    "text": " 330",
+    "confidence": 0.851
+   },
+   {
+    "text": " tomorrow",
+    "confidence": 0.993
+   },
+   {
+    "text": " afternoon.",
+    "confidence": 0.976
+   }
+  ],
+  "independent": "The meeting starts at 3.30 tomorrow afternoon."
+ },
+ {
+  "id": "time.pos.s2",
+  "line": "The meeting starts at 3:30 tomorrow afternoon.",
+  "native": "The meeting starts at 330 tomorrow afternoon.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.987
+   },
+   {
+    "text": " meeting",
+    "confidence": 0.994
+   },
+   {
+    "text": " starts",
+    "confidence": 0.999
+   },
+   {
+    "text": " at",
+    "confidence": 0.997
+   },
+   {
+    "text": " 330",
+    "confidence": 0.88
+   },
+   {
+    "text": " tomorrow",
+    "confidence": 0.996
+   },
+   {
+    "text": " afternoon.",
+    "confidence": 0.943
+   }
+  ],
+  "independent": "The meeting starts at 3.30 tomorrow afternoon."
+ },
+ {
+  "id": "time.spell.news",
+  "line": "The meeting starts at three thirty tomorrow afternoon.",
+  "native": "The meeting starts at 330 tomorrow afternoon.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.995
+   },
+   {
+    "text": " meeting",
+    "confidence": 0.998
+   },
+   {
+    "text": " starts",
+    "confidence": 1
+   },
+   {
+    "text": " at",
+    "confidence": 0.999
+   },
+   {
+    "text": " 330",
+    "confidence": 0.933
+   },
+   {
+    "text": " tomorrow",
+    "confidence": 0.995
+   },
+   {
+    "text": " afternoon.",
+    "confidence": 0.92
+   }
+  ],
+  "independent": "The meeting starts at 3.30 tomorrow afternoon."
+ },
+ {
+  "id": "time.spell.s1",
+  "line": "The meeting starts at three thirty tomorrow afternoon.",
+  "native": "The meeting starts at 330 tomorrow afternoon.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.994
+   },
+   {
+    "text": " meeting",
+    "confidence": 0.998
+   },
+   {
+    "text": " starts",
+    "confidence": 1
+   },
+   {
+    "text": " at",
+    "confidence": 0.999
+   },
+   {
+    "text": " 330",
+    "confidence": 0.84
+   },
+   {
+    "text": " tomorrow",
+    "confidence": 0.999
+   },
+   {
+    "text": " afternoon.",
+    "confidence": 0.963
+   }
+  ],
+  "independent": "The meeting starts at 3.30 tomorrow afternoon."
+ },
+ {
+  "id": "time.spell.s2",
+  "line": "The meeting starts at three thirty tomorrow afternoon.",
+  "native": "The meeting starts at 330 tomorrow afternoon.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.998
+   },
+   {
+    "text": " meeting",
+    "confidence": 0.999
+   },
+   {
+    "text": " starts",
+    "confidence": 1
+   },
+   {
+    "text": " at",
+    "confidence": 0.999
+   },
+   {
+    "text": " 330",
+    "confidence": 0.885
+   },
+   {
+    "text": " tomorrow",
+    "confidence": 0.997
+   },
+   {
+    "text": " afternoon.",
+    "confidence": 0.971
+   }
+  ],
+  "independent": "The meeting starts at 3.30 tomorrow afternoon."
+ },
+ {
+  "id": "website.neg.s1",
+  "line": "Alright, the website is down again.",
+  "native": "All right, the website is up again.",
+  "nativeSpans": [
+   {
+    "text": "All",
+    "confidence": 0.858
+   },
+   {
+    "text": " right,",
+    "confidence": 0.772
+   },
+   {
+    "text": " the",
+    "confidence": 0.851
+   },
+   {
+    "text": " website",
+    "confidence": 0.998
+   },
+   {
+    "text": " is",
+    "confidence": 0.996
+   },
+   {
+    "text": " up",
+    "confidence": 0.985
+   },
+   {
+    "text": " again.",
+    "confidence": 0.93
+   }
+  ],
+  "independent": "All right, the website is up again."
+ },
+ {
+  "id": "website.pos.news",
+  "line": "Alright, the website is down again.",
+  "native": "All right, the website is down again.",
+  "nativeSpans": [
+   {
+    "text": "All",
+    "confidence": 0.87
+   },
+   {
+    "text": " right,",
+    "confidence": 0.643
+   },
+   {
+    "text": " the",
+    "confidence": 0.753
+   },
+   {
+    "text": " website is",
+    "confidence": 0.998
+   },
+   {
+    "text": " down",
+    "confidence": 0.993
+   },
+   {
+    "text": " again.",
+    "confidence": 0.95
+   }
+  ],
+  "independent": "Alright, the website is down again."
+ },
+ {
+  "id": "website.pos.s1",
+  "line": "Alright, the website is down again.",
+  "native": "All right, the website is down again.",
+  "nativeSpans": [
+   {
+    "text": "All",
+    "confidence": 0.858
+   },
+   {
+    "text": " right,",
+    "confidence": 0.548
+   },
+   {
+    "text": " the",
+    "confidence": 0.608
+   },
+   {
+    "text": " website is",
+    "confidence": 0.998
+   },
+   {
+    "text": " down",
+    "confidence": 0.994
+   },
+   {
+    "text": " again.",
+    "confidence": 0.94
+   }
+  ],
+  "independent": "Alright, the website is down again."
+ },
+ {
+  "id": "website.pos.s2",
+  "line": "Alright, the website is down again.",
+  "native": "All right, the website is down again.",
+  "nativeSpans": [
+   {
+    "text": "All",
+    "confidence": 0.928
+   },
+   {
+    "text": " right,",
+    "confidence": 0.864
+   },
+   {
+    "text": " the",
+    "confidence": 0.93
+   },
+   {
+    "text": " website",
+    "confidence": 0.998
+   },
+   {
+    "text": " is",
+    "confidence": 0.997
+   },
+   {
+    "text": " down",
+    "confidence": 0.996
+   },
+   {
+    "text": " again.",
+    "confidence": 0.958
+   }
+  ],
+  "independent": "Alright, the website is down again."
+ },
+ {
+  "id": "year1998.neg.s1",
+  "line": "The company was founded in 1998.",
+  "native": "The company was founded in 1989.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.983
+   },
+   {
+    "text": " company",
+    "confidence": 0.992
+   },
+   {
+    "text": " was",
+    "confidence": 0.997
+   },
+   {
+    "text": " founded",
+    "confidence": 0.999
+   },
+   {
+    "text": " in",
+    "confidence": 0.995
+   },
+   {
+    "text": " 1989.",
+    "confidence": 0.901
+   }
+  ],
+  "independent": "The company was founded in 1989."
+ },
+ {
+  "id": "year1998.negspell.s1",
+  "line": "The company was founded in nineteen ninety-eight.",
+  "native": "The company was founded in 1989.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.983
+   },
+   {
+    "text": " company",
+    "confidence": 0.992
+   },
+   {
+    "text": " was",
+    "confidence": 0.997
+   },
+   {
+    "text": " founded",
+    "confidence": 0.999
+   },
+   {
+    "text": " in",
+    "confidence": 0.995
+   },
+   {
+    "text": " 1989.",
+    "confidence": 0.901
+   }
+  ],
+  "independent": "The company was founded in 1989."
+ },
+ {
+  "id": "year1998.pos.news",
+  "line": "The company was founded in 1998.",
+  "native": "The company was founded in 1998.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.989
+   },
+   {
+    "text": " company",
+    "confidence": 0.993
+   },
+   {
+    "text": " was",
+    "confidence": 0.997
+   },
+   {
+    "text": " founded",
+    "confidence": 0.999
+   },
+   {
+    "text": " in",
+    "confidence": 0.997
+   },
+   {
+    "text": " 1998.",
+    "confidence": 0.949
+   }
+  ],
+  "independent": "The company was founded in 1998."
+ },
+ {
+  "id": "year1998.pos.s1",
+  "line": "The company was founded in 1998.",
+  "native": "The company was founded in 1998.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.944
+   },
+   {
+    "text": " company",
+    "confidence": 0.985
+   },
+   {
+    "text": " was",
+    "confidence": 0.994
+   },
+   {
+    "text": " founded",
+    "confidence": 0.997
+   },
+   {
+    "text": " in",
+    "confidence": 0.993
+   },
+   {
+    "text": " 1998.",
+    "confidence": 0.936
+   }
+  ],
+  "independent": "The company was founded in 1998."
+ },
+ {
+  "id": "year1998.pos.s2",
+  "line": "The company was founded in 1998.",
+  "native": "The company was founded in 1998.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.957
+   },
+   {
+    "text": " company",
+    "confidence": 0.988
+   },
+   {
+    "text": " was",
+    "confidence": 0.996
+   },
+   {
+    "text": " founded",
+    "confidence": 0.998
+   },
+   {
+    "text": " in",
+    "confidence": 0.996
+   },
+   {
+    "text": " 1998.",
+    "confidence": 0.955
+   }
+  ],
+  "independent": "The company was founded in 1998."
+ },
+ {
+  "id": "year1998.spell.news",
+  "line": "The company was founded in nineteen ninety-eight.",
+  "native": "The company was founded in 1998.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.99
+   },
+   {
+    "text": " company",
+    "confidence": 0.993
+   },
+   {
+    "text": " was",
+    "confidence": 0.998
+   },
+   {
+    "text": " founded",
+    "confidence": 0.999
+   },
+   {
+    "text": " in",
+    "confidence": 0.997
+   },
+   {
+    "text": " 1998.",
+    "confidence": 0.904
+   }
+  ],
+  "independent": "The company was founded in 1998."
+ },
+ {
+  "id": "year1998.spell.s1",
+  "line": "The company was founded in nineteen ninety-eight.",
+  "native": "The company was founded in 1998.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.757
+   },
+   {
+    "text": " company",
+    "confidence": 0.963
+   },
+   {
+    "text": " was",
+    "confidence": 0.985
+   },
+   {
+    "text": " founded",
+    "confidence": 0.993
+   },
+   {
+    "text": " in",
+    "confidence": 0.988
+   },
+   {
+    "text": " 1998.",
+    "confidence": 0.922
+   }
+  ],
+  "independent": "The company was founded in 1998."
+ },
+ {
+  "id": "year1998.spell.s2",
+  "line": "The company was founded in nineteen ninety-eight.",
+  "native": "The company was founded in 1998.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.943
+   },
+   {
+    "text": " company",
+    "confidence": 0.982
+   },
+   {
+    "text": " was",
+    "confidence": 0.993
+   },
+   {
+    "text": " founded",
+    "confidence": 0.996
+   },
+   {
+    "text": " in",
+    "confidence": 0.992
+   },
+   {
+    "text": " 1998.",
+    "confidence": 0.925
+   }
+  ],
+  "independent": "The company was founded in 1998."
+ },
+ {
+  "id": "year2026.neg.s1",
+  "line": "The new model launches in 2026.",
+  "native": "The new model launches in 2027.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.721
+   },
+   {
+    "text": " new",
+    "confidence": 0.921
+   },
+   {
+    "text": " model",
+    "confidence": 0.894
+   },
+   {
+    "text": " launches",
+    "confidence": 0.993
+   },
+   {
+    "text": " in",
+    "confidence": 0.958
+   },
+   {
+    "text": " 2027.",
+    "confidence": 0.883
+   }
+  ],
+  "independent": "The new model launches in 2027."
+ },
+ {
+  "id": "year2026.negspell.s1",
+  "line": "The new model launches in twenty twenty-six.",
+  "native": "The new model launches in 2027.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.721
+   },
+   {
+    "text": " new",
+    "confidence": 0.921
+   },
+   {
+    "text": " model",
+    "confidence": 0.894
+   },
+   {
+    "text": " launches",
+    "confidence": 0.993
+   },
+   {
+    "text": " in",
+    "confidence": 0.958
+   },
+   {
+    "text": " 2027.",
+    "confidence": 0.883
+   }
+  ],
+  "independent": "The new model launches in 2027."
+ },
+ {
+  "id": "year2026.pos.news",
+  "line": "The new model launches in 2026.",
+  "native": "The new model launches in 2026.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.986
+   },
+   {
+    "text": " new",
+    "confidence": 0.981
+   },
+   {
+    "text": " model",
+    "confidence": 0.924
+   },
+   {
+    "text": " launches",
+    "confidence": 0.983
+   },
+   {
+    "text": " in",
+    "confidence": 0.993
+   },
+   {
+    "text": " 2026.",
+    "confidence": 0.932
+   }
+  ],
+  "independent": "The new model launches in 2026."
+ },
+ {
+  "id": "year2026.pos.s1",
+  "line": "The new model launches in 2026.",
+  "native": "The new model launches in 2026.",
+  "nativeSpans": [
+   {
+    "text": "The new",
+    "confidence": 0.982
+   },
+   {
+    "text": " model",
+    "confidence": 0.944
+   },
+   {
+    "text": " launches",
+    "confidence": 0.998
+   },
+   {
+    "text": " in",
+    "confidence": 0.993
+   },
+   {
+    "text": " 2026.",
+    "confidence": 0.912
+   }
+  ],
+  "independent": "The new model launches in 2026."
+ },
+ {
+  "id": "year2026.pos.s2",
+  "line": "The new model launches in 2026.",
+  "native": "The new model launches in 2026.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.863
+   },
+   {
+    "text": " new",
+    "confidence": 0.954
+   },
+   {
+    "text": " model",
+    "confidence": 0.928
+   },
+   {
+    "text": " launches",
+    "confidence": 0.996
+   },
+   {
+    "text": " in",
+    "confidence": 0.987
+   },
+   {
+    "text": " 2026.",
+    "confidence": 0.925
+   }
+  ],
+  "independent": "The new model launches in 2026."
+ },
+ {
+  "id": "year2026.spell.news",
+  "line": "The new model launches in twenty twenty-six.",
+  "native": "The new model launches in 2026.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.986
+   },
+   {
+    "text": " new",
+    "confidence": 0.979
+   },
+   {
+    "text": " model",
+    "confidence": 0.913
+   },
+   {
+    "text": " launches",
+    "confidence": 0.998
+   },
+   {
+    "text": " in",
+    "confidence": 0.995
+   },
+   {
+    "text": " 2026.",
+    "confidence": 0.91
+   }
+  ],
+  "independent": "The new model launches in 2026."
+ },
+ {
+  "id": "year2026.spell.s1",
+  "line": "The new model launches in twenty twenty-six.",
+  "native": "The new model launches in 2026.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.957
+   },
+   {
+    "text": " new",
+    "confidence": 0.978
+   },
+   {
+    "text": " model",
+    "confidence": 0.963
+   },
+   {
+    "text": " launches",
+    "confidence": 0.998
+   },
+   {
+    "text": " in",
+    "confidence": 0.996
+   },
+   {
+    "text": " 2026.",
+    "confidence": 0.873
+   }
+  ],
+  "independent": "The new model launches in 2026."
+ },
+ {
+  "id": "year2026.spell.s2",
+  "line": "The new model launches in twenty twenty-six.",
+  "native": "The new model launches in 2026.",
+  "nativeSpans": [
+   {
+    "text": "The",
+    "confidence": 0.995
+   },
+   {
+    "text": " new",
+    "confidence": 0.989
+   },
+   {
+    "text": " model",
+    "confidence": 0.96
+   },
+   {
+    "text": " launches",
+    "confidence": 0.994
+   },
+   {
+    "text": " in",
+    "confidence": 0.997
+   },
+   {
+    "text": " 2026.",
+    "confidence": 0.843
+   }
+  ],
+  "independent": "The new model launches in 2026."
+ }
+]
