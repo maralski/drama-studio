@@ -5,6 +5,30 @@ import XCTest
 @testable import DramaStudio
 
 final class AppScreenplayTests: XCTestCase {
+    func testHeraldAndEngineerKeepTheirCastVoicesAcrossSentences() throws {
+        let prepared = try Screenplay.prepare("""
+        Herald: [grandly] Hear ye, developers. Your next app has a voice.
+        Engineer: [curious] Does the speech run on this Mac?
+        Herald: [confident] Speech runs locally on Apple silicon.
+        """, asScreenplay: true).get()
+        let herald = ReferenceVoice(name: "Herald", transcript: "A herald speaks.", codes: Array(repeating: [1], count: 10))
+        let newsreader = ReferenceVoice(name: "Newsreader", transcript: "A newsreader speaks.", codes: Array(repeating: [2], count: 10))
+        let casting = Casting(speakers: prepared.speakers,
+                              assignments: [0: .library(herald.id), 1: .library(newsreader.id)], library: [herald, newsreader])
+        let plan = try GenerationPlan(SpeechRequest(text: prepared.text, references: casting.references))
+        XCTAssertEqual(plan.chunks.map(\.line), [
+            "<|speaker:0|> [grandly] Hear ye, developers.",
+            "<|speaker:0|> Your next app has a voice.",
+            "<|speaker:1|> [curious] Does the speech run on this Mac?",
+            "<|speaker:0|> [confident] Speech runs locally on Apple silicon."
+        ])
+        for chunk in plan.chunks {
+            let prompt = try Drama3Prompt.render(text: chunk.turn, references: plan.references)
+            XCTAssertTrue(prompt.contains("Text: <|speaker:0|> A herald speaks.\nSpeech: <codes:1>"))
+            XCTAssertTrue(prompt.contains("Text: <|speaker:1|> A newsreader speaks.\nSpeech: <codes:1>"))
+        }
+    }
+
     func testNamesBecomeSpeakerTagsInOrderOfFirstAppearance() throws {
         let script = """
         The rain fell.

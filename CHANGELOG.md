@@ -7,6 +7,14 @@ adds one, and a patch release changes neither.
 
 ## Unreleased
 
+## 2.1.0
+
+- Keep assigned library voices matched to their speakers across screenplay
+  sentences. Untagged reference clips now use their cast index instead of all
+  being labeled speaker 0. Preserve explicit reference speaker tags.
+- Add regression coverage for multi-voice prompts and the Herald and Engineer
+  screenplay. Verify playback with the saved Herald and Newsreader voices.
+
 ## 2.0.0
 
 - Save a voice from a selected complete, word-checked take, including Model

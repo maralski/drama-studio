@@ -4,6 +4,34 @@ import XCTest
 @testable import DramaEngine
 
 final class PromptTests: XCTestCase {
+    func testUntaggedCastReferencesUseTheirSpeakerIndex() throws {
+        let herald = Drama3Prompt.Reference(transcript: "Hear ye, developers.", codes: Array(repeating: [1], count: 10))
+        let newsreader = Drama3Prompt.Reference(transcript: "  Here is the news.", codes: Array(repeating: [2, 3], count: 10))
+        let prompt = try Drama3Prompt.render(text: "<|speaker:1|> Does the speech run on this Mac?", references: [herald, newsreader])
+        XCTAssertEqual(prompt, """
+        <|im_start|>system
+        convert the provided text to speech reference to the following:
+
+        [Reference 1]
+        Text: <|speaker:0|> Hear ye, developers.
+        Speech: <codes:1>
+
+        [Reference 2]
+        Text: <|speaker:1|>   Here is the news.
+        Speech: <codes:2><|im_end|>
+        <|im_start|>user
+        <|speaker:1|> Does the speech run on this Mac?<|im_end|>
+        <|im_start|>assistant
+        <|voice|>
+        """)
+    }
+
+    func testExplicitReferenceSpeakerIsPreserved() throws {
+        let voice = Drama3Prompt.Reference(transcript: "  <|speaker:5|> Hello.", codes: Array(repeating: [1], count: 10))
+        let prompt = try Drama3Prompt.render(text: "<|speaker:5|> Goodbye.", references: [voice])
+        XCTAssertTrue(prompt.contains("Text: <|speaker:5|>   Hello.\nSpeech: <codes:1>"))
+    }
+
     struct Codes: Decodable { let transcript: String?; let text: String?; let codes: [[Int32]] }
     struct PromptCase: Decodable { let name: String; let text: String; let references: [Codes]; let history: [Codes]; let rows: [[Int32]]?; let error: String? }
     struct ChunkCase: Decodable { let name: String; let text: String; let chunks: [String]; let by_length: [String]; let segments: [[String]] }

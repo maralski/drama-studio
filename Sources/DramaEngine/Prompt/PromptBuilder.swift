@@ -72,7 +72,8 @@ public enum Drama3Prompt: Sendable {
 
     /// A voice reference as the prompt holds it.
     public struct Reference: Sendable, Equatable {
-        /// What the clip says.
+        /// What the clip says. Without an explicit speaker tag, the reference's
+        /// array index identifies its speaker.
         public var transcript: String
         /// `[10][T]` codec codes.
         public var codes: [[Int32]]
@@ -111,11 +112,11 @@ public enum Drama3Prompt: Sendable {
         }
     }
 
-    /// Prefix `<|speaker:0|> ` unless a tag already leads the text after white space.
-    package static func withSpeakerTag(_ text: String) -> String {
+    /// Prefix the supplied speaker's tag unless a tag already leads the text after white space.
+    package static func withSpeakerTag(_ text: String, speaker: Int = 0) -> String {
         let body = UnicodeWhitespace.stripLeading(text)
         if speakerTag.firstMatch(in: body, options: .anchored, range: NSRange(location: 0, length: (body as NSString).length)) != nil { return text }
-        return "<|speaker:0|> " + text
+        return "<|speaker:\(speaker)|> " + text
     }
 
     private static func designedTurn(_ text: String) -> String {
@@ -203,7 +204,8 @@ public enum Drama3Prompt: Sendable {
             try validate(ref.transcript, location)
             try checkCodes(ref.codes, location)
             // The tag must follow "Text: " directly; leading white space moves behind it.
-            let tagged = withSpeakerTag(ref.transcript)
+            let tagged = withSpeakerTag(ref.transcript, speaker: index)
+            try validate(tagged, location)
             let body = UnicodeWhitespace.stripLeading(tagged)
             let leading = String(tagged.unicodeScalars.prefix(tagged.unicodeScalars.count - body.unicodeScalars.count))
             let ns = body as NSString
