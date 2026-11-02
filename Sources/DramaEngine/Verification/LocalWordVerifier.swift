@@ -229,7 +229,8 @@ package struct LocalWordVerifier: Sendable {
             var ordinal = 0
             for (index, span) in spans.enumerated() {
                 defer { ordinal += spanWords[index].count }
-                guard ordinal == firstCurrent, spanWords[index].count == 1,
+                // A number token can stand for several spoken words, so it never qualifies.
+                guard ordinal == firstCurrent, spanWords[index].count == 1, !WordCoverage.isNumber(spanWords[index][0]),
                       span.hasReportedConfidence, span.confidence.isFinite,
                       span.confidence > 0, span.confidence < 0.5 else { continue }
                 let remaining = spans.enumerated().filter { $0.offset != index && $0.element.confidence < 0.5 }.map { $0.element.text }

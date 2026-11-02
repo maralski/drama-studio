@@ -84,7 +84,8 @@ final class BoundaryVerificationTests: XCTestCase {
         let recognition = Recognition(text: "Meet at 9.30. Please stay here.", spans: [
             .init(text: "Meet at ", confidence: 0.99), .init(text: "9.30.", confidence: 0.99),
             .init(text: " Please", confidence: 0.189), .init(text: " stay here.", confidence: 0.99)])
-        XCTAssertNil(recognition.boundaryWordSpan(previousLine: "Meet at nine thirty.", currentLine: "Please stay here.", locale: english))
+        // "9.30" is one number token in the span and in the whole transcript, so the alignment is real.
+        XCTAssertEqual(recognition.boundaryWordSpan(previousLine: "Meet at nine thirty.", currentLine: "Please stay here.", locale: english), 2)
         XCTAssertFalse(recognition.matches(line: "Meet at nine thirty. Please stay here.", locale: english))
     }
 }

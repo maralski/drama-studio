@@ -17,6 +17,7 @@ package enum WordCoverage {
         var reaction_pattern: String
         var reaction_words: Set<String>
         var reaction_annotations: [ReactionAnnotation]
+        var spellings: [String: String]
     }
     private static let forms = Result { () throws -> EnglishForms in
         guard let url = EngineResources.bundle().url(forResource: "EnglishSpokenForms", withExtension: "json") else {
@@ -24,7 +25,7 @@ package enum WordCoverage {
         }
         return try JSONDecoder().decode(EnglishForms.self, from: Data(contentsOf: url))
     }
-    private static var englishForms: EnglishForms { (try? forms.get()) ?? EnglishForms(titles: [:], contractions: [:], reaction_pattern: "(?!)", reaction_words: [], reaction_annotations: []) }
+    private static var englishForms: EnglishForms { (try? forms.get()) ?? EnglishForms(titles: [:], contractions: [:], reaction_pattern: "(?!)", reaction_words: [], reaction_annotations: [], spellings: [:]) }
     package static func prepare() throws { _ = try forms.get() }
 
     private static func alternation(_ words: some Collection<String>) -> String {
@@ -40,6 +41,8 @@ package enum WordCoverage {
          " \(spoken) ")
     }
     private static let digits = try! NSRegularExpression(pattern: #"(?<![\p{L}\p{N}.])[−-]?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)(?![\p{L}\p{N}]|\.[0-9])"#)
+    private static let writtenNumber = try! NSRegularExpression(
+        pattern: #"(?<![\p{L}\p{N}_.,:])(?:([0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:([.:])([0-9]+))?|\.([0-9]+))('?s)?(?![\p{L}\p{N}_]|[.,:][0-9])"#)
     private static let spellOutFormatters = Mutex<[String: NumberFormatter]>([:])
 
     private static func spellOut(_ value: NSNumber, locale: Locale) -> String? {
@@ -85,7 +88,12 @@ package enum WordCoverage {
                                                        withTemplate: NSRegularExpression.escapedTemplate(for: spoken))
             }
         }
-        text = text.replacingOccurrences(of: "%", with: locale.language.languageCode?.identifier == "en" ? " percent " : " percent_symbol ")
+        if english {
+            return EnglishNumbers.tokens(englishPieces(text.replacingOccurrences(of: "%", with: " percent ")
+                                                           .replacingOccurrences(of: "-", with: " ")),
+                                         spellings: englishForms.spellings)
+        }
+        text = text.replacingOccurrences(of: "%", with: " percent_symbol ")
         for match in digits.matches(in: text, range: NSRange(text.startIndex..., in: text)).reversed() {
             guard let range = Range(match.range, in: text) else { continue }
             let numeric = String(text[range]).replacingOccurrences(of: "−", with: "-")
@@ -111,6 +119,37 @@ package enum WordCoverage {
         return words
     }
 
+    private static func englishPieces(_ text: String) -> [(piece: EnglishNumbers.Piece, joined: Bool)] {
+        var numbers: [(range: Range<String.Index>, readings: Set<String>)] = []
+        for match in writtenNumber.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
+            func group(_ index: Int) -> String? { Range(match.range(at: index), in: text).map { String(text[$0]) } }
+            guard let range = Range(match.range, in: text),
+                  let readings = EnglishNumbers.written(integer: group(1), separator: group(2) ?? group(4).map { _ in "." },
+                                                        fraction: group(3) ?? group(4), decade: group(5) != nil) else { continue }
+            numbers.append((range, readings))
+        }
+        var found: [(range: Range<String.Index>, piece: EnglishNumbers.Piece)] = numbers.map { ($0.range, .written($0.readings)) }
+        let tokenizer = NLTokenizer(unit: .word)
+        tokenizer.setLanguage(.english)
+        tokenizer.string = text
+        tokenizer.enumerateTokens(in: text.startIndex..<text.endIndex) { range, _ in
+            let word = text[range]
+            if word.unicodeScalars.contains(where: CharacterSet.alphanumerics.contains),
+               !numbers.contains(where: { $0.range.overlaps(range) }) {
+                found.append((range, .word(String(word))))
+            }
+            return true
+        }
+        found.sort { $0.range.lowerBound < $1.range.lowerBound }
+        return found.indices.map { index in
+            let gap = index > 0 ? text[found[index - 1].range.upperBound..<found[index].range.lowerBound] : "."
+            let joined = gap.allSatisfy { $0.isWhitespace || $0 == "," }
+            return (found[index].piece, joined)
+        }
+    }
+
+    package static func isNumber(_ token: String) -> Bool { EnglishNumbers.isNumber(token) }
+
     package static func matches(line: String, transcript: String, locale: Locale, uncertainSpans: [String] = []) -> Bool {
         let expected = tokens(DirectorsNote.spokenWords(line), locale: locale)
         let heard = recognizedTokens(transcript, line: line, locale: locale)
@@ -125,18 +164,11 @@ package enum WordCoverage {
     }
 
     package static func recognizedTokens(_ transcript: String, line: String, locale: Locale) -> [String] {
-        var text = removingReactionAnnotations(transcript, for: line)
-        if locale.language.languageCode?.identifier == "en" {
-            text = expandingDottedClockTimes(text, line: line, locale: locale)
-        }
-        return tokens(text, locale: locale)
+        tokens(removingReactionAnnotations(transcript, for: line), locale: locale)
     }
 
     private static let ordinalNumber = try! NSRegularExpression(
         pattern: #"(?<![\p{L}\p{N}_.+−-])([1-9][0-9]{0,3})(st|nd|rd|th)(?![\p{L}\p{N}_]|\.[0-9])"#)
-    private static let dottedClockTime = try! NSRegularExpression(
-        pattern: #"(?<![\p{L}\p{N}_])at\s+([0-9]{1,2})\.([0-9]{2})(?![\p{L}\p{N}_]|\.[0-9]|\s*[%:+−–—/*×÷-]|\s+\.[0-9])"#,
-        options: .caseInsensitive)
 
     private static func expandingOrdinals(_ source: String, locale: Locale) -> String {
         var text = source
@@ -159,38 +191,6 @@ package enum WordCoverage {
         return text
     }
 
-    private static func clockSpelling(_ match: NSTextCheckingResult, in text: String, locale: Locale) -> String? {
-        let ns = text as NSString
-        guard let hour = Int(ns.substring(with: match.range(at: 1))), (1...23).contains(hour),
-              let minute = Int(ns.substring(with: match.range(at: 2))), (10...59).contains(minute),
-              let hours = spellOut(NSNumber(value: hour), locale: locale),
-              let minutes = spellOut(NSNumber(value: minute), locale: locale) else { return nil }
-        return "at " + hours + " " + minutes
-    }
-
-    private static func expandingDottedClockTimes(_ text: String, line: String, locale: Locale) -> String {
-        let candidates = dottedClockTime.matches(in: text, range: NSRange(text.startIndex..., in: text))
-        guard !candidates.isEmpty else { return text }
-        let expected = tokens(DirectorsNote.spokenWords(line), locale: locale)
-        var result = "", cursor = text.startIndex
-        for candidate in candidates {
-            guard let spoken = clockSpelling(candidate, in: text, locale: locale),
-                  let range = Range(candidate.range, in: text) else { continue }
-            result += text[cursor..<range.lowerBound]
-            // A dot remains a decimal unless the requested words at this exact
-            // position spell the same clock time. Earlier decimals stay intact.
-            let prefix = match(expected: expected, heard: tokens(result, locale: locale),
-                               reactions: permitsReactions(line), complete: false)
-            if let prefix, expected.dropFirst(prefix.count).starts(with: tokens(spoken, locale: locale)) {
-                result += spoken
-            } else {
-                result += text[range]
-            }
-            cursor = range.upperBound
-        }
-        return result + text[cursor...]
-    }
-
     package static func unambiguousHeardOrdinal(line: String, transcript: String, expectedOrdinal: Int, locale: Locale) -> Int? {
         let expected = tokens(DirectorsNote.spokenWords(line), locale: locale)
         let reactions = permitsReactions(line)
@@ -205,15 +205,29 @@ package enum WordCoverage {
                    options: [.regularExpression, .caseInsensitive]) != nil
     }
 
-    private static func match(expected: [String], heard: [String], reactions: Bool, complete: Bool = true) -> [Int]? {
-        var next = 0
-        var ordinals: [Int] = []
-        for (ordinal, word) in heard.enumerated() {
-            if next < expected.count, word == expected[next] { next += 1; ordinals.append(ordinal) }
-            else if reactions && nonverbal(word) { continue }
-            else { return nil }
+    /// Returns, for each expected token, the ordinal of the heard token that
+    /// matched it. Spacing may differ inside a compound: "web site" == "website".
+    private static func match(expected: [String], heard: [String], reactions: Bool) -> [Int]? {
+        func joinable(_ tokens: [String], _ index: Int) -> Bool {
+            index + 1 < tokens.count && !isNumber(tokens[index]) && !isNumber(tokens[index + 1])
         }
-        return !expected.isEmpty && (!complete || next == expected.count) ? ordinals : nil
+        var next = 0, ordinal = 0
+        var ordinals: [Int] = []
+        while ordinal < heard.count {
+            let word = heard[ordinal]
+            if next < expected.count, EnglishNumbers.same(word, expected[next]) {
+                ordinals.append(ordinal); next += 1; ordinal += 1
+            } else if next < expected.count, joinable(expected, next), word == expected[next] + expected[next + 1] {
+                ordinals += [ordinal, ordinal]; next += 2; ordinal += 1
+            } else if next < expected.count, joinable(heard, ordinal), word + heard[ordinal + 1] == expected[next] {
+                ordinals.append(ordinal); next += 1; ordinal += 2
+            } else if reactions && nonverbal(word) {
+                ordinal += 1
+            } else {
+                return nil
+            }
+        }
+        return !expected.isEmpty && next == expected.count ? ordinals : nil
     }
 
     private static func removingReactionAnnotations(_ transcript: String, for line: String) -> String {

@@ -5,6 +5,88 @@ import XCTest
 
 final class WordCoverageTests: XCTestCase {
     private let english = Locale(identifier: "en_US")
+    private let englishLocales = [Locale(identifier: "en_US"), Locale(identifier: "en_AU")]
+
+    private func assertMatch(_ pairs: [(String, String)], _ expected: Bool, file: StaticString = #filePath, line: UInt = #line) {
+        for locale in englishLocales {
+            for (first, second) in pairs {
+                for (script, heard) in [(first, second), (second, first)] {
+                    XCTAssertEqual(WordCoverage.matches(line: script, transcript: heard, locale: locale), expected,
+                                   "\(locale.identifier): \(script) | \(heard)", file: file, line: line)
+                }
+            }
+        }
+    }
+
+    func testWrittenNumbersMatchEveryCommonSpokenReading() {
+        assertMatch([
+            ("It costs 1,200 dollars.", "It costs twelve hundred dollars."),
+            ("It costs 1,200 dollars.", "It costs one thousand two hundred dollars."),
+            ("Agent 007 reports for duty.", "Agent double oh seven reports for duty."),
+            ("Agent 007 reports for duty.", "Agent zero zero seven reports for duty."),
+            ("Room 0142 is open.", "Room one four two is open."),
+            ("Call 555 0142 now.", "Call five five five oh one four two now."),
+            ("Call 555-0142 now.", "Call 555 0142 now."),
+            ("Call 555-0142 now.", "Call five five five, oh one four two now."),
+            ("It weighs 4.99 grams.", "It weighs four point nine nine grams."),
+            ("The rate is 2.5 percent.", "The rate is two point five percent."),
+            ("Meet at 3:30.", "Meet at three thirty."),
+            ("Meet at 3:30.", "Meet at 330."),
+            ("Meet at 3:30.", "Meet at 3.30."),
+            ("In 2026 we left.", "In twenty twenty six we left."),
+            ("In 2026 we left.", "In two thousand twenty-six we left."),
+            ("In 2026 we left.", "In two thousand and twenty six we left."),
+            ("In 1998 we left.", "In nineteen ninety-eight we left."),
+            ("In 1905 we left.", "In nineteen oh five we left."),
+            ("Board the 747 now.", "Board the seven forty seven now."),
+            ("It costs $4.99.", "It costs four ninety-nine."),
+            ("It costs $4.99.", "It costs 4 99."),
+            ("They raised $2.5 million.", "They raised 2.5 million dollars."),
+            ("They raised $2.5 million.", "They raised two point five million dollars."),
+            ("They raised $2,500,000.", "They raised 2.5 million dollars."),
+            ("About 100 came.", "About a hundred came."),
+            ("About 700 came.", "About seven hundred came."),
+            ("Back in the 1990s.", "Back in the nineties."),
+            ("Back in the 1990s.", "Back in the nineteen nineties."),
+            ("Back in the 90s.", "Back in the '90s."),
+            ("Take the 5th door.", "Take the fifth door."),
+            ("It fell 12%.", "It fell twelve percent."),
+        ], true)
+        assertMatch([("Call 555 0142 now.", "Call five five five one four two now."),
+                     ("Call 555. 0142 is mine.", "Call 5550142 is mine.")], false)
+    }
+
+    func testWrongNumbersAndWordsStillFail() {
+        assertMatch([
+            ("Deliveries grew by 18% this quarter.", "Deliveries grew by 80% this quarter."),
+            ("In 1998 we left.", "In 1989 we left."),
+            ("It costs $4.99.", "It costs $9.99."),
+            ("They raised 2.5 million dollars.", "They raised $25 million."),
+            ("The value is 2.5.", "The value is 25."),
+            ("The value is 2.5.", "The value is twenty five."),
+            ("Meet at 3:30.", "Meet at 3:40."),
+            ("Agent 007 reports for duty.", "Agent 008 reports for duty."),
+            ("The new routes open on Monday.", "The new roads open on Monday."),
+            ("The queen arrives at noon.", "The king arrives at noon."),
+            ("The ship left the harbour, and nobody saw it again.", "The ship left the harbour."),
+        ], false)
+    }
+
+    func testBritishAndAmericanSpellingsMatch() {
+        assertMatch([
+            ("The boat is in the harbour.", "The boat is in the harbor."),
+            ("What colour is the theatre?", "What color is the theater?"),
+            ("All right, let us go.", "Alright, let us go."),
+            ("Ok, I will organise the grey programme.", "Okay, I will organize the gray program."),
+            ("We travelled to analyse it.", "We traveled to analyze it."),
+        ], true)
+        assertMatch([("I promise.", "I promised."), ("The boat is in the harbour.", "The boat is in the harbors.")], false)
+    }
+
+    func testCompoundSpacingMatches() {
+        assertMatch([("The website is down.", "The web site is down."), ("Read the ebook.", "Read the e book.")], true)
+        assertMatch([("The website is down.", "The web is down.")], false)
+    }
 
     func testMissingOpeningSentenceIsRejectedEvenWithALongReaction() {
         XCTAssertFalse(WordCoverage.matches(line: "[clears throat] The garden gate is closed. The meeting begins on Monday.",
@@ -106,7 +188,6 @@ final class WordCoverageTests: XCTestCase {
     }
 
     func testNumericSignsDecimalsAndPercentCannotDisappear() {
-        XCTAssertEqual(WordCoverage.tokens(".5%", locale: english), ["zero", "point", "five", "percent"])
         for (written, spoken) in [("-12", "minus twelve"), ("−12.5", "minus twelve point five"),
                                   ("+12.5", "plus twelve point five"), ("12.5%", "twelve point five percent"),
                                   (".5%", "zero point five percent")] {
@@ -162,10 +243,10 @@ final class WordCoverageTests: XCTestCase {
         XCTAssertFalse(WordCoverage.matches(line: "The meeting does not begin at nine thirty.", transcript: "The meeting begins at 9.30.", locale: english))
         XCTAssertFalse(WordCoverage.matches(line: line, transcript: "The meeting begins at 9.30.", locale: english, uncertainSpans: ["9.30"]))
         XCTAssertFalse(WordCoverage.matches(line: line, transcript: "The meeting begins at nine point three.", locale: english))
-        XCTAssertFalse(WordCoverage.matches(line: "The value is at 9.30.", transcript: "The value is at nine thirty.", locale: english))
         XCTAssertTrue(WordCoverage.matches(line: "The value is at 9.30.", transcript: "The value is at nine point three.", locale: english))
-        XCTAssertFalse(WordCoverage.matches(line: "The value is 9.30.", transcript: "The value is nine thirty.", locale: english))
-        XCTAssertFalse(WordCoverage.matches(line: "Set it at nine thirty percent.", transcript: "Set it at 9.30 %.", locale: english))
+        // A written pair "9.30" reads as "nine thirty", as in a price or an Australian clock time.
+        XCTAssertTrue(WordCoverage.matches(line: "The value is 9.30.", transcript: "The value is nine thirty.", locale: english))
+        XCTAssertTrue(WordCoverage.matches(line: "Set it at nine thirty percent.", transcript: "Set it at 9.30 %.", locale: english))
         for heard in ["Meet at 9.30-5.", "Meet at 9.30/5.", "Meet at 9.30 / 5.", "Meet at 9.30 +5.",
                       "Meet at 9.30 × 5.", "Meet at 9.30 * 5.", "Meet at 9.30 ÷ 5.", "Meet at 9.30 – 5."] {
             XCTAssertFalse(WordCoverage.matches(line: "Meet at nine thirty five.", transcript: heard, locale: english), heard)
