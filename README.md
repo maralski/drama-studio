@@ -10,12 +10,7 @@ Built with Fish Audio. The model weights are under the
 [Fish Audio Community License](https://huggingface.co/fishaudio/drama-3/blob/main/LICENSE);
 cloning a real person's voice without their consent is not permitted.
 
-[![Watch the Drama Studio promo video](docs/screenshots/promo-poster.jpg)](promo/Drama-Studio-Promo.mp4)
-
-[Watch the promo video](promo/Drama-Studio-Promo.mp4) (2:39, with sound). It was recorded
-from the app with streaming off: it designs a voice, generates and plays a
-screenplay scene, and narrates a slide deck. The voice-over is the app's own
-Captain voice. Waits during generation are sped up and labelled.
+https://github.com/user-attachments/assets/273c2a56-71da-4f1f-95a5-c74141b42930
 
 ## Install
 
