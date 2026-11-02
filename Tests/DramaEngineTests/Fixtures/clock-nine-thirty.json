@@ -1,0 +1,9 @@
+{
+  "source": "Locally generated Drama 3 baseline policy, seed 101, retained formatting rejection from 2026-11-02 experiments.",
+  "source_audit": "eval/out/upstream-experiments/sampling-v3/audit/numbers--s101--baseline/BEAFF390-D9CA-40CE-AE4A-60DF101A8230.json",
+  "line": "The meeting begins on Monday at nine thirty.",
+  "native_transcript": "The meeting begins on Monday at 9.30.",
+  "uncertain_spans": [],
+  "sha256": "e5067df805ab013542a46e0fa3b9b82503fa11a69b22fd63573336bbe6dc5f2f",
+  "sample_rate": 44100
+}

@@ -1,0 +1,9 @@
+{
+  "source": "Locally generated Drama 3 baseline policy, seed 101, retained formatting rejection from 2026-11-02 experiments.",
+  "source_audit": "eval/out/upstream-experiments/smoke/audit/plain-two--s101--baseline/D07C50D3-DEE1-47E2-81A4-926279C61B10.json",
+  "line": "The first door is open.",
+  "native_transcript": "The 1st door is open.",
+  "uncertain_spans": [],
+  "sha256": "9813c3c377d37e39aa795216c733406e3680b08f9cde558479fd65ad75ffe4c2",
+  "sample_rate": 44100
+}

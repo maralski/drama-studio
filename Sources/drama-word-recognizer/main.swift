@@ -56,7 +56,7 @@ import whisper
             throw RecognitionChannelError.invalidFrame
         }
         var params = whisper_context_default_params()
-        params.use_gpu = false
+        params.use_gpu = true
         let context = data.withUnsafeMutableBytes { buffer in
             whisper_init_from_buffer_with_params(buffer.baseAddress, buffer.count, params)
         }

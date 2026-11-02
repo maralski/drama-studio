@@ -1,7 +1,7 @@
 {
-  "policyRevision": 5,
+  "policyRevision": 6,
   "protocolVersion": 1,
-  "configurationID": "whisper-b5454-cpu-greedy-v1",
+  "configurationID": "whisper-b5454-metal-greedy-v1",
   "helperName": "drama-word-recognizer",
   "modelDirectory": "WordVerification",
   "framework": {
@@ -28,5 +28,5 @@
       "englishOnly": false
     }
   ],
-  "policyDefinition": "strict-raw-units-exact-adjacent-pairs-positional-boundary-confidence-v1"
+  "policyDefinition": "strict-raw-units-exact-adjacent-pairs-positional-boundary-confidence-english-ordinal-clock-v2"
 }

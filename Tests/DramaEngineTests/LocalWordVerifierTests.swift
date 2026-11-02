@@ -4,6 +4,20 @@ import XCTest
 @testable import DramaEngine
 
 final class LocalWordVerifierTests: XCTestCase {
+    func testRetainedOrdinalAndClockAudioWithBothRecognizers() throws {
+        guard #available(macOS 26, *) else { throw XCTSkip("Native word checking requires macOS 26.") }
+        for (fixture, line, wrong) in [
+            ("ordinal-first-door", "The first door is open.", "The second door is open."),
+            ("clock-nine-thirty", "The meeting begins on Monday at nine thirty.", "The meeting begins on Monday at nine forty five.")
+        ] {
+            let verifier = try LocalWordVerifier.prepare(text: line, shouldContinue: { true })
+            let url = try XCTUnwrap(Bundle.module.url(forResource: fixture, withExtension: "wav", subdirectory: "Fixtures"))
+            let samples = try DramaCodec.loadAudio(url: url)
+            XCTAssertTrue(try verifier.check(samples: samples, line: line, shouldContinue: { true }), fixture)
+            XCTAssertFalse(try verifier.check(samples: samples, line: wrong, shouldContinue: { true }), fixture)
+        }
+    }
+
     func testRejectsHumanConfirmedGoldenInsteadOfGarden() throws {
         guard #available(macOS 26, *) else { throw XCTSkip("Native word checking requires macOS 26.") }
         let line = "The garden gate is closed."

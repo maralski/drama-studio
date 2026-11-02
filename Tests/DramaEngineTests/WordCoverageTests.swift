@@ -118,4 +118,59 @@ final class WordCoverageTests: XCTestCase {
         XCTAssertFalse(WordCoverage.matches(line: "Revenue rose 12.5%.", transcript: "Revenue rose twelve point five.", locale: english))
         XCTAssertFalse(WordCoverage.matches(line: "The result is 12.5.", transcript: "The result is twelve five.", locale: english))
     }
+
+    func testNumericOrdinalsMatchTheirSpokenForms() {
+        for (written, spoken) in [("1st", "first"), ("2nd", "second"), ("3rd", "third"), ("4th", "fourth"),
+                                  ("11th", "eleventh"), ("12th", "twelfth"), ("13th", "thirteenth"),
+                                  ("20th", "twentieth"), ("21st", "twenty first"), ("22nd", "twenty second"),
+                                  ("23rd", "twenty third"), ("101st", "one hundred first")] {
+            XCTAssertTrue(WordCoverage.matches(line: "The \(spoken) door is open.", transcript: "The \(written) door is open.", locale: english), written)
+            XCTAssertTrue(WordCoverage.matches(line: "The \(written) door is open.", transcript: "The \(spoken) door is open.", locale: english), written)
+        }
+        XCTAssertTrue(WordCoverage.matches(line: "The twenty first door is open.", transcript: "The ２１ＳＴ door is open.", locale: english))
+    }
+
+    func testOrdinalFormattingCannotHideWrongNumbersOrMissingWords() {
+        for heard in ["The 2nd door is open.", "The 1st door is open again.", "The 1st is open.",
+                      "The 1th door is open.", "The 01st door is open.", "The +1st door is open.",
+                      "The -1st door is open.", "The - 1st door is open.", "The + 1st door is open.",
+                      "The −\n1st door is open.", "The 1st5 door is open."] {
+            XCTAssertFalse(WordCoverage.matches(line: "The first door is open.", transcript: heard, locale: english), heard)
+        }
+        XCTAssertFalse(WordCoverage.matches(line: "The first door is not open.", transcript: "The 1st door is open.", locale: english))
+        XCTAssertFalse(WordCoverage.matches(line: "The first door is open.", transcript: "The 1st door is open.", locale: english, uncertainSpans: ["1st"]))
+        XCTAssertFalse(WordCoverage.matches(line: "The first door is open.", transcript: "The 1st door is open.", locale: Locale(identifier: "de_DE")))
+    }
+
+    func testClockFormattingMatchesOnlyTheExpectedTimeAtItsPosition() {
+        let line = "The meeting begins on Monday at nine thirty."
+        for heard in ["The meeting begins on Monday at 9.30.", "The meeting begins on Monday at 9:30."] {
+            XCTAssertTrue(WordCoverage.matches(line: line, transcript: heard, locale: english), heard)
+        }
+        XCTAssertTrue(WordCoverage.matches(line: "The meeting begins at 9:30.", transcript: "The meeting begins at nine thirty.", locale: english))
+        XCTAssertTrue(WordCoverage.matches(line: "Meet at nine thirty and leave at ten forty five.", transcript: "Meet at 9.30 and leave at 10.45.", locale: english))
+        XCTAssertTrue(WordCoverage.matches(line: "The value is at nine point three. Meet at nine thirty.",
+                                           transcript: "The value is at 9.30. Meet at 9.30.", locale: english))
+        XCTAssertTrue(WordCoverage.matches(line: "[sighs] Meet at nine thirty.", transcript: "Ha! Meet at 9.30.", locale: english))
+    }
+
+    func testClockFormattingPreservesDecimalsSignsAndConfidence() {
+        let line = "The meeting begins at nine thirty."
+        for time in ["9.45", "10.30", "9.300", "9.30%", "9.30kg", "-9.30", "+9.30", "9.30.5", "9:30:45", "29.30"] {
+            XCTAssertFalse(WordCoverage.matches(line: line, transcript: "The meeting begins at \(time).", locale: english), time)
+        }
+        XCTAssertFalse(WordCoverage.matches(line: "The meeting does not begin at nine thirty.", transcript: "The meeting begins at 9.30.", locale: english))
+        XCTAssertFalse(WordCoverage.matches(line: line, transcript: "The meeting begins at 9.30.", locale: english, uncertainSpans: ["9.30"]))
+        XCTAssertFalse(WordCoverage.matches(line: line, transcript: "The meeting begins at nine point three.", locale: english))
+        XCTAssertFalse(WordCoverage.matches(line: "The value is at 9.30.", transcript: "The value is at nine thirty.", locale: english))
+        XCTAssertTrue(WordCoverage.matches(line: "The value is at 9.30.", transcript: "The value is at nine point three.", locale: english))
+        XCTAssertFalse(WordCoverage.matches(line: "The value is 9.30.", transcript: "The value is nine thirty.", locale: english))
+        XCTAssertFalse(WordCoverage.matches(line: "Set it at nine thirty percent.", transcript: "Set it at 9.30 %.", locale: english))
+        for heard in ["Meet at 9.30-5.", "Meet at 9.30/5.", "Meet at 9.30 / 5.", "Meet at 9.30 +5.",
+                      "Meet at 9.30 × 5.", "Meet at 9.30 * 5.", "Meet at 9.30 ÷ 5.", "Meet at 9.30 – 5."] {
+            XCTAssertFalse(WordCoverage.matches(line: "Meet at nine thirty five.", transcript: heard, locale: english), heard)
+        }
+        XCTAssertFalse(WordCoverage.matches(line: "Meet at nine thirty zero point five.", transcript: "Meet at 9.30 .5.", locale: english))
+        XCTAssertFalse(WordCoverage.matches(line: line, transcript: "The meeting begins at 9.30.", locale: Locale(identifier: "fr_FR")))
+    }
 }

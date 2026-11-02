@@ -71,11 +71,20 @@ final class BoundaryVerificationTests: XCTestCase {
         }
     }
     func testExpandedContractionsAndNumbersDoNotInventSpanAlignment() {
-        for (right, heard) in [("I'll stay here.", "I'll stay here."), ("24 tickets remain.", "24 tickets remain.")] {
+        for (right, heard) in [("I'll stay here.", "I'll stay here."), ("24 tickets remain.", "24 tickets remain."),
+                               ("Twenty first door is open.", "21st door is open.")] {
             let recognition = Recognition(text: left + " " + heard, spans: [
                 .init(text: left, confidence: 0.99), .init(text: " " + heard.components(separatedBy: " ")[0], confidence: 0.189),
                 .init(text: " " + heard.components(separatedBy: " ").dropFirst().joined(separator: " "), confidence: 0.99)])
             XCTAssertNil(recognition.boundaryWordSpan(previousLine: left, currentLine: right, locale: english))
         }
+    }
+
+    func testFormattingCannotCreateConfidenceSpanAlignment() {
+        let recognition = Recognition(text: "Meet at 9.30. Please stay here.", spans: [
+            .init(text: "Meet at ", confidence: 0.99), .init(text: "9.30.", confidence: 0.99),
+            .init(text: " Please", confidence: 0.189), .init(text: " stay here.", confidence: 0.99)])
+        XCTAssertNil(recognition.boundaryWordSpan(previousLine: "Meet at nine thirty.", currentLine: "Please stay here.", locale: english))
+        XCTAssertFalse(recognition.matches(line: "Meet at nine thirty. Please stay here.", locale: english))
     }
 }
