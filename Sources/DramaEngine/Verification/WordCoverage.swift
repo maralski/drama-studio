@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import Foundation
 import NaturalLanguage
+import Synchronization
 
 /// Compares an audio-only transcript with the requested words. No aggregate
 /// error threshold: even one missing word, repetition or negation fails.
@@ -26,35 +27,65 @@ package enum WordCoverage {
     private static var englishForms: EnglishForms { (try? forms.get()) ?? EnglishForms(titles: [:], contractions: [:], reaction_pattern: "(?!)", reaction_words: [], reaction_annotations: []) }
     package static func prepare() throws { _ = try forms.get() }
 
+    private static func alternation(_ words: some Collection<String>) -> String {
+        words.sorted { $0.count > $1.count }.map(NSRegularExpression.escapedPattern(for:)).joined(separator: "|")
+    }
+    private static let titlePattern = try! NSRegularExpression(
+        pattern: "\\b(" + alternation(englishForms.titles.keys) + ")\\.?(?=\\s+\\p{L})")
+    private static let contractionPattern = try! NSRegularExpression(
+        pattern: "\\b(" + alternation(englishForms.contractions.keys) + ")\\b")
+    private static let cannot = try! NSRegularExpression(pattern: #"\bcannot\b"#)
+    private static let signs = [("-", "minus"), ("−", "minus"), ("+", "plus")].map { symbol, spoken in
+        (try! NSRegularExpression(pattern: #"(?<![\p{L}\p{N}.])"# + NSRegularExpression.escapedPattern(for: symbol) + #"(?=\d|\.\d)"#),
+         " \(spoken) ")
+    }
+    private static let digits = try! NSRegularExpression(pattern: #"(?<![\p{L}\p{N}.])[−-]?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)(?![\p{L}\p{N}]|\.[0-9])"#)
+    private static let spellOutFormatters = Mutex<[String: NumberFormatter]>([:])
+
+    private static func spellOut(_ value: NSNumber, locale: Locale) -> String? {
+        spellOutFormatters.withLock { cache in
+            let formatter = cache[locale.identifier] ?? {
+                let formatter = NumberFormatter()
+                formatter.locale = locale
+                formatter.numberStyle = .spellOut
+                cache[locale.identifier] = formatter
+                return formatter
+            }()
+            return formatter.string(from: value)
+        }
+    }
+
+    private static func replacing(_ regex: NSRegularExpression, in text: String, with replacement: (String) -> String?) -> String {
+        var result = text
+        for match in regex.matches(in: text, range: NSRange(text.startIndex..., in: text)).reversed() {
+            guard let range = Range(match.range(at: match.numberOfRanges > 1 ? 1 : 0), in: text),
+                  let whole = Range(match.range, in: result),
+                  let spoken = replacement(String(text[range])) else { continue }
+            result.replaceSubrange(whole, with: spoken)
+        }
+        return result
+    }
+
     package static func tokens(_ text: String, locale: Locale) -> [String] {
+        let english = locale.language.languageCode?.identifier == "en"
         var original = text
-        if locale.language.languageCode?.identifier == "en" {
-            for (title, spoken) in englishForms.titles {
-                original = original.replacingOccurrences(of: "\\b" + title + "\\.?(?=\\s+\\p{L})", with: spoken, options: .regularExpression)
-            }
+        if english {
+            original = replacing(titlePattern, in: original) { englishForms.titles[$0] }
         }
         var text = original.precomposedStringWithCompatibilityMapping
             .replacingOccurrences(of: "’", with: "'")
             .folding(options: [.caseInsensitive, .widthInsensitive], locale: locale)
-        let number = NumberFormatter()
-        number.locale = locale
-        number.numberStyle = .spellOut
-        if locale.language.languageCode?.identifier == "en" {
+        if english {
             text = text.folding(options: .diacriticInsensitive, locale: locale)
-                .replacingOccurrences(of: #"\bcannot\b"#, with: "can not", options: .regularExpression)
-            text = expandingOrdinals(text, formatter: number)
-            let contractions = englishForms.contractions
-            for (short, long) in contractions {
-                text = text.replacingOccurrences(of: "\\b" + NSRegularExpression.escapedPattern(for: short) + "\\b",
-                                                with: long, options: .regularExpression)
-            }
-            for (symbol, spoken) in [("-", "minus"), ("−", "minus"), ("+", "plus")] {
-                text = text.replacingOccurrences(of: #"(?<![\p{L}\p{N}.])"# + NSRegularExpression.escapedPattern(for: symbol) + #"(?=\d|\.\d)"#,
-                                                with: " \(spoken) ", options: .regularExpression)
+            text = cannot.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: "can not")
+            text = expandingOrdinals(text, locale: locale)
+            text = replacing(contractionPattern, in: text) { englishForms.contractions[$0] }
+            for (symbol, spoken) in signs {
+                text = symbol.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text),
+                                                       withTemplate: NSRegularExpression.escapedTemplate(for: spoken))
             }
         }
         text = text.replacingOccurrences(of: "%", with: locale.language.languageCode?.identifier == "en" ? " percent " : " percent_symbol ")
-        let digits = try! NSRegularExpression(pattern: #"(?<![\p{L}\p{N}.])[−-]?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)(?![\p{L}\p{N}]|\.[0-9])"#)
         for match in digits.matches(in: text, range: NSRange(text.startIndex..., in: text)).reversed() {
             guard let range = Range(match.range, in: text) else { continue }
             let numeric = String(text[range]).replacingOccurrences(of: "−", with: "-")
@@ -64,7 +95,7 @@ package enum WordCoverage {
                 guard numeric.filter(\.isNumber).count <= 18 else { continue }
                 value = NSDecimalNumber(string: numeric, locale: Locale(identifier: "en_US_POSIX"))
             }
-            guard value.doubleValue.isFinite, let spoken = number.string(from: value) else { continue }
+            guard value.doubleValue.isFinite, let spoken = spellOut(value, locale: locale) else { continue }
             text.replaceSubrange(range, with: spoken.replacingOccurrences(of: "-", with: " "))
         }
         text = text.replacingOccurrences(of: "-", with: " ")
@@ -107,14 +138,14 @@ package enum WordCoverage {
         pattern: #"(?<![\p{L}\p{N}_])at\s+([0-9]{1,2})\.([0-9]{2})(?![\p{L}\p{N}_]|\.[0-9]|\s*[%:+−–—/*×÷-]|\s+\.[0-9])"#,
         options: .caseInsensitive)
 
-    private static func expandingOrdinals(_ source: String, formatter: NumberFormatter) -> String {
+    private static func expandingOrdinals(_ source: String, locale: Locale) -> String {
         var text = source
         for match in ordinalNumber.matches(in: text, range: NSRange(text.startIndex..., in: text)).reversed() {
             let ns = text as NSString
             guard let value = Int(ns.substring(with: match.range(at: 1))) else { continue }
             let suffix = (11...13).contains(value % 100) ? "th" : [1: "st", 2: "nd", 3: "rd"][value % 10] ?? "th"
             guard ns.substring(with: match.range(at: 2)) == suffix,
-                  let spoken = formatter.string(from: NSNumber(value: value)),
+                  let spoken = spellOut(NSNumber(value: value), locale: locale),
                   let range = Range(match.range, in: text) else { continue }
             let prefix = text[..<range.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
             guard !["+", "-", "−"].contains(prefix.last.map(String.init) ?? "") else { continue }
@@ -128,12 +159,12 @@ package enum WordCoverage {
         return text
     }
 
-    private static func clockSpelling(_ match: NSTextCheckingResult, in text: String, formatter: NumberFormatter) -> String? {
+    private static func clockSpelling(_ match: NSTextCheckingResult, in text: String, locale: Locale) -> String? {
         let ns = text as NSString
         guard let hour = Int(ns.substring(with: match.range(at: 1))), (1...23).contains(hour),
               let minute = Int(ns.substring(with: match.range(at: 2))), (10...59).contains(minute),
-              let hours = formatter.string(from: NSNumber(value: hour)),
-              let minutes = formatter.string(from: NSNumber(value: minute)) else { return nil }
+              let hours = spellOut(NSNumber(value: hour), locale: locale),
+              let minutes = spellOut(NSNumber(value: minute), locale: locale) else { return nil }
         return "at " + hours + " " + minutes
     }
 
@@ -141,11 +172,9 @@ package enum WordCoverage {
         let candidates = dottedClockTime.matches(in: text, range: NSRange(text.startIndex..., in: text))
         guard !candidates.isEmpty else { return text }
         let expected = tokens(DirectorsNote.spokenWords(line), locale: locale)
-        let formatter = NumberFormatter()
-        formatter.locale = locale; formatter.numberStyle = .spellOut
         var result = "", cursor = text.startIndex
         for candidate in candidates {
-            guard let spoken = clockSpelling(candidate, in: text, formatter: formatter),
+            guard let spoken = clockSpelling(candidate, in: text, locale: locale),
                   let range = Range(candidate.range, in: text) else { continue }
             result += text[cursor..<range.lowerBound]
             // A dot remains a decimal unless the requested words at this exact
