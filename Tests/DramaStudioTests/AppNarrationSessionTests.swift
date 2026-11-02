@@ -43,6 +43,30 @@ final class AppNarrationSessionTests: XCTestCase {
         XCTAssertFalse(session.state.isGenerating, "the run finished")
     }
 
+    func testSaveSelectedSectionVoiceAndRegenerateEditedSection() async throws {
+        let session = makeSession()
+        let guest = VoiceDesign(name: "Guest", description: "warm and measured")
+        session.open(document())
+        session.setVoice(.designed(guest), forSpeaker: 1)
+        session.generate()
+        await finish(session)
+        let section = try XCTUnwrap(session.document?.segments[3])
+        session.selectSegment(section.id)
+        let take = try XCTUnwrap(session.visibleTakes.first)
+        session.editorText = "New words for the guest."
+        session.setSpeaker(2, for: section.id)
+        XCTAssertTrue(session.saveVoice(fromTake: take.id, name: "Guest from take"))
+        let voice = try XCTUnwrap(session.library.voices.first)
+        XCTAssertEqual(voice.transcript, "A word from our guest.")
+        XCTAssertEqual(voice.codes, take.take.codes)
+        XCTAssertEqual(session.voice(for: Speaker(index: 2, name: "Guest")), .library(voice.id))
+        XCTAssertEqual(session.voice(for: Speaker(index: 0, name: "Narrator")), .modelDefault)
+        session.narrateSelectedSection()
+        await finish(session)
+        XCTAssertEqual(synthesizer.requests.last?.text, "New words for the guest.")
+        XCTAssertEqual(synthesizer.requests.last?.references, [voice])
+    }
+
     func testImportingADeckOpensItAsADocumentWithItsFirstSectionSelected() throws {
         let session = makeSession()
         session.script = "An old script."

@@ -8,6 +8,7 @@ struct TakesStrip: View {
     var resizable = false
     @State private var note = ""
     @State private var takeToDelete: SessionTake?
+    @State private var takeToSave: SessionTake?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -48,11 +49,19 @@ struct TakesStrip: View {
                     Button("Stop Audition", systemImage: "stop.fill") { model.stopPreview() }
                 }
                 Spacer()
+                Button("Save Voice to Library", systemImage: "square.and.arrow.down") {
+                    takeToSave = model.visibleTakes.first { $0.id == model.visibleSelectedTakeID }
+                }
+                .disabled(model.voiceSaveBlocker(forTake: model.visibleSelectedTakeID) != nil)
+                .help(model.voiceSaveBlocker(forTake: model.visibleSelectedTakeID) ?? "Save the selected take's voice and use it for future generation")
                 Button(isSelectedKept ? "Used for Export" : "Use for Export", systemImage: "checkmark.circle") {
                     model.useSelectedTakeForExport()
                 }
                 .disabled(model.visibleSelectedTakeID == nil || model.state.isGenerating || isSelectedKept)
                 .help("Use the selected take in exported audio and captions")
+            }
+            if model.visibleSelectedTakeID != nil, let blocker = model.voiceSaveBlocker(forTake: model.visibleSelectedTakeID) {
+                Text(blocker).font(.caption).foregroundStyle(.secondary)
             }
             if model.document == nil {
             HStack(spacing: 8) {
@@ -86,6 +95,9 @@ struct TakesStrip: View {
         .padding(.bottom, 16)
         .background(.bar)
         .overlay(alignment: .top) { Divider() }
+        .sheet(item: $takeToSave) { take in
+            SaveTakeVoiceSheet(model: model, take: take)
+        }
         .confirmationDialog("Delete this take?", isPresented: Binding(
             get: { takeToDelete != nil },
             set: { if !$0 { takeToDelete = nil } }
@@ -104,6 +116,44 @@ struct TakesStrip: View {
     private func retake() {
         guard model.canRetake else { return }
         model.retake(note: note)
+    }
+}
+
+private struct SaveTakeVoiceSheet: View {
+    let model: SessionModel
+    let take: SessionTake
+    @Environment(\.dismiss) private var dismiss
+    @State private var name: String
+    @State private var error: String?
+
+    init(model: SessionModel, take: SessionTake) {
+        self.model = model
+        self.take = take
+        _name = State(initialValue: "Take \(take.number) voice")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Save Voice from Take \(take.number)").font(.headline)
+            TextField("Voice name", text: $name)
+                .textFieldStyle(.roundedBorder)
+            Text("The saved voice will be selected for this speaker. You can edit the script and generate again using this voice.")
+                .font(.callout).foregroundStyle(.secondary)
+            if let error { Text(error).font(.callout).foregroundStyle(.red) }
+            HStack {
+                Spacer()
+                Button("Cancel", role: .cancel) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("Save Voice") {
+                    if model.saveVoice(fromTake: take.id, name: name) { dismiss() }
+                    else { error = model.notice }
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(24)
+        .frame(width: 440)
     }
 }
 

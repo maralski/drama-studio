@@ -103,6 +103,117 @@ final class AppDirectingTests: XCTestCase {
         XCTAssertEqual(synthesizer.requests[2].previousTakes, [], "picking Surprise me again gives a fresh surprise")
     }
 
+    func testSaveSelectedModelDefaultTakeReusesItsVoiceAfterEditingAndReopening() async throws {
+        let session = makeSession(script: "The first recording stays here.")
+        await finish(session.generate, in: session)
+        session.script = "These are the words of the voice I want to keep."
+        await finish(session.generate, in: session)
+        let selected = try XCTUnwrap(session.takes.last)
+        session.script = "A different later take."
+        await finish(session.generate, in: session)
+        session.selectTake(selected.id)
+        session.script = "The script has now been edited again."
+
+        XCTAssertTrue(session.saveVoice(fromTake: selected.id, name: "  My narrator  "))
+        let saved = try XCTUnwrap(session.library.voices.first)
+        XCTAssertEqual(saved.name, "My narrator")
+        XCTAssertEqual(saved.transcript, "These are the words of the voice I want to keep.")
+        XCTAssertEqual(saved.codes, selected.take.codes)
+        XCTAssertEqual(session.voice(for: Speaker(index: 0, name: "Narrator")), .library(saved.id))
+        XCTAssertEqual(session.takes.count, 3)
+        XCTAssertNotEqual(session.visibleExportTakeID, selected.id, "Saving a voice must not change the export take")
+        await finish(session.generate, in: session)
+        XCTAssertEqual(synthesizer.requests.last?.text, "The script has now been edited again.")
+        XCTAssertEqual(synthesizer.requests.last?.references, [saved])
+
+        let project = directory.appending(path: "SavedVoice.dramaproj")
+        XCTAssertTrue(session.saveProject(to: project))
+        let reopened = makeSession()
+        XCTAssertTrue(reopened.openProject(from: project))
+        reopened.script = "Another script after reopening."
+        await finish(reopened.generate, in: reopened)
+        XCTAssertEqual(synthesizer.requests.last?.references, [saved])
+    }
+
+    func testSavingDesignedRetakeUsesItsOriginalWordsAndSelectedCodes() async throws {
+        let session = makeSession(script: "Hello there.")
+        session.setVoice(.designed(design), forSpeaker: 0)
+        await finish(session.generate, in: session)
+        await finish({ session.retake(note: "softer") }, in: session)
+        let take = try XCTUnwrap(session.takes.last)
+        session.setVoice(.modelDefault, forSpeaker: 0)
+        session.script = "Changed words."
+        XCTAssertTrue(session.saveVoice(fromTake: take.id, name: "Selected performance"))
+        let saved = try XCTUnwrap(session.library.voices.first)
+        XCTAssertEqual(saved.transcript, "Hello there.")
+        XCTAssertEqual(saved.codes, take.take.codes)
+    }
+
+    func testSavedVoiceConditionsASingleNonzeroSpeakerAfterEditing() async throws {
+        let session = makeSession(script: "<|speaker:2|>Hello there.")
+        await finish(session.generate, in: session)
+        let take = try XCTUnwrap(session.takes.last)
+        XCTAssertTrue(session.saveVoice(fromTake: take.id, name: "Speaker two"))
+        session.script = "<|speaker:2|>A different line."
+        await finish(session.generate, in: session)
+        XCTAssertTrue(session.casting.ignored.isEmpty)
+        let request = try XCTUnwrap(synthesizer.requests.last)
+        XCTAssertEqual(request.references.first?.codes, take.take.codes)
+        let plan = try GenerationPlan(request)
+        let prompt = try Drama3Prompt.render(text: plan.chunks[0].turn, references: plan.references, history: plan.history)
+        XCTAssertTrue(prompt.contains("\nText: <|speaker:2|> Hello there.\nSpeech: "), prompt)
+        XCTAssertFalse(prompt.contains("\nText: <|speaker:0|>"), prompt)
+    }
+
+    func testSavingTakeRejectsInvalidSelectionBlankNameAndMixedSpeakers() async throws {
+        let session = makeSession(script: "Hello there.")
+        XCTAssertFalse(session.saveVoice(fromTake: UUID(), name: "Missing"))
+        await finish(session.generate, in: session)
+        let take = try XCTUnwrap(session.takes.last)
+        XCTAssertFalse(session.saveVoice(fromTake: take.id, name: " \n "))
+        XCTAssertTrue(session.library.voices.isEmpty)
+        session.script = "<|speaker:0|>Hello. <|speaker:1|>Goodbye."
+        await finish(session.generate, in: session)
+        XCTAssertFalse(session.saveVoice(fromTake: try XCTUnwrap(session.takes.last).id, name: "Mixed"))
+        XCTAssertTrue(session.library.voices.isEmpty)
+        session.script = "Hello. <|speaker:1|>Goodbye."
+        await finish(session.generate, in: session)
+        XCTAssertFalse(session.saveVoice(fromTake: try XCTUnwrap(session.takes.last).id, name: "Implicit narrator"))
+        XCTAssertTrue(session.library.voices.isEmpty)
+    }
+
+    func testIncompleteTakeCannotBeSavedAsAVoice() async throws {
+        let session = makeSession(script: "Hello there.")
+        await finish(session.generate, in: session)
+        let project = directory.appending(path: "Incomplete.dramaproj")
+        XCTAssertTrue(session.saveProject(to: project))
+        let manifest = project.appending(path: "project.json")
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: manifest)) as? [String: Any])
+        var archive = try XCTUnwrap(json["archive"] as? [String: Any])
+        archive["plainTakes"] = try XCTUnwrap(archive["plainTakes"] as? [[String: Any]]).map { entry in
+            var entry = entry; entry["isIncomplete"] = true; return entry
+        }
+        json["archive"] = archive
+        try JSONSerialization.data(withJSONObject: json).write(to: manifest)
+        let reopened = makeSession()
+        XCTAssertTrue(reopened.openProject(from: project))
+        let take = try XCTUnwrap(reopened.takes.first)
+        XCTAssertTrue(take.isIncomplete)
+        XCTAssertFalse(reopened.saveVoice(fromTake: take.id, name: "Incomplete"))
+        XCTAssertTrue(reopened.library.voices.isEmpty)
+    }
+
+    func testVoiceWriteFailureDoesNotChangeTheCast() async throws {
+        let session = makeSession(script: "Hello there.")
+        await finish(session.generate, in: session)
+        let take = try XCTUnwrap(session.takes.first)
+        if FileManager.default.fileExists(atPath: directory.path) { try FileManager.default.removeItem(at: directory) }
+        try Data("not a directory".utf8).write(to: directory)
+        XCTAssertFalse(session.saveVoice(fromTake: take.id, name: "Cannot save"))
+        XCTAssertEqual(session.voice(for: Speaker(index: 0, name: "Narrator")), .modelDefault)
+        XCTAssertTrue(session.library.voices.isEmpty)
+    }
+
     func testLegacyProjectPreservesAudioAndUnverifiedVoiceWithoutReusingThem() async throws {
         let session = makeSession()
         session.setVoice(.designed(design), forSpeaker: 0)
@@ -137,6 +248,8 @@ final class AppDirectingTests: XCTestCase {
         XCTAssertTrue(restored.openProject(from: url))
         XCTAssertEqual(restored.takes.first?.samples, original.samples)
         XCTAssertFalse(try XCTUnwrap(restored.takes.first).wordsChecked)
+        XCTAssertFalse(restored.saveVoice(fromTake: try XCTUnwrap(restored.takes.first).id, name: "Unchecked"))
+        XCTAssertTrue(restored.library.voices.isEmpty)
         XCTAssertTrue(restored.sessionVoices.isEmpty)
         let preserved = try XCTUnwrap(restored.projectSnapshot.project.archive?.recordedVoices?[.designed(design)])
         XCTAssertEqual(preserved.take, original.take)
@@ -171,6 +284,8 @@ final class AppDirectingTests: XCTestCase {
         XCTAssertEqual(preserved.samples, original.samples)
         XCTAssertTrue(preserved.wordsChecked, "Preserve the historical native-only check.")
         XCTAssertFalse(preserved.hasCurrentWordCheck)
+        XCTAssertFalse(restored.saveVoice(fromTake: preserved.id, name: "Earlier check"))
+        XCTAssertTrue(restored.library.voices.isEmpty)
         XCTAssertTrue(restored.sessionVoices.isEmpty)
         await finish(restored.generate, in: restored)
         XCTAssertEqual(synthesizer.requests.last?.previousTakes, [])

@@ -152,6 +152,12 @@ HTTPS and the published checksum for authenticity.
   them, in the app and through the API.
 - **Voice cloning** from one or more reference clips (any format AVFoundation
   reads) plus their transcripts, kept in a local voice library.
+  To reuse a generated voice, select a take and click **Save Voice to Library**
+  beside **Use for Export**. Name the voice and save it. The app selects it for
+  future generations, including after you edit the script. This works with
+  Model default takes and individual document sections. Complete, checked takes
+  containing one speaker can be saved; outdated script text does not prevent it.
+  **Save Session Voice** in Cast saves the retained session voice instead.
 - **Streaming playback** as chunks finish, scrubbing, a speed control from
   0.75x to 1.5x, the sentence being spoken highlighted in the editor, and
   export to WAV or M4A.

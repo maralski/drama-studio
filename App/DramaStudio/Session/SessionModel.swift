@@ -1049,6 +1049,50 @@ final class SessionModel {
         sessionVoices[voice(for: speaker)] != nil
     }
 
+    @discardableResult
+    func saveVoice(fromTake id: SessionTake.ID, name: String) -> Bool {
+        if let blocker = voiceSaveBlocker(forTake: id) { notice = blocker; return false }
+        guard let take = visibleTakes.first(where: { $0.id == id }),
+              let sourceSpeaker = voiceSpeaker(of: take) else { return false }
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { notice = "Give the voice a name."; return false }
+        let character = take.basis?.voices[sourceSpeaker]?.design
+        let transcript = DirectorsNote.spokenText(ofTurn: take.take.text, character: character)
+        let voice = ReferenceVoice(name: name, transcript: transcript, codes: take.take.codes)
+        do {
+            try library.add(voice)
+            let speaker = document != nil ? (selectedSegment?.speakerTag ?? 0)
+                : ((try? prepared.get()).flatMap { $0.speakers.count == 1 ? $0.speakers.first?.index : nil } ?? sourceSpeaker)
+            setVoice(.library(voice.id), forSpeaker: speaker)
+            return true
+        } catch {
+            notice = "Couldn't save the voice: \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    func voiceSaveBlocker(forTake id: SessionTake.ID?) -> String? {
+        guard !state.isGenerating else { return "Wait until generation finishes before saving a voice." }
+        guard let take = visibleTakes.first(where: { $0.id == id }) else { return "Select a take to save its voice." }
+        guard !take.isIncomplete, take.hasCurrentWordCheck else {
+            return "Generate a complete take with current word checks before saving its voice."
+        }
+        guard let speaker = voiceSpeaker(of: take) else {
+            return "Save a single-speaker take or section so the reference contains only one voice."
+        }
+        guard take.take.frameCount > 0,
+              !DirectorsNote.spokenText(ofTurn: take.take.text, character: take.basis?.voices[speaker]?.design).isEmpty else {
+            return "This take has no voice reference to save."
+        }
+        return nil
+    }
+
+    private func voiceSpeaker(of take: SessionTake) -> Int? {
+        guard let script = try? Screenplay.prepare(Drama3Prompt.withSpeakerTag(take.basis?.text ?? take.take.text), asScreenplay: false).get(),
+              script.speakers.count == 1 else { return nil }
+        return document != nil ? (take.basis?.voices.keys.first ?? selectedSegment?.speakerTag ?? 0) : script.speakers[0].index
+    }
+
     /// Saves the speaker's session voice to the library and casts it from there.
     func keepVoice(for speaker: Speaker) {
         let choice = voice(for: speaker)
@@ -1308,11 +1352,9 @@ struct GenerationClock: Equatable {
     var duration: TimeInterval? { end.map { $0.timeIntervalSince(start) } }
 }
 
-/// What a request carries for its voices. The engine contract has no
-/// explicit speaker field on a reference, so reference i speaks for speaker i
-/// and library voices must form an unbroken run from speaker 0. A surprise or
-/// designed voice has no reference to place, so it only casts a script with
-/// one speaker.
+/// What a request carries for its voices. Library assignments normally form
+/// an unbroken run from speaker 0; a solo nonzero speaker gets a tagged reference.
+/// Surprise and designed voices cast only a script with one speaker.
 struct Casting: Equatable {
     struct Ignored: Equatable, Identifiable {
         enum Reason: Equatable { case gap, needsLibrary }
@@ -1345,7 +1387,11 @@ struct Casting: Equatable {
                     gap = true
                     continue
                 }
-                if !gap, speaker.index == references.count {
+                if speakers.count == 1, speaker.index != 0 {
+                    var reference = voice
+                    reference.transcript = "\(speaker.tag) \(voice.transcript)"
+                    references.append(reference)
+                } else if !gap, speaker.index == references.count {
                     references.append(voice)
                 } else {
                     ignored.append(Ignored(speaker: speaker, reason: .gap))
