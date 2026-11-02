@@ -7,6 +7,28 @@ adds one, and a patch release changes neither.
 
 ## Unreleased
 
+## 2.0.0
+
+- Save a voice from a selected complete, word-checked take, including Model
+  default takes. Name the voice and select it automatically for future reads.
+  Preserve the selected take's original words and codes after script edits
+  and project reopening, without changing the export selection.
+- Use Metal for the independent word recognizer. Preserve model integrity,
+  native confidence checks, and independent transcript verification.
+- Accept guarded English ordinal and clock formatting equivalents during
+  word verification. Preserve decimal values, signs, negation, word order,
+  and uncertainty checks.
+- Remove Quick Preview from the app, HTTP API, MCP tool, and say command.
+  Existing projects retain their audio and drop the obsolete preview setting
+  when saved.
+- Breaking API changes: replace
+  `GenerationConfig.make(expressiveness:quickPreview:)` with
+  `GenerationConfig.make(expressiveness:)`. Remove
+  `SpeechParameters.quickPreview`, `SayCommand.quickPreview`, and the
+  `drama-say --quick` option. Normal app and API generation use word checks.
+- Preserve reference speaker tags when a single-speaker script uses a
+  nonzero speaker number.
+
 ## 1.1.0
 
 - Display takes in a resizable, scrolling card panel and add take deletion.

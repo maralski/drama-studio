@@ -10,9 +10,9 @@ public enum DramaEngineVersion: Sendable {
     /// The version as `major.minor.patch`, for example `"1.0.0"`.
     public static let string = "\(major).\(minor).\(patch)"
     /// The major version.
-    public static let major = 1
+    public static let major = 2
     /// The minor version.
-    public static let minor = 1
+    public static let minor = 0
     /// The patch version.
     public static let patch = 0
 }
