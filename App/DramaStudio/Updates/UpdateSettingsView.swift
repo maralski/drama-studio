@@ -12,7 +12,14 @@ struct UpdateSettingsView: View {
             Text("Checks at launch. Turning this off stops future automatic checks. A download already in progress will finish. Updates are installed only when you choose Install and Restart.")
                 .font(.caption).foregroundStyle(.secondary)
             Text(updater.status).textSelection(.enabled)
-            if updater.busy { ProgressView().controlSize(.small) }
+            if let progress = updater.downloadProgress {
+                ProgressView(progress)
+                    .progressViewStyle(.linear)
+                    .labelsHidden()
+                    .accessibilityLabel("App download progress")
+            } else if updater.busy {
+                ProgressView().controlSize(.small)
+            }
             HStack {
                 Button("Check for Updates") { Task { await updater.check() } }
                     .disabled(updater.busy || updater.readyVersion != nil)

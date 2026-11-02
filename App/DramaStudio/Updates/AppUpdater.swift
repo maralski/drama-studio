@@ -21,6 +21,7 @@ final class AppUpdater {
     private var directory: URL?
     private var staged: URL?
     private(set) var busy = false
+    private(set) var downloadProgress: Progress?
     private(set) var status = "Updates are checked when Drama Studio launches."
     private(set) var readyVersion: String?
     var showsReady = false
@@ -56,7 +57,10 @@ final class AppUpdater {
         }
         busy = true
         status = "Checking for updates…"
-        defer { busy = false }
+        defer {
+            busy = false
+            downloadProgress = nil
+        }
         var work: URL?
         do {
             var request = URLRequest(url: URL(string: "https://api.github.com/repos/maralski/drama-studio/releases/latest")!)
@@ -75,6 +79,8 @@ final class AppUpdater {
                 return
             }
             status = "Downloading Drama Studio \(update.version) in the background…"
+            let progress = Progress(totalUnitCount: 1)
+            downloadProgress = progress
             // A sibling keeps both replacement renames on the same filesystem.
             let folder = app.deletingLastPathComponent().appending(path: ".DramaStudio-update-\(UUID().uuidString)")
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
@@ -82,11 +88,12 @@ final class AppUpdater {
             let (sums, sumsResponse) = try await session.data(from: update.checksums)
             try Self.validate(sumsResponse)
             let checksum = try AppRelease.checksum(in: String(decoding: sums, as: UTF8.self), version: update.version)
-            let (download, downloadResponse) = try await session.download(from: update.image)
+            let (download, downloadResponse) = try await session.download(from: update.image, delegate: UpdateDownloadProgress(progress: progress))
             defer { try? FileManager.default.removeItem(at: download) }
             try Self.validate(downloadResponse)
             let image = folder.appending(path: "update.dmg")
             try FileManager.default.moveItem(at: download, to: image)
+            downloadProgress = nil
             status = "Verifying Drama Studio \(update.version)…"
             let currentApp = app
             let candidate = try await Task.detached {
@@ -138,5 +145,15 @@ final class AppUpdater {
     private static func validate(_ response: URLResponse) throws {
         guard let http = response as? HTTPURLResponse, http.statusCode == 200,
               http.url?.scheme == "https" else { throw UpdateError.message("The release server could not complete the request. Try again later.") }
+    }
+}
+
+private final class UpdateDownloadProgress: NSObject, URLSessionTaskDelegate {
+    let progress: Progress
+
+    init(progress: Progress) { self.progress = progress }
+
+    func urlSession(_ session: URLSession, didCreateTask task: URLSessionTask) {
+        progress.addChild(task.progress, withPendingUnitCount: 1)
     }
 }

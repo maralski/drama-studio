@@ -7,6 +7,12 @@ adds one, and a patch release changes neither.
 
 ## Unreleased
 
+## 2.1.1
+
+- Show background app downloads as a horizontal progress bar that follows
+  the download task's actual progress. Clear the bar when the download ends
+  or fails, and use the existing spinner for checking and verification.
+
 ## 2.1.0
 
 - Keep assigned library voices matched to their speakers across screenplay
