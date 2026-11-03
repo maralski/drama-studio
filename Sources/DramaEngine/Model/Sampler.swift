@@ -95,12 +95,6 @@ package struct Sampler {
         return order[best]
     }
 
-    /// Returns the index into `logits` under Fish Audio's reference sampling.
-    ///
-    /// Rank r of the sorted row stays when it is under top-k, its cumulative mass
-    /// is within top-p and its probability is at least `epsilon`; then only ids
-    /// below `legal` stay, the most probable legal one always. Untruncated draws
-    /// race every legal index in index order instead of sorting.
     mutating func sample(_ logits: [Float], _ draw: ReferenceDraw) -> Int {
         let t = max(draw.temperature, 1e-5)
         let n = logits.count
@@ -148,11 +142,8 @@ package struct Sampler {
         return order[best]
     }
 
-    /// The most ranks a truncated reference draw keeps: the GPU sampler's buffer.
-    /// An epsilon of 1e-3 already keeps at most 1000.
     static let maxKept = 1024
 
-    /// Residual code `head + 1` from that head's 4096 logits.
     mutating func sampleResidual(_ logits: [Float], _ params: SamplingParams) -> Int {
         switch params.rule {
         case .vendor: sample(logits, temperature: params.temperature, topK: params.topK, topP: params.topP)
@@ -161,14 +152,11 @@ package struct Sampler {
     }
 }
 
-/// One draw under the reference rule.
 struct ReferenceDraw {
     var temperature: Double
-    /// Below 1: no cap.
     var topK: Int
     var topP: Double
     var epsilon: Double
-    /// Ids from here on are never drawn.
     var legal: Int
 
     init(_ params: SamplingParams, epsilon: Double, legal: Int) {
@@ -179,7 +167,6 @@ struct ReferenceDraw {
         self.legal = legal
     }
 
-    /// No rule drops a legal id, so the draw needs no sort.
     func untruncated(n: Int) -> Bool { (topK < 1 || topK >= n) && topP >= 1 && epsilon <= 0 }
 }
 
@@ -231,12 +218,10 @@ struct MainTokenSampler {
         case .vendor:
             let first = candidates[sampler.sample(candidateLogits, temperature: params.temperature, topK: params.topK, topP: params.topP)]
             let retry = candidates[sampler.sample(candidateLogits, temperature: Self.retryTemperature, topK: Self.retryTopK, topP: Self.retryTopP)]
-            // Only audio tokens are redrawn: the window starts in the prompt, whose user turn ends in eos.
             return window.contains(first) && isSemantic(first) ? retry : first
         case .reference(let epsilon):
             let first = candidates[sampler.sample(candidateLogits, ReferenceDraw(params, epsilon: epsilon, legal: candidateLogits.count))]
             guard window.contains(first) else { return first }
-            // The most probable candidate, the lowest id on a tie.
             var top = 0
             for i in candidateLogits.indices where candidateLogits[i] > candidateLogits[top] { top = i }
             return candidates[top]

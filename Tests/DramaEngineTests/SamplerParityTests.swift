@@ -15,11 +15,7 @@ final class SamplerParityTests: XCTestCase {
     static let settings = [SamplingParams(temperature: 0.7, topK: 30, topP: 0.7), SamplingParams(temperature: 1.0, topK: 30, topP: 0.95)]
     /// Keeps more candidates than a sampler threadgroup has threads.
     static let wide = SamplingParams(temperature: 1.0, topK: 600, topP: 1.0)
-    /// The reference rule at its recommended settings: residual heads race every
-    /// legal code unsorted, the main token sorts down to the epsilon.
     static let reference = SamplingParams(temperature: 1.0, topK: 0, topP: 1.0, rule: .reference(epsilon: SamplingRule.referenceEpsilon))
-    /// The reference rule truncated: sorted residual draws, where a peak above
-    /// code 1023 leaves no legal rank inside top-p.
     static let referenceTruncated = [SamplingParams(temperature: 0.7, topK: 30, topP: 0.7, rule: .reference(epsilon: SamplingRule.referenceEpsilon)),
                                       SamplingParams(temperature: 1.0, topK: 0, topP: 0.95, rule: .reference(epsilon: 0))]
     static let referenceSettings = [reference] + referenceTruncated
@@ -210,16 +206,11 @@ final class SamplerParityTests: XCTestCase {
         }
     }
 
-    /// The reference rule's main token: one draw with the epsilon cutoff, and
-    /// any pick repeating the window, eos as well as audio, replaced by the
-    /// most probable candidate.
     func testReferenceMainToken() throws {
         guard let loc = ModelLocation.huggingFaceCache(), loc.isComplete else { throw XCTSkip("drama-3 not downloaded") }
         let config = try ModelConfig(url: loc.directory.appendingPathComponent("config.json"))
         let mainSampler = MainTokenSampler(config: config)
         var g = SeededGenerator(seed: 7)
-        // Every third row makes eos likely but not the most probable, so a
-        // repeated eos is replaced by an audio token.
         var rows = Self.uniformRows(count: Self.samplesPerSet / 2, n: Self.candidates, seed: 4, peak: false)
         for i in stride(from: 0, to: rows.count, by: 3) {
             rows[i][0] = 15
@@ -256,7 +247,6 @@ final class SamplerParityTests: XCTestCase {
                 XCTAssertEqual(cpu.state, gpu.end, "\(label) \(p): generator state differs")
                 if label == "mixed" {
                     XCTAssertGreaterThan(audioReplaced, 0, "\(label) \(p): no repeated audio token was replaced")
-                    // Top-p 0.7 leaves eos out of the truncated settings' draws.
                     if p == Self.reference { XCTAssertGreaterThan(eosReplaced, 0, "\(label) \(p): no repeated eos was replaced") }
                 }
             }

@@ -3,7 +3,6 @@
 import Foundation
 import Metal
 
-/// How one frame is sampled.
 package struct SamplingParams: Equatable {
     package var temperature: Double
     package var topK: Int
@@ -17,7 +16,6 @@ package struct SamplingParams: Equatable {
         self.rule = rule
     }
 
-    /// The vendor's settings, which the CLI's timing commands use.
     package static let vendorDefaults = SamplingParams(temperature: 0.7, topK: 30, topP: 0.7)
 }
 
@@ -40,11 +38,8 @@ struct SamplerKernelParams {
     var retryTopPHi: Float, retryTopPLo: Float
     var windowFrames: UInt32
     var reference: UInt32
-    /// The main token's epsilon under the reference rule.
     var epsilonHi: Float, epsilonLo: Float
     var residualCodes: UInt32
-    /// Whether the reference draw needs no sort, with `n` as the main token's
-    /// count and as a tower head's; each kernel reads its own.
     var mainRace: UInt32
     var towerRace: UInt32
 
@@ -85,8 +80,8 @@ struct SamplerKernelParams {
             let e = Self.split(epsilon)
             reference = 1
             epsilonHi = e.0; epsilonLo = e.1
-            mainRace = ReferenceDraw(p, epsilon: epsilon, legal: n).untruncated(n: n) ? 1 : 0
-            towerRace = ReferenceDraw(p, epsilon: 0, legal: ModelConstants.residualCodebookSize).untruncated(n: n) ? 1 : 0
+            mainRace = ReferenceDraw(p, epsilon: epsilon, legal: codebookSize + 1).untruncated(n: codebookSize + 1) ? 1 : 0
+            towerRace = ReferenceDraw(p, epsilon: 0, legal: ModelConstants.residualCodebookSize).untruncated(n: codebookSize) ? 1 : 0
         }
     }
 }

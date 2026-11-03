@@ -248,10 +248,7 @@ struct SamplerShared {
     ulong keptU[SAMPLE_MAX_KEPT];
 };
 
-// One draw of the CPU `Sampler.sample`, or with `reference` of its reference
-// draw (top-k 0 meaning no cap, `epsilon`, ids from `legal` on never drawn):
-// returns the index into `logits`, and `top` the most probable index. Every
-// thread of the SAMPLE_TG-wide threadgroup must call it; `rng` is advanced on
+// Every thread of the SAMPLE_TG-wide threadgroup must call it; `rng` is advanced on
 // thread 0 only. `bad` is set when a logit is not finite.
 inline uint sample_one(device const float* logits, uint n, df t, df topP, uint topK,
                        bool reference, df epsilon, uint legal,
@@ -304,13 +301,9 @@ inline uint sample_one(device const float* logits, uint n, df t, df topP, uint t
     df cumulative = df_make(0.0f, 0.0f);
     df keptSum = df_make(0.0f, 0.0f);
     uint kept = 0;
-    // The reference draw walks ranks until one fails its rules; it keeps at most
-    // SAMPLE_MAX_KEPT, as the CPU does.
     uint limit = reference ? n : min(clamp(topK, 1u, uint(SAMPLE_MAX_KEPT)), n);
     // Top-p 1 keeps every candidate up to top-k, as on the CPU; see `Sampler`.
     bool nucleus = df_gt(df_make(1.0f, 0.0f), topP);
-    // Set once the reference ranks stop before a legal id: the next round looks
-    // for the most probable legal id alone.
     bool legalOnly = false;
     for (uint i = 0; i < limit; i++) {
         Cand best;
@@ -398,10 +391,6 @@ inline uint sample_one(device const float* logits, uint n, df t, df topP, uint t
 
 inline bool race_better(df a, uint ai, df b, uint bi) { return df_gt(a, b) || (a.hi == b.hi && a.lo == b.lo && ai < bi); }
 
-// The untruncated reference draw: the argmax over legal indices of
-// exp((logit - max) / t) / E, one exponential E per index drawn in index
-// order, as the CPU `Sampler` does; `top` is the most probable index. Same
-// calling rules as sample_one.
 inline uint sample_race(device const float* logits, uint n, df t, uint legal,
                         thread ulong* rng, threadgroup SamplerShared& sh,
                         uint tid, uint lane, uint sg, thread bool& bad, thread uint& top) {
@@ -521,11 +510,6 @@ kernel void sample_tower(device const float* logits [[buffer(0)]],
     }
 }
 
-// The main token over the 4097 candidates (eos, then the semantic band). The
-// vendor rule draws twice, the second with the retry settings, and the retry
-// wins when the first pick is semantic and repeats a main token of the last
-// `windowFrames` rows. The reference rule draws once and replaces any
-// repeating pick with the most probable candidate.
 [[max_total_threads_per_threadgroup(SAMPLE_TG)]]
 kernel void sample_main(device const float* logits [[buffer(0)]],
                         device ulong* rng [[buffer(1)]],

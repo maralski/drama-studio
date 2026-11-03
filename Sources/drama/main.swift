@@ -36,9 +36,6 @@ func awaitBlocking<T: Sendable>(_ body: @escaping @Sendable () async throws -> T
 
 func fail(_ m: String) -> Never { FileHandle.standardError.write((m + "\n").data(using: .utf8)!); exit(1) }
 
-/// --temperature, --top-k and --top-p over the vendor's defaults, or with
-/// --reference-sampling [--epsilon-cutoff 1e-3] over temperature 1, top-p 1
-/// and top-k 0 (no cap).
 func samplingParams(_ args: Args) -> SamplingParams {
     let reference = args.flags.contains("reference-sampling")
     if !reference, args["epsilon-cutoff"] != nil { fail("--epsilon-cutoff needs --reference-sampling") }
@@ -107,7 +104,7 @@ func readFrames(_ path: String) throws -> [Frame] {
 
 /// drama dump --rows prompt_rows.npy [--frames frames.npy | --steps N] [--reference-sampling [--epsilon-cutoff x]] --out out.npz
 func dump(_ args: Args) throws {
-    guard let outPath = args["out"], args["rows"] != nil || args["text"] != nil else { fail("usage: drama dump (--rows prompt_rows.npy | --text <text>) [--frames frames.npy | --steps N] --out out.npz") }
+    guard let outPath = args["out"], args["rows"] != nil || args["text"] != nil else { fail("usage: drama dump (--rows prompt_rows.npy | --text <text>) [--frames frames.npy | --steps N] [--reference-sampling [--epsilon-cutoff x]] --out out.npz") }
     let forced = try args["frames"].map(readFrames)
     let steps = forced?.count ?? args.int("steps", 8)
     let sampling = samplingParams(args)
@@ -291,7 +288,7 @@ func decodeCommand(_ args: Args) throws {
 
 /// drama generate --text "..." [--ref clip_codes.npy --ref-text "..."] [--reference-sampling [--epsilon-cutoff x]] --out frames.npy [--trace-frames timings.csv [--trace-stages]]
 func generate(_ args: Args) throws {
-    guard let text = args["text"], let outPath = args["out"] else { fail("usage: drama generate --text <text> [--ref codes.npy --ref-text <transcript>] --out frames.npy") }
+    guard let text = args["text"], let outPath = args["out"] else { fail("usage: drama generate --text <text> [--ref codes.npy --ref-text <transcript>] [--reference-sampling [--epsilon-cutoff x]] --out frames.npy") }
     let model = try loadModel(args)
     let tokenizer = try Tokenizer(url: model.location.directory.appendingPathComponent("tokenizer.json"))
     var refs: [Drama3Prompt.Reference] = []
@@ -494,7 +491,7 @@ func dbench(_ args: Args) throws {
 /// times) with the dispatch count per frame; --parts instead times the parts
 /// of one frame (samplers, tower, backbone) in separate command buffers.
 func fbench(_ args: Args) throws {
-    guard let rowsPath = args["rows"] else { fail("usage: drama fbench --rows prompt_rows.npy [--steps 48] [--repeats 3] [--parts]") }
+    guard let rowsPath = args["rows"] else { fail("usage: drama fbench --rows prompt_rows.npy [--reference-sampling] [--steps 48] [--repeats 3] [--parts]") }
     let model = try loadModel(args)
     print(scheduleLine(model, args: args))
     if args.flags.contains("warm") { print(String(format: "warm-up walk: %.2fs", model.benchWarmUp())) }
