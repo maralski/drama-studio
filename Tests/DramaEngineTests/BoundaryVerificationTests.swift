@@ -28,6 +28,17 @@ final class BoundaryVerificationTests: XCTestCase {
         repeated.spans[0].confidence = 0.99; repeated.spans[2].confidence = 0.189
         XCTAssertEqual(repeated.boundaryWordSpan(previousLine: "Please wait.", currentLine: "Please stay.", locale: english), 2)
     }
+    func testOtherWordsUseTheOrdinaryConfidenceFloors() {
+        var interior = clean; interior.spans[4].confidence = 0.4
+        XCTAssertEqual(interior.boundaryWordSpan(previousLine: left, currentLine: right, locale: english), 2)
+        interior.spans[4].confidence = 0.29
+        XCTAssertNil(interior.boundaryWordSpan(previousLine: left, currentLine: right, locale: english))
+        var final = clean; final.spans[5].confidence = 0.45
+        XCTAssertNil(final.boundaryWordSpan(previousLine: left, currentLine: right, locale: english))
+        var certain = clean; certain.spans[2].confidence = 0.4
+        XCTAssertNil(certain.boundaryWordSpan(previousLine: left, currentLine: right, locale: english))
+        XCTAssertTrue(certain.matches(line: left + " " + right, locale: english))
+    }
     func testAmbiguousRequiredReactionWordCannotQualify() {
         let recognition = Recognition(text: "Wait here. He he stays.", spans: [
             .init(text: "Wait here.", confidence: 0.99), .init(text: " He", confidence: 0.189),
@@ -84,7 +95,8 @@ final class BoundaryVerificationTests: XCTestCase {
         let recognition = Recognition(text: "Meet at 9.30. Please stay here.", spans: [
             .init(text: "Meet at ", confidence: 0.99), .init(text: "9.30.", confidence: 0.99),
             .init(text: " Please", confidence: 0.189), .init(text: " stay here.", confidence: 0.99)])
-        XCTAssertNil(recognition.boundaryWordSpan(previousLine: "Meet at nine thirty.", currentLine: "Please stay here.", locale: english))
+        // "9.30" is one number token in the span and in the whole transcript, so the alignment is real.
+        XCTAssertEqual(recognition.boundaryWordSpan(previousLine: "Meet at nine thirty.", currentLine: "Please stay here.", locale: english), 2)
         XCTAssertFalse(recognition.matches(line: "Meet at nine thirty. Please stay here.", locale: english))
     }
 }

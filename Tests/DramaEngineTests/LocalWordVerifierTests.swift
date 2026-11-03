@@ -97,6 +97,38 @@ final class LocalWordVerifierTests: XCTestCase {
         XCTAssertTrue(confirmed.matches(line: "Go on Monday.", locale: locale, confidenceFloor: 0.9))
     }
 
+    func testNativeGateAcceptsInteriorWordsDownToTheFloorButNotAnUncertainEnding() {
+        let locale = Locale(identifier: "en_AU")
+        func recognition(_ middle: Double, _ last: Double) -> LocalWordVerifier.Recognition {
+            .init(text: "Go on Monday.", spans: [.init(text: "Go", confidence: 0.99), .init(text: " on", confidence: middle),
+                                                .init(text: " Monday.", confidence: last)])
+        }
+        XCTAssertTrue(recognition(0.35, 0.99).matches(line: "Go on Monday.", locale: locale))
+        XCTAssertFalse(recognition(0.29, 0.99).matches(line: "Go on Monday.", locale: locale))
+        XCTAssertFalse(recognition(0.99, 0.45).matches(line: "Go on Monday.", locale: locale))
+        XCTAssertTrue(recognition(0.99, 0.45).canConfirmEndOfAudio(line: "Go on Monday.", locale: locale))
+    }
+
+    func testEndOfAudioConfirmationAcceptsInteriorWordsDownToTheFloor() {
+        let locale = Locale(identifier: "en_AU")
+        func recognition(_ middle: Double) -> LocalWordVerifier.Recognition {
+            .init(text: "Go on Monday.", spans: [.init(text: "Go", confidence: 0.99), .init(text: " on", confidence: middle),
+                                                .init(text: " Monday.", confidence: 0.45)])
+        }
+        XCTAssertTrue(recognition(0.4).canConfirmEndOfAudio(line: "Go on Monday.", locale: locale))
+        XCTAssertFalse(recognition(0.29).canConfirmEndOfAudio(line: "Go on Monday.", locale: locale))
+    }
+
+    func testOnlyTheNativeTranscriptHasAppleFormattingForgiven() {
+        let locale = Locale(identifier: "en_AU")
+        let line = "The train leaves at 1:30 this afternoon."
+        let heard = "The train leaves at 130 this afternoon."
+        let native = LocalWordVerifier.Recognition(text: heard, spans: [.init(text: heard, confidence: 0.99)])
+        XCTAssertTrue(native.matches(line: line, locale: locale))
+        XCTAssertFalse(LocalWordVerifier.independentMatches(line: line, transcript: heard, locale: locale))
+        XCTAssertTrue(LocalWordVerifier.independentMatches(line: line, transcript: "The train leaves at 1.30 this afternoon.", locale: locale))
+    }
+
     func testTimeoutCancelsTheRecognitionWorker() {
         let stopped = DispatchSemaphore(value: 0)
         XCTAssertThrowsError(try LocalWordVerifier.blocking(timeout: .milliseconds(20), shouldContinue: { true }) {

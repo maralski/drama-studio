@@ -20,7 +20,7 @@ package enum DirectorsNote {
         return UnicodeWhitespace.strip(String(collapsed.prefix(maxNoteLength)))
     }
 
-    /// The words the line speaks: `[cues]`, `<tags>` and speaker tags removed.
+    /// The words the line speaks: `[cues]`, `<tags>` and `<|speaker:N|>` tags removed.
     package static func spokenWords(_ line: String) -> String {
         let ns = line as NSString
         let bare = markup.stringByReplacingMatches(in: line, range: NSRange(location: 0, length: ns.length), withTemplate: " ")
