@@ -77,8 +77,16 @@ enum EnglishNumbers {
     /// A currency symbol that the speaker may or may not have read aloud.
     static func isImpliedCurrency(_ token: String) -> Bool { token.hasPrefix("¤?") }
 
+    /// A hyphen between two numbers that stay apart, which reads as any of
+    /// its alternatives: "~through|thru|to".
+    private static func alternatives(_ token: String) -> [Substring]? {
+        token.hasPrefix("~") ? token.dropFirst().split(separator: "|") : nil
+    }
+
     static func same(_ left: String, _ right: String) -> Bool {
         guard left != right else { return true }
+        if let words = alternatives(left) { return words.contains(Substring(right)) }
+        if let words = alternatives(right) { return words.contains(Substring(left)) }
         if isNumber(left), isNumber(right) {
             return !Set(left.dropFirst().split(separator: "|")).isDisjoint(with: right.dropFirst().split(separator: "|"))
         }
@@ -159,8 +167,8 @@ enum EnglishNumbers {
 
     /// Groups number words and written numbers into number tokens, turns a
     /// currency symbol or a currency word after a number into a currency token,
-    /// and applies `spellings` to the other words.
-    static func tokens(_ pieces: [(piece: Piece, gap: Gap)], spellings: [String: String],
+    /// and applies the spellings to the other words.
+    static func tokens(_ pieces: [(piece: Piece, gap: Gap)], forms: WordCoverage.EnglishForms,
                        profile: WordCoverage.RecognizerProfile?) -> [String] {
         func word(_ index: Int) -> String? {
             guard index < pieces.count, case .word(let word) = pieces[index].piece else { return nil }
@@ -224,7 +232,7 @@ enum EnglishNumbers {
                let both = joined(left, right, across: gap) {
                 merged[merged.count - 1] = .number(both, currency: nil)
             } else {
-                if gap == .hyphen { merged.append(.word("to")) }
+                if gap == .hyphen { merged.append(.word("~" + forms.range_words.joined(separator: "|"))) }
                 merged.append(part)
             }
         }
@@ -240,7 +248,7 @@ enum EnglishNumbers {
                 if let currency = currencyWords[word], offset > 0, case .number = amounts[offset - 1] {
                     if result.last.map(isImpliedCurrency) == true { result.removeLast() }
                     result.append("¤" + currency)
-                } else if let spelling = spellings[word] {
+                } else if let spelling = forms.spellings[word] {
                     result += spelling.split(separator: " ").map(String.init)
                 } else {
                     result.append(word)

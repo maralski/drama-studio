@@ -16,17 +16,19 @@ package enum WordCoverage {
         case apple
     }
 
-    private struct ReactionAnnotation: Decodable {
+    struct ReactionAnnotation: Decodable {
         var cue_pattern: String
         var label_pattern: String
     }
-    private struct EnglishForms: Decodable {
-        var titles: [String: String]
-        var contractions: [String: String]
-        var reaction_pattern: String
-        var reaction_words: Set<String>
-        var reaction_annotations: [ReactionAnnotation]
-        var spellings: [String: String]
+    struct EnglishForms: Decodable {
+        var titles: [String: String] = [:]
+        var contractions: [String: String] = [:]
+        var reaction_pattern = "(?!)"
+        var reaction_words: Set<String> = []
+        var reaction_annotations: [ReactionAnnotation] = []
+        var spellings: [String: String] = [:]
+        /// What a hyphen between two numbers may be read as.
+        var range_words: [String] = []
     }
     private static let forms = Result { () throws -> EnglishForms in
         guard let url = EngineResources.bundle().url(forResource: "EnglishSpokenForms", withExtension: "json") else {
@@ -34,7 +36,7 @@ package enum WordCoverage {
         }
         return try JSONDecoder().decode(EnglishForms.self, from: Data(contentsOf: url))
     }
-    private static var englishForms: EnglishForms { (try? forms.get()) ?? EnglishForms(titles: [:], contractions: [:], reaction_pattern: "(?!)", reaction_words: [], reaction_annotations: [], spellings: [:]) }
+    private static var englishForms: EnglishForms { (try? forms.get()) ?? EnglishForms() }
     package static func prepare() throws { _ = try forms.get() }
 
     private static func alternation(_ words: some Collection<String>) -> String {
@@ -113,7 +115,7 @@ package enum WordCoverage {
         if english {
             text = text.replacingOccurrences(of: "%", with: " percent ")
             text = wordHyphen.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: " ")
-            return EnglishNumbers.tokens(englishPieces(text, profile: profile), spellings: englishForms.spellings, profile: profile)
+            return EnglishNumbers.tokens(englishPieces(text, profile: profile), forms: englishForms, profile: profile)
         }
         text = text.replacingOccurrences(of: "%", with: " percent_symbol ")
         for match in digits.matches(in: text, range: NSRange(text.startIndex..., in: text)).reversed() {

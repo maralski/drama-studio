@@ -37,6 +37,11 @@
     "you're": "you are",
     "you've": "you have"
   },
+  "range_words": [
+    "through",
+    "thru",
+    "to"
+  ],
   "reaction_annotations": [
     {
       "cue_pattern": "\\[gasps?\\]",

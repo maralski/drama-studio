@@ -106,9 +106,11 @@ final class WordCoverageTests: XCTestCase {
         ], false)
     }
 
-    func testAHyphenJoinsOnlyIdentifiersAndOtherwiseReadsTo() {
+    func testAHyphenJoinsOnlyIdentifiersAndOtherwiseReadsToOrThrough() {
         assertMatch([
             ("Pages 10-20 are missing.", "Pages ten to twenty are missing."),
+            ("Read pages 10-20 before class.", "Read pages 10 through 20 before class."),
+            ("Read pages 10-20 before class.", "Read pages ten thru twenty before class."),
             ("Pages 10-20 are missing.", "Pages 10 to 20 are missing."),
             ("The final score was 21 to 17.", "The final score was 21-17."),
             ("The final score was twenty-one to seventeen.", "The final score was 21-17."),
@@ -119,6 +121,9 @@ final class WordCoverageTests: XCTestCase {
         ], true)
         assertMatch([
             ("Pages 10-20 are missing.", "Pages 1020 are missing."),
+            ("Read pages 10 to 20 before class.", "Read pages 10 through 20 before class."),
+            ("Read pages 10-20 before class.", "Read pages 10 through 30 before class."),
+            ("Read pages 10-20 before class.", "Read pages 10 and 20 before class."),
             ("Pages 10-20 are missing.", "Pages ten twenty are missing."),
             ("The final score was 21-17.", "The final score was 2117."),
             ("The final score was 21-17.", "The final score was twenty one seventeen."),
