@@ -149,6 +149,36 @@ final class WordCoverageTests: XCTestCase {
         ], true)
     }
 
+    func testAmountsMatchTheirCommonSpokenForms() {
+        assertMatch([
+            ("It costs $4.99.", "It costs four dollars ninety nine."),
+            ("It costs $4.99.", "It costs four dollars and ninety nine cents."),
+            ("It costs $5.03.", "It costs five dollars and three cents."),
+            ("It costs $5.00.", "It costs five dollars."),
+            ("It costs $1.", "It costs a dollar."),
+            ("It costs $1.50.", "It costs a dollar fifty."),
+            ("It costs $0.99.", "It costs ninety nine cents."),
+            ("It costs £5.50.", "It costs five pounds fifty."),
+            ("A stamp now costs 50 cents.", "A stamp now costs ¢50."),
+            ("A stamp now costs fifty cents.", "A stamp now costs ¢50."),
+            ("A stamp now costs 50 cents.", "A stamp now costs 50¢."),
+            ("A stamp now costs 50 cents.", "A stamp now costs $.50."),
+            ("A stamp now costs 50 cents.", "A stamp now costs $0.50."),
+            ("A stamp now costs fifty cents.", "A stamp now costs $.50."),
+        ], true)
+        assertMatch([
+            ("It costs $4.99.", "It costs four dollars nine."),
+            ("It costs $4.99.", "It costs nine dollars ninety nine."),
+            ("It costs $4.99.", "It costs four dollars ninety."),
+            ("It costs $5.50.", "It costs five pounds fifty."),
+            ("It costs $1.", "It costs a pound."),
+            ("A stamp now costs 50 cents.", "A stamp now costs $50."),
+            ("A stamp now costs 50 cents.", "A stamp now costs fifty dollars."),
+            ("A stamp now costs ¢50.", "A stamp now costs $50."),
+            ("A stamp now costs $.50.", "A stamp now costs fifty dollars."),
+        ], false)
+    }
+
     func testWrongNumbersAndWordsStillFail() {
         assertMatch([
             ("Deliveries grew by 18% this quarter.", "Deliveries grew by 80% this quarter."),

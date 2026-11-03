@@ -139,20 +139,18 @@ package enum WordCoverage {
     }
 
     private static func englishPieces(_ text: String, profile: RecognizerProfile?) -> [(piece: EnglishNumbers.Piece, gap: EnglishNumbers.Gap)] {
-        var numbers: [(range: Range<String.Index>, readings: Set<EnglishNumbers.Reading>)] = []
+        var numbers: [(range: Range<String.Index>, piece: EnglishNumbers.Piece)] = []
         for match in writtenNumber.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
             func group(_ index: Int) -> String? { Range(match.range(at: index), in: text).map { String(text[$0]) } }
-            guard let range = Range(match.range, in: text),
-                  let readings = EnglishNumbers.written(integer: group(1), separator: group(2) ?? group(4).map { _ in "." },
-                                                        fraction: group(3) ?? group(4), decade: group(5) != nil,
-                                                        profile: profile) else { continue }
-            numbers.append((range, readings))
+            guard let range = Range(match.range, in: text) else { continue }
+            let currency = text[..<range.lowerBound].last.flatMap { EnglishNumbers.currencySymbols[$0] }
+                ?? text[range.upperBound...].first.flatMap { EnglishNumbers.currencySymbols[$0] }
+            guard let piece = EnglishNumbers.written(integer: group(1), separator: group(2) ?? group(4).map { _ in "." },
+                                                     fraction: group(3) ?? group(4), decade: group(5) != nil,
+                                                     currency: currency, profile: profile) else { continue }
+            numbers.append((range, piece))
         }
-        var found: [(range: Range<String.Index>, piece: EnglishNumbers.Piece)] = numbers.map { number in
-            let currency = text[..<number.range.lowerBound].last.flatMap { EnglishNumbers.currencySymbols[$0] }
-                ?? text[number.range.upperBound...].first.flatMap { EnglishNumbers.currencySymbols[$0] }
-            return (number.range, .written(number.readings, currency: currency))
-        }
+        var found = numbers
         let tokenizer = NLTokenizer(unit: .word)
         tokenizer.setLanguage(.english)
         tokenizer.string = text

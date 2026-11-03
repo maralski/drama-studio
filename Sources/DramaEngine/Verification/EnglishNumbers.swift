@@ -22,6 +22,9 @@ enum EnglishNumbers {
         case decimal = "f"
         /// "nineties" is 90s.
         case decade = "s"
+        /// An amount with its currency word inside: "four dollars ninety nine"
+        /// is 4.99.
+        case money = "m"
         /// Number words that form no reading, such as "twelve five"; they match
         /// only the same words.
         case words = "w"
@@ -80,35 +83,41 @@ enum EnglishNumbers {
         return first == second
     }
 
-    /// Readings of a written group. `integer` may hold thousands commas;
-    /// `separator` is "." or ":"; `decade` marks a trailing "s" or "'s".
-    static func written(integer: String?, separator: String?, fraction: String?, decade: Bool,
-                        profile: WordCoverage.RecognizerProfile?) -> Set<Reading>? {
+    /// A written group. `integer` may hold thousands commas; `separator` is
+    /// "." or ":"; `decade` marks a trailing "s" or "'s"; `currency` is the
+    /// currency a symbol beside it names.
+    static func written(integer: String?, separator: String?, fraction: String?, decade: Bool, currency: String?,
+                        profile: WordCoverage.RecognizerProfile?) -> Piece? {
         let digits = (integer ?? "0").replacingOccurrences(of: ",", with: "")
         let significant = digits.drop { $0 == "0" }
         let trimmed = significant.isEmpty ? "0" : String(significant)
         if decade {
-            guard separator == nil else { return nil }
-            return decadeReadings(digits)
+            guard separator == nil, let readings = decadeReadings(digits) else { return nil }
+            return .written(readings, currency: currency)
         }
         guard let separator, let fraction else {
-            guard digits == trimmed else { return [Kind.digits.reading(digits)] }
+            guard digits == trimmed else { return .written([Kind.digits.reading(digits)], currency: currency) }
             var readings: Set = [Kind.digits.reading(digits), Kind.cardinal.reading(digits)]
             // The exact recognizer writes "one thirty" as 1.30, so its 130 may be
             // "one hundred thirty"; a first pair that is no clock hour is a year.
             if (3...4).contains(digits.count), profile != .exact || Int(digits.dropLast(2))! > 12 {
                 readings.insert(Kind.paired.reading(digits.dropLast(2) + "." + digits.suffix(2)))
             }
-            return readings
+            return .written(readings, currency: currency)
         }
         if separator == ":" {
-            return [Kind.paired.reading(fraction.count == 2 ? trimmed + "." + fraction : digits + ":" + fraction)]
+            return .written([Kind.paired.reading(fraction.count == 2 ? trimmed + "." + fraction : digits + ":" + fraction)], currency: currency)
         }
-        var readings: Set = [Kind.decimal.reading(trimmed + "." + fraction)]
-        if fraction.count == 2 { readings.insert(Kind.paired.reading(trimmed + "." + fraction)) }
-        let shortened = fraction.reversed().drop { $0 == "0" }
-        if !shortened.isEmpty { readings.insert(Kind.decimal.reading(trimmed + "." + String(shortened.reversed()))) }
-        return readings
+        let shortened = String(fraction.reversed().drop { $0 == "0" }.reversed())
+        var readings: Set = [Kind.decimal.reading(trimmed + "." + fraction),
+                             shortened.isEmpty ? Kind.cardinal.reading(trimmed) : Kind.decimal.reading(trimmed + "." + shortened)]
+        guard fraction.count == 2 else { return .written(readings, currency: currency) }
+        readings.formUnion([Kind.paired.reading(trimmed + "." + fraction), Kind.money.reading(trimmed + "." + fraction)])
+        if trimmed == "0", currency == "dollar" || currency == "euro" {
+            readings.insert(Kind.cardinal.reading(String(Int(fraction)!)))
+            return .written(readings, currency: "cent")
+        }
+        return .written(readings, currency: currency)
     }
 
     private static func decadeReadings(_ digits: String) -> Set<Reading>? {
@@ -122,7 +131,6 @@ enum EnglishNumbers {
     /// and applies `spellings` to the other words.
     static func tokens(_ pieces: [(piece: Piece, gap: Gap)], spellings: [String: String],
                        profile: WordCoverage.RecognizerProfile?) -> [String] {
-        enum Part { case word(String), number(Set<Reading>, currency: String?) }
         func word(_ index: Int) -> String? {
             guard index < pieces.count, case .word(let word) = pieces[index].piece else { return nil }
             return word
@@ -133,7 +141,7 @@ enum EnglishNumbers {
             guard let word = word(index) else { return false }
             if units[word] != nil || tens[word] != nil || decades[word] != nil { return true }
             switch word {
-            case "a": return joinedWord(index + 1).flatMap { scales[$0] } != nil
+            case "a": return joinedWord(index + 1).map { scales[$0] != nil || currencyWords[$0] != nil } == true
             case "oh": return joinedWord(index + 1) != "oh" && isDigit(joinedWord(index + 1)) && isDigit(joinedWord(index + 2))
             case "double", "triple", "point": return isDigit(joinedWord(index + 1))
             default: return false
@@ -186,14 +194,15 @@ enum EnglishNumbers {
             }
         }
 
+        let amounts = foldingAmounts(merged)
         var result: [String] = []
-        for (offset, part) in merged.enumerated() {
+        for (offset, part) in amounts.enumerated() {
             switch part {
             case .number(let readings, let currency):
                 result.append(token(readings))
                 if let currency { result.append("¤?" + currency) }
             case .word(let word):
-                if let currency = currencyWords[word], offset > 0, case .number = merged[offset - 1] {
+                if let currency = currencyWords[word], offset > 0, case .number = amounts[offset - 1] {
                     if result.last.map(isImpliedCurrency) == true { result.removeLast() }
                     result.append("¤" + currency)
                 } else if let spelling = spellings[word] {
@@ -204,6 +213,41 @@ enum EnglishNumbers {
             }
         }
         return result
+    }
+
+    private enum Part { case word(String), number(Set<Reading>, currency: String?) }
+
+    /// "four dollars and ninety nine cents" becomes one amount followed by its
+    /// currency, the same token as a written "$4.99".
+    private static func foldingAmounts(_ parts: [Part]) -> [Part] {
+        func word(_ index: Int) -> String? {
+            guard index < parts.count, case .word(let word) = parts[index] else { return nil }
+            return word
+        }
+        func cents(_ index: Int) -> [String] {
+            guard index < parts.count, case .number(let readings, nil) = parts[index] else { return [] }
+            return values(readings, .cardinal).compactMap(Int.init).filter { (1...99).contains($0) }.map { String(format: "%02d", $0) }
+        }
+        var folded: [Part] = []
+        var index = 0
+        while index < parts.count {
+            let minor = word(index + 2) == "and" ? index + 3 : index + 2
+            guard case .number(let whole, nil) = parts[index], let major = word(index + 1),
+                  let currency = currencyWords[major], currency != "cent", !cents(minor).isEmpty else {
+                folded.append(parts[index]); index += 1
+                continue
+            }
+            let amounts = values(whole, .cardinal).filter { Int($0) != nil }.flatMap { whole in
+                cents(minor).map { Kind.money.reading(whole + "." + $0) }
+            }
+            guard !amounts.isEmpty else {
+                folded.append(parts[index]); index += 1
+                continue
+            }
+            folded += [.number(Set(amounts), currency: nil), .word(major)]
+            index = word(minor + 1).flatMap { currencyWords[$0] } == "cent" ? minor + 2 : minor + 1
+        }
+        return folded
     }
 
     private static func values(_ readings: Set<Reading>, _ kind: Kind) -> [String] {
@@ -258,6 +302,7 @@ enum EnglishNumbers {
 
     private static func readings(_ run: [String]) -> Set<Reading> {
         guard let last = run.last else { return [] }
+        if run == ["a"] { return [Kind.cardinal.reading("1")] }
         if let tensWord = decades[last] {
             let spoken = readings(Array(run.dropLast()) + [tensWord])
             let years = values(spoken, .cardinal) + values(spoken, .paired).map { $0.replacingOccurrences(of: ".", with: "") }
