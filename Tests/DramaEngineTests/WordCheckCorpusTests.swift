@@ -3,10 +3,14 @@
 import XCTest
 @testable import DramaEngine
 
-/// Real recognizer output for generated clips: `pos` and `spell` clips speak
-/// the line, `neg` and `negspell` clips speak a different line, and `drop`
-/// clips leave a word out.
+/// Real recognizer output for generated clips, one fixture per set listed in
+/// word-check-sets.json. `pos` and `spell` clips speak the line, `neg` and
+/// `negspell` clips speak a different line, and `drop` clips leave a word out.
+/// tools/word_check_eval/README.md explains how the sets were made.
 final class WordCheckCorpusTests: XCTestCase {
+    private struct ClipSet: Decodable {
+        var name: String; var clips: Int; var replayFloor: Int
+    }
     private struct Clip: Decodable {
         struct Span: Decodable { var text: String; var confidence: Double }
         var id: String; var line: String; var native: String; var nativeSpans: [Span]; var independent: String
@@ -17,9 +21,9 @@ final class WordCheckCorpusTests: XCTestCase {
     }
     private let locale = Locale(identifier: "en_AU")
 
-    private func corpus(_ name: String = "word-check-corpus") throws -> [Clip] {
+    private func fixture<T: Decodable>(_ name: String) throws -> T {
         let url = try XCTUnwrap(Bundle.module.url(forResource: name, withExtension: "json", subdirectory: "Fixtures"))
-        return try JSONDecoder().decode([Clip].self, from: Data(contentsOf: url))
+        return try JSONDecoder().decode(T.self, from: Data(contentsOf: url))
     }
 
     private func accepted(_ clip: Clip) -> Bool {
@@ -27,35 +31,29 @@ final class WordCheckCorpusTests: XCTestCase {
             && LocalWordVerifier.independentMatches(line: clip.line, transcript: clip.independent, locale: locale)
     }
 
-    func testCorpusAcceptsCorrectSpeechAndRejectsEveryWrongClip() throws {
-        let clips = try corpus()
-        XCTAssertEqual(clips.count, 200)
-        let wrongAccepted = clips.filter { !$0.speaksLine && accepted($0) }.map(\.id)
-        XCTAssertEqual(wrongAccepted, [])
-        let correct = clips.filter(\.speaksLine)
-        let correctAccepted = correct.filter(accepted).count
-        print("word-check corpus: \(correctAccepted)/\(correct.count) correct clips accepted")
-        XCTAssertGreaterThanOrEqual(correctAccepted, 132)
-    }
-
-    /// Lines with every kind of cue Drama Studio offers. About a dozen correct
-    /// clips performed only the cue's sound or cut the line short.
-    func testCuedLinesAcceptCorrectSpeechAndRejectEveryWrongClip() throws {
-        let clips = try corpus("word-check-cues")
-        XCTAssertEqual(clips.count, 132)
-        let wrongAccepted = clips.filter { !$0.speaksLine && accepted($0) }.map(\.id)
-        XCTAssertEqual(wrongAccepted, [])
-        let correct = clips.filter(\.speaksLine)
-        let correctAccepted = correct.filter(accepted).count
-        print("word-check cues: \(correctAccepted)/\(correct.count) correct clips accepted")
-        XCTAssertGreaterThanOrEqual(correctAccepted, 76)
+    /// The replay cannot confirm the end of the audio, so its floors sit a
+    /// little below what the full check accepts on the same clips.
+    func testEverySetAcceptsCorrectSpeechAndRejectsEveryWrongClip() throws {
+        let sets: [ClipSet] = try fixture("word-check-sets")
+        XCTAssertFalse(sets.isEmpty)
+        for set in sets {
+            let clips: [Clip] = try fixture("word-check-\(set.name)")
+            XCTAssertEqual(clips.count, set.clips, "\(set.name) clip count")
+            let wrongAccepted = clips.filter { !$0.speaksLine && accepted($0) }.map(\.id)
+            XCTAssertEqual(wrongAccepted, [], "\(set.name) accepted wrong clips")
+            let correct = clips.filter(\.speaksLine)
+            let correctAccepted = correct.filter(accepted).count
+            print("word-check \(set.name): \(correctAccepted)/\(correct.count) correct, "
+                  + "\(wrongAccepted.count)/\(clips.count - correct.count) wrong accepted")
+            XCTAssertGreaterThanOrEqual(correctAccepted, set.replayFloor, "\(set.name) correct clips accepted")
+        }
     }
 
     func testMatcherSpeed() throws {
         guard ProcessInfo.processInfo.environment["DRAMA_WORD_CHECK_BENCH"] != nil else {
             throw XCTSkip("Set DRAMA_WORD_CHECK_BENCH=1 to time the matcher.")
         }
-        let clips = try corpus()
+        let clips: [Clip] = try fixture("word-check-tuning")
         try WordCoverage.prepare()
         _ = clips.map(accepted)
         let rounds = 20

@@ -34,6 +34,7 @@ let package = Package(
         .executableTarget(name: "drama-mcp", dependencies: ["DramaMCP"], path: "Sources/drama-mcp"),
         .executableTarget(name: "drama-say", dependencies: ["DramaMCP"], path: "Sources/drama-say"),
         .executableTarget(name: "drama", dependencies: ["DramaEngine", "DramaServer"], path: "Sources/drama"),
+        .executableTarget(name: "word-check-lab", dependencies: ["DramaEngine"], path: "Sources/word-check-lab"),
         .executableTarget(name: "DramaStudio", dependencies: ["DramaEngine", "DramaServer"], path: "App/DramaStudio"),
         .testTarget(name: "DramaEngineTests", dependencies: ["DramaEngine", "WordRecognitionProtocol"], path: "Tests/DramaEngineTests", resources: [.copy("Fixtures")]),
         .testTarget(name: "DramaServerTests", dependencies: ["DramaServer", "DramaEngine"], path: "Tests/DramaServerTests"),

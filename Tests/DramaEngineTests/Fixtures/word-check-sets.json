@@ -1,0 +1,7 @@
+[
+ {"name": "tuning", "purpose": "the set the matcher was tuned on", "clips": 200, "replayFloor": 132, "audioFloor": 134},
+ {"name": "heldout1", "purpose": "first held-out set", "clips": 166, "replayFloor": 87, "audioFloor": 87},
+ {"name": "heldout2", "purpose": "second held-out set", "clips": 125, "replayFloor": 57, "audioFloor": 57},
+ {"name": "cues", "purpose": "lines with every kind of cue", "clips": 132, "replayFloor": 76, "audioFloor": 77},
+ {"name": "final", "purpose": "hidden set no implementer saw", "clips": 126, "replayFloor": 69, "audioFloor": 71}
+]
