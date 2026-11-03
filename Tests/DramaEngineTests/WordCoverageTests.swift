@@ -65,6 +65,8 @@ final class WordCoverageTests: XCTestCase {
             ("In 2019, 300 people came.", "In 201, 9300 people came."),
             ("one two three four five six seven", "one million two hundred thirty four thousand five hundred sixty seven"),
             ("I have two, oh well.", "I have twenty well."),
+            ("Rooms 5 6 and 7 are free.", "Rooms fifty six and seven are free."),
+            ("Board the seven forty seven.", "Board the seven hundred forty seven."),
         ], false)
         assertMatch([
             ("Call me on 555 0142 when you land.", "Call me on 555 0142 when you land"),
@@ -75,6 +77,8 @@ final class WordCoverageTests: XCTestCase {
             ("Call me on five five five, oh one four two, when you land.", "Call me on 5550142 when you land."),
             ("Three. Two. One. Go!", "Three, two, one, go!"),
             ("In 2019, 300 people came.", "In 2019, 300 people came."),
+            ("Oh oh oh, look at that.", "Oh, oh, oh, look at that."),
+            ("Oh, one more thing.", "Oh one more thing."),
         ], true)
     }
 
@@ -130,7 +134,8 @@ final class WordCoverageTests: XCTestCase {
             ("Ok, I will organise the grey programme.", "Okay, I will organize the gray program."),
             ("We travelled to analyse it.", "We traveled to analyze it."),
         ], true)
-        assertMatch([("I promise.", "I promised."), ("The boat is in the harbour.", "The boat is in the harbors.")], false)
+        assertMatch([("I promise.", "I promised."), ("The boat is in the harbour.", "The boat is in the harbors."),
+                     ("The pan is aluminium.", "The pan is aluminum."), ("It is our speciality.", "It is our specialty.")], false)
     }
 
     func testCompoundSpacingMatches() {
