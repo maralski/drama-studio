@@ -375,6 +375,27 @@ final class WordCoverageTests: XCTestCase {
         ], false)
     }
 
+    func testBritishUnitSpellingsNameTheSameUnit() throws {
+        assertMatch([
+            ("Add 250 ml of warm milk.", "Add 250 millilitres of warm milk."),
+            ("Add 250 ml of warm milk.", "Add 250 milliliters of warm milk."),
+            ("Add 250 ml of warm milk.", "Add two hundred fifty millilitres of warm milk."),
+            ("It is 5 km away.", "It is 5 kilometres away."),
+            ("Pour 2 l of water.", "Pour 2 litres of water."),
+            ("Pour 2 cl of rum.", "Pour 2 centilitres of rum."),
+        ], true)
+        assertMatch([
+            ("Add 250 ml of warm milk.", "Add 250 centilitres of warm milk."),
+            ("Add 250 ml of warm milk.", "Add 250 millimetres of warm milk."),
+            ("It is 5 km away.", "It is 5 metres away."),
+        ], false)
+        let url = try XCTUnwrap(EngineResources.bundle().url(forResource: "EnglishSpokenForms", withExtension: "json"))
+        let units = try JSONDecoder().decode(WordCoverage.EnglishForms.self, from: Data(contentsOf: url)).units.keys
+        let metric = units.filter { $0.hasSuffix("ter") || $0.hasSuffix("ters") }
+        XCTAssertGreaterThanOrEqual(metric.count, 14)
+        assertMatch(metric.map { ("It is 5 \($0).", "It is 5 \($0.replacingOccurrences(of: "ter", with: "tre")).") }, true)
+    }
+
     func testAPossessiveApostropheIsSilentButAContractionIsNot() {
         assertMatch([
             ("My neighbour's favourite flavour.", "My neighbors favorite flavor."),
