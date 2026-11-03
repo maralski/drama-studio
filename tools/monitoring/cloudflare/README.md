@@ -3,8 +3,6 @@
 Cloudflare Worker for opt-in, anonymous usage counts. The New Relic ingest key
 lives in Cloudflare Secrets Store, never in the app. Worker logs and traces are disabled.
 
-See [deployment instructions and data contract](../../../docs/usage-monitoring.md#cloudflare-workers-relay).
-
 ```sh
 npm ci
 npm test

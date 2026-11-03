@@ -707,9 +707,8 @@ for try await event in engine.synthesize(request) {
   extra in `App/DramaStudio/Server`.
 - `eval/`: the faithfulness suite (see `docs/EVAL.md`).
 
-Current UI checks and responsiveness measurements are in
-[UI verification](docs/ui-verification.md). Historical engine experiments below
-record their original configurations; they are not current latency guarantees.
+Historical engine experiments below record their original configurations;
+they are not current latency guarantees.
 
 Design notes and decisions are in `docs/DESIGN.md`; the decision trail of the
 build is `.audit/drama-studio.tsv`.
@@ -1206,6 +1205,3 @@ improve Drama Studio. Sharing is off unless you enable it. Only counts of app
 launches, generation outcomes and setup failures are included. Scripts, audio,
 voices, file names and personal identifiers are excluded. Change your choice
 at any time in Settings > General > Privacy.
-
-See [usage monitoring configuration](docs/usage-monitoring.md) for release setup
-and the data contract.
