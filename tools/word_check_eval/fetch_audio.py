@@ -40,8 +40,6 @@ def fetch(archive=None):
         if not bootstrap.verified(archive, pin):
             raise SystemExit(f'{archive} does not match the size and SHA-256 in audio.json')
         seeds.append(archive.resolve().parent)
-    elif 'UPLOAD-TAG' in pin['url']:
-        raise SystemExit('audio.json has no release URL yet; pass --archive <local zip>')
     bootstrap.provision(pin, target, seeds)
     with zipfile.ZipFile(target) as zipped:
         if any(Path(name).is_absolute() or '..' in Path(name).parts for name in zipped.namelist()):
