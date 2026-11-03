@@ -7,12 +7,23 @@ final class WordCoverageTests: XCTestCase {
     private let english = Locale(identifier: "en_US")
     private let englishLocales = [Locale(identifier: "en_US"), Locale(identifier: "en_AU")]
 
-    private func assertMatch(_ pairs: [(String, String)], _ expected: Bool, file: StaticString = #filePath, line: UInt = #line) {
+    /// Checks each pair in every English locale, with either side as the
+    /// script, heard by each recognizer profile.
+    private func assertMatch(_ pairs: [(String, String)], _ expected: Bool,
+                             heardBy profiles: [WordCoverage.RecognizerProfile] = [.exact, .apple],
+                             file: StaticString = #filePath, line: UInt = #line) {
+        assertHeard(pairs + pairs.map { ($1, $0) }, expected, heardBy: profiles, file: file, line: line)
+    }
+
+    /// Checks each (script, transcript) pair in one direction only.
+    private func assertHeard(_ pairs: [(String, String)], _ expected: Bool,
+                             heardBy profiles: [WordCoverage.RecognizerProfile] = [.exact, .apple],
+                             file: StaticString = #filePath, line: UInt = #line) {
         for locale in englishLocales {
-            for (first, second) in pairs {
-                for (script, heard) in [(first, second), (second, first)] {
-                    XCTAssertEqual(WordCoverage.matches(line: script, transcript: heard, locale: locale), expected,
-                                   "\(locale.identifier): \(script) | \(heard)", file: file, line: line)
+            for profile in profiles {
+                for (script, heard) in pairs {
+                    XCTAssertEqual(WordCoverage.matches(line: script, transcript: heard, locale: locale, profile: profile), expected,
+                                   "\(locale.identifier) \(profile): \(script) | \(heard)", file: file, line: line)
                 }
             }
         }
@@ -30,14 +41,12 @@ final class WordCoverageTests: XCTestCase {
             ("It weighs 4.99 grams.", "It weighs four point nine nine grams."),
             ("The rate is 2.5 percent.", "The rate is two point five percent."),
             ("Meet at 3:30.", "Meet at three thirty."),
-            ("Meet at 3:30.", "Meet at 330."),
             ("Meet at 3:30.", "Meet at 3.30."),
             ("In 2026 we left.", "In twenty twenty six we left."),
             ("In 2026 we left.", "In two thousand twenty-six we left."),
             ("In 2026 we left.", "In two thousand and twenty six we left."),
             ("In 1998 we left.", "In nineteen ninety-eight we left."),
             ("In 1905 we left.", "In nineteen oh five we left."),
-            ("Board the 747 now.", "Board the seven forty seven now."),
             ("It costs $4.99.", "It costs four ninety-nine."),
             ("It costs $4.99.", "It costs 4 99."),
             ("They raised $2.5 million.", "They raised 2.5 million dollars."),
@@ -51,6 +60,7 @@ final class WordCoverageTests: XCTestCase {
             ("Take the 5th door.", "Take the fifth door."),
             ("It fell 12%.", "It fell twelve percent."),
         ], true)
+        assertHeard([("Board the 747 now.", "Board the seven forty seven now.")], true)
         assertMatch([("Call 555 0142 now.", "Call five five five one four two now."),
                      ("Room 0142 is open.", "Room one four two is open."),
                      ("Call 555. 0142 is mine.", "Call 5550142 is mine.")], false)
@@ -88,7 +98,36 @@ final class WordCoverageTests: XCTestCase {
             ("Meet at 1:30.", "Meet at one hundred and thirty."),
             ("Agent 007.", "Agent seven."),
         ], false)
-        assertMatch([("Meet at 3:30.", "Meet at 330."), ("Meet at 330.", "Meet at three hundred and thirty.")], true)
+        assertMatch([("Meet at 330.", "Meet at three hundred and thirty.")], true)
+    }
+
+    func testAppleFormattingLossesAreForgivenOnlyInAppleTranscripts() {
+        let lossy = [
+            ("The train leaves at 1:30 this afternoon.", "The train leaves at 130 this afternoon."),
+            ("The train leaves at one thirty this afternoon.", "The train leaves at 130 this afternoon."),
+            ("Meet at 3:30.", "Meet at 330."),
+            ("Meet at 10:30.", "Meet at 1030."),
+            ("Board the seven forty seven now.", "Board the 747 now."),
+            ("Revenue reached 2.5 million dollars.", "Revenue reached $25 million."),
+            ("Revenue reached two point five million dollars.", "Revenue reached $25 million."),
+            ("It grew to 12.5 billion.", "It grew to 125 billion."),
+            ("It grew to 1.25 billion.", "It grew to 125 billion."),
+        ]
+        assertHeard(lossy, true, heardBy: [.apple])
+        assertHeard(lossy, false, heardBy: [.exact])
+        assertHeard([
+            ("Revenue reached 3.5 million dollars.", "Revenue reached $25 million."),
+            ("Revenue reached 25 million dollars.", "Revenue reached $2.5 million."),
+            ("Revenue reached 2 million dollars.", "Revenue reached $20 million."),
+            ("It costs 2.5 dollars.", "It costs $25."),
+            ("It weighs 2.5 hundred grams.", "It weighs 25 hundred grams."),
+            ("The train leaves at 1:30 this afternoon.", "The train leaves at one hundred and thirty this afternoon."),
+        ], false)
+        assertMatch([
+            ("In 1998 we left.", "In nineteen ninety-eight we left."),
+            ("In 2026 we left.", "In twenty twenty six we left."),
+            ("In 1905 we left.", "In nineteen oh five we left."),
+        ], true)
     }
 
     func testCurrenciesMustAgreeButASymbolMayGoUnspoken() {
@@ -115,7 +154,6 @@ final class WordCoverageTests: XCTestCase {
             ("Deliveries grew by 18% this quarter.", "Deliveries grew by 80% this quarter."),
             ("In 1998 we left.", "In 1989 we left."),
             ("It costs $4.99.", "It costs $9.99."),
-            ("They raised 2.5 million dollars.", "They raised $25 million."),
             ("The value is 2.5.", "The value is 25."),
             ("The value is 2.5.", "The value is twenty five."),
             ("Meet at 3:30.", "Meet at 3:40."),
@@ -152,65 +190,65 @@ final class WordCoverageTests: XCTestCase {
 
     func testMissingOpeningSentenceIsRejectedEvenWithALongReaction() {
         XCTAssertFalse(WordCoverage.matches(line: "[clears throat] The garden gate is closed. The meeting begins on Monday.",
-                                            transcript: "The meeting begins on Monday.", locale: english))
+                                            transcript: "The meeting begins on Monday.", locale: english, profile: .exact))
     }
 
     func testEveryWordIncludingNegationAndRepetitionsIsRequiredInOrder() {
         let line = "No, no, he did not leave the gate open."
         for heard in ["No he did not leave the gate open", "No no he did leave the gate open",
                       "No no he did not leave the open gate", "No no he did not leave the gate open again"] {
-            XCTAssertFalse(WordCoverage.matches(line: line, transcript: heard, locale: english), heard)
+            XCTAssertFalse(WordCoverage.matches(line: line, transcript: heard, locale: english, profile: .exact), heard)
         }
-        XCTAssertTrue(WordCoverage.matches(line: line, transcript: line, locale: english))
+        XCTAssertTrue(WordCoverage.matches(line: line, transcript: line, locale: english, profile: .exact))
     }
 
     func testReactionsOnlyPermitExtraNonverbalSoundsWithoutDeletingRequiredWords() {
-        XCTAssertTrue(WordCoverage.matches(line: "[laughs] He left.", transcript: "Ha ha! He left.", locale: english))
-        XCTAssertTrue(WordCoverage.matches(line: "[laughs] He left.", transcript: "Hah! He left.", locale: english))
-        XCTAssertFalse(WordCoverage.matches(line: "[laughs] He left.", transcript: "Ha ha! Left.", locale: english))
-        XCTAssertFalse(WordCoverage.matches(line: "He left.", transcript: "Ha ha! He left.", locale: english))
-        XCTAssertFalse(WordCoverage.matches(line: "[laughs] He left.", transcript: "Ha ha! She left.", locale: english))
-        XCTAssertTrue(WordCoverage.matches(line: "[clears throat] He left.", transcript: "Ahem. He left.", locale: english))
-        XCTAssertFalse(WordCoverage.matches(line: "[clears throat] He left.", transcript: "Ahem. Left.", locale: english))
-        XCTAssertFalse(WordCoverage.matches(line: "[clears throat] Ahem, he left.", transcript: "He left.", locale: english))
+        XCTAssertTrue(WordCoverage.matches(line: "[laughs] He left.", transcript: "Ha ha! He left.", locale: english, profile: .exact))
+        XCTAssertTrue(WordCoverage.matches(line: "[laughs] He left.", transcript: "Hah! He left.", locale: english, profile: .exact))
+        XCTAssertFalse(WordCoverage.matches(line: "[laughs] He left.", transcript: "Ha ha! Left.", locale: english, profile: .exact))
+        XCTAssertFalse(WordCoverage.matches(line: "He left.", transcript: "Ha ha! He left.", locale: english, profile: .exact))
+        XCTAssertFalse(WordCoverage.matches(line: "[laughs] He left.", transcript: "Ha ha! She left.", locale: english, profile: .exact))
+        XCTAssertTrue(WordCoverage.matches(line: "[clears throat] He left.", transcript: "Ahem. He left.", locale: english, profile: .exact))
+        XCTAssertFalse(WordCoverage.matches(line: "[clears throat] He left.", transcript: "Ahem. Left.", locale: english, profile: .exact))
+        XCTAssertFalse(WordCoverage.matches(line: "[clears throat] Ahem, he left.", transcript: "He left.", locale: english, profile: .exact))
     }
 
     func testCommonEnglishContractionsDoNotLoseNegation() {
-        XCTAssertTrue(WordCoverage.matches(line: "I can't leave. What's the plan?", transcript: "I cannot leave. What is the plan?", locale: english))
-        XCTAssertTrue(WordCoverage.matches(line: "What's the plan?", transcript: "whats the plan?", locale: english))
-        XCTAssertFalse(WordCoverage.matches(line: "What's the plan?", transcript: "what the plan?", locale: english))
-        XCTAssertFalse(WordCoverage.matches(line: "I can't leave.", transcript: "I can leave.", locale: english))
+        XCTAssertTrue(WordCoverage.matches(line: "I can't leave. What's the plan?", transcript: "I cannot leave. What is the plan?", locale: english, profile: .exact))
+        XCTAssertTrue(WordCoverage.matches(line: "What's the plan?", transcript: "whats the plan?", locale: english, profile: .exact))
+        XCTAssertFalse(WordCoverage.matches(line: "What's the plan?", transcript: "what the plan?", locale: english, profile: .exact))
+        XCTAssertFalse(WordCoverage.matches(line: "I can't leave.", transcript: "I can leave.", locale: english, profile: .exact))
     }
 
     func testMarkupIsNotSpeechButTaggedWordsAreStillRequired() {
         let line = "<|speaker:2|> [icy calm] <whisper>Wait here.</whisper> Then <emphasis>go.</emphasis>"
-        XCTAssertTrue(WordCoverage.matches(line: line, transcript: "Wait here. Then go.", locale: english))
-        XCTAssertFalse(WordCoverage.matches(line: line, transcript: "Wait here.", locale: english))
-        XCTAssertFalse(WordCoverage.matches(line: "[laughs]", transcript: "ha ha", locale: english))
+        XCTAssertTrue(WordCoverage.matches(line: line, transcript: "Wait here. Then go.", locale: english, profile: .exact))
+        XCTAssertFalse(WordCoverage.matches(line: line, transcript: "Wait here.", locale: english, profile: .exact))
+        XCTAssertFalse(WordCoverage.matches(line: "[laughs]", transcript: "ha ha", locale: english, profile: .exact))
     }
 
     func testTestedContractionsNumbersAndUnicodeNamesAreEquivalent() {
         XCTAssertTrue(WordCoverage.matches(line: "I’m here. You don't have 24 tickets, Élodie.",
-                                           transcript: "I am here. You do not have twenty-four tickets, Elodie.", locale: english))
+                                           transcript: "I am here. You do not have twenty-four tickets, Elodie.", locale: english, profile: .exact))
         XCTAssertFalse(WordCoverage.matches(line: "You don't have 24 tickets, Élodie.",
-                                            transcript: "You have twenty-four tickets, Élodie.", locale: english))
-        XCTAssertFalse(WordCoverage.matches(line: "Peter and Élodie are here.", transcript: "Peter is here.", locale: english))
+                                            transcript: "You have twenty-four tickets, Élodie.", locale: english, profile: .exact))
+        XCTAssertFalse(WordCoverage.matches(line: "Peter and Élodie are here.", transcript: "Peter is here.", locale: english, profile: .exact))
     }
 
     func testAnUncertainMatchingWordCannotCertifySpeech() {
         let line = "[clears throat] The garden gate is closed."
-        XCTAssertFalse(WordCoverage.matches(line: line, transcript: "The garden gate is closed.", locale: english, uncertainSpans: ["garden"]))
-        XCTAssertTrue(WordCoverage.matches(line: line, transcript: "Ha! The garden gate is closed.", locale: english, uncertainSpans: ["Ha!"]))
-        XCTAssertFalse(WordCoverage.matches(line: line, transcript: "The garden gate is closed.", locale: english, uncertainSpans: ["closed."]))
-        XCTAssertFalse(WordCoverage.matches(line: "[laughs] He left.", transcript: "He left.", locale: english, uncertainSpans: ["He"]))
+        XCTAssertFalse(WordCoverage.matches(line: line, transcript: "The garden gate is closed.", locale: english, profile: .exact, uncertainSpans: ["garden"]))
+        XCTAssertTrue(WordCoverage.matches(line: line, transcript: "Ha! The garden gate is closed.", locale: english, profile: .exact, uncertainSpans: ["Ha!"]))
+        XCTAssertFalse(WordCoverage.matches(line: line, transcript: "The garden gate is closed.", locale: english, profile: .exact, uncertainSpans: ["closed."]))
+        XCTAssertFalse(WordCoverage.matches(line: "[laughs] He left.", transcript: "He left.", locale: english, profile: .exact, uncertainSpans: ["He"]))
     }
 
     func testWrittenTitlesAreEquivalentButAnAcronymIsNotANameTitle() throws {
         try WordCoverage.prepare()
-        XCTAssertTrue(WordCoverage.matches(line: "His name is Mister Hops.", transcript: "His name is Mr. Hops.", locale: english))
-        XCTAssertTrue(WordCoverage.matches(line: "Doctor Elodie is here.", transcript: "Dr. Elodie is here.", locale: english))
-        XCTAssertFalse(WordCoverage.matches(line: "MR results are ready.", transcript: "Mister results are ready.", locale: english))
-        XCTAssertFalse(WordCoverage.matches(line: "His name is Mister Hops.", transcript: "His name is Mr. Jones.", locale: english))
+        XCTAssertTrue(WordCoverage.matches(line: "His name is Mister Hops.", transcript: "His name is Mr. Hops.", locale: english, profile: .exact))
+        XCTAssertTrue(WordCoverage.matches(line: "Doctor Elodie is here.", transcript: "Dr. Elodie is here.", locale: english, profile: .exact))
+        XCTAssertFalse(WordCoverage.matches(line: "MR results are ready.", transcript: "Mister results are ready.", locale: english, profile: .exact))
+        XCTAssertFalse(WordCoverage.matches(line: "His name is Mister Hops.", transcript: "His name is Mr. Jones.", locale: english, profile: .exact))
     }
 
     func testExplicitRecognizerReactionAnnotationsMatchOnlyRequestedCueFamilies() {
@@ -220,10 +258,10 @@ final class WordCoverageTests: XCTestCase {
                                   ("clears throat", "(clears throat)"), ("hesitates", "*hesitation*"),
                                   ("pause", "(pause)"), ("whispers", "(whispering)")] {
             XCTAssertTrue(WordCoverage.matches(line: "[\(cue)] Please wait here.",
-                                               transcript: "\(annotation) Please wait here.", locale: english), cue + annotation)
+                                               transcript: "\(annotation) Please wait here.", locale: english, profile: .exact), cue + annotation)
         }
         XCTAssertTrue(WordCoverage.matches(line: "<whisper>Please wait here.</whisper>",
-                                           transcript: "(whispering) Please wait here.", locale: english))
+                                           transcript: "(whispering) Please wait here.", locale: english, profile: .exact))
         for (line, heard) in [("Please wait here.", "*gasp* Please wait here."),
                               ("[laughs] Please wait here.", "*gasp* Please wait here."),
                               ("[gasps] Please wait here.", "Gasp, please wait here."),
@@ -232,12 +270,12 @@ final class WordCoverageTests: XCTestCase {
                               ("[gasps] No, no, he did not wait.", "(gasps) No, he did not wait."),
                               ("[gasps] The garden gate is closed.", "(gasps) The golden gate is closed."),
                               ("[gasps] The garden gate is closed.", "(gasps) The Gordon gate is closed.")] {
-            XCTAssertFalse(WordCoverage.matches(line: line, transcript: heard, locale: english), line + heard)
+            XCTAssertFalse(WordCoverage.matches(line: line, transcript: heard, locale: english, profile: .exact), line + heard)
         }
         XCTAssertFalse(WordCoverage.matches(line: "[gasps] Please wait here.", transcript: "(gasps) Please wait here.",
-                                            locale: english, uncertainSpans: ["Please"]))
+                                            locale: english, profile: .exact, uncertainSpans: ["Please"]))
         XCTAssertTrue(WordCoverage.matches(line: "[gasps] Please wait here.", transcript: "(gasps) Please wait here.",
-                                           locale: english, uncertainSpans: ["(gasps)"]))
+                                           locale: english, profile: .exact, uncertainSpans: ["(gasps)"]))
     }
 
     func testOldConfigurationDefaultsToRequiredChecks() throws {
@@ -253,13 +291,13 @@ final class WordCoverageTests: XCTestCase {
         for (written, spoken) in [("-12", "minus twelve"), ("−12.5", "minus twelve point five"),
                                   ("+12.5", "plus twelve point five"), ("12.5%", "twelve point five percent"),
                                   (".5%", "zero point five percent")] {
-            XCTAssertTrue(WordCoverage.matches(line: "The result is \(written).", transcript: "The result is \(spoken).", locale: english), written)
+            XCTAssertTrue(WordCoverage.matches(line: "The result is \(written).", transcript: "The result is \(spoken).", locale: english, profile: .exact), written)
         }
-        XCTAssertFalse(WordCoverage.matches(line: "The temperature is -12 degrees.", transcript: "The temperature is twelve degrees.", locale: english))
-        XCTAssertFalse(WordCoverage.matches(line: "The result is +12.", transcript: "The result is twelve.", locale: english))
-        XCTAssertFalse(WordCoverage.matches(line: "Revenue rose 12.5%.", transcript: "Revenue rose twelve five.", locale: english))
-        XCTAssertFalse(WordCoverage.matches(line: "Revenue rose 12.5%.", transcript: "Revenue rose twelve point five.", locale: english))
-        XCTAssertFalse(WordCoverage.matches(line: "The result is 12.5.", transcript: "The result is twelve five.", locale: english))
+        XCTAssertFalse(WordCoverage.matches(line: "The temperature is -12 degrees.", transcript: "The temperature is twelve degrees.", locale: english, profile: .exact))
+        XCTAssertFalse(WordCoverage.matches(line: "The result is +12.", transcript: "The result is twelve.", locale: english, profile: .exact))
+        XCTAssertFalse(WordCoverage.matches(line: "Revenue rose 12.5%.", transcript: "Revenue rose twelve five.", locale: english, profile: .exact))
+        XCTAssertFalse(WordCoverage.matches(line: "Revenue rose 12.5%.", transcript: "Revenue rose twelve point five.", locale: english, profile: .exact))
+        XCTAssertFalse(WordCoverage.matches(line: "The result is 12.5.", transcript: "The result is twelve five.", locale: english, profile: .exact))
     }
 
     func testNumericOrdinalsMatchTheirSpokenForms() {
@@ -267,10 +305,10 @@ final class WordCoverageTests: XCTestCase {
                                   ("11th", "eleventh"), ("12th", "twelfth"), ("13th", "thirteenth"),
                                   ("20th", "twentieth"), ("21st", "twenty first"), ("22nd", "twenty second"),
                                   ("23rd", "twenty third"), ("101st", "one hundred first")] {
-            XCTAssertTrue(WordCoverage.matches(line: "The \(spoken) door is open.", transcript: "The \(written) door is open.", locale: english), written)
-            XCTAssertTrue(WordCoverage.matches(line: "The \(written) door is open.", transcript: "The \(spoken) door is open.", locale: english), written)
+            XCTAssertTrue(WordCoverage.matches(line: "The \(spoken) door is open.", transcript: "The \(written) door is open.", locale: english, profile: .exact), written)
+            XCTAssertTrue(WordCoverage.matches(line: "The \(written) door is open.", transcript: "The \(spoken) door is open.", locale: english, profile: .exact), written)
         }
-        XCTAssertTrue(WordCoverage.matches(line: "The twenty first door is open.", transcript: "The ２１ＳＴ door is open.", locale: english))
+        XCTAssertTrue(WordCoverage.matches(line: "The twenty first door is open.", transcript: "The ２１ＳＴ door is open.", locale: english, profile: .exact))
     }
 
     func testOrdinalFormattingCannotHideWrongNumbersOrMissingWords() {
@@ -278,42 +316,42 @@ final class WordCoverageTests: XCTestCase {
                       "The 1th door is open.", "The 01st door is open.", "The +1st door is open.",
                       "The -1st door is open.", "The - 1st door is open.", "The + 1st door is open.",
                       "The −\n1st door is open.", "The 1st5 door is open."] {
-            XCTAssertFalse(WordCoverage.matches(line: "The first door is open.", transcript: heard, locale: english), heard)
+            XCTAssertFalse(WordCoverage.matches(line: "The first door is open.", transcript: heard, locale: english, profile: .exact), heard)
         }
-        XCTAssertFalse(WordCoverage.matches(line: "The first door is not open.", transcript: "The 1st door is open.", locale: english))
-        XCTAssertFalse(WordCoverage.matches(line: "The first door is open.", transcript: "The 1st door is open.", locale: english, uncertainSpans: ["1st"]))
-        XCTAssertFalse(WordCoverage.matches(line: "The first door is open.", transcript: "The 1st door is open.", locale: Locale(identifier: "de_DE")))
+        XCTAssertFalse(WordCoverage.matches(line: "The first door is not open.", transcript: "The 1st door is open.", locale: english, profile: .exact))
+        XCTAssertFalse(WordCoverage.matches(line: "The first door is open.", transcript: "The 1st door is open.", locale: english, profile: .exact, uncertainSpans: ["1st"]))
+        XCTAssertFalse(WordCoverage.matches(line: "The first door is open.", transcript: "The 1st door is open.", locale: Locale(identifier: "de_DE"), profile: .exact))
     }
 
     func testClockFormattingMatchesOnlyTheExpectedTimeAtItsPosition() {
         let line = "The meeting begins on Monday at nine thirty."
         for heard in ["The meeting begins on Monday at 9.30.", "The meeting begins on Monday at 9:30."] {
-            XCTAssertTrue(WordCoverage.matches(line: line, transcript: heard, locale: english), heard)
+            XCTAssertTrue(WordCoverage.matches(line: line, transcript: heard, locale: english, profile: .exact), heard)
         }
-        XCTAssertTrue(WordCoverage.matches(line: "The meeting begins at 9:30.", transcript: "The meeting begins at nine thirty.", locale: english))
-        XCTAssertTrue(WordCoverage.matches(line: "Meet at nine thirty and leave at ten forty five.", transcript: "Meet at 9.30 and leave at 10.45.", locale: english))
+        XCTAssertTrue(WordCoverage.matches(line: "The meeting begins at 9:30.", transcript: "The meeting begins at nine thirty.", locale: english, profile: .exact))
+        XCTAssertTrue(WordCoverage.matches(line: "Meet at nine thirty and leave at ten forty five.", transcript: "Meet at 9.30 and leave at 10.45.", locale: english, profile: .exact))
         XCTAssertTrue(WordCoverage.matches(line: "The value is at nine point three. Meet at nine thirty.",
-                                           transcript: "The value is at 9.30. Meet at 9.30.", locale: english))
-        XCTAssertTrue(WordCoverage.matches(line: "[sighs] Meet at nine thirty.", transcript: "Ha! Meet at 9.30.", locale: english))
+                                           transcript: "The value is at 9.30. Meet at 9.30.", locale: english, profile: .exact))
+        XCTAssertTrue(WordCoverage.matches(line: "[sighs] Meet at nine thirty.", transcript: "Ha! Meet at 9.30.", locale: english, profile: .exact))
     }
 
     func testClockFormattingPreservesDecimalsSignsAndConfidence() {
         let line = "The meeting begins at nine thirty."
         for time in ["9.45", "10.30", "9.300", "9.30%", "9.30kg", "-9.30", "+9.30", "9.30.5", "9:30:45", "29.30"] {
-            XCTAssertFalse(WordCoverage.matches(line: line, transcript: "The meeting begins at \(time).", locale: english), time)
+            XCTAssertFalse(WordCoverage.matches(line: line, transcript: "The meeting begins at \(time).", locale: english, profile: .exact), time)
         }
-        XCTAssertFalse(WordCoverage.matches(line: "The meeting does not begin at nine thirty.", transcript: "The meeting begins at 9.30.", locale: english))
-        XCTAssertFalse(WordCoverage.matches(line: line, transcript: "The meeting begins at 9.30.", locale: english, uncertainSpans: ["9.30"]))
-        XCTAssertFalse(WordCoverage.matches(line: line, transcript: "The meeting begins at nine point three.", locale: english))
-        XCTAssertTrue(WordCoverage.matches(line: "The value is at 9.30.", transcript: "The value is at nine point three.", locale: english))
+        XCTAssertFalse(WordCoverage.matches(line: "The meeting does not begin at nine thirty.", transcript: "The meeting begins at 9.30.", locale: english, profile: .exact))
+        XCTAssertFalse(WordCoverage.matches(line: line, transcript: "The meeting begins at 9.30.", locale: english, profile: .exact, uncertainSpans: ["9.30"]))
+        XCTAssertFalse(WordCoverage.matches(line: line, transcript: "The meeting begins at nine point three.", locale: english, profile: .exact))
+        XCTAssertTrue(WordCoverage.matches(line: "The value is at 9.30.", transcript: "The value is at nine point three.", locale: english, profile: .exact))
         // A written pair "9.30" reads as "nine thirty", as in a price or an Australian clock time.
-        XCTAssertTrue(WordCoverage.matches(line: "The value is 9.30.", transcript: "The value is nine thirty.", locale: english))
-        XCTAssertTrue(WordCoverage.matches(line: "Set it at nine thirty percent.", transcript: "Set it at 9.30 %.", locale: english))
+        XCTAssertTrue(WordCoverage.matches(line: "The value is 9.30.", transcript: "The value is nine thirty.", locale: english, profile: .exact))
+        XCTAssertTrue(WordCoverage.matches(line: "Set it at nine thirty percent.", transcript: "Set it at 9.30 %.", locale: english, profile: .exact))
         for heard in ["Meet at 9.30-5.", "Meet at 9.30/5.", "Meet at 9.30 / 5.", "Meet at 9.30 +5.",
                       "Meet at 9.30 × 5.", "Meet at 9.30 * 5.", "Meet at 9.30 ÷ 5.", "Meet at 9.30 – 5."] {
-            XCTAssertFalse(WordCoverage.matches(line: "Meet at nine thirty five.", transcript: heard, locale: english), heard)
+            XCTAssertFalse(WordCoverage.matches(line: "Meet at nine thirty five.", transcript: heard, locale: english, profile: .exact), heard)
         }
-        XCTAssertFalse(WordCoverage.matches(line: "Meet at nine thirty zero point five.", transcript: "Meet at 9.30 .5.", locale: english))
-        XCTAssertFalse(WordCoverage.matches(line: line, transcript: "The meeting begins at 9.30.", locale: Locale(identifier: "fr_FR")))
+        XCTAssertFalse(WordCoverage.matches(line: "Meet at nine thirty zero point five.", transcript: "Meet at 9.30 .5.", locale: english, profile: .exact))
+        XCTAssertFalse(WordCoverage.matches(line: line, transcript: "The meeting begins at 9.30.", locale: Locale(identifier: "fr_FR"), profile: .exact))
     }
 }

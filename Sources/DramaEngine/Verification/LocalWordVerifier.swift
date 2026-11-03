@@ -131,7 +131,7 @@ package struct LocalWordVerifier: Sendable {
                 throw error
             }
         }
-        let matches = nativeMatches && WordCoverage.matches(line: line, transcript: independentTranscript, locale: locale)
+        let matches = nativeMatches && Self.independentMatches(line: line, transcript: independentTranscript, locale: locale)
         if !matches || confirmation != nil || boundarySpan != nil {
             let matchedReason = boundarySpan != nil ? "verified_boundary_word_matched" : "endpoint_confirmation_matched"
             let witness = boundary.map {
@@ -141,7 +141,7 @@ package struct LocalWordVerifier: Sendable {
                     expectedTokenOrdinal: WordCoverage.tokens(DirectorsNote.spokenWords($0.previousLine), locale: locale).count,
                     heardTokenOrdinal: boundarySpan.map { span in
                         recognition.spans[..<span].reduce(0) { count, item in
-                            count + WordCoverage.recognizedTokens(item.text, line: line, locale: locale).count
+                            count + WordCoverage.recognizedTokens(item.text, line: line, locale: locale, profile: Recognition.profile).count
                         }
                     }, nativeSpanOrdinal: boundarySpan)
             }
@@ -157,6 +157,12 @@ package struct LocalWordVerifier: Sendable {
         guard shouldContinue() else { independent.cancel(); throw CancellationError() }
         guard ContinuousClock.now < deadline else { independent.cancel(); throw SpeechVerificationError.timedOut }
         return matches
+    }
+
+    /// The independent recognizer writes numbers as it heard them, so none of
+    /// Apple's formatting losses are forgiven in its transcript.
+    static func independentMatches(line: String, transcript: String, locale: Locale) -> Bool {
+        WordCoverage.matches(line: line, transcript: transcript, locale: locale, profile: .exact)
     }
 
     /// Bounded wait; cancellation does not wait for a late framework callback.
@@ -189,6 +195,7 @@ package struct LocalWordVerifier: Sendable {
         return try completion.withLock { try $0!.get() }
     }
 
+    /// Apple SpeechTranscriber's transcript with its word confidences.
     package struct Recognition: Sendable {
         package struct Span: Sendable {
             var text: String
@@ -197,6 +204,7 @@ package struct LocalWordVerifier: Sendable {
         }
         var text = ""
         var spans: [Span] = []
+        static let profile = WordCoverage.RecognizerProfile.apple
 
         /// Apple reports correct words at 0.35-0.49 often enough that 0.5 rejected
         /// half of all correct generated clips; the independent check still applies.
@@ -213,15 +221,15 @@ package struct LocalWordVerifier: Sendable {
         }
 
         func matches(line: String, locale: Locale, confidenceFloor: Double = Self.confidenceFloor) -> Bool {
-            WordCoverage.matches(line: line, transcript: text, locale: locale,
+            WordCoverage.matches(line: line, transcript: text, locale: locale, profile: Self.profile,
                                  uncertainSpans: uncertainSpans(confidenceFloor: confidenceFloor))
         }
 
         func canConfirmEndOfAudio(line: String, locale: Locale) -> Bool {
-            guard WordCoverage.matches(line: line, transcript: text, locale: locale) else { return false }
-            let lexical = spans.filter { !WordCoverage.tokens($0.text, locale: locale).isEmpty }
+            guard WordCoverage.matches(line: line, transcript: text, locale: locale, profile: Self.profile) else { return false }
+            let lexical = spans.filter { !WordCoverage.tokens($0.text, locale: locale, profile: Self.profile).isEmpty }
             guard let last = lexical.last, last.confidence < Self.endOfAudioFloor,
-                  WordCoverage.tokens(last.text, locale: locale).count == 1 else { return false }
+                  WordCoverage.tokens(last.text, locale: locale, profile: Self.profile).count == 1 else { return false }
             return lexical.dropLast().allSatisfy { $0.confidence >= Self.confidenceFloor }
         }
 
@@ -231,11 +239,11 @@ package struct LocalWordVerifier: Sendable {
             let line = previousLine + " " + currentLine
             guard !previous.isEmpty, current.count > 1,
                   WordCoverage.tokens(DirectorsNote.spokenWords(line), locale: locale) == previous + current,
-                  let firstCurrent = WordCoverage.unambiguousHeardOrdinal(line: line, transcript: text,
-                                                                          expectedOrdinal: previous.count, locale: locale) else { return nil }
-            let spanWords = spans.map { WordCoverage.recognizedTokens($0.text, line: line, locale: locale) }
+                  let firstCurrent = WordCoverage.unambiguousHeardOrdinal(line: line, transcript: text, expectedOrdinal: previous.count,
+                                                                          locale: locale, profile: Self.profile) else { return nil }
+            let spanWords = spans.map { WordCoverage.recognizedTokens($0.text, line: line, locale: locale, profile: Self.profile) }
             guard spans.map(\.text).joined() == text,
-                  spanWords.flatMap({ $0 }) == WordCoverage.recognizedTokens(text, line: line, locale: locale) else { return nil }
+                  spanWords.flatMap({ $0 }) == WordCoverage.recognizedTokens(text, line: line, locale: locale, profile: Self.profile) else { return nil }
             var ordinal = 0
             for (index, span) in spans.enumerated() {
                 defer { ordinal += spanWords[index].count }
@@ -244,7 +252,8 @@ package struct LocalWordVerifier: Sendable {
                       span.hasReportedConfidence, span.confidence.isFinite,
                       span.confidence > 0, span.confidence < Self.endOfAudioFloor else { continue }
                 let remaining = spans.enumerated().filter { $0.offset != index && $0.element.confidence < Self.endOfAudioFloor }.map { $0.element.text }
-                if WordCoverage.matches(line: line, transcript: text, locale: locale, uncertainSpans: remaining) { return index }
+                if WordCoverage.matches(line: line, transcript: text, locale: locale, profile: Self.profile,
+                                        uncertainSpans: remaining) { return index }
             }
             return nil
         }

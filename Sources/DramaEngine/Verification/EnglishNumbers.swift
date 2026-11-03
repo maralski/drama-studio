@@ -82,7 +82,8 @@ enum EnglishNumbers {
 
     /// Readings of a written group. `integer` may hold thousands commas;
     /// `separator` is "." or ":"; `decade` marks a trailing "s" or "'s".
-    static func written(integer: String?, separator: String?, fraction: String?, decade: Bool) -> Set<Reading>? {
+    static func written(integer: String?, separator: String?, fraction: String?, decade: Bool,
+                        profile: WordCoverage.RecognizerProfile?) -> Set<Reading>? {
         let digits = (integer ?? "0").replacingOccurrences(of: ",", with: "")
         let significant = digits.drop { $0 == "0" }
         let trimmed = significant.isEmpty ? "0" : String(significant)
@@ -93,7 +94,9 @@ enum EnglishNumbers {
         guard let separator, let fraction else {
             guard digits == trimmed else { return [Kind.digits.reading(digits)] }
             var readings: Set = [Kind.digits.reading(digits), Kind.cardinal.reading(digits)]
-            if (3...4).contains(digits.count) {
+            // The exact recognizer writes "one thirty" as 1.30, so its 130 may be
+            // "one hundred thirty"; a first pair that is no clock hour is a year.
+            if (3...4).contains(digits.count), profile != .exact || Int(digits.dropLast(2))! > 12 {
                 readings.insert(Kind.paired.reading(digits.dropLast(2) + "." + digits.suffix(2)))
             }
             return readings
@@ -117,7 +120,8 @@ enum EnglishNumbers {
     /// Groups number words and written numbers into number tokens, turns a
     /// currency symbol or a currency word after a number into a currency token,
     /// and applies `spellings` to the other words.
-    static func tokens(_ pieces: [(piece: Piece, gap: Gap)], spellings: [String: String]) -> [String] {
+    static func tokens(_ pieces: [(piece: Piece, gap: Gap)], spellings: [String: String],
+                       profile: WordCoverage.RecognizerProfile?) -> [String] {
         enum Part { case word(String), number(Set<Reading>, currency: String?) }
         func word(_ index: Int) -> String? {
             guard index < pieces.count, case .word(let word) = pieces[index].piece else { return nil }
@@ -156,8 +160,10 @@ enum EnglishNumbers {
         var index = 0
         while index < pieces.count {
             let gap = pieces[index].gap
-            if case .written(let readings, let currency) = pieces[index].piece {
-                let scaled = joinedWord(index + 1).flatMap { scales[$0] }.map { multiplied(readings, by: $0) } ?? []
+            if case .written(var readings, let currency) = pieces[index].piece {
+                let scale = joinedWord(index + 1).flatMap { scales[$0] }
+                if profile == .apple, let scale, scale >= 1000 { readings.formUnion(pointInserted(readings)) }
+                let scaled = scale.map { multiplied(readings, by: $0) } ?? []
                 parts.append((.number(scaled.isEmpty ? readings : scaled, currency: currency), gap))
                 index += scaled.isEmpty ? 1 : 2
                 continue
@@ -226,6 +232,15 @@ enum EnglishNumbers {
             }
         }
         return readings
+    }
+
+    /// Apple writes "two point five million" as "25 million": the same digits
+    /// with one point dropped.
+    private static func pointInserted(_ readings: Set<Reading>) -> Set<Reading> {
+        Set(values(readings, .cardinal).flatMap { digits in
+            (1..<digits.count).map { Kind.decimal.reading(digits.prefix($0) + "." + digits.dropFirst($0)) }
+                .filter { !$0.value.hasSuffix("0") }
+        })
     }
 
     private static func multiplied(_ readings: Set<Reading>, by scale: Int) -> Set<Reading> {

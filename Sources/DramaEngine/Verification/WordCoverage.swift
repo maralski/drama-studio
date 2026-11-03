@@ -7,6 +7,15 @@ import Synchronization
 /// Compares an audio-only transcript with the requested words. No aggregate
 /// error threshold: even one missing word, repetition or negation fails.
 package enum WordCoverage {
+    /// How a recognizer writes the numbers it hears. The script has no profile.
+    package enum RecognizerProfile: Sendable {
+        /// Keeps what was said: "one thirty" is 1.30 and "one hundred thirty" is 130.
+        case exact
+        /// Apple's SpeechTranscriber writes both as 130, and "two point five
+        /// million" as 25 million, so its numbers also get those readings.
+        case apple
+    }
+
     private struct ReactionAnnotation: Decodable {
         var cue_pattern: String
         var label_pattern: String
@@ -71,6 +80,14 @@ package enum WordCoverage {
     }
 
     package static func tokens(_ text: String, locale: Locale) -> [String] {
+        tokens(text, locale: locale, profile: nil)
+    }
+
+    package static func tokens(_ text: String, locale: Locale, profile: RecognizerProfile) -> [String] {
+        tokens(text, locale: locale, profile: .some(profile))
+    }
+
+    private static func tokens(_ text: String, locale: Locale, profile: RecognizerProfile?) -> [String] {
         let english = locale.language.languageCode?.identifier == "en"
         var original = text
         if english {
@@ -92,8 +109,8 @@ package enum WordCoverage {
         }
         if english {
             return EnglishNumbers.tokens(englishPieces(text.replacingOccurrences(of: "%", with: " percent ")
-                                                           .replacingOccurrences(of: "-", with: " ")),
-                                         spellings: englishForms.spellings)
+                                                           .replacingOccurrences(of: "-", with: " "), profile: profile),
+                                         spellings: englishForms.spellings, profile: profile)
         }
         text = text.replacingOccurrences(of: "%", with: " percent_symbol ")
         for match in digits.matches(in: text, range: NSRange(text.startIndex..., in: text)).reversed() {
@@ -121,13 +138,14 @@ package enum WordCoverage {
         return words
     }
 
-    private static func englishPieces(_ text: String) -> [(piece: EnglishNumbers.Piece, gap: EnglishNumbers.Gap)] {
+    private static func englishPieces(_ text: String, profile: RecognizerProfile?) -> [(piece: EnglishNumbers.Piece, gap: EnglishNumbers.Gap)] {
         var numbers: [(range: Range<String.Index>, readings: Set<EnglishNumbers.Reading>)] = []
         for match in writtenNumber.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
             func group(_ index: Int) -> String? { Range(match.range(at: index), in: text).map { String(text[$0]) } }
             guard let range = Range(match.range, in: text),
                   let readings = EnglishNumbers.written(integer: group(1), separator: group(2) ?? group(4).map { _ in "." },
-                                                        fraction: group(3) ?? group(4), decade: group(5) != nil) else { continue }
+                                                        fraction: group(3) ?? group(4), decade: group(5) != nil,
+                                                        profile: profile) else { continue }
             numbers.append((range, readings))
         }
         var found: [(range: Range<String.Index>, piece: EnglishNumbers.Piece)] = numbers.map { number in
@@ -157,12 +175,13 @@ package enum WordCoverage {
 
     package static func isNumber(_ token: String) -> Bool { EnglishNumbers.isNumber(token) }
 
-    package static func matches(line: String, transcript: String, locale: Locale, uncertainSpans: [String] = []) -> Bool {
+    package static func matches(line: String, transcript: String, locale: Locale, profile: RecognizerProfile,
+                                uncertainSpans: [String] = []) -> Bool {
         let expected = tokens(DirectorsNote.spokenWords(line), locale: locale)
-        let heard = recognizedTokens(transcript, line: line, locale: locale)
+        let heard = recognizedTokens(transcript, line: line, locale: locale, profile: profile)
         let reactions = permitsReactions(line)
         for span in uncertainSpans {
-            let words = recognizedTokens(span, line: line, locale: locale)
+            let words = recognizedTokens(span, line: line, locale: locale, profile: profile)
             let insertedReaction = reactions && words.allSatisfy(nonverbal)
                 && words.allSatisfy { !expected.contains($0) }
             if !words.isEmpty && !insertedReaction { return false }
@@ -170,8 +189,8 @@ package enum WordCoverage {
         return match(expected: expected, heard: heard, reactions: reactions) != nil
     }
 
-    package static func recognizedTokens(_ transcript: String, line: String, locale: Locale) -> [String] {
-        tokens(removingReactionAnnotations(transcript, for: line), locale: locale)
+    package static func recognizedTokens(_ transcript: String, line: String, locale: Locale, profile: RecognizerProfile) -> [String] {
+        tokens(removingReactionAnnotations(transcript, for: line), locale: locale, profile: profile)
     }
 
     private static let ordinalNumber = try! NSRegularExpression(
@@ -198,12 +217,14 @@ package enum WordCoverage {
         return text
     }
 
-    package static func unambiguousHeardOrdinal(line: String, transcript: String, expectedOrdinal: Int, locale: Locale) -> Int? {
+    package static func unambiguousHeardOrdinal(line: String, transcript: String, expectedOrdinal: Int, locale: Locale,
+                                                profile: RecognizerProfile) -> Int? {
         let expected = tokens(DirectorsNote.spokenWords(line), locale: locale)
         let reactions = permitsReactions(line)
         guard expected.indices.contains(expectedOrdinal),
               !(reactions && nonverbal(expected[expectedOrdinal])),
-              let ordinals = match(expected: expected, heard: recognizedTokens(transcript, line: line, locale: locale), reactions: reactions) else { return nil }
+              let ordinals = match(expected: expected, heard: recognizedTokens(transcript, line: line, locale: locale, profile: profile),
+                                   reactions: reactions) else { return nil }
         return ordinals[expectedOrdinal]
     }
 

@@ -23,7 +23,7 @@ final class WordCheckCorpusTests: XCTestCase {
 
     private func accepted(_ clip: Clip) -> Bool {
         clip.recognition.matches(line: clip.line, locale: locale)
-            && WordCoverage.matches(line: clip.line, transcript: clip.independent, locale: locale)
+            && LocalWordVerifier.independentMatches(line: clip.line, transcript: clip.independent, locale: locale)
     }
 
     func testCorpusAcceptsCorrectSpeechAndRejectsEveryWrongClip() throws {
@@ -49,8 +49,8 @@ final class WordCheckCorpusTests: XCTestCase {
         let start = ContinuousClock.now
         for _ in 0..<rounds {
             for clip in clips {
-                _ = WordCoverage.matches(line: clip.line, transcript: clip.native, locale: locale)
-                _ = WordCoverage.matches(line: clip.line, transcript: clip.independent, locale: locale)
+                _ = WordCoverage.matches(line: clip.line, transcript: clip.native, locale: locale, profile: .apple)
+                _ = WordCoverage.matches(line: clip.line, transcript: clip.independent, locale: locale, profile: .exact)
                 calls += 2
             }
         }

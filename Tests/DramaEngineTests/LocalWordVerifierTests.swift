@@ -119,6 +119,16 @@ final class LocalWordVerifierTests: XCTestCase {
         XCTAssertFalse(recognition(0.29).canConfirmEndOfAudio(line: "Go on Monday.", locale: locale))
     }
 
+    func testOnlyTheNativeTranscriptHasAppleFormattingForgiven() {
+        let locale = Locale(identifier: "en_AU")
+        let line = "The train leaves at 1:30 this afternoon."
+        let heard = "The train leaves at 130 this afternoon."
+        let native = LocalWordVerifier.Recognition(text: heard, spans: [.init(text: heard, confidence: 0.99)])
+        XCTAssertTrue(native.matches(line: line, locale: locale))
+        XCTAssertFalse(LocalWordVerifier.independentMatches(line: line, transcript: heard, locale: locale))
+        XCTAssertTrue(LocalWordVerifier.independentMatches(line: line, transcript: "The train leaves at 1.30 this afternoon.", locale: locale))
+    }
+
     func testTimeoutCancelsTheRecognitionWorker() {
         let stopped = DispatchSemaphore(value: 0)
         XCTAssertThrowsError(try LocalWordVerifier.blocking(timeout: .milliseconds(20), shouldContinue: { true }) {
