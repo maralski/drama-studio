@@ -263,6 +263,7 @@ final class WordCoverageTests: XCTestCase {
             ("It costs 75 cents.", "It costs $750."),
             ("It costs 75 cents.", "It costs €75."),
             ("It costs 75 cents.", "It costs $76."),
+            ("It costs 750 cents.", "It costs $750."),
         ], false)
     }
 
