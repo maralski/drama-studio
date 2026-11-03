@@ -103,13 +103,16 @@ enum EnglishNumbers {
     }
 
     /// A number with a reading other than its digits, such as 321 or "fifty
-    /// six", never splits digit by digit.
+    /// six", never splits digit by digit. The word a range hyphen stands for
+    /// may go unsaid, so "two one" is "2-1".
     private static func digitRun(_ run: String, spelledBy tokens: ArraySlice<String>) -> Int? {
         let whole = readings(of: run)
         guard isNumber(run), whole.allSatisfy({ $0.kind == .digits || $0.kind == .groups }) else { return nil }
         func length(_ rest: Substring, from index: Int) -> Int? {
             guard !rest.isEmpty else { return index - tokens.startIndex }
-            guard index < tokens.endIndex, isNumber(tokens[index]) else { return nil }
+            guard index < tokens.endIndex else { return nil }
+            if index > tokens.startIndex, alternatives(tokens[index]) != nil { return length(rest, from: index + 1) }
+            guard isNumber(tokens[index]) else { return nil }
             for part in readings(of: tokens[index]) where part.kind == .digits && rest.hasPrefix(part.value) {
                 if let count = length(rest.dropFirst(part.value.count), from: index + 1) { return count }
             }

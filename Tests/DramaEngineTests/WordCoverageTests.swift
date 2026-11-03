@@ -129,11 +129,27 @@ final class WordCoverageTests: XCTestCase {
             ("Read pages 10 to 20 before class.", "Read pages 10 through 20 before class."),
             ("Read pages 10-20 before class.", "Read pages 10 through 30 before class."),
             ("Read pages 10-20 before class.", "Read pages 10 and 20 before class."),
-            ("Pages 10-20 are missing.", "Pages ten twenty are missing."),
             ("The final score was 21-17.", "The final score was 2117."),
+            ("The answer is 5 - 3.", "The answer is 53."),
+        ], false)
+    }
+
+    func testARangeWordMayGoUnsaidOnlyBetweenNumbersReadDigitByDigit() {
+        assertMatch([
+            ("They had a 2-1 win.", "They had a two one win."),
+            ("They had a 2-1 win.", "They had a two to one win."),
+            ("They had a 2-1 win.", "They had a 2 1 win."),
+            ("She works a 9-5 job.", "She works a nine five job."),
+            ("They kept the 3-0 lead.", "They kept the three oh lead."),
+        ], true)
+        assertMatch([
+            ("They had a 2-1 win.", "They had a twenty one win."),
+            ("They had a 2-1 win.", "They had a 21 win."),
+            ("They had a 2-1 win.", "They had a two two win."),
+            ("They had a 2-1 win.", "They had a two and one win."),
+            ("Pages 10-20 are missing.", "Pages ten twenty are missing."),
             ("The final score was 21-17.", "The final score was twenty one seventeen."),
             ("The answer is 5 - 3.", "The answer is five three."),
-            ("The answer is 5 - 3.", "The answer is 53."),
         ], false)
     }
 
