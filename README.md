@@ -16,9 +16,10 @@ https://github.com/user-attachments/assets/273c2a56-71da-4f1f-95a5-c74141b42930
 
 ### System requirements
 
-- Apple silicon Mac. Checked generation requires macOS 26 or later and an installed
-  on-device speech model for the script language. Unchecked preview targets macOS 15.
-  Intel Macs are not supported by the engine.
+- Apple silicon Mac. Speech generation requires macOS 26 or later and an
+  installed on-device speech model for the script language. The app opens on
+  macOS 15 but cannot generate speech there. Intel Macs are not supported by
+  the engine.
 - About 49 GB of free disk for the model, codec and setup caches. Allow more
   space for generated audio, saved projects and app updates.
 - 64 GB or more of unified memory is recommended. This is not a verified
@@ -30,8 +31,9 @@ https://github.com/user-attachments/assets/273c2a56-71da-4f1f-95a5-c74141b42930
 - An internet connection for the initial downloads and update checks.
   Speech generation runs locally after setup.
 
-The setup memory override tests the warning only. It does not simulate a
-lower-memory Mac or establish that generation works on one.
+The setup memory override (`DRAMA_STUDIO_MEMORY_GB`, see
+[Build and run](#build-and-run)) tests the warning only. It does not simulate
+a lower-memory Mac or establish that generation works on one.
 
 1. Download `DramaStudio-<version>.dmg` from the
    [latest release](https://github.com/maralski/drama-studio/releases/latest).
@@ -163,8 +165,9 @@ need one verified download to establish it.
   To reuse a generated voice, select a take and click **Save Voice to Library**
   beside **Use for Export**. Name the voice and save it. The app selects it for
   future generations, including after you edit the script. This works with
-  Model default takes and individual document sections. Complete, checked takes
-  containing one speaker can be saved; outdated script text does not prevent it.
+  Model default takes and individual document sections. Complete takes that
+  passed the current word check and contain one speaker can be saved; outdated
+  script text does not prevent it.
   **Save Session Voice** in Cast saves the retained session voice instead.
 - **Streaming playback** as chunks finish, scrubbing, a speed control from
   0.75x to 1.5x, the sentence being spoken highlighted in the editor, and
@@ -173,7 +176,7 @@ need one verified download to establish it.
   through the same engine and voice library (see
   [Agents and programs](#agents-and-programs)).
 - **Menu bar residency**: closing the window leaves Drama Studio in the menu
-  bar (the waveform-and-microphone icon) with the API still serving. The menu
+  bar (the app icon's waveform) with the API still serving. The menu
   shows the model state, the API address, and the current job. ⌘Q quits.
 
 ## Build requirements
@@ -195,7 +198,8 @@ cd tools && uv venv --python 3.12 .venv && uv pip install --python .venv/bin/pyt
 ```
 
   They land in `~/Library/Application Support/DramaStudio/Codec/` (encoder
-  809 MB in fp32, decoder 353 MB in fp16).
+  809 MB in fp32, decoder 353 MB and the 64-frame silence-probe decoder
+  352 MB in fp16).
 
 ## Build and run
 
@@ -285,7 +289,8 @@ speaker picker. The editor edits the selected section.
   settings, voice assignments, session voices, and every take with its original
   text, voice assignments, codes, and audio. Library assignments still refer to
   voices in the local library. Save updates the current project; **Save Project
-  As** creates a copy. Format 2 projects require this version of Drama Studio.
+  As** creates a copy. Projects are saved in format 4, which versions before
+  1.1.0 cannot open.
   Older projects still open, with a verification warning for audio whose
   generation history was not stored.
 - Import, Open Project, and Quit offer Save, Discard Changes, or Cancel when
@@ -310,11 +315,15 @@ done.
 comes out as speech: 33 conditions (short and long lines, numbers,
 abbreviations, all caps, performance cues, multi-speaker tags, Spanish,
 French and German, a cloned voice, both expressiveness extremes, and two
-control conditions), five seeds each, in `full` and `balanced`.
+control conditions), five seeds each, in `full` and `balanced`. It was run on
+2026-10-18 and predates the current defaults: no silence stop, short sentences
+kept as separate turns, up to five retries, and a required word check on every
+sentence (see [Streaming](#streaming)). Treat its numbers as a record of that
+build, not a measurement of this one.
 
 | rows | full | balanced |
 | --- | --- | --- |
-| plain prose under the shipped defaults | 130 of 130 | 126 of 130 |
+| plain prose under the 2026-10-18 defaults | 130 of 130 | 126 of 130 |
 | performance-cue lines | 16 of 20 | 14 of 20 |
 | retries off (control) | 1 of 5 | 3 of 5 |
 | reference 300-byte chunking (control) | 7 of 10 | 9 of 10 |
@@ -346,9 +355,10 @@ the two-sentence line reaching the end of speech on its first attempt with
 retries off in 5 of 5, and 0.007 more word error rate on prose (standard
 error 0.004), mostly abbreviations and a few slurred words. It is the top of
 the Expressiveness slider and the API's `expressiveness: 1`; the vendor's
-sampling stays the default. The Insert Cue menu says what remains: about one
-take in twenty still drops the clause after a cue, so listen before
-exporting.
+sampling stays the default. Since then every sentence also passes a local
+word check before release, so a dropped clause is retried or fails the
+request instead of reaching a finished take. The Insert Cue menu still says to
+listen before export to judge the performance.
 
 ## Agents and programs
 
@@ -376,7 +386,7 @@ The speech request follows the
 
 | Route | Does |
 | --- | --- |
-| `GET /v1/health` | `{status, model_loaded, engine: "metal" or "mock", busy, tuned, version}`. `tuned` is `null` until the model loads. While a generation runs it adds `estimate: {elapsed_seconds, remaining_seconds, frames_done, frames_expected}`; `remaining_seconds` is `null` once the last sentence is in its silence tail or a retry runs. |
+| `GET /v1/health` | `{status, model_loaded, engine: "metal" or "mock", busy, tuned, version}`. `tuned` is `null` until the Metal engine loads its model; the mock engine reports `false`. While a generation runs it adds `estimate: {elapsed_seconds, remaining_seconds, frames_done, frames_expected}`; `remaining_seconds` is `null` once the last sentence is in its silence tail or a retry runs. |
 | `GET /v1/models` | The one model, `fishaudio/drama-3`, with its snapshot id. |
 | `POST /v1/audio/speech` | Speaks `input`. Returns the audio file, or a PCM stream. |
 | `POST /v1/tts` | The same, with the text in `text`. |
@@ -400,7 +410,7 @@ The speech body takes these fields:
 | `expressiveness` | 0 to 1, default 0.5: the app's Expressiveness slider. 0.5 is the vendor's sampling, 1 the Hugging Face Space's. |
 | `seed` | A fixed sampler seed, for repeatable takes. |
 | `character` | A voice designed from a description instead of a clip: `{name, description, scene?}`. |
-| `note` | A director's note, such as `"softer and warmer"`. The line is generated again as one turn, with the note as a direction and as a cue before every sentence. |
+| `note` | A director's note, such as `"softer and warmer"`. The line is generated again, sentence by sentence, with the note as a direction and as a cue before every sentence. |
 | `previous_takes` | Earlier takes of the line, oldest first: `[{take_id}]` or `[{text, codes_base64}]`. The last two are context. With no `voice` or `references`, the first one is the voice. |
 | `apply_pronunciation` | `true` (default) rewrites `input` with the pronunciation rules in `~/Library/Application Support/DramaStudio/pronunciation.json`, the same rules the app uses, before it is spoken; `false` speaks it as sent. |
 
@@ -413,8 +423,12 @@ retake the line of the last named take, with its voice and character.
 `codes_base64` is the take's codes as 16-bit little-endian integers, codebook
 by codebook, as `GET /v1/takes/{id}` returns them.
 
-A file response carries `X-Drama-Frames`, `X-Drama-Seconds`, and
-`X-Drama-Generation-Seconds`. The engine runs one generation at a time. A
+A file response carries `X-Drama-Frames`, `X-Drama-Seconds`,
+`X-Drama-Generation-Seconds`, `X-Drama-Word-Coverage` (`recognized` or
+`unchecked`), `X-Drama-Generated-Frames` (including rejected attempts) and
+`X-Drama-Verification-Seconds`. A sentence that still fails the word check
+after its retries, or a missing word checker, fails the request with `500`
+and a plain-text message. The engine runs one generation at a time. A
 request that arrives while another runs, through the API or in the window, gets
 `429` with `Retry-After`. A bad request gets `400` with a plain-text message
 that names the field.
@@ -433,11 +447,11 @@ curl -sS -H "$AUTH" localhost:8780/v1/audio/speech \
   -d "{\"note\": \"softer and warmer\", \"previous_takes\": [{\"take_id\": \"$TAKE\"}]}" -o captain-retake.wav
 ```
 
-#### Streaming framing
+### Streaming framing
 
-All three streaming routes send completed chunks when retries are enabled.
-The engine validates each attempt before releasing audio, so a rejected attempt
-can be replaced for any voice.
+All three streaming routes send only completed chunks. The engine checks each
+sentence's words before releasing its audio, so a rejected attempt can be
+replaced for any voice.
 
 The audio is always 16-bit little-endian mono at 44.1 kHz, as the
 `X-Drama-Format: pcm_s16le_mono` and `X-Drama-Sample-Rate: 44100` headers say.
@@ -466,7 +480,7 @@ and these events:
 | --- | --- |
 | `audio` | Base64 of the next PCM bytes, a whole number of frames. |
 | `sentence` | `{"index", "text", "seconds"}` after the last audio of each sentence. |
-| `done` | `{"take_id", "frames", "seconds"}` once the take is complete. |
+| `done` | `{"take_id", "frames", "word_coverage", "seconds"}` once the take is complete. |
 | `error` | `{"message"}`, after which the stream ends. |
 
 The route still needs the bearer token, and the server sends no CORS headers,
@@ -489,7 +503,7 @@ request body:
   on a line once its newline arrives.
 - The server joins the lines with spaces and speaks each sentence once a
   sentence end (`.`, `!`, `?`, `;`, `…`, or a CJK one, optionally followed by a
-  closing quote or bracket) arrives. Sentences are cut with the same splitter
+  closing quote or parenthesis) arrives. Sentences are cut with the same splitter
   as `input`, so `<|speaker:N|>` tags and cues work.
 - The pronunciation rules rewrite each sentence before it is spoken, unless
   the query has `apply_pronunciation=false`.
@@ -516,8 +530,8 @@ tools/live_speech.py --events < script.txt      # prints each event with its arr
 ```
 
 `curl -T -` also speaks a piped body, but it holds the piped lines back before
-sending them: on the mock engine its first audio came 1.7 s later than the
-same feed through `tools/live_speech.py`.
+sending them, so its first audio comes later than the same feed through
+`tools/live_speech.py`.
 
 Manage voices:
 
@@ -607,8 +621,9 @@ needed. The public API includes `ModelLocation` and `DramaSetup` for the
 install, `DramaSynthesizer` (an actor) behind the `SpeechSynthesizer`
 protocol, `SpeechRequest` with `ReferenceVoice`, `VoiceDesign`, `Take` and
 `GenerationConfig`, the streamed `SpeechEvent`s with `StreamedAudio` and
-`GenerationEstimate`, `PronunciationDictionary`, `DramaCodec` for standalone
-encode and decode, and `MockSynthesizer` for previews and tests. Everything
+`GenerationEstimate`, the word check's `WordVerificationPolicy` and
+`SpeechVerificationError`, `PronunciationDictionary`, `DramaCodec` for
+standalone encode and decode, and `MockSynthesizer` for previews and tests. Everything
 else in `Sources/DramaEngine` is `package`: the repository's targets use it,
 other packages cannot.
 
@@ -621,6 +636,7 @@ let engine = DramaSynthesizer(location: location, codecDirectory: DramaCodec.def
 let voice = try await engine.encodeReference(audioURL: clip, transcript: "What the clip says.", name: "Narrator")
 var request = SpeechRequest(text: "Hello there.", references: [voice])
 request.config.streaming = .defaultLowLatency
+request.config.wordVerification = .uncheckedPreview // Words are not checked before playback.
 request.config.maxRetries = 0 // Allow partial playback before a chunk is validated.
 var audio = StreamedAudio()
 for try await event in engine.synthesize(request) {
@@ -635,8 +651,14 @@ for try await event in engine.synthesize(request) {
   resource bundle, through a Python you name (it throws the exact commands
   when you name none and never downloads Python), and loads the model once to
   tune the kernels.
+- Normal generation checks each sentence's words with the
+  `drama-word-recognizer` helper and a Whisper model, which must sit next to
+  the executable or the engine bundle (`tools/make_app.sh` stages them).
+  `DramaSetup.check` does not report them; without them a checked request
+  throws `SpeechVerificationError.unavailable`. Set
+  `config.wordVerification = .uncheckedPreview` to skip the check.
 - `Examples/SpeakCLI` is a separate package that depends on this one by path,
-  clones a voice from a clip, streams progress, and writes a WAV in 67 lines.
+  clones a voice from a clip, streams progress, and writes a WAV in 69 lines.
   `Examples/README.md` has the Xcode steps and the entitlements: none beyond
   the app's own, plus the microphone only to record clips.
 - The DocC catalog (`Sources/DramaEngine/DramaEngine.docc`) has the landing
@@ -658,8 +680,11 @@ for try await event in engine.synthesize(request) {
   (`MAP_SHARED`) and wrapped as Metal buffers without copying. Experts stay in
   FP8 E4M3 with their 128x128 block scales and are decoded inside the kernel
   through a 256-entry table; every other weight is bf16 widened to fp32 in the
-  kernel.
-- `Sources/DramaEngine/Kernels`: zero-centered RMSNorm, a bf16 GEMV for decode
+  kernel. One-row decode reads eight bf16 weight families from a lossless
+  exponent-coded copy built once per checkpoint (`PackedWeights`, see
+  [Decode, second pass](#decode-second-pass-2026-10-22)).
+- `Sources/DramaEngine/Kernels`: zero-centered RMSNorm, a bf16 GEMV and its
+  exponent-coded variant for decode
   and a simdgroup-matrix GEMM for prefill, the Gated DeltaNet depthwise conv and
   recurrence, GQA attention with an online softmax over an fp32 KV cache,
   partial RoPE (NeoX for the backbone, interleaved for the tower), the MoE
@@ -681,7 +706,13 @@ for try await event in engine.synthesize(request) {
 - `Sources/DramaEngine/Codec`: Core ML wrappers for the DAC encoder (reference
   clips to codes) and decoder (codes to 44.1 kHz audio), both exported at one
   static 512-frame shape and run in windows with 256 frames of left context,
-  plus the same decoder at a 64-frame shape for the silence stop's probe.
+  plus the same decoder at a 64-frame shape for the optional silence stop's
+  probe (off by default).
+- `Sources/DramaEngine/Verification`: the word check, Apple's on-device
+  transcriber plus the independent `drama-word-recognizer` (Whisper), and the
+  acceptance policy.
+- `Sources/DramaEngine/Install`: the pinned model download plan, the resumable
+  downloader and the codec bundle.
 - `Sources/DramaServer`: the HTTP API on `Network.framework`. Request parsing
   and routing are pure functions from an `HTTPRequest` to an `APIRequest`;
   `APIService` answers them against any `SpeechSynthesizer` and `VoiceStore`,
@@ -703,7 +734,10 @@ build is `.audit/drama-studio.tsv`.
 
 The engine is checked against the fish-speech v3.0.0-beta PyTorch
 implementation running on the CPU in float32, teacher-forced on the same
-prompt and frames. Numbers from `eval/compare.py`:
+prompt and frames. Numbers from `eval/compare.py`, measured 2026-10-15, before
+the fused decode dispatches (2026-10-22) and packed decode weights
+(2026-10-23); the second pass reported hidden 1.2e-6 relative L2 at most and
+top-1 1.0 after those changes:
 
 | quantity | relative L2 vs float32 oracle | top-1 agreement | mean KL |
 | --- | --- | --- | --- |
@@ -712,8 +746,8 @@ prompt and frames. Numbers from `eval/compare.py`:
 | nine tower head logits | 4.4e-7 | 1.000 | 4.2e-12 |
 | residual stream after each of the 40 layers, and each of the 13 tower layers, at the first step | under 2e-6 each | | |
 
-For scale, the same oracle run in bfloat16 on the CPU differs from its float32
-run by a relative L2 of 5.2e-2 on the hidden state with a top-1 agreement of
+For scale, the same oracle run in bfloat16 on the CPU, on a shorter 12-frame
+prompt, differs from its float32 run by a relative L2 of 5.2e-2 on the hidden state with a top-1 agreement of
 0.846. The Metal engine sits at float32 precision; it keeps the FP8 expert
 weights exact and widens everything else, so it does not reproduce the
 CUDA release's W8A8 activation quantization, and no claim is made about that.
@@ -753,12 +787,14 @@ on the CPU through Core ML: 1.5 s per 512-frame window (23.8 s of audio) for
 the decoder and 2.1 s for a 10 s reference clip in the encoder. The encoder
 matches PyTorch's codes exactly; the decoder is 35 to 39 dB from the fp32
 reference. `DramaCodec.init(computeUnits:)` still accepts `.cpuAndNeuralEngine`
-for anyone who wants to retry on a different machine or OS.
+for the decoders (the encoder always runs on the CPU), for anyone who wants to retry on a different machine or OS.
 
 ## Speech quality hill-climb
 
 Measured with `eval/e2e.py` on six texts, plain and cloned, three seeds each
-(36 runs per row), scored by Whisper small.en word error rate, whether the model
+(36 runs per row), measured 2026-10-15, before the word check, the cue and
+loop guards, and the removal of the default silence stop. Scored by Whisper
+small.en word error rate, whether the model
 reached eos, trailing silent frames, and resemblyzer speaker similarity to the
 reference clip for the cloned runs.
 
@@ -778,14 +814,17 @@ last row are Whisper rendering "the 21st of March" as "21 March" in three runs;
 every other run transcribes exactly. The retry rule's threshold was chosen on
 the same 72 runs of the first two rows and then applied to the third, so treat
 it as tuned to this sentence set. The word error rates above use the PyTorch
-codec to decode. Decoding the same 36 frame sequences with the shipped Core ML
+codec to decode. Decoding the second row's 36 frame sequences with the shipped Core ML
 fp16 decoder instead (`eval/coreml_vs_pytorch_wer.py`) gives the same mean
 word error rate, 0.063 against 0.063, with no run scoring worse.
 
 ## Performance (M3 Max, 128 GB)
 
-Medians of five interleaved runs against the previous engine on an idle
-machine (`eval/perf_ab.sh`, raw runs under `eval/out/perf/ab_final/`). GPU
+First pass, 2026-10-16. The decode rows are superseded by the
+[second pass](#decode-second-pass-2026-10-22): a decode frame is now 18.1 ms
+of GPU time and sustained decode 35 frames/s. Medians of five interleaved runs
+against the previous engine on an idle machine (`eval/perf_ab.sh`; raw runs
+were kept locally under the gitignored `eval/out/`). GPU
 times come from `drama bench`; the end-to-end rows are wall time from
 `drama generate --warm` on a 324-row prompt (a 10 s reference clip plus text)
 and 600 frames.
@@ -903,7 +942,7 @@ GEMV kept its tile this time, the MoE prefill tile went to 32x32x32, and the
 concurrent encoder stays: against a serial-encoder build of the same code it
 is 0.5 ms shorter on the bench line and 0.0 to 1.2 ms shorter per frame over
 three interleaved 300-frame traces, with a fatter tail (p99 39 to 41 ms
-against 33 to 35), which playback's 64-frame buffer absorbs. The parked
+against 33 to 35). The parked
 multi-matrix GEMV was rebased (branch `hill/step3-gemv-decode-quiet`) and
 measured again: 0.1 ms, inside the A/A gap of the bench, so it stays parked.
 End to end, `eval/perf_ab.sh` over five 425-frame generations: 35.1 frames
@@ -923,8 +962,9 @@ folds a short opening sentence into the next one, which could let the model end
 after the opening and omit the rest of that chunk.
 
 `GenerationConfig.streaming` requests when decoded audio leaves the engine.
-When `maxRetries` and `minSpokenRatio` are positive, every request uses
-`.sentence` mode. Each chunk is decoded and checked before its selected attempt
+Unless word verification is set to `.uncheckedPreview` and retries are off,
+every request uses `.sentence` mode. The app and the HTTP API always check
+words, so they always stream in sentence mode. Each chunk is decoded and checked before its selected attempt
 leaves the engine. Checked generation also verifies both complete neighboring
 chunks together before exposing their join. A mismatch retries only the current
 unplayed chunk within the existing attempt limit. Already emitted audio stays
@@ -1017,7 +1057,7 @@ request:
 | average cores in use | 2.69 | 2.65 |
 | peak cores over any 0.5 s | 4.3 (3.8 to 4.7) | 4.0 (3.8 to 4.5) |
 
-The first byte now comes after the prefill (0.7 s), 64 frames (1.8 s), and
+In that build the first byte came after the prefill (0.7 s), 64 frames (1.8 s), and
 one decode of a 512-frame window (about 2 s). The request also uses less CPU:
 before, the silence probe decoded the whole chunk so far every 16 frames
 whenever no probe was running, and every chunk was decoded once more at the
@@ -1055,7 +1095,8 @@ while frames land and runs once per chunk at its end:
   sentence again, while low latency kept that attempt (336 to 369 frames).
 - 32-frame steps start 0.7 s sooner but stutter: in every trace the first
   1.5 s of audio ran out 1.1 to 1.5 s before the next partial arrived. With
-  64-frame steps every trace played without a gap, so 64 stays the default.
+  64-frame steps every trace played without a gap, so 64 stays the default
+  for unchecked preview, the only mode that streams partial chunks today.
 
 The app shows the time left beside the elapsed time while it generates
 (`GenerationEstimate`): the expected frames of the unfinished chunks (text
@@ -1071,29 +1112,38 @@ same numbers are `X-Drama-Estimated-Seconds` and the `estimate` field of
 ## Kernel autotune
 
 Kernel schedule parameters (the GEMV token tile and rows per threadgroup, the
-GEMM tile, the MoE tile and K step, the one-row expert kernels' rows per
-threadgroup, the attention key split, the GDN threads per state column) are
-not constants any more. On the first load for a given (chip, macOS version,
-kernel source digest, model snapshot) the engine times each kernel family's
+packed decode GEMV's shape, the GEMM tile, the MoE tile and K step, the
+attention key split, the GDN threads per state column) are not constants any
+more. On the first load for a given (chip, macOS version, kernel source
+digest, model snapshot, packed or bf16 decode weights, schedule layout) the
+engine times each kernel family's
 real workload on the resident weights, rotated over ten layers, for every
 value in its declared domain, keeps a candidate only when its output is within
 a relative L2 of 1e-5 of the default's on the same inputs and it is at least 5
 percent faster over five interleaved rounds, then times whole forwards of 128
 and 300 rows and of one row on both schedules and drops a side's choices
-unless the tuned one wins by 2 percent at every row count. The result is a
+unless the tuned one wins by 2 percent at every row count. It stops after a
+60 s budget (`drama tune --budget`), and entries it has not reached keep their
+defaults. The result is a
 JSON report under `~/Library/Application Support/DramaStudio/Tuning/`; every
 later load reads it and measures nothing. `drama tune` runs it from the
-command line and prints the table (about 30 s here); the app shows "Tuning
-kernels for this Mac" once; `drama schedule-ab` times any two schedule files
+command line and prints the table (about 30 s to a minute); the app shows
+"Tuning kernels for this Mac" once; `drama schedule-ab` times any two schedule files
 against each other inside one process. The idea is Magnitude's (tune,
 validate, cache per device); the kernels, the domains and the measurement scripts are
 this project's. Nothing in the numerics changes beyond summation order: the
 tuned engine scores hidden 5.8e-7, candidate logits 3.0e-7 and tower logits
-4.4e-7 against the float32 oracle with top-1 1.0 (`eval/out/perf/compare_tuned_final.txt`),
+4.4e-7 against the float32 oracle with top-1 1.0,
 and the A/B prompt below produced byte-identical frames with and without the
 tuned schedule in all fourteen compared runs.
 
-What it shipped on this M3 Max (`eval/out/perf/tune_final2.txt`): two decode
+The results below were measured on 2026-10-16, before the decode MoE layer
+became three dispatches (2026-10-22) and decode moved to packed weights
+(2026-10-23); both changed the kernels being tuned, and the one-row backbone
+has since dropped to 12.9 ms. The decision trail is rows 20 to 23 of
+`.audit/autotune.tsv`.
+
+What it shipped on this M3 Max then: two decode
 changes, a token tile of 1 with two simdgroups per threadgroup for the one-row
 GEMVs (27 percent faster per kernel) and a 16-way key split for one-row
 attention (27 percent). Everything on the prefill side stayed at the
@@ -1106,8 +1156,7 @@ have shipped a slower prefill: random activations route evenly over the 256
 experts and favour a small MoE row tile that was 9 percent faster in the
 measurement script and 5 to 12 percent slower in the real prefill, and a 2 percent
 minimum gain measured at 128 and 32 rows let through a tile that lost 9
-percent at 300 rows. Both are in `.audit/autotune.tsv`, and the isolation
-that caught the second is `eval/out/perf/schedule_ab_1.txt`.
+percent at 300 rows. Both are in `.audit/autotune.tsv`.
 
 Measured, with the shipped schedule against the default:
 
@@ -1134,7 +1183,8 @@ side in every round where neither side was disturbed. Those two series ran
 with an earlier cache whose decode fields equal the shipped ones and whose
 prefill fields have since been reverted. Prefill has no measured change and
 none is expected: with the reverted fields the schedule is the default there.
-To redo the end-to-end table on an idle machine: `eval/tune_ab.sh
+To redo the end-to-end table on an idle machine, with a reference dump at
+`eval/out/perf/ref_215.npy`: `eval/tune_ab.sh
 .build/release/drama 5 eval/out/perf/ab_tune_idle` then
 `eval/.venv/bin/python -I eval/perf_ab_summary.py eval/out/perf/ab_tune_idle`.
 
@@ -1158,8 +1208,8 @@ Section IV(b) of that license asks anyone who makes speech generation available
 to others to bind them to its use restrictions, so the app's setup window shows
 them and asks you to agree before it downloads or generates anything. Until you
 agree, the window, the HTTP API (403) and through it the MCP server and
-`drama-say` refuse to speak. The command-line `drama` tool is for developers
-building from source and does not ask.
+`drama-say` refuse to speak. The command-line `drama` tool, including
+`drama serve`, is for developers building from source and does not ask.
 
 The fish-speech reference code copied under `eval/oracle/` and
 `Sources/DramaEngine/CodecConversion/dac_reference/`, the parts of DramaEngine
@@ -1172,10 +1222,13 @@ affiliated with or endorsed by Fish Audio.
 ### Optional usage information
 
 During setup, you can choose to share anonymous usage information to help
-improve Drama Studio. Sharing is off unless you enable it. Only counts of app
+improve Drama Studio; existing installs are asked once. Sharing is off unless
+you enable it. Only counts of app
 launches, generation outcomes and setup failures are included. Scripts, audio,
 voices, file names and personal identifiers are excluded. Change your choice
-at any time in Settings > General > Privacy.
+at any time in Settings > General > Privacy. Counts are sent at most once a
+minute to a relay on Cloudflare, which handles the connection's IP address at
+its edge and forwards only the totals to New Relic.
 
 See [usage monitoring configuration](docs/usage-monitoring.md) for release setup
 and the data contract.
