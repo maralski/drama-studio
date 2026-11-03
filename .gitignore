@@ -19,3 +19,7 @@ App/Icon/AppIcon.iconset/
 
 # Local speech experiments and generated audit recordings.
 /.audit/cue-reliability/
+
+# Word-check evaluation downloads, decisions and regenerated clips.
+/tools/word_check_eval/cache/
+/tools/word_check_eval/audio/
