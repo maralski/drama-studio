@@ -115,6 +115,8 @@ public struct GenerationConfig: Sendable, Codable, Equatable {
     /// The measured defaults.
     public init() {}
 
+    package var samplingParams: SamplingParams { SamplingParams(temperature: temperature, topK: topK, topP: topP) }
+
     public enum WordVerification: String, Sendable, Codable {
         case required, uncheckedPreview
     }

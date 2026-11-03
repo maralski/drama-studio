@@ -287,8 +287,7 @@ package final class DramaModel: @unchecked Sendable {
 
     /// GPU milliseconds of the parts of one decode frame at `position`, each in
     /// its own command buffer, on whatever the last session left in the buffers.
-    package func profileFrameParts(position p: Int, repeats: Int) throws -> [(String, [Double])] {
-        let params = SamplingParams(temperature: 0.7, topK: 30, topP: 0.7)
+    package func profileFrameParts(position p: Int, repeats: Int, params: SamplingParams) throws -> [(String, [Double])] {
         let k = tower.k, codebooks = weights.tower.codebookEmbeddings
         func kp(n: Int, head: Int) -> SamplerKernelParams {
             SamplerKernelParams(params, n: n, rngIn: 0, rngOut: 0, position: p, head: head, eos: config.eos, semanticStart: config.semanticStart, codebookSize: config.codebookSize)
@@ -484,10 +483,9 @@ package final class GenerationSession {
     /// which every call returns nil without touching the GPU. In trace mode the
     /// trace holds the candidate logits, and the head logits when a frame was
     /// produced.
-    package func step(temperature: Double, topK: Int, topP: Double, sampler: inout Sampler) throws -> (frame: Frame?, trace: StepTrace) {
+    package func step(_ params: SamplingParams, sampler: inout Sampler) throws -> (frame: Frame?, trace: StepTrace) {
         guard !finished else { return (nil, StepTrace(candidateLogits: [], towerLogits: [])) }
         let stepEnter = timeline == nil ? 0 : FrameTimeline.now()
-        let params = SamplingParams(temperature: temperature, topK: topK, topP: topP)
         var cand: [Float] = []
         let job: FrameJob
         if let pending = inFlight {

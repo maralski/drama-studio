@@ -3,11 +3,20 @@
 import Foundation
 import Metal
 
-/// The settings of one `Sampler.sample` call.
-struct SamplingParams: Equatable {
-    var temperature: Double
-    var topK: Int
-    var topP: Double
+/// How one frame is sampled.
+package struct SamplingParams: Equatable {
+    package var temperature: Double
+    package var topK: Int
+    package var topP: Double
+
+    package init(temperature: Double, topK: Int, topP: Double) {
+        self.temperature = temperature
+        self.topK = topK
+        self.topP = topP
+    }
+
+    /// The vendor's settings, which the CLI's timing commands use.
+    package static let vendorDefaults = SamplingParams(temperature: 0.7, topK: 30, topP: 0.7)
 }
 
 /// What the GPU sampler kernels take; mirrors `SamplerParams` in Sampling.metal.

@@ -257,7 +257,7 @@ package final class FrameGenerator {
                     var offered = 0
                     for step in 0..<budget {
                         guard shouldContinue() else { end = .cancelled; break }
-                        let r = try session.step(temperature: sampling.temperature, topK: sampling.topK, topP: sampling.topP, sampler: &sampler)
+                        let r = try session.step(sampling.samplingParams, sampler: &sampler)
                         guard let frame = r.frame else { end = .eos; break }
                         frames.append(frame)
                         onEvent(.frame(index: step, maxFrames: budget))

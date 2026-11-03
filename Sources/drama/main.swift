@@ -116,7 +116,7 @@ func dump(_ args: Args) throws {
             frame = forced[i]
             trace = try session.force(frame)
         } else {
-            let r = try session.step(temperature: temperature, topK: topK, topP: topP, sampler: &sampler)
+            let r = try session.step(SamplingParams(temperature: temperature, topK: topK, topP: topP), sampler: &sampler)
             guard let f = r.frame else { hidden.removeLast(); break }
             frame = f
             trace = r.trace
@@ -486,9 +486,9 @@ func fbench(_ args: Args) throws {
     if args.flags.contains("parts") {
         let session = try GenerationSession(model: model, prompt: prompt)
         var sampler = Sampler(seed: seed)
-        for _ in 0..<steps { _ = try session.step(temperature: 0.7, topK: 30, topP: 0.7, sampler: &sampler) }
+        for _ in 0..<steps { _ = try session.step(.vendorDefaults, sampler: &sampler) }
         _ = session.lastHidden
-        for (part, ms) in try model.profileFrameParts(position: prompt.count + steps, repeats: repeats) {
+        for (part, ms) in try model.profileFrameParts(position: prompt.count + steps, repeats: repeats, params: .vendorDefaults) {
             let t = ms.sorted()
             print(String(format: "part %@: median %.3f ms [%.3f .. %.3f], %d repeats", part, t[t.count / 2], t.first!, t.last!, t.count))
         }
@@ -503,7 +503,7 @@ func fbench(_ args: Args) throws {
         var sampler = Sampler(seed: seed)
         var frames: [Frame] = []
         for _ in 0..<steps {
-            guard let f = try session.step(temperature: 0.7, topK: 30, topP: 0.7, sampler: &sampler).frame else { break }
+            guard let f = try session.step(.vendorDefaults, sampler: &sampler).frame else { break }
             frames.append(f)
         }
         model.tally = nil

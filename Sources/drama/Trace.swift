@@ -73,7 +73,7 @@ func trace(_ args: Args) throws {
     var sampler = Sampler(seed: UInt64(args.int("seed", 0)))
     func step() throws -> Double {
         let before = session.gpuSeconds
-        guard try session.step(temperature: 0.7, topK: 30, topP: 0.7, sampler: &sampler).frame != nil else { fail("the model emitted eos; pass a longer --text") }
+        guard try session.step(.vendorDefaults, sampler: &sampler).frame != nil else { fail("the model emitted eos; pass a longer --text") }
         return (session.gpuSeconds - before) * 1000
     }
     for _ in 0..<3 { _ = try step() }
@@ -107,7 +107,7 @@ func trace(_ args: Args) throws {
     var pipelinedFrames = 0
     let wall0 = Date()
     for _ in 0..<args.int("pipelined", 40) {
-        guard try pipelined.step(temperature: 0.7, topK: 30, topP: 0.7, sampler: &pipelinedSampler).frame != nil else { break }
+        guard try pipelined.step(.vendorDefaults, sampler: &pipelinedSampler).frame != nil else { break }
         pipelinedFrames += 1
     }
     let pipelinedWallMs = Date().timeIntervalSince(wall0) * 1000 / Double(max(pipelinedFrames, 1))
