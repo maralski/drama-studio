@@ -26,12 +26,18 @@ enum EnglishNumbers {
         /// only the same words.
         case words = "w"
 
-        func reading(_ value: String) -> String { String(rawValue) + value }
+        func reading(_ value: some StringProtocol) -> Reading { Reading(kind: self, value: String(value)) }
+    }
+
+    struct Reading: Hashable {
+        var kind: Kind
+        var value: String
+        var text: String { String(kind.rawValue) + value }
     }
 
     enum Piece {
         case word(String)
-        case written(Set<String>, currency: String?)
+        case written(Set<Reading>, currency: String?)
     }
 
     /// What separates a piece from the one before it.
@@ -52,7 +58,7 @@ enum EnglishNumbers {
                                         "pound": "pound", "pounds": "pound", "euro": "euro", "euros": "euro"]
     static let currencySymbols: [Character: String] = ["$": "dollar", "£": "pound", "€": "euro", "¢": "cent"]
 
-    static func token(_ readings: Set<String>) -> String { "#" + readings.sorted().joined(separator: "|") }
+    static func token(_ readings: Set<Reading>) -> String { "#" + readings.map(\.text).sorted().joined(separator: "|") }
 
     static func isNumber(_ token: String) -> Bool { token.hasPrefix("#") }
 
@@ -76,7 +82,7 @@ enum EnglishNumbers {
 
     /// Readings of a written group. `integer` may hold thousands commas;
     /// `separator` is "." or ":"; `decade` marks a trailing "s" or "'s".
-    static func written(integer: String?, separator: String?, fraction: String?, decade: Bool) -> Set<String>? {
+    static func written(integer: String?, separator: String?, fraction: String?, decade: Bool) -> Set<Reading>? {
         let digits = (integer ?? "0").replacingOccurrences(of: ",", with: "")
         let significant = digits.drop { $0 == "0" }
         let trimmed = significant.isEmpty ? "0" : String(significant)
@@ -102,7 +108,7 @@ enum EnglishNumbers {
         return readings
     }
 
-    private static func decadeReadings(_ digits: String) -> Set<String>? {
+    private static func decadeReadings(_ digits: String) -> Set<Reading>? {
         guard [2, 4].contains(digits.count), digits.hasSuffix("0") else { return nil }
         let short = Kind.decade.reading(digits.suffix(2) + "s")
         return digits.count == 4 ? [Kind.decade.reading(digits + "s"), short] : [short]
@@ -112,7 +118,7 @@ enum EnglishNumbers {
     /// currency symbol or a currency word after a number into a currency token,
     /// and applies `spellings` to the other words.
     static func tokens(_ pieces: [(piece: Piece, gap: Gap)], spellings: [String: String]) -> [String] {
-        enum Part { case word(String), number(Set<String>, currency: String?) }
+        enum Part { case word(String), number(Set<Reading>, currency: String?) }
         func word(_ index: Int) -> String? {
             guard index < pieces.count, case .word(let word) = pieces[index].piece else { return nil }
             return word
@@ -194,15 +200,15 @@ enum EnglishNumbers {
         return result
     }
 
-    private static func values(_ readings: Set<String>, _ kind: Kind) -> [String] {
-        readings.filter { $0.first == kind.rawValue }.map { String($0.dropFirst()) }.sorted()
+    private static func values(_ readings: Set<Reading>, _ kind: Kind) -> [String] {
+        readings.filter { $0.kind == kind }.map(\.value).sorted()
     }
 
     /// One identifier from two digit groups, as in a phone number. Groups
     /// separated by a space join when both can be read digit by digit; across a
     /// comma only spoken digit runs join, so "three, two, one" stays three numbers.
-    private static func joined(_ left: Set<String>, _ right: Set<String>, across gap: Gap) -> Set<String>? {
-        func onlyDigits(_ readings: Set<String>) -> Bool { readings.allSatisfy { $0.first == Kind.digits.rawValue } }
+    private static func joined(_ left: Set<Reading>, _ right: Set<Reading>, across gap: Gap) -> Set<Reading>? {
+        func onlyDigits(_ readings: Set<Reading>) -> Bool { readings.allSatisfy { $0.kind == .digits } }
         switch gap {
         case .space: break
         case .comma: guard onlyDigits(left), onlyDigits(right) else { return nil }
@@ -210,7 +216,7 @@ enum EnglishNumbers {
         }
         let lefts = values(left, .digits), rights = values(right, .digits)
         guard !lefts.isEmpty, !rights.isEmpty else { return nil }
-        var readings = Set<String>()
+        var readings = Set<Reading>()
         for first in lefts {
             for second in rights {
                 readings.insert(Kind.digits.reading(first + second))
@@ -222,7 +228,7 @@ enum EnglishNumbers {
         return readings
     }
 
-    private static func multiplied(_ readings: Set<String>, by scale: Int) -> Set<String> {
+    private static func multiplied(_ readings: Set<Reading>, by scale: Int) -> Set<Reading> {
         Set((values(readings, .cardinal) + values(readings, .decimal)).compactMap { value in
             Decimal(string: value, locale: Locale(identifier: "en_US_POSIX")).map {
                 Kind.cardinal.reading(NSDecimalNumber(decimal: $0 * Decimal(scale)).stringValue)
@@ -230,12 +236,12 @@ enum EnglishNumbers {
         })
     }
 
-    private static func spokenReadings(_ run: [String]) -> Set<String> {
+    private static func spokenReadings(_ run: [String]) -> Set<Reading> {
         let readings = readings(run)
         return readings.isEmpty ? [Kind.words.reading(run.joined(separator: " "))] : readings
     }
 
-    private static func readings(_ run: [String]) -> Set<String> {
+    private static func readings(_ run: [String]) -> Set<Reading> {
         guard let last = run.last else { return [] }
         if let tensWord = decades[last] {
             let spoken = readings(Array(run.dropLast()) + [tensWord])
@@ -250,7 +256,7 @@ enum EnglishNumbers {
             let decimal = Kind.decimal.reading("\(whole)." + fraction.map { $0 == "oh" ? "0" : String(units[$0]!) }.joined())
             return scale.map { multiplied([decimal], by: $0) } ?? [decimal]
         }
-        var readings = Set<String>()
+        var readings = Set<Reading>()
         if let value = cardinal(run[...]) { readings.insert(Kind.cardinal.reading(String(value))) }
         if let digits = digitSequence(run) { readings.insert(Kind.digits.reading(digits)) }
         for split in 1..<min(3, run.count) {

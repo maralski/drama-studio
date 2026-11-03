@@ -120,7 +120,7 @@ package enum WordCoverage {
     }
 
     private static func englishPieces(_ text: String) -> [(piece: EnglishNumbers.Piece, gap: EnglishNumbers.Gap)] {
-        var numbers: [(range: Range<String.Index>, readings: Set<String>)] = []
+        var numbers: [(range: Range<String.Index>, readings: Set<EnglishNumbers.Reading>)] = []
         for match in writtenNumber.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
             func group(_ index: Int) -> String? { Range(match.range(at: index), in: text).map { String(text[$0]) } }
             guard let range = Range(match.range, in: text),
