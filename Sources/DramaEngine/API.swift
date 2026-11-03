@@ -111,6 +111,8 @@ public struct GenerationConfig: Sendable, Codable, Equatable {
     /// A ``FrameCap/fixed(_:)`` cap gets no allowance.
     public var capSecondsPerCue: Double = 1.5
     /// When decoded audio leaves the engine. Default ``StreamingMode/sentence``.
+    /// Low latency takes effect only with ``WordVerification/uncheckedPreview``
+    /// and `maxRetries` 0.
     public var streaming: StreamingMode = .sentence
     /// The measured defaults.
     public init() {}
@@ -204,14 +206,15 @@ public enum StreamingMode: Sendable, Codable, Equatable {
     /// every `stepFrames` generated frames, decoded on the CPU while the GPU
     /// generates. A chunk is never generated again, because its first audio
     /// may already be playing.
-    /// Requests use ``sentence`` when `maxRetries` and `minSpokenRatio` are
-    /// positive, so failed attempts can be replaced before playback.
+    /// Requests use ``sentence`` while ``GenerationConfig/wordVerification``
+    /// is ``GenerationConfig/WordVerification/required``, or while `maxRetries`
+    /// and `minSpokenRatio` are positive, so failed attempts can be replaced
+    /// before playback.
     case lowLatency(stepFrames: Int)
 
-    /// Partials every 64 frames, about 3 s of audio. Through the HTTP API on
-    /// an M3 Max the first audio byte came after 4.49 s instead of 12.95 s.
-    /// 32-frame steps started 0.7 s sooner but ran out of audio before the
-    /// next partial in every measured trace.
+    /// Partials every 64 frames, about 3 s of audio. In measurements of an
+    /// earlier streaming implementation, 32-frame steps started 0.7 s sooner
+    /// but ran out of audio before the next partial in every measured trace.
     public static let defaultLowLatency = StreamingMode.lowLatency(stepFrames: 64)
 
     /// The partial step in frames, at least 1; nil for ``sentence``.

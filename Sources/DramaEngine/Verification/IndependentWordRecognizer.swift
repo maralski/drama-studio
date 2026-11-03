@@ -15,6 +15,24 @@ package final class IndependentWordRecognizer: @unchecked Sendable {
     private var retired = false
     package private(set) var identity: RecognitionReady?
 
+    /// Where the helper and the language's model must be: beside the
+    /// executable, or beside the engine resource bundle in embedded hosts such
+    /// as XCTest. Installed apps keep the model in Contents/Resources.
+    package static func runtimeFiles(language: String, runtimeDirectory: URL? = nil) -> (helper: URL, model: URL) {
+        var executableDirectory = URL(fileURLWithPath: Bundle.main.executablePath ?? CommandLine.arguments[0]).deletingLastPathComponent()
+        if let runtimeDirectory {
+            executableDirectory = runtimeDirectory
+        } else if Bundle.main.bundleURL.pathExtension != "app",
+                  !FileManager.default.isExecutableFile(atPath: executableDirectory.appendingPathComponent(WordRecognitionAssets.helperName).path) {
+            executableDirectory = EngineResources.bundle().bundleURL.deletingLastPathComponent()
+        }
+        let helper = executableDirectory.appendingPathComponent(WordRecognitionAssets.helperName)
+        let resourceDirectory = Bundle.main.bundleURL.pathExtension == "app" ? Bundle.main.resourceURL! : executableDirectory
+        let model = resourceDirectory.appendingPathComponent(WordRecognitionAssets.modelDirectory)
+            .appendingPathComponent(WordRecognitionAssets.model(for: language).fileName)
+        return (helper, model)
+    }
+
     package init(language: String, deadline: ContinuousClock.Instant, shouldContinue: () -> Bool, runtimeDirectory: URL? = nil) throws {
         while Self.capacity.wait(timeout: .now() + .milliseconds(50)) == .timedOut {
             guard shouldContinue() else { throw CancellationError() }
@@ -23,19 +41,7 @@ package final class IndependentWordRecognizer: @unchecked Sendable {
         var releaseReservation = true
         defer { if releaseReservation { Self.capacity.signal() } }
         guard shouldContinue() else { throw CancellationError() }
-        var executableDirectory = URL(fileURLWithPath: Bundle.main.executablePath ?? CommandLine.arguments[0]).deletingLastPathComponent()
-        if let runtimeDirectory {
-            executableDirectory = runtimeDirectory
-        } else if Bundle.main.bundleURL.pathExtension != "app",
-                  !FileManager.default.isExecutableFile(atPath: executableDirectory.appendingPathComponent(WordRecognitionAssets.helperName).path) {
-            // Embedded engine hosts, including XCTest, keep the helper beside
-            // the engine resource bundle. Installed apps use only Contents.
-            executableDirectory = EngineResources.bundle().bundleURL.deletingLastPathComponent()
-        }
-        let helper = executableDirectory.appendingPathComponent(WordRecognitionAssets.helperName)
-        let resourceDirectory = Bundle.main.bundleURL.pathExtension == "app" ? Bundle.main.resourceURL! : executableDirectory
-        let model = resourceDirectory.appendingPathComponent(WordRecognitionAssets.modelDirectory)
-            .appendingPathComponent(WordRecognitionAssets.model(for: language).fileName)
+        let (helper, model) = Self.runtimeFiles(language: language, runtimeDirectory: runtimeDirectory)
         guard FileManager.default.isExecutableFile(atPath: helper.path), FileManager.default.fileExists(atPath: model.path) else {
             throw SpeechVerificationError.unavailable("the bundled independent recognition helper or model is missing; rebuild with tools/make_app.sh")
         }

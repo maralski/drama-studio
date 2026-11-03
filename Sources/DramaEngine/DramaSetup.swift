@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import Foundation
 import Metal
+import WordRecognitionProtocol
 
 /// One part of an install the engine needs, and whether it is in place.
 public struct SetupItem: Sendable, Equatable {
@@ -22,6 +23,14 @@ public struct SetupItem: Sendable, Equatable {
         /// The kernel schedule tuned for this Mac, kept as one JSON file in
         /// the tuning directory.
         case tuning
+        /// The `drama-word-recognizer` helper and its Whisper model, which
+        /// check the words of every chunk under the default
+        /// ``GenerationConfig/WordVerification/required``. They sit beside
+        /// the executable, or beside the engine resource bundle in a test or
+        /// embedded host, with the model in `WordVerification/`. The engine
+        /// loads without them, but checked generation fails with
+        /// ``SpeechVerificationError/unavailable(_:)``.
+        case wordRecognizer
     }
 
     /// Whether a component is in place, and what to do when it is not.
@@ -87,7 +96,8 @@ public struct SetupReport: Sendable, Equatable {
     }
 
     /// True when nothing is missing, so ``DramaSynthesizer/load(onPhase:)``
-    /// can succeed. The first load may still tune the kernels.
+    /// can succeed and default, word-checked requests can run. The first
+    /// load may still tune the kernels.
     public var isReady: Bool { !items.contains(where: \.isMissing) }
 
     /// True when every component is ready, so the first load does no work
@@ -183,6 +193,7 @@ public enum DramaSetup: Sendable {
             codecCheckpointItem(location, codecModelsReady: codecModels.state == .ready),
             codecModels,
             tuningItem(location: location, tuningDirectory: tuningDirectory),
+            wordRecognizerItem(),
         ])
     }
 
@@ -197,6 +208,9 @@ public enum DramaSetup: Sendable {
     ///    which tunes and caches it (about 30 s after the load), and then
     ///    releases the model. A tuning failure keeps the default schedule
     ///    and does not throw, as in ``DramaSynthesizer/load(onPhase:)``.
+    ///
+    /// It does not install the word checker, which
+    /// ``SetupItem/Component/wordRecognizer`` reports with its fix.
     ///
     /// Calling it again after it succeeds returns without loading anything.
     ///
@@ -214,7 +228,8 @@ public enum DramaSetup: Sendable {
                                tuningDirectory: URL = DramaSynthesizer.defaultTuningDirectory,
                                progress: @escaping @Sendable (String) -> Void = { _ in }) async throws {
         var report = check(location: location, codecDirectory: codecDirectory, tuningDirectory: tuningDirectory)
-        guard !report.items.contains(where: { $0.isMissing && $0.component != .codecModels }) else { throw DramaSetupError.notReady(report) }
+        let buildable: Set<SetupItem.Component> = [.codecModels, .wordRecognizer]
+        guard !report.items.contains(where: { $0.isMissing && !buildable.contains($0.component) }) else { throw DramaSetupError.notReady(report) }
         if report[.codecModels].isMissing {
             guard let python else {
                 let suggested = suggestedPythonEnvironment.appending(path: "bin/python")
@@ -223,7 +238,7 @@ public enum DramaSetup: Sendable {
             progress("Building the Core ML codec models with \(python.path), a few minutes")
             try await runConversion(python: python, location: location, codecDirectory: codecDirectory, progress: progress)
             report = check(location: location, codecDirectory: codecDirectory, tuningDirectory: tuningDirectory)
-            guard report.isReady else { throw DramaSetupError.notReady(report) }
+            guard !report.items.contains(where: { $0.isMissing && $0.component != .wordRecognizer }) else { throw DramaSetupError.notReady(report) }
         }
         if report.isPrepared { return }
         progress("Loading Drama 3 to tune the kernels for this Mac")
@@ -308,6 +323,24 @@ public enum DramaSetup: Sendable {
         }
         return SetupItem(component: .tuning, state: .ready, url: url,
                          summary: "Kernels tuned for \(device.name) on macOS \(key.os), \(report.created.formatted(date: .abbreviated, time: .omitted)).")
+    }
+
+    /// The English model is the one ``SetupItem/Component/wordRecognizer``
+    /// requires; the multilingual model is reported but optional.
+    package static func wordRecognizerItem(runtimeDirectory: URL? = nil) -> SetupItem {
+        let (helper, english) = IndependentWordRecognizer.runtimeFiles(language: "en", runtimeDirectory: runtimeDirectory)
+        let multilingual = english.deletingLastPathComponent().appendingPathComponent(WordRecognitionAssets.multilingualModel.fileName)
+        let fix = "From a Drama Studio checkout, run python3 tools/bootstrap_word_recognition.py, then python3 tools/stage_word_recognition.py --bin with the folder that holds your executable. To generate without the check, set config.wordVerification = .uncheckedPreview."
+        var absent: [URL] = []
+        if !FileManager.default.isExecutableFile(atPath: helper.path) { absent.append(helper) }
+        if !FileManager.default.fileExists(atPath: english.path) { absent.append(english) }
+        guard absent.isEmpty else {
+            return SetupItem(component: .wordRecognizer, state: .missing(fix: fix), url: helper.deletingLastPathComponent(),
+                             summary: "The word checker is missing: \(absent.map(\.path).joined(separator: ", ")).")
+        }
+        let languages = FileManager.default.fileExists(atPath: multilingual.path) ? "English and other languages" : "English only"
+        return SetupItem(component: .wordRecognizer, state: .ready, url: helper,
+                         summary: "Word checker at \(helper.path), \(languages).")
     }
 
     static func runConversion(python: URL, location: ModelLocation, codecDirectory: URL, progress: @escaping @Sendable (String) -> Void) async throws {
