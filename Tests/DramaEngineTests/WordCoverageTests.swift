@@ -121,6 +121,26 @@ final class WordCoverageTests: XCTestCase {
                      ("Count 3,2,1 and go.", "Count three hundred twenty one and go.")], false)
     }
 
+    func testPunctuationInsideASpokenDigitRunDoesNotMatter() {
+        assertMatch([
+            ("Three, two, one, go!", "Three two one go"),
+            ("Three, two, one, go!", "3 2 1 go"),
+            ("Three. Two. One. Go!", "3, 2, 1, go!"),
+            ("I'll take two. Three if you have them.", "I'll take two three if you have them"),
+            ("Table for two. Seven o'clock.", "Table for two seven o'clock"),
+            ("Rooms 5, 6 and 7 are free.", "Rooms five six and seven are free."),
+            ("Agent 007 reports for duty.", "Agent zero, zero, seven reports for duty."),
+        ], true)
+        assertMatch([
+            ("Three, two, one, go!", "321 go"),
+            ("Three, two, one, go!", "Three hundred twenty one go"),
+            ("Rooms 5, 6 and 7 are free.", "Rooms fifty six and seven are free."),
+            ("Table for two. Seven o'clock.", "Table for twenty seven o'clock"),
+            ("Two, three.", "Twenty three."),
+            ("Three two one go", "Three, two, go"),
+        ], false)
+    }
+
     func testClockTimesAndLeadingZerosDoNotReadAsCardinals() {
         assertMatch([
             ("Meet at 3:30.", "Meet at three hundred and thirty."),

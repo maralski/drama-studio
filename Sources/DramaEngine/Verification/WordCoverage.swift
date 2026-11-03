@@ -236,7 +236,8 @@ package enum WordCoverage {
     }
 
     /// Returns, for each expected token, the ordinal of the heard token that
-    /// matched it. Spacing may differ inside a compound: "web site" == "website".
+    /// matched it. Spacing may differ inside a compound: "web site" == "website",
+    /// and punctuation inside a run of digits: "three two one" == "3, 2, 1".
     /// A currency only a symbol implies may be absent from the other side, but
     /// never replaced by a different currency.
     private static func match(expected: [String], heard: [String], reactions: Bool) -> [Int]? {
@@ -256,6 +257,10 @@ package enum WordCoverage {
                 ordinals += [ordinal, ordinal]; next += 2; ordinal += 1
             } else if next < expected.count, joinable(heard, ordinal), word + heard[ordinal + 1] == expected[next] {
                 ordinals.append(ordinal); next += 1; ordinal += 2
+            } else if next < expected.count, let count = EnglishNumbers.digitRun(word, spelledBy: expected[next...]) {
+                ordinals += Array(repeating: ordinal, count: count); next += count; ordinal += 1
+            } else if next < expected.count, let count = EnglishNumbers.digitRun(expected[next], spelledBy: heard[ordinal...]) {
+                ordinals.append(ordinal); next += 1; ordinal += count
             } else if optional(expected, next, against: word) {
                 ordinals.append(ordinal); next += 1
             } else if optional(heard, ordinal, against: next < expected.count ? expected[next] : nil) {

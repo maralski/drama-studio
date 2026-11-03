@@ -84,6 +84,30 @@ enum EnglishNumbers {
         return first == second
     }
 
+    /// How many of `tokens` together spell out `run`, a number read only digit
+    /// by digit: "three two one" is the same speech as "three, two, one" or
+    /// "3. 2. 1." whatever the punctuation. A number with any other reading,
+    /// such as 321 or "fifty six", never splits.
+    static func digitRun(_ run: String, spelledBy tokens: ArraySlice<String>) -> Int? {
+        let whole = readings(of: run)
+        guard isNumber(run), whole.allSatisfy({ $0.kind == .digits }) else { return nil }
+        func length(_ rest: Substring, from index: Int) -> Int? {
+            guard !rest.isEmpty else { return index - tokens.startIndex }
+            guard index < tokens.endIndex, isNumber(tokens[index]) else { return nil }
+            for part in readings(of: tokens[index]) where part.kind == .digits && rest.hasPrefix(part.value) {
+                if let count = length(rest.dropFirst(part.value.count), from: index + 1) { return count }
+            }
+            return nil
+        }
+        return whole.lazy.compactMap { length(Substring($0.value), from: tokens.startIndex) }.first { $0 > 1 }
+    }
+
+    private static func readings(of token: String) -> [Reading] {
+        token.dropFirst().split(separator: "|").compactMap { reading in
+            Kind(rawValue: reading.first!).map { $0.reading(reading.dropFirst()) }
+        }
+    }
+
     /// A written group. `integer` may hold thousands commas; `separator` is
     /// "." or ":"; `decade` marks a trailing "s" or "'s"; `currency` is the
     /// currency a symbol beside it names.
