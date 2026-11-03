@@ -170,7 +170,7 @@ enum EnglishNumbers {
 
     /// Groups number words and written numbers into number tokens, turns a
     /// currency symbol or a currency word after a number into a currency token,
-    /// and applies the spellings to the other words.
+    /// names a unit after a number, and applies the spellings to the other words.
     static func tokens(_ pieces: [(piece: Piece, gap: Gap)], forms: WordCoverage.EnglishForms,
                        profile: WordCoverage.RecognizerProfile?) -> [String] {
         func word(_ index: Int) -> String? {
@@ -248,13 +248,14 @@ enum EnglishNumbers {
                 result.append(token(readings))
                 if let currency { result.append("¤?" + currency) }
             case .word(let word):
-                if let currency = currencyWords[word], offset > 0, case .number = amounts[offset - 1] {
+                let afterNumber = if offset > 0, case .number = amounts[offset - 1] { true } else { false }
+                let spelled = forms.spellings[word] ?? word
+                let spoken = afterNumber ? forms.units[spelled] ?? spelled : spelled
+                if afterNumber, let currency = currencyWords[spoken] {
                     if result.last.map(isImpliedCurrency) == true { result.removeLast() }
                     result.append("¤" + currency)
-                } else if let spelling = forms.spellings[word] {
-                    result += spelling.split(separator: " ").map(String.init)
                 } else {
-                    result.append(word)
+                    result += spoken.split(separator: " ").map(String.init)
                 }
             }
         }

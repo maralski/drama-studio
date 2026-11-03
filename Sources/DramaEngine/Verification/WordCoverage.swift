@@ -29,6 +29,11 @@ package enum WordCoverage {
         var spellings: [String: String] = [:]
         /// What a hyphen between two numbers may be read as.
         var range_words: [String] = []
+        /// A unit right after a number, abbreviated or spelled out, singular or
+        /// plural, as one singular name: "kg" and "kilograms" are "kilogram".
+        var units: [String: String] = [:]
+        /// Unit symbols that are not words, as the unit words they stand for.
+        var unit_symbols: [String: String] = [:]
     }
     private static let forms = Result { () throws -> EnglishForms in
         guard let url = EngineResources.bundle().url(forResource: "EnglishSpokenForms", withExtension: "json") else {
@@ -55,6 +60,9 @@ package enum WordCoverage {
         return (try! NSRegularExpression(pattern: #"(?<![\p{L}\p{N}.])"# + symbol + #"(?=\d|\.\d)|(?<=\d )"# + symbol + #"(?= \d)"#),
                 " \(spoken) ")
     }
+    private static let unitSymbol = try! NSRegularExpression(pattern: "(" + alternation(englishForms.unit_symbols.keys) + ")")
+    private static let unitAfterDigits = try! NSRegularExpression(
+        pattern: #"(?<=[0-9])(?=(?:"# + alternation(englishForms.units.keys.filter { $0.count > 1 }) + #")(?!\p{L}))"#)
     private static let digitsAfterLetters = try! NSRegularExpression(pattern: #"(?<=\p{L})(?=[0-9])"#)
     private static let digits = try! NSRegularExpression(pattern: #"(?<![\p{L}\p{N}.])[−-]?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)(?![\p{L}\p{N}]|\.[0-9])"#)
     private static let writtenNumber = try! NSRegularExpression(
@@ -117,6 +125,8 @@ package enum WordCoverage {
         }
         if english {
             text = text.replacingOccurrences(of: "%", with: " percent ")
+            text = replacing(unitSymbol, in: text) { englishForms.unit_symbols[$0].map { " \($0) " } }
+            text = unitAfterDigits.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: " ")
             text = wordHyphen.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: " ")
             return EnglishNumbers.tokens(englishPieces(text, profile: profile), forms: englishForms, profile: profile)
         }

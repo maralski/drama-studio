@@ -293,6 +293,28 @@ final class WordCoverageTests: XCTestCase {
                      ("The pan is aluminium.", "The pan is aluminum."), ("It is our speciality.", "It is our specialty.")], false)
     }
 
+    func testAUnitAfterANumberMatchesItsAbbreviationButNoOtherUnit() {
+        assertMatch([
+            ("The parcel weighs 2.75 kilograms.", "The parcel weighs 2.75 kg."),
+            ("It weighs 1 kg.", "It weighs one kilogram."),
+            ("It weighs 2.75kg.", "It weighs two point seven five kilograms."),
+            ("It is 25°C outside.", "It is 25 degrees Celsius outside."),
+            ("Drive at 50 km/h.", "Drive at 50 kilometres per hour."),
+            ("Drive at 50 mph.", "Drive at fifty miles per hour."),
+            ("The board is 6 in wide.", "The board is six inches wide."),
+            ("It takes 5 min.", "It takes five minutes."),
+        ], true)
+        assertMatch([
+            ("It is 5 km away.", "It is 5 miles away."),
+            ("It weighs 5 kg.", "It weighs 5 g."),
+            ("It is 25°C outside.", "It is 25 degrees Fahrenheit outside."),
+            ("Add 5 ml.", "Add 5 l."),
+            ("It takes 5 min.", "It takes 5 seconds."),
+            ("It is 5 km away.", "It is 5 away."),
+            ("It weighs 5 kg.", "It weighs 6 kilograms."),
+        ], false)
+    }
+
     func testAPossessiveApostropheIsSilentButAContractionIsNot() {
         assertMatch([
             ("My neighbour's favourite flavour.", "My neighbors favorite flavor."),
