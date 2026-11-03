@@ -138,7 +138,7 @@ package struct LocalWordVerifier: Sendable {
                 SpeechAttemptAudit.BoundaryWitness(
                     session: owner, previousIndex: $0.previous.index, currentIndex: $0.current.index,
                     previousSamples: $0.previous.samples, currentSamples: $0.current.samples,
-                    expectedTokenOrdinal: WordCoverage.tokens(DirectorsNote.spokenWords($0.previousLine), locale: locale).count,
+                    expectedTokenOrdinal: WordCoverage.expectedTokens($0.previousLine, locale: locale).count,
                     heardTokenOrdinal: boundarySpan.map { span in
                         recognition.spans[..<span].reduce(0) { count, item in
                             count + WordCoverage.recognizedTokens(item.text, line: line, locale: locale, profile: Recognition.profile).count
@@ -238,11 +238,11 @@ package struct LocalWordVerifier: Sendable {
         }
 
         func boundaryWordSpan(previousLine: String, currentLine: String, locale: Locale) -> Int? {
-            let previous = WordCoverage.tokens(DirectorsNote.spokenWords(previousLine), locale: locale)
-            let current = WordCoverage.tokens(DirectorsNote.spokenWords(currentLine), locale: locale)
+            let previous = WordCoverage.expectedTokens(previousLine, locale: locale)
+            let current = WordCoverage.expectedTokens(currentLine, locale: locale)
             let line = previousLine + " " + currentLine
             guard !previous.isEmpty, current.count > 1,
-                  WordCoverage.tokens(DirectorsNote.spokenWords(line), locale: locale) == previous + current,
+                  WordCoverage.expectedTokens(line, locale: locale) == previous + current,
                   let firstCurrent = WordCoverage.unambiguousHeardOrdinal(line: line, transcript: text, expectedOrdinal: previous.count,
                                                                           locale: locale, profile: Self.profile) else { return nil }
             let spanWords = spans.map { WordCoverage.recognizedTokens($0.text, line: line, locale: locale, profile: Self.profile) }

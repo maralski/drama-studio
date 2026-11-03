@@ -16,16 +16,14 @@ package enum WordCoverage {
         case apple
     }
 
-    struct ReactionAnnotation: Decodable {
-        var cue_pattern: String
-        var label_pattern: String
-    }
     struct EnglishForms: Decodable {
         var titles: [String: String] = [:]
         var contractions: [String: String] = [:]
         var reaction_pattern = "(?!)"
+        /// Sounds a recognizer writes as words, which a cued line may insert.
         var reaction_words: Set<String> = []
-        var reaction_annotations: [ReactionAnnotation] = []
+        /// The first word of a parenthesized stage direction: "(laughing)".
+        var direction_words: [String] = []
         var spellings: [String: String] = [:]
         /// What a hyphen between two numbers may be read as.
         var range_words: [String] = []
@@ -51,6 +49,15 @@ package enum WordCoverage {
         pattern: "\\b(" + alternation(englishForms.titles.keys) + ")\\.?(?=\\s+\\p{L})")
     private static let contractionPattern = try! NSRegularExpression(
         pattern: "\\b(" + alternation(englishForms.contractions.keys) + ")\\b")
+    /// A parenthesized stage direction of up to four words, as opposed to
+    /// spoken words that happen to be in parentheses.
+    private static let direction = "\\(\\s*(?:" + alternation(englishForms.direction_words) + #")(?![\p{L}'])(?:[\s-]+[\p{L}']+){0,3}\s*\)"#
+    private static let directionPattern = try! NSRegularExpression(pattern: direction, options: .caseInsensitive)
+    /// A cue performed rather than read: a [cue], a <passage> tag or a direction.
+    private static let cue = try! NSRegularExpression(pattern: #"\[[^\[\]]*\]|</?[A-Za-z][^<>]*>|"# + direction, options: .caseInsensitive)
+    /// A recognizer's label for a sound: "(laughs)", "[BLANK_AUDIO]", "*sniff*".
+    private static let annotation = try! NSRegularExpression(
+        pattern: #"\(\s*[\p{L}_][\p{L}_' -]{0,39}\)|\[\s*[\p{L}_][\p{L}_' -]{0,39}\]|\*\s*[\p{L}_][\p{L}_' -]{0,39}\*"#)
     private static let cannot = try! NSRegularExpression(pattern: #"\bcannot\b"#)
     /// The apostrophe of a possessive is silent: neighbor's, neighbors, neighbors'.
     private static let possessive = try! NSRegularExpression(pattern: #"(?<=\p{L})'(?=s(?!\p{L}))|(?<=\p{L}s)'(?!\p{L})"#)
@@ -192,11 +199,19 @@ package enum WordCoverage {
 
     package static func isNumber(_ token: String) -> Bool { EnglishNumbers.isNumber(token) }
 
+    /// The tokens the line speaks, without its markup or stage directions.
+    package static func expectedTokens(_ line: String, locale: Locale) -> [String] {
+        let spoken = DirectorsNote.spokenWords(line)
+        let ns = spoken as NSString
+        return tokens(directionPattern.stringByReplacingMatches(in: spoken, range: NSRange(location: 0, length: ns.length), withTemplate: " "),
+                      locale: locale)
+    }
+
     package static func matches(line: String, transcript: String, locale: Locale, profile: RecognizerProfile,
                                 uncertainSpans: [String] = []) -> Bool {
-        let expected = tokens(DirectorsNote.spokenWords(line), locale: locale)
+        let expected = expectedTokens(line, locale: locale)
         let heard = recognizedTokens(transcript, line: line, locale: locale, profile: profile)
-        let reactions = permitsReactions(line)
+        let reactions = hasCue(line)
         for span in uncertainSpans {
             let words = recognizedTokens(span, line: line, locale: locale, profile: profile)
             let insertedReaction = reactions && words.allSatisfy(nonverbal)
@@ -207,7 +222,7 @@ package enum WordCoverage {
     }
 
     package static func recognizedTokens(_ transcript: String, line: String, locale: Locale, profile: RecognizerProfile) -> [String] {
-        tokens(removingReactionAnnotations(transcript, for: line), locale: locale, profile: profile)
+        tokens(removingAnnotations(transcript, line: line, locale: locale), locale: locale, profile: profile)
     }
 
     private static let ordinalNumber = try! NSRegularExpression(
@@ -236,8 +251,8 @@ package enum WordCoverage {
 
     package static func unambiguousHeardOrdinal(line: String, transcript: String, expectedOrdinal: Int, locale: Locale,
                                                 profile: RecognizerProfile) -> Int? {
-        let expected = tokens(DirectorsNote.spokenWords(line), locale: locale)
-        let reactions = permitsReactions(line)
+        let expected = expectedTokens(line, locale: locale)
+        let reactions = hasCue(line)
         guard expected.indices.contains(expectedOrdinal),
               !(reactions && nonverbal(expected[expectedOrdinal])),
               let ordinals = match(expected: expected, heard: recognizedTokens(transcript, line: line, locale: locale, profile: profile),
@@ -245,9 +260,9 @@ package enum WordCoverage {
         return ordinals[expectedOrdinal]
     }
 
-    private static func permitsReactions(_ line: String) -> Bool {
-        line.range(of: #"\[(?:laugh[^\]]*|chuckle[^\]]*|sigh[^\]]*|gasp[^\]]*|cough[^\]]*|clears throat|hesitates|pause)\]"#,
-                   options: [.regularExpression, .caseInsensitive]) != nil
+    /// A cued line may hold sounds the script does not spell out.
+    private static func hasCue(_ line: String) -> Bool {
+        cue.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil
     }
 
     /// Returns, for each expected token, the ordinal of the heard token that
@@ -292,13 +307,16 @@ package enum WordCoverage {
         return !expected.isEmpty && next == expected.count ? ordinals : nil
     }
 
-    private static func removingReactionAnnotations(_ transcript: String, for line: String) -> String {
+    /// On a cued line, drops each sound label that holds none of the script's
+    /// words; a label never stands in for a word the line needs.
+    private static func removingAnnotations(_ transcript: String, line: String, locale: Locale) -> String {
+        let labels = annotation.matches(in: transcript, range: NSRange(transcript.startIndex..., in: transcript))
+        guard !labels.isEmpty, hasCue(line) else { return transcript }
+        let script = Set(expectedTokens(line, locale: locale))
         var text = transcript
-        for annotation in englishForms.reaction_annotations
-        where line.range(of: annotation.cue_pattern, options: [.regularExpression, .caseInsensitive]) != nil {
-            let label = "(?:\(annotation.label_pattern))"
-            let pattern = "\\(\\s*\(label)\\s*\\)|\\[\\s*\(label)\\s*\\]|\\*\\s*\(label)\\s*\\*"
-            text = text.replacingOccurrences(of: pattern, with: " ", options: [.regularExpression, .caseInsensitive])
+        for label in labels.reversed() {
+            guard let range = Range(label.range, in: text), script.isDisjoint(with: tokens(String(text[range]), locale: locale)) else { continue }
+            text.replaceSubrange(range, with: " ")
         }
         return text
     }

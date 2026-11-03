@@ -403,31 +403,79 @@ final class WordCoverageTests: XCTestCase {
         XCTAssertFalse(WordCoverage.matches(line: "His name is Mister Hops.", transcript: "His name is Mr. Jones.", locale: english, profile: .exact))
     }
 
-    func testExplicitRecognizerReactionAnnotationsMatchOnlyRequestedCueFamilies() {
-        for (cue, annotation) in [("gasps", "*gasp*"), ("gasps", "(gasps)"), ("gasps", "[Gasping]"),
-                                  ("laughs", "(laughter)"), ("chuckles", "*chuckling*"),
-                                  ("sighs", "(sigh)"), ("coughs", "[coughing]"),
-                                  ("clears throat", "(clears throat)"), ("hesitates", "*hesitation*"),
-                                  ("pause", "(pause)"), ("whispers", "(whispering)")] {
-            XCTAssertTrue(WordCoverage.matches(line: "[\(cue)] Please wait here.",
-                                               transcript: "\(annotation) Please wait here.", locale: english, profile: .exact), cue + annotation)
-        }
-        XCTAssertTrue(WordCoverage.matches(line: "<whisper>Please wait here.</whisper>",
-                                           transcript: "(whispering) Please wait here.", locale: english, profile: .exact))
-        for (line, heard) in [("Please wait here.", "*gasp* Please wait here."),
-                              ("[laughs] Please wait here.", "*gasp* Please wait here."),
-                              ("[gasps] Please wait here.", "Gasp, please wait here."),
-                              ("[gasps] Please say gasp.", "*gasp* Please say."),
-                              ("[gasps] He waits here.", "(gasps) Waits here."),
-                              ("[gasps] No, no, he did not wait.", "(gasps) No, he did not wait."),
-                              ("[gasps] The garden gate is closed.", "(gasps) The golden gate is closed."),
-                              ("[gasps] The garden gate is closed.", "(gasps) The Gordon gate is closed.")] {
-            XCTAssertFalse(WordCoverage.matches(line: line, transcript: heard, locale: english, profile: .exact), line + heard)
-        }
+    func testACuedLineDropsAnySoundLabelButNeverAWord() {
+        assertHeard([
+            ("[gasps] Please wait here.", "*gasp* Please wait here."),
+            ("[gasps] Please wait here.", "[Gasping] Please wait here."),
+            ("[clears throat] Please wait here.", "(clears throat) Please wait here."),
+            ("[whispers] Please wait here.", "(whispering) Please wait here."),
+            ("<whisper>Please wait here.</whisper>", "(whispering) Please wait here."),
+            ("[laughs] Please wait here.", "*gasp* Please wait here."),
+            ("[giggles] Stop it, that tickles!", "(laughs) Stop it, that tickles."),
+            ("[scoffs] As if anyone believes that story.", "*sniff* As if anyone believes that story."),
+            ("[scoffs] As if anyone believes that story.", "(sighs) As if anyone believes that story."),
+            ("[yawns] Is it morning already?", "(exhales) Is it morning already? [ Silence ]"),
+            ("[coughs] Sorry, it's the dust in here.", "[coughing] Sorry, it's the dust in here. [BLANK_AUDIO]"),
+            ("[icy calm] Put the letter down.", "[SOUND] Put the letter down."),
+            ("[sighs] I said never.", "I said *never*."),
+        ], true)
+        assertHeard([
+            ("Please wait here.", "*gasp* Please wait here."),
+            ("<|speaker:1|> Please wait here.", "(sighs) Please wait here."),
+            ("[gasps] Please wait here.", "Gasp, please wait here."),
+            ("[gasps] Please say gasp.", "*gasp* Please say."),
+            ("[gasps] He waits here.", "(gasps) Waits here."),
+            ("[gasps] No, no, he did not wait.", "(gasps) No, he did not wait."),
+            ("[sighs] I suppose we should start again.", "(sigh)"),
+            ("[gasps] The door was open the whole time!", "[BLANK_AUDIO]"),
+            ("[sighs] I suppose we should start again.", "*Sigh* I suppose we should stop again."),
+            ("[coughs] Sorry, it's the dust in here.", "*coughs* Sorry, it's the smoke in here."),
+            ("[groans] Not another Monday morning.", "(sigh) Not enough."),
+            ("[sighs] I said never.", "I said *ever*."),
+        ], false)
         XCTAssertFalse(WordCoverage.matches(line: "[gasps] Please wait here.", transcript: "(gasps) Please wait here.",
                                             locale: english, profile: .exact, uncertainSpans: ["Please"]))
         XCTAssertTrue(WordCoverage.matches(line: "[gasps] Please wait here.", transcript: "(gasps) Please wait here.",
                                            locale: english, profile: .exact, uncertainSpans: ["(gasps)"]))
+    }
+
+    func testAnyCueLetsAnInterjectionBeInsertedButNeverReplaceAWord() {
+        assertHeard([
+            ("[groans] Not another Monday morning.", "Ugh, not another Monday morning."),
+            ("[groans] Not another Monday morning.", "Oh. Not another Monday morning."),
+            ("[yawns] Is it morning already?", "Ugh. Is it morning already?"),
+            ("[icy calm] Put the letter down.", "Mm. Put the letter down."),
+            ("[sarcastic and deadpan] Oh good, another fire drill.", "Pfft. Oh good, another fire drill."),
+        ], true)
+        assertHeard([
+            ("Not another Monday morning.", "Ugh, not another Monday morning."),
+            ("<|speaker:0|> Not another Monday morning.", "Oh. Not another Monday morning."),
+            ("[groans] Not another Monday morning.", "Ugh, not another morning."),
+            ("[groans] Oh, not again.", "Ugh, not again."),
+            ("[groans] Oh, not again.", "Not again."),
+            ("[sarcastic and deadpan] Oh good, another fire drill.", "Oh good, another fire alarm."),
+            ("[Enunciate each word precisely] The quick brown fox.", "The quick brown ugh."),
+        ], false)
+    }
+
+    func testAParenthesizedStageDirectionIsACueButSpokenParenthesesAreWords() {
+        let line = "(laughing) That is the worst idea I have ever heard."
+        assertHeard([
+            (line, "That is the worst idea I have ever heard."),
+            (line, "(laughs) That is the worst idea I have ever heard."),
+            (line, "Ha ha. That is the worst idea I have ever heard."),
+            ("Fine. (Sighs heavily) Let us go.", "Fine. Let us go."),
+            ("I know (beat) you did it.", "I know, you did it."),
+        ], true)
+        assertHeard([
+            (line, "That is the worst idea I ever heard."),
+            (line, "That is the best idea I have ever heard."),
+            ("I told him (twice) already.", "I told him already."),
+            ("(And I mean it) go home.", "Go home."),
+            ("(She laughs) Go home.", "Go home."),
+            ("(laughing at the sheer nerve of it) Go home.", "Go home."),
+            ("I told him (twice) already.", "Ugh, I told him twice already."),
+        ], false)
     }
 
     func testOldConfigurationDefaultsToRequiredChecks() throws {
