@@ -300,21 +300,9 @@ speaker picker. The editor edits the selected section.
 
 ![Drama Studio 2.0.0 showing the Export menu for a deck](docs/screenshots/document-export-menu.png)
 
-On the five-slide sample deck (`python-pptx`, slide 3 without notes), the
-real engine at the default settings narrated 24.3 s of audio in 34.5 s
-including the model load. Whisper small.en heard slide 4, whose notes read
-"Revenue grew twelve percent. Costs stayed flat, and margins improved.", as
-"Revenue grew 12%. Cost stayed flat, and margins improved." Two slides lost
-words: slide 1 spoke only "Welcome, everyone." of its two sentences, and
-slide 3 only its title. Each was one engine chunk in that build (the splitter joined a
-sentence under 24 bytes to the next), and with "Stream audio while
-generating" on, a chunk that comes out short is kept rather than generated
-again. With the setting off, Narrate This Section gave slide 1 both sentences
-and slide 3 "How it works Import". That is one run per slide, not a
-measurement. Because narration is exported, document sections now always
-generate in the retrying sentence mode whatever the streaming setting says;
-playback of a section starts when the section is done rather than three
-seconds in.
+Document sections always generate in sentence mode, whatever "Stream audio
+while generating" says, so playback of a section starts when the section is
+done.
 
 ## Reliability
 
