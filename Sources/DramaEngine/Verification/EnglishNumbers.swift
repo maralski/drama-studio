@@ -61,9 +61,6 @@ enum EnglishNumbers {
     private static let largeScales = ["thousand": 1_000, "million": 1_000_000, "billion": 1_000_000_000,
                                       "trillion": 1_000_000_000_000]
     private static let scales = largeScales.merging(["hundred": 100]) { $1 }
-    private static let currencyWords = ["dollar": "dollar", "dollars": "dollar", "cent": "cent", "cents": "cent",
-                                        "pound": "pound", "pounds": "pound", "euro": "euro", "euros": "euro"]
-    static let currencySymbols: [Character: String] = ["$": "dollar", "£": "pound", "€": "euro", "¢": "cent"]
 
     static func token(_ readings: Set<Reading>) -> String { "#" + readings.map(\.text).sorted().joined(separator: "|") }
 
@@ -216,7 +213,7 @@ enum EnglishNumbers {
             guard let word = word(index) else { return false }
             if units[word] != nil || tens[word] != nil || decades[word] != nil { return true }
             switch word {
-            case "a": return joinedWord(index + 1).map { scales[$0] != nil || currencyWords[$0] != nil } == true
+            case "a": return joinedWord(index + 1).map { scales[$0] != nil || forms.currency_words[$0] != nil } == true
             case "oh":
                 var digit = index + 1
                 while joinedWord(digit) == "oh" { digit += 1 }
@@ -275,7 +272,7 @@ enum EnglishNumbers {
             }
         }
 
-        let amounts = foldingAmounts(merged)
+        let amounts = foldingAmounts(merged, currencyWords: forms.currency_words)
         var result: [String] = []
         for (offset, part) in amounts.enumerated() {
             switch part {
@@ -286,7 +283,7 @@ enum EnglishNumbers {
                 let afterNumber = if offset > 0, case .number = amounts[offset - 1] { true } else { false }
                 let spelled = forms.spellings[word] ?? word
                 let spoken = afterNumber ? forms.units[spelled] ?? spelled : spelled
-                if afterNumber, let currency = currencyWords[spoken] {
+                if afterNumber, let currency = forms.currency_words[spoken] {
                     if result.last.map(isImpliedCurrency) == true { result.removeLast() }
                     result.append("¤" + currency)
                 } else {
@@ -301,7 +298,7 @@ enum EnglishNumbers {
 
     /// "four dollars and ninety nine cents" becomes one amount followed by its
     /// currency, the same token as a written "$4.99".
-    private static func foldingAmounts(_ parts: [Part]) -> [Part] {
+    private static func foldingAmounts(_ parts: [Part], currencyWords: [String: String]) -> [Part] {
         func word(_ index: Int) -> String? {
             guard index < parts.count, case .word(let word) = parts[index] else { return nil }
             return word

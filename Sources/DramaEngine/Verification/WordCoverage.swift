@@ -18,6 +18,8 @@ package enum WordCoverage {
         case apple
     }
 
+    /// The open word lists, from EnglishSpokenForms.json. The closed grammar
+    /// of numbers, such as "twenty" or "thousand", lives in `EnglishNumbers`.
     struct EnglishForms: Decodable {
         var titles: [String: String] = [:]
         var contractions: [String: String] = [:]
@@ -34,6 +36,10 @@ package enum WordCoverage {
         var units: [String: String] = [:]
         /// Unit symbols that are not words, as the unit words they stand for.
         var unit_symbols: [String: String] = [:]
+        /// A currency word after a number, as one singular name.
+        var currency_words: [String: String] = [:]
+        /// A currency symbol beside a written number, as its currency name.
+        var currency_symbols: [String: String] = [:]
     }
     private static let forms = Result { () throws -> EnglishForms in
         guard let url = EngineResources.bundle().url(forResource: "EnglishSpokenForms", withExtension: "json") else {
@@ -162,8 +168,8 @@ package enum WordCoverage {
         for match in writtenNumber.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
             func group(_ index: Int) -> String? { Range(match.range(at: index), in: text).map { String(text[$0]) } }
             guard let range = Range(match.range, in: text) else { continue }
-            let currency = text[..<range.lowerBound].last.flatMap { EnglishNumbers.currencySymbols[$0] }
-                ?? text[range.upperBound...].first.flatMap { EnglishNumbers.currencySymbols[$0] }
+            let currency = text[..<range.lowerBound].last.flatMap { englishForms.currency_symbols[String($0)] }
+                ?? text[range.upperBound...].first.flatMap { englishForms.currency_symbols[String($0)] }
             guard let piece = EnglishNumbers.written(integer: group(1), separator: group(2) ?? group(4).map { _ in "." },
                                                      fraction: group(3) ?? group(4), decade: group(5) != nil,
                                                      currency: currency, profile: profile) else { continue }

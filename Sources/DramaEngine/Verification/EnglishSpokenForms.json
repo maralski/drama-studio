@@ -37,6 +37,22 @@
     "you're": "you are",
     "you've": "you have"
   },
+  "currency_symbols": {
+    "$": "dollar",
+    "¢": "cent",
+    "£": "pound",
+    "€": "euro"
+  },
+  "currency_words": {
+    "cent": "cent",
+    "cents": "cent",
+    "dollar": "dollar",
+    "dollars": "dollar",
+    "euro": "euro",
+    "euros": "euro",
+    "pound": "pound",
+    "pounds": "pound"
+  },
   "direction_words": [
     "angrily",
     "aside",
