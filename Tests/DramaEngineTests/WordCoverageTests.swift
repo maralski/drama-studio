@@ -137,6 +137,27 @@ final class WordCoverageTests: XCTestCase {
         ], false)
     }
 
+    func testNumberWordsWithNoSingleReadingAreSeveralNumbers() {
+        assertMatch([
+            ("Nothing was the same since 9/11.", "Nothing was the same since nine eleven."),
+            ("The shop is open 24/7.", "The shop is open twenty four seven."),
+            ("Rooms 7 11 13 are free.", "Rooms seven eleven thirteen are free."),
+            ("Rooms 7, 11, 13 are free.", "Rooms seven eleven thirteen are free."),
+            ("Take twelve five now.", "Take 12 5 now."),
+            ("Take twelve five now.", "Take twelve, five now."),
+        ], true)
+        assertMatch([
+            ("Take twelve five now.", "Take 125 now."),
+            ("Take twelve five now.", "Take 12.5 now."),
+            ("Take twelve five now.", "Take 1 25 now."),
+            ("Rooms 7 11 13 are free.", "Rooms seven one eleven three are free."),
+            ("Rooms 7 11 13 are free.", "Rooms seventy one, one hundred thirteen are free."),
+            ("The shop is open 24/7.", "The shop is open two forty seven."),
+            ("Nothing was the same since 9/11.", "Nothing was the same since ninety one one."),
+            ("Board the 747 now.", "Board the seventy four seven now."),
+        ], false)
+    }
+
     func testUnspacedCommaListsAreSeparateNumbers() {
         assertMatch([("Count 3,2,1 and go.", "Count 3, 2, 1 and go."),
                      ("Count 3,2,1 and go.", "Count three, two, one and go."),
@@ -559,7 +580,7 @@ final class WordCoverageTests: XCTestCase {
                       "Meet at 9.30 × 5.", "Meet at 9.30 * 5.", "Meet at 9.30 ÷ 5.", "Meet at 9.30 – 5."] {
             XCTAssertFalse(WordCoverage.matches(line: "Meet at nine thirty five.", transcript: heard, locale: english, profile: .exact), heard)
         }
-        XCTAssertFalse(WordCoverage.matches(line: "Meet at nine thirty zero point five.", transcript: "Meet at 9.30 .5.", locale: english, profile: .exact))
+        XCTAssertTrue(WordCoverage.matches(line: "Meet at nine thirty zero point five.", transcript: "Meet at 9.30 .5.", locale: english, profile: .exact))
         XCTAssertFalse(WordCoverage.matches(line: line, transcript: "The meeting begins at 9.30.", locale: Locale(identifier: "fr_FR"), profile: .exact))
     }
 }

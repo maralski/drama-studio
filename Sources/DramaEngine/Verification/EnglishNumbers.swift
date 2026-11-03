@@ -26,9 +26,9 @@ enum EnglishNumbers {
         /// An amount with its currency word inside: "four dollars ninety nine"
         /// is 4.99.
         case money = "m"
-        /// Number words that form no reading, such as "twelve five"; they match
-        /// only the same words.
-        case words = "w"
+        /// Groups said one after another: "7 11 13" read "seven eleven
+        /// thirteen" is 7.11.13.
+        case groups = "g"
 
         func reading(_ value: some StringProtocol) -> Reading { Reading(kind: self, value: String(value)) }
     }
@@ -95,13 +95,18 @@ enum EnglishNumbers {
         return !Set(first.split(separator: "|")).isDisjoint(with: second.split(separator: "|"))
     }
 
-    /// How many of `tokens` together spell out `run`, a number read only digit
-    /// by digit: "three two one" is the same speech as "three, two, one" or
-    /// "3. 2. 1." whatever the punctuation. A number with any other reading,
-    /// such as 321 or "fifty six", never splits.
-    static func digitRun(_ run: String, spelledBy tokens: ArraySlice<String>) -> Int? {
+    /// How many of `tokens` together say `run`, whatever the punctuation
+    /// between them: digit by digit, "three two one" is "3. 2. 1.", and group
+    /// by group, "nine eleven" is "9/11".
+    static func run(_ run: String, spelledBy tokens: ArraySlice<String>) -> Int? {
+        digitRun(run, spelledBy: tokens) ?? groupRun(run, spelledBy: tokens)
+    }
+
+    /// A number with a reading other than its digits, such as 321 or "fifty
+    /// six", never splits digit by digit.
+    private static func digitRun(_ run: String, spelledBy tokens: ArraySlice<String>) -> Int? {
         let whole = readings(of: run)
-        guard isNumber(run), whole.allSatisfy({ $0.kind == .digits }) else { return nil }
+        guard isNumber(run), whole.allSatisfy({ $0.kind == .digits || $0.kind == .groups }) else { return nil }
         func length(_ rest: Substring, from index: Int) -> Int? {
             guard !rest.isEmpty else { return index - tokens.startIndex }
             guard index < tokens.endIndex, isNumber(tokens[index]) else { return nil }
@@ -110,7 +115,30 @@ enum EnglishNumbers {
             }
             return nil
         }
-        return whole.lazy.compactMap { length(Substring($0.value), from: tokens.startIndex) }.first { $0 > 1 }
+        return values(Set(whole), .digits).lazy.compactMap { length(Substring($0), from: tokens.startIndex) }.first { $0 > 1 }
+    }
+
+    /// Each group is one token's whole number: "seven forty seven" may be
+    /// "7, 47" but never "74, 7".
+    private static func groupRun(_ run: String, spelledBy tokens: ArraySlice<String>) -> Int? {
+        func groups(_ reading: Reading) -> [Substring] {
+            switch reading.kind {
+            case .groups, .paired: reading.value.split(separator: ".")
+            case .cardinal, .digits: [Substring(reading.value)]
+            default: []
+            }
+        }
+        func length(_ rest: ArraySlice<Substring>, from index: Int) -> Int? {
+            guard !rest.isEmpty else { return index - tokens.startIndex }
+            guard index < tokens.endIndex, isNumber(tokens[index]) else { return nil }
+            for part in readings(of: tokens[index]).map(groups) where !part.isEmpty && rest.starts(with: part) {
+                if let count = length(rest.dropFirst(part.count), from: index + 1) { return count }
+            }
+            return nil
+        }
+        guard isNumber(run) else { return nil }
+        return readings(of: run).lazy.filter { $0.kind == .groups || $0.kind == .paired }
+            .compactMap { length(groups($0)[...], from: tokens.startIndex) }.first { $0 > 1 }
     }
 
     private static func readings(of token: String) -> [Reading] {
@@ -225,7 +253,8 @@ enum EnglishNumbers {
             }
             let end = runEnd(from: index)
             if end > index {
-                parts.append((.number(spokenReadings((index..<end).compactMap(word)), currency: nil), gap)); index = end
+                parts += numbers((index..<end).compactMap(word)).enumerated().map { ($1, $0 == 0 ? gap : .other) }
+                index = end
             } else {
                 parts.append((.word(word(index)!), gap)); index += 1
             }
@@ -319,6 +348,10 @@ enum EnglishNumbers {
         case .other: return nil
         }
         var readings = Set<Reading>()
+        if gap == .space {
+            let groups = values(left, .groups).isEmpty ? lefts : values(left, .groups)
+            for first in groups { for second in rights { readings.insert(Kind.groups.reading(first + "." + second)) } }
+        }
         for first in lefts {
             for second in rights {
                 readings.insert(Kind.digits.reading(first + second))
@@ -347,9 +380,19 @@ enum EnglishNumbers {
         })
     }
 
-    private static func spokenReadings(_ run: [String]) -> Set<Reading> {
-        let readings = readings(run)
-        return readings.isEmpty ? [Kind.words.reading(run.joined(separator: " "))] : readings
+    /// A run of number words with no single reading, such as "twenty four
+    /// seven", is several numbers, each the longest start that has one.
+    private static func numbers(_ run: [String]) -> [Part] {
+        var parts: [Part] = []
+        var rest = run[...]
+        while !rest.isEmpty {
+            let found = (1...rest.count).reversed().lazy.map { rest.prefix($0) }
+                .map { (count: $0.count, readings: readings(Array($0))) }.first { !$0.readings.isEmpty }
+            guard let found else { parts.append(.word(rest.removeFirst())); continue }
+            parts.append(.number(found.readings, currency: nil))
+            rest = rest.dropFirst(found.count)
+        }
+        return parts
     }
 
     private static func readings(_ run: [String]) -> Set<Reading> {
