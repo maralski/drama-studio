@@ -28,6 +28,17 @@ final class BoundaryVerificationTests: XCTestCase {
         repeated.spans[0].confidence = 0.99; repeated.spans[2].confidence = 0.189
         XCTAssertEqual(repeated.boundaryWordSpan(previousLine: "Please wait.", currentLine: "Please stay.", locale: english), 2)
     }
+    func testOtherWordsUseTheOrdinaryConfidenceFloors() {
+        var interior = clean; interior.spans[4].confidence = 0.4
+        XCTAssertEqual(interior.boundaryWordSpan(previousLine: left, currentLine: right, locale: english), 2)
+        interior.spans[4].confidence = 0.29
+        XCTAssertNil(interior.boundaryWordSpan(previousLine: left, currentLine: right, locale: english))
+        var final = clean; final.spans[5].confidence = 0.45
+        XCTAssertNil(final.boundaryWordSpan(previousLine: left, currentLine: right, locale: english))
+        var certain = clean; certain.spans[2].confidence = 0.4
+        XCTAssertNil(certain.boundaryWordSpan(previousLine: left, currentLine: right, locale: english))
+        XCTAssertTrue(certain.matches(line: left + " " + right, locale: english))
+    }
     func testAmbiguousRequiredReactionWordCannotQualify() {
         let recognition = Recognition(text: "Wait here. He he stays.", spans: [
             .init(text: "Wait here.", confidence: 0.99), .init(text: " He", confidence: 0.189),

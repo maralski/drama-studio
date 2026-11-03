@@ -214,10 +214,14 @@ package struct LocalWordVerifier: Sendable {
         static let endOfAudioFloor = 0.5
 
         func uncertainSpans(confidenceFloor: Double = Self.confidenceFloor) -> [String] {
+            uncertainIndices(confidenceFloor: confidenceFloor).map { spans[$0].text }
+        }
+
+        private func uncertainIndices(confidenceFloor: Double = Self.confidenceFloor) -> [Int] {
             let last = spans.lastIndex { $0.text.contains { $0.isLetter || $0.isNumber } }
             return spans.indices.filter {
                 spans[$0].confidence < ($0 == last ? max(confidenceFloor, Self.endOfAudioFloor) : confidenceFloor)
-            }.map { spans[$0].text }
+            }
         }
 
         func matches(line: String, locale: Locale, confidenceFloor: Double = Self.confidenceFloor) -> Bool {
@@ -244,14 +248,15 @@ package struct LocalWordVerifier: Sendable {
             let spanWords = spans.map { WordCoverage.recognizedTokens($0.text, line: line, locale: locale, profile: Self.profile) }
             guard spans.map(\.text).joined() == text,
                   spanWords.flatMap({ $0 }) == WordCoverage.recognizedTokens(text, line: line, locale: locale, profile: Self.profile) else { return nil }
+            let uncertain = uncertainIndices()
             var ordinal = 0
             for (index, span) in spans.enumerated() {
                 defer { ordinal += spanWords[index].count }
                 // A number token can stand for several spoken words, so it never qualifies.
                 guard ordinal == firstCurrent, spanWords[index].count == 1, !WordCoverage.isNumber(spanWords[index][0]),
                       span.hasReportedConfidence, span.confidence.isFinite,
-                      span.confidence > 0, span.confidence < Self.endOfAudioFloor else { continue }
-                let remaining = spans.enumerated().filter { $0.offset != index && $0.element.confidence < Self.endOfAudioFloor }.map { $0.element.text }
+                      span.confidence > 0, uncertain.contains(index) else { continue }
+                let remaining = uncertain.filter { $0 != index }.map { spans[$0].text }
                 if WordCoverage.matches(line: line, transcript: text, locale: locale, profile: Self.profile,
                                         uncertainSpans: remaining) { return index }
             }
