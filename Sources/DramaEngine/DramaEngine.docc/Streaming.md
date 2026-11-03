@@ -22,15 +22,18 @@ into silence stopping, probe readings follow the voice-aware allowance.
 
 ### Pick when audio leaves the engine
 
-When ``GenerationConfig/maxRetries`` and ``GenerationConfig/minSpokenRatio``
-are positive, every request uses sentence mode, regardless of the requested
-streaming mode or voice. The engine checks each complete attempt before
-releasing audio. Explicitly disable retries to receive low-latency partials.
+Every request uses sentence mode, regardless of the requested streaming mode
+or voice, while ``GenerationConfig/wordVerification`` is
+``GenerationConfig/WordVerification/required``, the default, or while
+``GenerationConfig/maxRetries`` and ``GenerationConfig/minSpokenRatio`` are
+both positive. The engine checks each complete attempt before releasing audio.
+To receive low-latency partials, set `wordVerification` to
+``GenerationConfig/WordVerification/uncheckedPreview`` and `maxRetries` to 0.
 
 | Mode | Audio events | A chunk that comes out short | Use for |
 | --- | --- | --- | --- |
 | ``StreamingMode/sentence``, the default | one ``SpeechEvent/audio(samples:chunkIndex:)`` per chunk, once the chunk is generated | generated again, up to ``GenerationConfig/maxRetries`` times | exports, captions, anything kept |
-| ``StreamingMode/defaultLowLatency``, with retries disabled, 64-frame steps | ``SpeechEvent/partialAudio(samples:chunkIndex:frameRange:)`` about every 3 s of audio, then the chunk's `audio` | kept, because its start may already be playing | live playback |
+| ``StreamingMode/defaultLowLatency``, with the word check and retries off, 64-frame steps | ``SpeechEvent/partialAudio(samples:chunkIndex:frameRange:)`` about every 3 s of audio, then the chunk's `audio` | kept, because its start may already be playing | live playback |
 
 Under low latency the CPU decodes the newest 64 frames while the GPU
 generates the next ones. A chunk's partials, in order, join into exactly the
@@ -58,6 +61,7 @@ the samples its partials did not carry.
 
 ```swift
 var request = SpeechRequest(text: script, references: [voice])
+request.config.wordVerification = .uncheckedPreview
 request.config.streaming = .defaultLowLatency
 request.config.maxRetries = 0
 var audio = StreamedAudio()

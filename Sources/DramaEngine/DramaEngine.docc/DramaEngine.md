@@ -49,6 +49,7 @@ func speak(_ text: String, cloning clip: URL, transcript: String,
     try await engine.load { phase in print(phase) }
     let voice = try await engine.encodeReference(audioURL: clip, transcript: transcript, name: "Narrator")
     var request = SpeechRequest(text: text, references: [voice])
+    request.config.wordVerification = .uncheckedPreview
     request.config.streaming = .defaultLowLatency
     request.config.maxRetries = 0
     var audio = StreamedAudio()
@@ -65,8 +66,10 @@ let (result, _) = try await speak("Hello there. Good to see you.", cloning: URL(
 print("\(result.take.durationSeconds) s of audio")
 ```
 
-This example disables retries so partial audio can arrive before a chunk
-finishes. Keep retries enabled when completeness matters more than early playback.
+This example turns off the word check and retries so partial audio can
+arrive before a chunk finishes. With either one on, the engine holds each
+chunk until it passes. Keep the defaults when completeness matters more than
+early playback.
 
 `streamed` grows by about 3 s of 44.1 kHz mono audio at a time while the
 model generates. In a player, schedule each `newSamples(from:)` result as it

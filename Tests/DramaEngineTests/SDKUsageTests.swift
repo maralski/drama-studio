@@ -10,6 +10,7 @@ func speak(_ text: String, cloning clip: URL, transcript: String,
     try await engine.load { phase in print(phase) }
     let voice = try await engine.encodeReference(audioURL: clip, transcript: transcript, name: "Narrator")
     var request = SpeechRequest(text: text, references: [voice])
+    request.config.wordVerification = .uncheckedPreview
     request.config.streaming = .defaultLowLatency
     request.config.maxRetries = 0
     var audio = StreamedAudio()
@@ -38,6 +39,31 @@ final class SDKUsageTests: XCTestCase {
         XCTAssertEqual(streamed, result.samples)
         XCTAssertEqual(result.samples.count, result.take.frameCount * ModelConstants.samplesPerFrame)
         XCTAssertEqual(result.sentences.map(\.frames).reduce(0, +), result.take.frameCount)
+    }
+
+    func testDocumentedLowLatencySamplesStream() throws {
+        let catalog = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appending(path: "Sources/DramaEngine/DramaEngine.docc")
+        var checked = 0
+        for page in ["DramaEngine.md", "Streaming.md"] {
+            let blocks = try String(contentsOf: catalog.appending(path: page), encoding: .utf8)
+                .components(separatedBy: "```swift").dropFirst().map { $0.components(separatedBy: "```")[0] }
+            for block in blocks where block.contains(".defaultLowLatency") {
+                var config = GenerationConfig()
+                for line in block.split(separator: "\n").map({ $0.trimmingCharacters(in: .whitespaces) }) where line.hasPrefix("request.config.") {
+                    switch line {
+                    case "request.config.wordVerification = .uncheckedPreview": config.wordVerification = .uncheckedPreview
+                    case "request.config.streaming = .defaultLowLatency": config.streaming = .defaultLowLatency
+                    case "request.config.maxRetries = 0": config.maxRetries = 0
+                    default: XCTFail("\(page): teach this test the setting \(line)")
+                    }
+                }
+                let plan = try GenerationPlan(text: "Hello there. Good to see you.", references: [], config: config)
+                XCTAssertEqual(plan.streaming, .defaultLowLatency, "\(page) shows a low-latency sample that the engine runs in sentence mode")
+                checked += 1
+            }
+        }
+        XCTAssertEqual(checked, 2)
     }
 
     func testLandingPageShowsThisExample() throws {

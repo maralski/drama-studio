@@ -52,7 +52,7 @@ final class DramaSetupTests: XCTestCase {
         XCTAssertTrue(report[.codecModels].isMissing)
         XCTAssertTrue(report[.codecModels].fix?.contains("convert_codec.py") == true, report[.codecModels].fix ?? "")
         guard case .builtOnFirstLoad = report[.tuning].state else { return XCTFail("tuning: \(report[.tuning])") }
-        XCTAssertEqual(report.items.filter(\.isMissing).map(\.component), [.codecModels])
+        XCTAssertEqual(report.items.filter { $0.isMissing && $0.component != .wordRecognizer }.map(\.component), [.codecModels])
     }
 
     func testCodecCheckpointIsNotNeededOnceTheModelsExist() throws {
@@ -63,7 +63,7 @@ final class DramaSetupTests: XCTestCase {
         let report = DramaSetup.check(location: location, codecDirectory: codecDirectory, tuningDirectory: tuningDirectory)
         XCTAssertEqual(report[.codecCheckpoint].state, .ready)
         XCTAssertEqual(report[.codecModels].state, .ready)
-        XCTAssertTrue(report.isReady)
+        XCTAssertEqual(report.isReady, !report[.wordRecognizer].isMissing)
         XCTAssertFalse(report.isPrepared)
     }
 
@@ -100,6 +100,27 @@ final class DramaSetupTests: XCTestCase {
         } catch DramaSetupError.notReady(let report) {
             XCTAssertTrue(report[.weights].isMissing)
         }
+    }
+
+    func testMissingWordCheckerNamesTheStagingStep() throws {
+        let item = DramaSetup.wordRecognizerItem(runtimeDirectory: root)
+        XCTAssertTrue(item.isMissing)
+        XCTAssertTrue(item.summary.contains("drama-word-recognizer"), item.summary)
+        XCTAssertTrue(item.summary.contains("ggml-small.en.bin"), item.summary)
+        XCTAssertTrue(item.fix?.contains("stage_word_recognition.py") == true, item.fix ?? "")
+        XCTAssertTrue(item.fix?.contains(".uncheckedPreview") == true, item.fix ?? "")
+    }
+
+    func testStagedWordCheckerIsReady() throws {
+        let helper = root.appending(path: "drama-word-recognizer")
+        try Data().write(to: helper)
+        try FileManager.default.createDirectory(at: root.appending(path: "WordVerification"), withIntermediateDirectories: true)
+        try Data([0]).write(to: root.appending(path: "WordVerification/ggml-small.en.bin"))
+        XCTAssertTrue(DramaSetup.wordRecognizerItem(runtimeDirectory: root).isMissing, "a helper that cannot run is not ready")
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: helper.path)
+        let item = DramaSetup.wordRecognizerItem(runtimeDirectory: root)
+        XCTAssertEqual(item.state, .ready)
+        XCTAssertTrue(item.summary.contains("English only"), item.summary)
     }
 
     func testBundledConversionScriptShips() throws {
