@@ -43,8 +43,9 @@ enum EnglishNumbers {
         case written(Set<Reading>, currency: String?)
     }
 
-    /// What separates a piece from the one before it.
-    enum Gap { case space, comma, other }
+    /// What separates a piece from the one before it. A hyphen is only ever
+    /// between two written numbers.
+    enum Gap { case space, comma, hyphen, other }
 
     private static let units: [String: Int] = Dictionary(uniqueKeysWithValues: zip(
         ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve",
@@ -190,6 +191,7 @@ enum EnglishNumbers {
                let both = joined(left, right, across: gap) {
                 merged[merged.count - 1] = .number(both, currency: nil)
             } else {
+                if gap == .hyphen { merged.append(.word("to")) }
                 merged.append(part)
             }
         }
@@ -257,15 +259,18 @@ enum EnglishNumbers {
     /// One identifier from two digit groups, as in a phone number. Groups
     /// separated by a space join when both can be read digit by digit; across a
     /// comma only spoken digit runs join, so "three, two, one" stays three numbers.
+    /// Across a hyphen only an identifier joins, 555-0142 or 1-800; a score or
+    /// range such as 21-17 stays two numbers and the hyphen reads "to".
     private static func joined(_ left: Set<Reading>, _ right: Set<Reading>, across gap: Gap) -> Set<Reading>? {
         func onlyDigits(_ readings: Set<Reading>) -> Bool { readings.allSatisfy { $0.kind == .digits } }
+        let lefts = values(left, .digits), rights = values(right, .digits)
+        guard !lefts.isEmpty, !rights.isEmpty else { return nil }
         switch gap {
         case .space: break
         case .comma: guard onlyDigits(left), onlyDigits(right) else { return nil }
+        case .hyphen: guard onlyDigits(right) || (lefts + rights).contains(where: { $0.count >= 3 }) else { return nil }
         case .other: return nil
         }
-        let lefts = values(left, .digits), rights = values(right, .digits)
-        guard !lefts.isEmpty, !rights.isEmpty else { return nil }
         var readings = Set<Reading>()
         for first in lefts {
             for second in rights {

@@ -92,6 +92,35 @@ final class WordCoverageTests: XCTestCase {
         ], true)
     }
 
+    func testAHyphenJoinsOnlyIdentifiersAndOtherwiseReadsTo() {
+        assertMatch([
+            ("Pages 10-20 are missing.", "Pages ten to twenty are missing."),
+            ("Pages 10-20 are missing.", "Pages 10 to 20 are missing."),
+            ("The final score was 21 to 17.", "The final score was 21-17."),
+            ("The final score was twenty-one to seventeen.", "The final score was 21-17."),
+            ("Call 555-0142 now.", "Call 5550142 now."),
+            ("Call 555-0142 now.", "Call five five five oh one four two now."),
+            ("Call 1-800-555-0142 now.", "Call 18005550142 now."),
+            ("The answer is 5 - 3.", "The answer is five minus three."),
+        ], true)
+        assertMatch([
+            ("Pages 10-20 are missing.", "Pages 1020 are missing."),
+            ("Pages 10-20 are missing.", "Pages ten twenty are missing."),
+            ("The final score was 21-17.", "The final score was 2117."),
+            ("The final score was 21-17.", "The final score was twenty one seventeen."),
+            ("The answer is 5 - 3.", "The answer is five three."),
+            ("The answer is 5 - 3.", "The answer is 53."),
+        ], false)
+    }
+
+    func testUnspacedCommaListsAreSeparateNumbers() {
+        assertMatch([("Count 3,2,1 and go.", "Count 3, 2, 1 and go."),
+                     ("Count 3,2,1 and go.", "Count three, two, one and go."),
+                     ("The town has 12,500 residents.", "The town has twelve thousand five hundred residents.")], true)
+        assertMatch([("Count 3,2,1 and go.", "Count 321 and go."),
+                     ("Count 3,2,1 and go.", "Count three hundred twenty one and go.")], false)
+    }
+
     func testClockTimesAndLeadingZerosDoNotReadAsCardinals() {
         assertMatch([
             ("Meet at 3:30.", "Meet at three hundred and thirty."),

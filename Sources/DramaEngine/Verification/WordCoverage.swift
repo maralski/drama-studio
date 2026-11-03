@@ -45,14 +45,17 @@ package enum WordCoverage {
     private static let contractionPattern = try! NSRegularExpression(
         pattern: "\\b(" + alternation(englishForms.contractions.keys) + ")\\b")
     private static let cannot = try! NSRegularExpression(pattern: #"\bcannot\b"#)
+    /// A sign before a number, or between two numbers with a space each side.
     private static let signs = [("-", "minus"), ("−", "minus"), ("+", "plus")].map { symbol, spoken in
-        (try! NSRegularExpression(pattern: #"(?<![\p{L}\p{N}.])"# + NSRegularExpression.escapedPattern(for: symbol) + #"(?=\d|\.\d)"#),
-         " \(spoken) ")
+        let symbol = NSRegularExpression.escapedPattern(for: symbol)
+        return (try! NSRegularExpression(pattern: #"(?<![\p{L}\p{N}.])"# + symbol + #"(?=\d|\.\d)|(?<=\d )"# + symbol + #"(?= \d)"#),
+                " \(spoken) ")
     }
     private static let digitsAfterLetters = try! NSRegularExpression(pattern: #"(?<=\p{L})(?=[0-9])"#)
     private static let digits = try! NSRegularExpression(pattern: #"(?<![\p{L}\p{N}.])[−-]?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)(?![\p{L}\p{N}]|\.[0-9])"#)
     private static let writtenNumber = try! NSRegularExpression(
-        pattern: #"(?<![\p{L}\p{N}_.,:])(?:([0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:([.:])([0-9]+))?|\.([0-9]+))('?s)?(?![\p{L}\p{N}_]|[.,:][0-9])"#)
+        pattern: #"(?<![\p{L}\p{N}_.:])(?:([0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:([.:])([0-9]+))?|\.([0-9]+))('?s)?(?![\p{L}\p{N}_]|[.:][0-9]|,[0-9]{3}(?![0-9]))"#)
+    private static let wordHyphen = try! NSRegularExpression(pattern: #"-(?![0-9])|(?<![0-9])-"#)
     private static let spellOutFormatters = Mutex<[String: NumberFormatter]>([:])
 
     private static func spellOut(_ value: NSNumber, locale: Locale) -> String? {
@@ -108,9 +111,9 @@ package enum WordCoverage {
             text = digitsAfterLetters.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: " ")
         }
         if english {
-            return EnglishNumbers.tokens(englishPieces(text.replacingOccurrences(of: "%", with: " percent ")
-                                                           .replacingOccurrences(of: "-", with: " "), profile: profile),
-                                         spellings: englishForms.spellings, profile: profile)
+            text = text.replacingOccurrences(of: "%", with: " percent ")
+            text = wordHyphen.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: " ")
+            return EnglishNumbers.tokens(englishPieces(text, profile: profile), spellings: englishForms.spellings, profile: profile)
         }
         text = text.replacingOccurrences(of: "%", with: " percent_symbol ")
         for match in digits.matches(in: text, range: NSRange(text.startIndex..., in: text)).reversed() {
@@ -166,7 +169,8 @@ package enum WordCoverage {
         return found.indices.map { index in
             let between = index > 0 ? text[found[index - 1].range.upperBound..<found[index].range.lowerBound] : "."
             let gap: EnglishNumbers.Gap = between.allSatisfy(\.isWhitespace) ? .space
-                : between.allSatisfy({ $0.isWhitespace || $0 == "," }) ? .comma : .other
+                : between.allSatisfy({ $0.isWhitespace || $0 == "," }) ? .comma
+                : between == "-" || between == "–" ? .hyphen : .other
             return (found[index].piece, gap)
         }
     }
