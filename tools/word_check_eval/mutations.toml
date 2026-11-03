@@ -1,0 +1,692 @@
+# Source mutations for tools/word_check_eval/mutate.py.
+#
+# Each mutation replaces `old`, which must occur exactly once in `file`, with
+# `new`, and the word-check tests must then fail. A mutation marked
+# `equivalent = true` changes no behavior the tests can see; it must survive.
+# Literal strings ('...' and '''...''') hold the source text unescaped.
+
+[[mutation]]
+name = 'decimal equals integer'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'var readings: Set = [Kind.decimal.reading(trimmed + "." + fraction),'
+new = 'var readings: Set = [Kind.decimal.reading(trimmed + "." + fraction), Kind.cardinal.reading(trimmed + fraction),'
+
+[[mutation]]
+name = 'kinds collapse'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'var text: String { String(kind.rawValue) + value }'
+new = 'var text: String { value }'
+
+[[mutation]]
+name = 'spoken cardinal reads as digits'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'if let value = cardinal(run[...]) { readings.insert(Kind.cardinal.reading(String(value))) }'
+new = 'if let value = cardinal(run[...]) { readings.insert(Kind.digits.reading(String(value))) }'
+
+[[mutation]]
+name = 'spoken paired also cardinal'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'readings.insert(Kind.paired.reading("\(first).\(second)"))'
+new = 'readings.insert(Kind.paired.reading("\(first).\(second)")); readings.insert(Kind.cardinal.reading("\(first)\(second)"))'
+
+[[mutation]]
+name = 'leading zero allows cardinal'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'guard digits == trimmed else { return .written([Kind.digits.reading(digits)], currency: currency) }'
+new = 'guard digits == trimmed else { return .written([Kind.digits.reading(digits), Kind.cardinal.reading(trimmed)], currency: currency) }'
+
+[[mutation]]
+name = 'clock reads as cardinal'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'return .written([Kind.paired.reading(trimmed + "." + fraction)], currency: currency)'
+new = 'return .written([Kind.paired.reading(trimmed + "." + fraction), Kind.cardinal.reading(trimmed + fraction)], currency: currency)'
+
+[[mutation]]
+name = 'no written paired'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'readings.insert(Kind.paired.reading(digits.dropLast(2) + "." + digits.suffix(2)))'
+new = ''
+
+[[mutation]]
+name = 'no merging'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'guard !lefts.isEmpty, !rights.isEmpty else { return nil }'
+new = 'return nil'
+
+[[mutation]]
+name = 'merge across any gap'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'case .other: return nil'
+new = 'case .other: break'
+
+[[mutation]]
+name = 'written groups merge across commas'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'case .comma: guard onlyDigits(left), onlyDigits(right) else { return nil }'
+new = 'case .comma: break'
+
+[[mutation]]
+name = 'no comma merge at all'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'case .comma: guard onlyDigits(left), onlyDigits(right) else { return nil }'
+new = 'case .comma: return nil'
+
+[[mutation]]
+name = 'merged identifier also cardinal'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'readings.insert(Kind.digits.reading(first + second))'
+new = 'readings.insert(Kind.digits.reading(first + second)); readings.insert(Kind.cardinal.reading(first + second))'
+
+[[mutation]]
+name = 'no a.bb merge'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'readings.insert(Kind.paired.reading(first + "." + second))'
+new = ''
+
+[[mutation]]
+name = 'no paired readings'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'readings.insert(Kind.paired.reading("\(first).\(second)"))'
+new = ''
+
+[[mutation]]
+name = 'no paired oh readings'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'readings.insert(Kind.paired.reading("\(first).0\(digit)"))'
+new = ''
+equivalent = true
+
+[[mutation]]
+name = 'no digit sequence'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'if let digits = digitSequence(run) { readings.insert(Kind.digits.reading(digits)) }'
+new = ''
+
+[[mutation]]
+name = 'no cardinal'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'if let value = cardinal(run[...]) { readings.insert(Kind.cardinal.reading(String(value))) }'
+new = ''
+
+[[mutation]]
+name = 'oh starts any run'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'return isDigit(joinedWord(digit)) && (digit > index + 1 || isDigit(joinedWord(digit + 1)))'
+new = 'return isDigit(joinedWord(index + 1))'
+
+[[mutation]]
+name = 'oh never starts a run'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'return isDigit(joinedWord(digit)) && (digit > index + 1 || isDigit(joinedWord(digit + 1)))'
+new = 'return false'
+
+[[mutation]]
+name = 'oh oh never starts a run'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'return isDigit(joinedWord(digit)) && (digit > index + 1 || isDigit(joinedWord(digit + 1)))'
+new = 'return isDigit(joinedWord(digit)) && digit == index + 1 && isDigit(joinedWord(digit + 1))'
+
+[[mutation]]
+name = 'no currency word token'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'if afterNumber, let currency = forms.currency_words[spoken] {'
+new = 'if false, let currency = forms.currency_words[spoken] {'
+
+[[mutation]]
+name = 'no implied currency'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'if let currency { result.append("¤?" + currency) }'
+new = ''
+
+[[mutation]]
+name = 'any currencies agree'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'return !Set(first.split(separator: "|")).isDisjoint(with: second.split(separator: "|"))'
+new = 'return true'
+
+[[mutation]]
+name = 'plural currency kept'
+file = 'Sources/DramaEngine/Verification/EnglishSpokenForms.json'
+old = '"dollars": "dollar"'
+new = '"dollars": "dollars"'
+
+[[mutation]]
+name = 'no written scale'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'let scaled = scale.map { multiplied(readings, by: $0) } ?? []'
+new = 'let scaled = Set<Reading>()'
+
+[[mutation]]
+name = 'no decades'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'if let tensWord = decadeWords[last] {'
+new = 'if let tensWord = Optional<String>.none {'
+
+[[mutation]]
+name = 'no spellings'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'let spelled = forms.spellings[word] ?? word'
+new = 'let spelled = word'
+
+[[mutation]]
+name = 'non-homophone spelling'
+file = 'Sources/DramaEngine/Verification/EnglishSpokenForms.json'
+old = '"alright": "all right",'
+new = '''
+"alright": "all right",
+    "aluminium": "aluminum",'''
+
+[[mutation]]
+name = 'implied currency may not go unspoken'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = '} else if optional(expected, next, against: word) {'
+new = '} else if false {'
+
+[[mutation]]
+name = 'implied currency skips a different currency'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = 'index < tokens.count && EnglishNumbers.isImpliedCurrency(tokens[index]) && !(other.map(EnglishNumbers.isCurrency) ?? false)'
+new = 'index < tokens.count && EnglishNumbers.isImpliedCurrency(tokens[index])'
+
+[[mutation]]
+name = 'no compound join'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = '} else if next < expected.count, joinable(heard, ordinal), word + heard[ordinal + 1] == expected[next] {'
+new = '} else if false {'
+
+[[mutation]]
+name = 'no compound split'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = '} else if next < expected.count, joinable(expected, next), word == expected[next] + expected[next + 1] {'
+new = '} else if false {'
+
+[[mutation]]
+name = 'comma counts as other'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = ': between.allSatisfy({ $0.isWhitespace || $0 == "," }) ? .comma'
+new = ': false ? .comma'
+
+[[mutation]]
+name = 'comma counts as space'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = 'between.allSatisfy(\.isWhitespace) ? .space'
+new = 'between.allSatisfy({ $0.isWhitespace || $0 == "," }) ? .space'
+
+[[mutation]]
+name = 'floor 0.5'
+file = 'Sources/DramaEngine/Verification/LocalWordVerifier.swift'
+old = 'static let confidenceFloor = 0.3'
+new = 'static let confidenceFloor = 0.5'
+
+[[mutation]]
+name = 'terminal word uses floor'
+file = 'Sources/DramaEngine/Verification/LocalWordVerifier.swift'
+old = 'spans[$0].confidence < ($0 == last ? max(confidenceFloor, Self.endOfAudioFloor) : confidenceFloor)'
+new = 'spans[$0].confidence < confidenceFloor'
+
+[[mutation]]
+name = 'end-of-audio interior at 0.5'
+file = 'Sources/DramaEngine/Verification/LocalWordVerifier.swift'
+old = 'return lexical.dropLast().allSatisfy { $0.confidence >= Self.confidenceFloor }'
+new = 'return lexical.dropLast().allSatisfy { $0.confidence >= Self.endOfAudioFloor }'
+
+[[mutation]]
+name = 'number may qualify as boundary word'
+file = 'Sources/DramaEngine/Verification/LocalWordVerifier.swift'
+old = '!WordCoverage.isNumber(spanWords[index][0]),'
+new = ''
+
+[[mutation]]
+name = 'apple pairs leak into whisper'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'profile != .exact || Int(digits.dropLast(2))! > 12'
+new = 'true'
+
+[[mutation]]
+name = 'apple point insertion leaks into whisper'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'if profile == .apple, let scale, scale >= 1000 {'
+new = 'if let scale, scale >= 1000 {'
+
+[[mutation]]
+name = 'verifier reads whisper with the apple profile'
+file = 'Sources/DramaEngine/Verification/LocalWordVerifier.swift'
+old = 'WordCoverage.matches(line: line, transcript: transcript, locale: locale, profile: .exact)'
+new = 'WordCoverage.matches(line: line, transcript: transcript, locale: locale, profile: .apple)'
+
+[[mutation]]
+name = 'native recognition read exactly'
+file = 'Sources/DramaEngine/Verification/LocalWordVerifier.swift'
+old = 'static let profile = WordCoverage.RecognizerProfile.apple'
+new = 'static let profile = WordCoverage.RecognizerProfile.exact'
+
+[[mutation]]
+name = 'no year pairs from whisper'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'profile != .exact || Int(digits.dropLast(2))! > 12'
+new = 'profile != .exact'
+
+[[mutation]]
+name = 'clock hours count as years'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'profile != .exact || Int(digits.dropLast(2))! > 12'
+new = 'profile != .exact || Int(digits.dropLast(2))! > 0'
+
+[[mutation]]
+name = 'no point insertion'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'readings.formUnion(pointInserted(readings))'
+new = '_ = readings'
+
+[[mutation]]
+name = 'point insertion before hundred'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'if profile == .apple, let scale, scale >= 1000 {'
+new = 'if profile == .apple, let scale, scale >= 100 {'
+
+[[mutation]]
+name = 'point insertion leaves a trailing zero'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = '.filter { !$0.value.hasSuffix("0") }'
+new = ''
+
+[[mutation]]
+name = 'no written money reading'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = ', Kind.money.reading(trimmed + "." + fraction)])'
+new = '])'
+
+[[mutation]]
+name = 'no amount folding'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'let amounts = foldingAmounts(merged, currencyWords: forms.currency_words)'
+new = 'let amounts = merged'
+
+[[mutation]]
+name = 'cents not padded'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'String(format: "%02d", $0)'
+new = 'String($0)'
+
+[[mutation]]
+name = 'dollar under one stays dollars'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'return .written(readings, currency: "cent")'
+new = 'return .written(readings, currency: currency)'
+
+[[mutation]]
+name = 'whole amount has no integer reading'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'shortened.isEmpty ? Kind.cardinal.reading(trimmed) :'
+new = 'shortened.isEmpty ? Kind.decimal.reading(trimmed) :'
+
+[[mutation]]
+name = 'a never starts an amount'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'scales[$0] != nil || forms.currency_words[$0] != nil'
+new = 'scales[$0] != nil'
+
+[[mutation]]
+name = 'short hyphen pair merges'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'case .hyphen: guard onlyDigits(right) || (lefts + rights).contains(where: { $0.count >= 3 }) else { return nil }'
+new = 'case .hyphen: break'
+
+[[mutation]]
+name = 'hyphen never merges'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'case .hyphen: guard onlyDigits(right) || (lefts + rights).contains(where: { $0.count >= 3 }) else { return nil }'
+new = 'case .hyphen: return nil'
+
+[[mutation]]
+name = 'hyphen does not read to'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'if gap == .hyphen { merged.append(.word("~" + forms.range_words.joined(separator: "|"))) }'
+new = ''
+
+[[mutation]]
+name = 'every hyphen erased'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = '#"-(?![0-9])|(?<![0-9])-"#'
+new = '#"-"#'
+
+[[mutation]]
+name = 'spaced minus is no sign'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = '+ #"(?=\d|\.\d)|(?<=\d )"# + symbol + #"(?= \d)"#'
+new = '+ #"(?=\d|\.\d)"#'
+
+[[mutation]]
+name = 'comma before a digit blocks a number'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = '(?<![\p{L}\p{N}_.:])(?:([0-9]{1,3}'
+new = '(?<![\p{L}\p{N}_.,:])(?:([0-9]{1,3}'
+
+[[mutation]]
+name = 'digit glued to a word stays glued'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = 'text = digitsAfterLetters.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: " ")'
+new = ''
+
+[[mutation]]
+name = 'digit run without the digits-only rule'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'guard isNumber(run), whole.allSatisfy({ $0.kind == .digits || $0.kind == .groups }) else { return nil }'
+new = 'guard isNumber(run) else { return nil }'
+
+[[mutation]]
+name = 'no digit runs'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'length(Substring($0), from: tokens.startIndex) }.first { $0 > 1 }'
+new = 'length(Substring($0), from: tokens.startIndex) }.first { $0 > 99 }'
+
+[[mutation]]
+name = 'written side never splits'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = '} else if next < expected.count, let count = EnglishNumbers.run(expected[next], spelledBy: heard[ordinal...]) {'
+new = '} else if false, let count = EnglishNumbers.run(expected[next], spelledBy: heard[ordinal...]) {'
+
+[[mutation]]
+name = 'boundary rest at the end-of-audio floor'
+file = 'Sources/DramaEngine/Verification/LocalWordVerifier.swift'
+old = 'let remaining = uncertain.filter { $0 != index }.map { spans[$0].text }'
+new = 'let remaining = spans.indices.filter { $0 != index && spans[$0].confidence < Self.endOfAudioFloor }.map { spans[$0].text }'
+
+[[mutation]]
+name = 'boundary word qualifies below 0.5'
+file = 'Sources/DramaEngine/Verification/LocalWordVerifier.swift'
+old = 'span.confidence > 0, uncertain.contains(index) else { continue }'
+new = 'span.confidence > 0, span.confidence < Self.endOfAudioFloor else { continue }'
+
+[[mutation]]
+name = '1600s keeps the 00s decade'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'return inScript && !digits.hasSuffix("00") ? [full, short] : [full]'
+new = 'return inScript ? [full, short] : [full]'
+
+[[mutation]]
+name = 'no spoken hundreds'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'decades.merging(["hundreds": "hundred"]) { $1 }'
+new = 'decades'
+
+[[mutation]]
+name = 'range alternatives ignored'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'if let words = alternatives(left) { return words.contains(Substring(right)) }'
+new = ''
+
+[[mutation]]
+name = 'through always reads to'
+file = 'Sources/DramaEngine/Verification/EnglishSpokenForms.json'
+old = '"alright": "all right",'
+new = '''
+"alright": "all right",
+    "through": "to",'''
+
+[[mutation]]
+name = 'apple cents leak into exact'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'profile == .apple && currency == "dollar" && digits.count <= 2'
+new = 'currency == "dollar" && digits.count <= 2'
+
+[[mutation]]
+name = 'apple cents for any amount'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'profile == .apple && currency == "dollar" && digits.count <= 2'
+new = 'profile == .apple && currency == "dollar"'
+
+[[mutation]]
+name = 'possessive apostrophe kept'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = '''
+text = possessive.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: "")
+'''
+new = ''
+
+[[mutation]]
+name = 'possessive before contractions'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = '''
+            text = replacing(contractionPattern, in: text) { englishForms.contractions[$0] }
+            text = possessive.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: "")
+'''
+new = '''
+            text = possessive.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: "")
+            text = replacing(contractionPattern, in: text) { englishForms.contractions[$0] }
+'''
+
+[[mutation]]
+name = 'unit mismatch'
+file = 'Sources/DramaEngine/Verification/EnglishSpokenForms.json'
+old = '"miles": "mile"'
+new = '"miles": "kilometer"'
+
+[[mutation]]
+name = 'units ignored'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'let spoken = afterNumber ? forms.units[spelled] ?? spelled : spelled'
+new = 'let spoken = spelled'
+
+[[mutation]]
+name = 'unit named without a number'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'let spoken = afterNumber ? forms.units[spelled] ?? spelled : spelled'
+new = 'let spoken = forms.units[spelled] ?? spelled'
+
+[[mutation]]
+name = 'glued unit stays glued'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = 'text = unitAfterDigits.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: " ")'
+new = ''
+
+[[mutation]]
+name = 'unit symbols ignored'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = 'text = replacing(unitSymbol, in: text) { englishForms.unit_symbols[$0].map { " \($0) " } }'
+new = ''
+
+[[mutation]]
+name = 'annotations removed without a cue'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = 'guard !labels.isEmpty, hasCue(line) else { return transcript }'
+new = 'guard !labels.isEmpty else { return transcript }'
+
+[[mutation]]
+name = 'annotations never removed'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = 'guard !labels.isEmpty, hasCue(line) else { return transcript }'
+new = 'return transcript'
+
+[[mutation]]
+name = 'a label holding a script word is removed'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = 'guard let range = Range(label.range, in: text), script.isDisjoint(with: tokens(String(text[range]), locale: locale, profile: .script)) else { continue }'
+new = 'guard let range = Range(label.range, in: text) else { continue }'
+
+[[mutation]]
+name = 'a filler replaces an expected word'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = '''
+} else if reactions && nonverbal(word) {
+                ordinal += 1'''
+new = '''
+} else if reactions && nonverbal(word) {
+                ordinal += 1; if next < expected.count { ordinals.append(ordinal - 1); next += 1 }'''
+
+[[mutation]]
+name = 'fillers on uncued lines'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = '''
+let heard = recognizedTokens(transcript, line: line, locale: locale, profile: profile)
+        let reactions = hasCue(line)'''
+new = '''
+let heard = recognizedTokens(transcript, line: line, locale: locale, profile: profile)
+        let reactions = true'''
+
+[[mutation]]
+name = 'written decade in a transcript keeps nineties'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'decadeReadings(digits, inScript: profile == .script)'
+new = 'decadeReadings(digits, inScript: true)'
+
+[[mutation]]
+name = 'spoken century keeps nineties'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'decadeReadings($0, inScript: false)'
+new = 'decadeReadings($0, inScript: true)'
+
+[[mutation]]
+name = 'script decade loses nineties'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'decadeReadings(digits, inScript: profile == .script)'
+new = 'decadeReadings(digits, inScript: false)'
+
+[[mutation]]
+name = 'range word always required'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'if index > tokens.startIndex, alternatives(tokens[index]) != nil { return length(rest, from: index + 1) }'
+new = ''
+
+[[mutation]]
+name = 'range word optional for groups'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = '''
+guard index < tokens.endIndex, isNumber(tokens[index]) else { return nil }
+            for part in readings(of: tokens[index]).map(groups)'''
+new = '''
+guard index < tokens.endIndex else { return nil }
+            if alternatives(tokens[index]) != nil { return length(rest, from: index + 1) }
+            guard isNumber(tokens[index]) else { return nil }
+            for part in readings(of: tokens[index]).map(groups)'''
+
+[[mutation]]
+name = 'range word optional everywhere'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = 'index < tokens.count && EnglishNumbers.isImpliedCurrency(tokens[index]) && !(other.map(EnglishNumbers.isCurrency) ?? false)'
+new = 'index < tokens.count && (EnglishNumbers.isImpliedCurrency(tokens[index]) && !(other.map(EnglishNumbers.isCurrency) ?? false) || tokens[index].hasPrefix("~"))'
+
+[[mutation]]
+name = 'no group runs'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'digitRun(run, spelledBy: tokens) ?? groupRun(run, spelledBy: tokens)'
+new = 'digitRun(run, spelledBy: tokens)'
+
+[[mutation]]
+name = 'unsplit run is opaque'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'guard let found else { parts.append(.word(rest.removeFirst())); continue }'
+new = 'guard let found, found.count == run.count else { return [.word(run.joined(separator: " "))] }'
+
+[[mutation]]
+name = 'group may be part of a number'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'where !part.isEmpty && rest.starts(with: part)'
+new = 'where !part.isEmpty && rest.first.map { $0.hasPrefix(part[0]) } == true'
+
+[[mutation]]
+name = 'no written groups'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'for first in groups { for second in rights { readings.insert(Kind.groups.reading(first + "." + second)) } }'
+new = ''
+
+[[mutation]]
+name = 'split part joins its neighbour'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'parts += numbers((index..<end).compactMap(word)).enumerated().map { ($1, $0 == 0 ? gap : .other) }'
+new = 'parts += numbers((index..<end).compactMap(word)).enumerated().map { ($1, $0 == 0 ? gap : .space) }'
+equivalent = true
+
+[[mutation]]
+name = 'bare hundred stays a word'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = '''
+            case "hundred", "thousand": return true
+'''
+new = ''
+
+[[mutation]]
+name = 'bare hundred inside a split'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'if run == ["hundred"] || run == ["thousand"] { return [.number([Kind.cardinal.reading(String(scales[run[0]]!))], currency: nil)] }'
+new = ''
+
+[[mutation]]
+name = 'hundreds starts a run'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'if units[word] != nil || tens[word] != nil || decades[word] != nil { return true }'
+new = 'if units[word] != nil || tens[word] != nil || decadeWords[word] != nil { return true }'
+equivalent = true
+
+[[mutation]]
+name = 'no millilitre spelling'
+file = 'Sources/DramaEngine/Verification/EnglishSpokenForms.json'
+old = '''
+    "millilitres": "milliliters",
+'''
+new = ''
+
+[[mutation]]
+name = 'no kilometre spelling'
+file = 'Sources/DramaEngine/Verification/EnglishSpokenForms.json'
+old = '''
+    "kilometres": "kilometers",
+'''
+new = ''
+
+[[mutation]]
+name = 'unit without British spelling'
+file = 'Sources/DramaEngine/Verification/EnglishSpokenForms.json'
+old = '''
+    "cl": "centiliter",
+'''
+new = '''
+    "cl": "centiliter",
+    "decameter": "decameter",
+'''
+
+[[mutation]]
+name = 'units named before spellings'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'let spoken = afterNumber ? forms.units[spelled] ?? spelled : spelled'
+new = 'let spoken = afterNumber ? forms.units[word] ?? spelled : spelled'
+
+[[mutation]]
+name = 'speaker tag is a cue'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = '#"\[[^\[\]]*\]|</?[A-Za-z][^<>]*>|"#'
+new = '#"\[[^\[\]]*\]|<[^<>]*>|"#'
+
+[[mutation]]
+name = 'only fixed cues enable fillers'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = 'cue.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil'
+new = 'line.range(of: #"\[(?:laugh[^\]]*|sigh[^\]]*|gasp[^\]]*|cough[^\]]*|clears throat)\]"#, options: [.regularExpression, .caseInsensitive]) != nil'
+
+[[mutation]]
+name = 'oh is no filler'
+file = 'Sources/DramaEngine/Verification/EnglishSpokenForms.json'
+old = '''
+    "oh",
+'''
+new = ''
+
+[[mutation]]
+name = 'any parenthesis is a direction'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = '"\\(\\s*(?:" + alternation(englishForms.direction_words) + #")'
+new = '''"\\(\\s*(?:" + #"[\p{L}']+"# + #")'''
+
+[[mutation]]
+name = 'a long parenthesis is a direction'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = '''(?:[\s-]+[\p{L}']+){0,3}'''
+new = '''(?:[\s-]+[\p{L}']+){0,9}'''
+
+[[mutation]]
+name = 'directions stay in the expected words'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = '''
+return tokens(directionPattern.stringByReplacingMatches(in: spoken, range: NSRange(location: 0, length: ns.length), withTemplate: " "),
+                      locale: locale, profile: .script)'''
+new = 'return tokens(spoken, locale: locale, profile: .script)'
