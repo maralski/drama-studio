@@ -43,7 +43,7 @@ func samplingParams(_ args: Args) -> SamplingParams {
     var p = SamplingParams(temperature: args.double("temperature", d.temperature), topK: args.int("top-k", d.topK), topP: args.double("top-p", d.topP))
     if reference {
         let epsilon = args.double("epsilon-cutoff", SamplingRule.referenceEpsilon)
-        guard (0..<1).contains(epsilon) else { fail("--epsilon-cutoff must be in [0, 1)") }
+        guard SamplingRule.epsilonRange.contains(epsilon) else { fail("--epsilon-cutoff must be in [0, 1)") }
         p.rule = .reference(epsilon: epsilon)
     }
     return p

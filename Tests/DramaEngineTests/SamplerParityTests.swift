@@ -18,7 +18,8 @@ final class SamplerParityTests: XCTestCase {
     static let reference = SamplingParams(temperature: 1.0, topK: 0, topP: 1.0, rule: .reference(epsilon: SamplingRule.referenceEpsilon))
     static let referenceTruncated = [SamplingParams(temperature: 0.7, topK: 30, topP: 0.7, rule: .reference(epsilon: SamplingRule.referenceEpsilon)),
                                       SamplingParams(temperature: 1.0, topK: 0, topP: 0.95, rule: .reference(epsilon: 0))]
-    static let referenceSettings = [reference] + referenceTruncated
+    static let referenceUncut = SamplingParams(temperature: 1.0, topK: 0, topP: 1.0, rule: .reference(epsilon: 0))
+    static let referenceSettings = [reference, referenceUncut] + referenceTruncated
     static let codebookSize = ModelConstants.codebookSize
     static let candidates = ModelConstants.codebookSize + 1
 

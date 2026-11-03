@@ -574,6 +574,15 @@ final class WordCoverageTests: XCTestCase {
         XCTAssertEqual(GenerationConfig.make(expressiveness: 0.5).wordVerification, .required)
     }
 
+    func testConfigurationRejectsEpsilonOutsideItsRange() throws {
+        for epsilon in ["-0.1", "1", "1.5"] {
+            let json = Data(#"{"samplingRule":{"reference":{"epsilon":\#(epsilon)}}}"#.utf8)
+            XCTAssertThrowsError(try JSONDecoder().decode(GenerationConfig.self, from: json), epsilon)
+        }
+        let ok = Data(#"{"samplingRule":{"reference":{"epsilon":0}}}"#.utf8)
+        XCTAssertEqual(try JSONDecoder().decode(GenerationConfig.self, from: ok).samplingRule, .reference(epsilon: 0))
+    }
+
     func testNumericSignsDecimalsAndPercentCannotDisappear() {
         for (written, spoken) in [("-12", "minus twelve"), ("−12.5", "minus twelve point five"),
                                   ("+12.5", "plus twelve point five"), ("12.5%", "twelve point five percent"),

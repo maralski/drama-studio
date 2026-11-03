@@ -139,6 +139,9 @@ public struct GenerationConfig: Sendable, Codable, Equatable {
         topK = try values.decodeIfPresent(Int.self, forKey: .topK) ?? topK
         topP = try values.decodeIfPresent(Double.self, forKey: .topP) ?? topP
         samplingRule = try values.decodeIfPresent(SamplingRule.self, forKey: .samplingRule) ?? samplingRule
+        if case .reference(let epsilon) = samplingRule, !SamplingRule.epsilonRange.contains(epsilon) {
+            throw DecodingError.dataCorruptedError(forKey: .samplingRule, in: values, debugDescription: "epsilon must be in [0, 1)")
+        }
         frameCap = try values.decodeIfPresent(FrameCap.self, forKey: .frameCap) ?? frameCap
         seed = try values.decodeIfPresent(UInt64.self, forKey: .seed)
         chunkBytes = try values.decodeIfPresent(Int.self, forKey: .chunkBytes) ?? chunkBytes
@@ -212,10 +215,13 @@ public enum SamplingRule: Sendable, Codable, Equatable {
     /// main token, eos included, that repeats one of the last 16 is replaced
     /// by the most probable candidate; residual codes come only from the
     /// codec's 1024 entries. Meant for temperature 1, top-p 1 and top-k 0.
+    /// Unlike upstream, a draw keeps at most 1024 candidates, which binds only
+    /// when epsilon is below 1/1024 or top-k is above 1024.
     case reference(epsilon: Double)
 
     /// The reference rule's epsilon when none is given.
     public static let referenceEpsilon = 1e-3
+    public static let epsilonRange = 0.0..<1.0
 }
 
 /// When decoded audio leaves the engine.
