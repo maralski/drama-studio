@@ -98,7 +98,8 @@ final class WordCoverageTests: XCTestCase {
         ], true)
         assertHeard([("Back in the 1990s.", "Back in the 90s."), ("Back in the 1990s.", "Back in the nineties.")], true)
         assertHeard([("Back in the 90s.", "Back in the 1990s."), ("Back in the nineties.", "Back in the 1990s."),
-                     ("Back in the nineteen nineties.", "Back in the 90s.")], false)
+                     ("Back in the nineteen nineties.", "Back in the 90s."),
+                     ("The castle dates from the 1600s.", "The castle dates from the 00s.")], false)
         assertMatch([
             ("Back in the 1990s.", "Back in the eighteen nineties."),
             ("Back in the 1990s.", "Back in the 1890s."),
@@ -148,6 +149,7 @@ final class WordCoverageTests: XCTestCase {
             ("They had a 2-1 win.", "They had a two two win."),
             ("They had a 2-1 win.", "They had a two and one win."),
             ("Pages 10-20 are missing.", "Pages ten twenty are missing."),
+            ("Pages 10-20 are missing.", "Pages 10, 20 are missing."),
             ("The final score was 21-17.", "The final score was twenty one seventeen."),
             ("The answer is 5 - 3.", "The answer is five three."),
         ], false)
@@ -171,6 +173,7 @@ final class WordCoverageTests: XCTestCase {
             ("The shop is open 24/7.", "The shop is open two forty seven."),
             ("Nothing was the same since 9/11.", "Nothing was the same since ninety one one."),
             ("Board the 747 now.", "Board the seventy four seven now."),
+            ("Nothing was the same since nine eleven.", "Nothing was the same since 9, 1."),
         ], false)
     }
 
