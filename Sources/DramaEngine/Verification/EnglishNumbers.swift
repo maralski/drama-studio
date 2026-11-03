@@ -55,6 +55,8 @@ enum EnglishNumbers {
     private static let decades: [String: String] = Dictionary(uniqueKeysWithValues: tens.keys.map {
         (String($0.dropLast()) + "ies", $0)
     })
+    /// A decade word ends a run: "nineteen nineties", "sixteen hundreds".
+    private static let decadeWords = decades.merging(["hundreds": "hundred"]) { $1 }
     private static let largeScales = ["thousand": 1_000, "million": 1_000_000, "billion": 1_000_000_000,
                                       "trillion": 1_000_000_000_000]
     private static let scales = largeScales.merging(["hundred": 100]) { $1 }
@@ -146,10 +148,13 @@ enum EnglishNumbers {
         return .written(readings, currency: currency)
     }
 
+    /// "1990s" may be read "nineties", but "1600s" never "hundreds" alone, so
+    /// a century keeps only its full reading.
     private static func decadeReadings(_ digits: String) -> Set<Reading>? {
         guard [2, 4].contains(digits.count), digits.hasSuffix("0") else { return nil }
         let short = Kind.decade.reading(digits.suffix(2) + "s")
-        return digits.count == 4 ? [Kind.decade.reading(digits + "s"), short] : [short]
+        guard digits.count == 4 else { return [short] }
+        return digits.hasSuffix("00") ? [Kind.decade.reading(digits + "s")] : [Kind.decade.reading(digits + "s"), short]
     }
 
     /// Groups number words and written numbers into number tokens, turns a
@@ -179,13 +184,13 @@ enum EnglishNumbers {
         func runEnd(from start: Int) -> Int {
             guard startsRun(start) else { return start }
             var end = start + 1, hasPoint = word(start) == "point"
-            while let next = joinedWord(end), let previous = word(end - 1), decades[previous] == nil {
+            while let next = joinedWord(end), let previous = word(end - 1), decadeWords[previous] == nil {
                 let continues: Bool
                 switch next {
                 case "double", "triple": continues = isDigit(joinedWord(end + 1))
                 case "point": continues = !hasPoint && isDigit(joinedWord(end + 1)); hasPoint = true
                 case "and": continues = scales[previous] != nil && joinedWord(end + 1).map { units[$0] != nil || tens[$0] != nil } == true
-                default: continues = units[next] != nil || tens[next] != nil || decades[next] != nil || scales[next] != nil || next == "oh"
+                default: continues = units[next] != nil || tens[next] != nil || decadeWords[next] != nil || scales[next] != nil || next == "oh"
                 }
                 guard continues else { break }
                 end += 1
@@ -336,7 +341,7 @@ enum EnglishNumbers {
     private static func readings(_ run: [String]) -> Set<Reading> {
         guard let last = run.last else { return [] }
         if run == ["a"] { return [Kind.cardinal.reading("1")] }
-        if let tensWord = decades[last] {
+        if let tensWord = decadeWords[last] {
             let spoken = readings(Array(run.dropLast()) + [tensWord])
             let years = values(spoken, .cardinal) + values(spoken, .paired).map { $0.replacingOccurrences(of: ".", with: "") }
             return Set(years.compactMap(decadeReadings).joined())

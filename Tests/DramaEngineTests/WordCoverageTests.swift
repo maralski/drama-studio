@@ -92,6 +92,20 @@ final class WordCoverageTests: XCTestCase {
         ], true)
     }
 
+    func testACenturyMatchesOnlyItsOwnHundreds() {
+        assertMatch([
+            ("The castle dates from the 1600s.", "The castle dates from the sixteen hundreds."),
+            ("It was built in the 1900s.", "It was built in the nineteen hundreds."),
+            ("Back in the 1990s.", "Back in the 90s."),
+        ], true)
+        assertMatch([
+            ("The castle dates from the 1600s.", "The castle dates from the 1700s."),
+            ("The castle dates from the 1600s.", "The castle dates from the seventeen hundreds."),
+            ("The castle dates from the 2000s.", "The castle dates from the 1900s."),
+            ("The castle dates from the 1600s.", "The castle dates from the sixteen hundred."),
+        ], false)
+    }
+
     func testAHyphenJoinsOnlyIdentifiersAndOtherwiseReadsTo() {
         assertMatch([
             ("Pages 10-20 are missing.", "Pages ten to twenty are missing."),
