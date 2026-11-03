@@ -40,6 +40,7 @@ package enum WordCoverage {
         (try! NSRegularExpression(pattern: #"(?<![\p{L}\p{N}.])"# + NSRegularExpression.escapedPattern(for: symbol) + #"(?=\d|\.\d)"#),
          " \(spoken) ")
     }
+    private static let digitsAfterLetters = try! NSRegularExpression(pattern: #"(?<=\p{L})(?=[0-9])"#)
     private static let digits = try! NSRegularExpression(pattern: #"(?<![\p{L}\p{N}.])[−-]?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)(?![\p{L}\p{N}]|\.[0-9])"#)
     private static let writtenNumber = try! NSRegularExpression(
         pattern: #"(?<![\p{L}\p{N}_.,:])(?:([0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:([.:])([0-9]+))?|\.([0-9]+))('?s)?(?![\p{L}\p{N}_]|[.,:][0-9])"#)
@@ -87,6 +88,7 @@ package enum WordCoverage {
                 text = symbol.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text),
                                                        withTemplate: NSRegularExpression.escapedTemplate(for: spoken))
             }
+            text = digitsAfterLetters.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: " ")
         }
         if english {
             return EnglishNumbers.tokens(englishPieces(text.replacingOccurrences(of: "%", with: " percent ")

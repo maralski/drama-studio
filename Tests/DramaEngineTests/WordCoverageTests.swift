@@ -143,6 +143,13 @@ final class WordCoverageTests: XCTestCase {
         assertMatch([("The website is down.", "The web is down.")], false)
     }
 
+    func testANumberGluedToAWordIsTheSameWordAndNumber() {
+        assertMatch([("Running the Drama 3 model.", "Running the Drama3 model."),
+                     ("Running the Drama three model.", "Running the Drama3 model.")], true)
+        assertMatch([("Running the Drama 3 model.", "Running the Drama2 model."),
+                     ("Running the Drama 3 model.", "Running the Drama model.")], false)
+    }
+
     func testMissingOpeningSentenceIsRejectedEvenWithALongReaction() {
         XCTAssertFalse(WordCoverage.matches(line: "[clears throat] The garden gate is closed. The meeting begins on Monday.",
                                             transcript: "The meeting begins on Monday.", locale: english))
