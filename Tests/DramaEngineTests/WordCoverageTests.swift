@@ -87,6 +87,25 @@ final class WordCoverageTests: XCTestCase {
         assertMatch([("Meet at 3:30.", "Meet at 330."), ("Meet at 330.", "Meet at three hundred and thirty.")], true)
     }
 
+    func testCurrenciesMustAgreeButASymbolMayGoUnspoken() {
+        assertMatch([
+            ("It costs 50 cents.", "It costs 50 dollars."),
+            ("It costs £5.", "It costs five dollars."),
+            ("It costs €5.", "It costs five dollars."),
+            ("It costs £5.", "It costs $5."),
+            ("I paid 5 dollars.", "I paid 5."),
+        ], false)
+        assertMatch([
+            ("They raised $2.5 million.", "They raised 2.5 million dollars."),
+            ("It costs $4.99.", "It costs four ninety nine dollars."),
+            ("It costs $4.99 a month.", "It costs four ninety-nine a month."),
+            ("I paid 5 dollars.", "I paid $5."),
+            ("I paid one dollar.", "I paid $1."),
+            ("It costs 50¢.", "It costs fifty cents."),
+            ("It costs £5.", "It costs five pounds."),
+        ], true)
+    }
+
     func testWrongNumbersAndWordsStillFail() {
         assertMatch([
             ("Deliveries grew by 18% this quarter.", "Deliveries grew by 80% this quarter."),

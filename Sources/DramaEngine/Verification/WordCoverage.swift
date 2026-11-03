@@ -128,7 +128,11 @@ package enum WordCoverage {
                                                         fraction: group(3) ?? group(4), decade: group(5) != nil) else { continue }
             numbers.append((range, readings))
         }
-        var found: [(range: Range<String.Index>, piece: EnglishNumbers.Piece)] = numbers.map { ($0.range, .written($0.readings)) }
+        var found: [(range: Range<String.Index>, piece: EnglishNumbers.Piece)] = numbers.map { number in
+            let currency = text[..<number.range.lowerBound].last.flatMap { EnglishNumbers.currencySymbols[$0] }
+                ?? text[number.range.upperBound...].first.flatMap { EnglishNumbers.currencySymbols[$0] }
+            return (number.range, .written(number.readings, currency: currency))
+        }
         let tokenizer = NLTokenizer(unit: .word)
         tokenizer.setLanguage(.english)
         tokenizer.string = text
@@ -208,9 +212,14 @@ package enum WordCoverage {
 
     /// Returns, for each expected token, the ordinal of the heard token that
     /// matched it. Spacing may differ inside a compound: "web site" == "website".
+    /// A currency only a symbol implies may be absent from the other side, but
+    /// never replaced by a different currency.
     private static func match(expected: [String], heard: [String], reactions: Bool) -> [Int]? {
         func joinable(_ tokens: [String], _ index: Int) -> Bool {
             index + 1 < tokens.count && !isNumber(tokens[index]) && !isNumber(tokens[index + 1])
+        }
+        func optional(_ tokens: [String], _ index: Int, against other: String?) -> Bool {
+            index < tokens.count && EnglishNumbers.isImpliedCurrency(tokens[index]) && !(other.map(EnglishNumbers.isCurrency) ?? false)
         }
         var next = 0, ordinal = 0
         var ordinals: [Int] = []
@@ -222,11 +231,18 @@ package enum WordCoverage {
                 ordinals += [ordinal, ordinal]; next += 2; ordinal += 1
             } else if next < expected.count, joinable(heard, ordinal), word + heard[ordinal + 1] == expected[next] {
                 ordinals.append(ordinal); next += 1; ordinal += 2
+            } else if optional(expected, next, against: word) {
+                ordinals.append(ordinal); next += 1
+            } else if optional(heard, ordinal, against: next < expected.count ? expected[next] : nil) {
+                ordinal += 1
             } else if reactions && nonverbal(word) {
                 ordinal += 1
             } else {
                 return nil
             }
+        }
+        while optional(expected, next, against: nil) {
+            ordinals.append(ordinal); next += 1
         }
         return !expected.isEmpty && next == expected.count ? ordinals : nil
     }

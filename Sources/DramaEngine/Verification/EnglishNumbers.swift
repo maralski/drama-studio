@@ -7,7 +7,8 @@ import Foundation
 /// one per spoken unit and two numbers match when their readings intersect.
 /// Each reading starts with its `Kind`, so a digit-by-digit "three two one"
 /// and a cardinal "three hundred twenty one" never match each other, while a
-/// written "321" carries both.
+/// written "321" carries both. A currency becomes its own token after the
+/// number: `¤dollar` when spoken, `¤?dollar` when only a symbol implies it.
 enum EnglishNumbers {
     enum Kind: Character {
         /// Digit by digit, leading zeros kept: "double oh seven" is 007.
@@ -27,7 +28,7 @@ enum EnglishNumbers {
 
     enum Piece {
         case word(String)
-        case written(Set<String>)
+        case written(Set<String>, currency: String?)
     }
 
     /// What separates a piece from the one before it.
@@ -44,16 +45,30 @@ enum EnglishNumbers {
     private static let largeScales = ["thousand": 1_000, "million": 1_000_000, "billion": 1_000_000_000,
                                       "trillion": 1_000_000_000_000]
     private static let scales = largeScales.merging(["hundred": 100]) { $1 }
-    private static let currencies: Set<String> = ["dollar", "dollars", "cent", "cents", "pound", "pounds", "euro", "euros"]
+    private static let currencyWords = ["dollar": "dollar", "dollars": "dollar", "cent": "cent", "cents": "cent",
+                                        "pound": "pound", "pounds": "pound", "euro": "euro", "euros": "euro"]
+    static let currencySymbols: [Character: String] = ["$": "dollar", "£": "pound", "€": "euro", "¢": "cent"]
 
     static func token(_ readings: Set<String>) -> String { "#" + readings.sorted().joined(separator: "|") }
 
     static func isNumber(_ token: String) -> Bool { token.hasPrefix("#") }
 
+    private static func currency(_ token: String) -> Substring? {
+        token.hasPrefix("¤") ? token.dropFirst().drop { $0 == "?" } : nil
+    }
+
+    static func isCurrency(_ token: String) -> Bool { token.hasPrefix("¤") }
+
+    /// A currency symbol that the speaker may or may not have read aloud.
+    static func isImpliedCurrency(_ token: String) -> Bool { token.hasPrefix("¤?") }
+
     static func same(_ left: String, _ right: String) -> Bool {
         guard left != right else { return true }
-        guard isNumber(left), isNumber(right) else { return false }
-        return !Set(left.dropFirst().split(separator: "|")).isDisjoint(with: right.dropFirst().split(separator: "|"))
+        if isNumber(left), isNumber(right) {
+            return !Set(left.dropFirst().split(separator: "|")).isDisjoint(with: right.dropFirst().split(separator: "|"))
+        }
+        guard let first = currency(left), let second = currency(right) else { return false }
+        return first == second
     }
 
     /// Readings of a written group. `integer` may hold thousands commas;
@@ -90,10 +105,11 @@ enum EnglishNumbers {
         return digits.count == 4 ? [Kind.decade.reading(digits + "s"), short] : [short]
     }
 
-    /// Groups number words and written numbers into number tokens, drops
-    /// currency words beside a number, and applies `spellings` to the rest.
+    /// Groups number words and written numbers into number tokens, turns a
+    /// currency symbol or a currency word after a number into a currency token,
+    /// and applies `spellings` to the other words.
     static func tokens(_ pieces: [(piece: Piece, gap: Gap)], spellings: [String: String]) -> [String] {
-        enum Part { case word(String), number(Set<String>) }
+        enum Part { case word(String), number(Set<String>, currency: String?) }
         func word(_ index: Int) -> String? {
             guard index < pieces.count, case .word(let word) = pieces[index].piece else { return nil }
             return word
@@ -131,15 +147,15 @@ enum EnglishNumbers {
         var index = 0
         while index < pieces.count {
             let gap = pieces[index].gap
-            if case .written(let readings) = pieces[index].piece {
+            if case .written(let readings, let currency) = pieces[index].piece {
                 let scaled = joinedWord(index + 1).flatMap { scales[$0] }.map { multiplied(readings, by: $0) } ?? []
-                parts.append((.number(scaled.isEmpty ? readings : scaled), gap))
+                parts.append((.number(scaled.isEmpty ? readings : scaled, currency: currency), gap))
                 index += scaled.isEmpty ? 1 : 2
                 continue
             }
             let end = runEnd(from: index)
             if end > index {
-                parts.append((.number(spokenReadings((index..<end).compactMap(word))), gap)); index = end
+                parts.append((.number(spokenReadings((index..<end).compactMap(word)), currency: nil), gap)); index = end
             } else {
                 parts.append((.word(word(index)!), gap)); index += 1
             }
@@ -147,9 +163,9 @@ enum EnglishNumbers {
 
         var merged: [Part] = []
         for (part, gap) in parts {
-            if case .number(let right) = part, case .number(let left)? = merged.last,
+            if case .number(let right, nil) = part, case .number(let left, nil)? = merged.last,
                let both = joined(left, right, across: gap) {
-                merged[merged.count - 1] = .number(both)
+                merged[merged.count - 1] = .number(both, currency: nil)
             } else {
                 merged.append(part)
             }
@@ -158,15 +174,14 @@ enum EnglishNumbers {
         var result: [String] = []
         for (offset, part) in merged.enumerated() {
             switch part {
-            case .number(let readings):
+            case .number(let readings, let currency):
                 result.append(token(readings))
+                if let currency { result.append("¤?" + currency) }
             case .word(let word):
-                func isNumber(_ at: Int) -> Bool {
-                    guard merged.indices.contains(at), case .number = merged[at] else { return false }
-                    return true
-                }
-                if currencies.contains(word), isNumber(offset - 1) || isNumber(offset + 1) { continue }
-                if let spelling = spellings[word] {
+                if let currency = currencyWords[word], offset > 0, case .number = merged[offset - 1] {
+                    if result.last.map(isImpliedCurrency) == true { result.removeLast() }
+                    result.append("¤" + currency)
+                } else if let spelling = spellings[word] {
                     result += spelling.split(separator: " ").map(String.init)
                 } else {
                     result.append(word)
