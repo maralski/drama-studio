@@ -628,17 +628,18 @@ for try await event in engine.synthesize(request) {
 ```
 
 - `DramaSetup.check` reads files only and names what is missing: a weight
-  shard, the tokenizer, `codec.pth`, the Core ML codec models, or a tuned
-  kernel schedule for this Mac, each with a fix. `DramaSetup.prepare` builds
+  shard, the tokenizer, `codec.pth`, the Core ML codec models, the word
+  checker, or a tuned kernel schedule for this Mac, each with a fix. `DramaSetup.prepare` builds
   the codec models with the `convert_codec.py` that ships in the engine's
   resource bundle, through a Python you name (it throws the exact commands
   when you name none and never downloads Python), and loads the model once to
   tune the kernels.
 - Normal generation checks each sentence's words with the
   `drama-word-recognizer` helper and a Whisper model, which must sit next to
-  the executable or the engine bundle (`tools/make_app.sh` stages them).
-  `DramaSetup.check` does not report them; without them a checked request
-  throws `SpeechVerificationError.unavailable`. Set
+  the executable or the engine bundle (`tools/make_app.sh` stages them;
+  `tools/stage_word_recognition.py --bin` stages them for your own
+  executable). Without them a checked request throws
+  `SpeechVerificationError.unavailable`. Set
   `config.wordVerification = .uncheckedPreview` to skip the check.
 - `Examples/SpeakCLI` is a separate package that depends on this one by path,
   clones a voice from a clip, streams progress, and writes a WAV in 69 lines.
