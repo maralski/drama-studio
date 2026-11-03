@@ -96,6 +96,14 @@ final class ChunkAcceptanceTests: XCTestCase {
         XCTAssertEqual(FrameGenerator.sampling(config: preview, text: "[coughs] Keep the gate closed.", attempt: 1), preview)
     }
 
+    func testCueRetriesKeepTheSamplingRule() {
+        var reference = GenerationConfig()
+        reference.samplingRule = .reference(epsilon: 1e-3)
+        let broadened = FrameGenerator.sampling(config: reference, text: "[coughs] Keep the gate closed.", attempt: 1)
+        XCTAssertEqual(broadened.topK, 4097)
+        XCTAssertEqual(broadened.samplingParams.rule, .reference(epsilon: 1e-3))
+    }
+
     func testTimingsCountRejectedWorkAsWellAsTheAcceptedAudio() throws {
         var timings = SpeechTimings()
         let accepted = try ChunkAttempts.run(index: 0, maxRetries: 2, expectedSeconds: 2, config: GenerationConfig(),

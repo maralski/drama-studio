@@ -30,6 +30,12 @@ final class SilenceStopTests: XCTestCase {
         }
     }
 
+    func testCodablePreservesTheSamplingRule() throws {
+        var config = GenerationConfig()
+        config.samplingRule = .reference(epsilon: 0.002)
+        XCTAssertEqual(try JSONDecoder().decode(GenerationConfig.self, from: JSONEncoder().encode(config)).samplingRule, .reference(epsilon: 0.002))
+    }
+
     func testTwoSecondsIsFortyFourFrames() {
         XCTAssertEqual(FrameGenerator.silenceFrames(for: 2.0), 44, "43 frames are 1.997 s")
         XCTAssertEqual(FrameGenerator.silenceFrames(for: 0), 0)

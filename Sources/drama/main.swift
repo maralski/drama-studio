@@ -36,6 +36,22 @@ func awaitBlocking<T: Sendable>(_ body: @escaping @Sendable () async throws -> T
 
 func fail(_ m: String) -> Never { FileHandle.standardError.write((m + "\n").data(using: .utf8)!); exit(1) }
 
+/// --temperature, --top-k and --top-p over the vendor's defaults, or with
+/// --reference-sampling [--epsilon-cutoff 1e-3] over temperature 1, top-p 1
+/// and top-k 0 (no cap).
+func samplingParams(_ args: Args) -> SamplingParams {
+    let reference = args.flags.contains("reference-sampling")
+    if !reference, args["epsilon-cutoff"] != nil { fail("--epsilon-cutoff needs --reference-sampling") }
+    let d = reference ? SamplingParams(temperature: 1, topK: 0, topP: 1) : .vendorDefaults
+    var p = SamplingParams(temperature: args.double("temperature", d.temperature), topK: args.int("top-k", d.topK), topP: args.double("top-p", d.topP))
+    if reference {
+        let epsilon = args.double("epsilon-cutoff", SamplingRule.referenceEpsilon)
+        guard (0..<1).contains(epsilon) else { fail("--epsilon-cutoff must be in [0, 1)") }
+        p.rule = .reference(epsilon: epsilon)
+    }
+    return p
+}
+
 func loadModel(_ args: Args) throws -> DramaModel {
     guard let loc = args["model"].map({ ModelLocation(directory: URL(fileURLWithPath: $0)) }) ?? ModelLocation.huggingFaceCache() else {
         fail("no model found; pass --model <dir> or run: hf download fishaudio/drama-3")
@@ -89,12 +105,12 @@ func readFrames(_ path: String) throws -> [Frame] {
     return (0..<a.shape[0]).map { r in (0..<11).map { Int32(v[r * 11 + $0]) } }
 }
 
-/// drama dump --rows prompt_rows.npy [--frames frames.npy | --steps N] --out out.npz
+/// drama dump --rows prompt_rows.npy [--frames frames.npy | --steps N] [--reference-sampling [--epsilon-cutoff x]] --out out.npz
 func dump(_ args: Args) throws {
     guard let outPath = args["out"], args["rows"] != nil || args["text"] != nil else { fail("usage: drama dump (--rows prompt_rows.npy | --text <text>) [--frames frames.npy | --steps N] --out out.npz") }
     let forced = try args["frames"].map(readFrames)
     let steps = forced?.count ?? args.int("steps", 8)
-    let temperature = args.double("temperature", 0.7), topK = args.int("top-k", 30), topP = args.double("top-p", 0.7)
+    let sampling = samplingParams(args)
     let seed = UInt64(args.int("seed", 0))
     let model = try loadModel(args)
     let prompt: [Frame]
@@ -116,7 +132,7 @@ func dump(_ args: Args) throws {
             frame = forced[i]
             trace = try session.force(frame)
         } else {
-            let r = try session.step(SamplingParams(temperature: temperature, topK: topK, topP: topP), sampler: &sampler)
+            let r = try session.step(sampling, sampler: &sampler)
             guard let f = r.frame else { hidden.removeLast(); break }
             frame = f
             trace = r.trace
@@ -130,7 +146,7 @@ func dump(_ args: Args) throws {
     let decodeSeconds = Date().timeIntervalSince(t1)
     let H = model.config.hiddenSize
     let F = frames.count
-    let meta = "{\"engine\": \"metal\", \"precision\": \"\(args["precision"] ?? "exact")\", \"seed\": \(seed), \"temperature\": \(temperature), \"top_k\": \(topK), \"top_p\": \(topP), \"prefill_seconds\": \(prefillSeconds), \"decode_seconds\": \(decodeSeconds), \"steps\": \(F)}"
+    let meta = "{\"engine\": \"metal\", \"precision\": \"\(args["precision"] ?? "exact")\", \"seed\": \(seed), \"temperature\": \(sampling.temperature), \"top_k\": \(sampling.topK), \"top_p\": \(sampling.topP), \"rule\": \"\(sampling.rule)\", \"prefill_seconds\": \(prefillSeconds), \"decode_seconds\": \(decodeSeconds), \"steps\": \(F)}"
     var entries: [(String, NPY.Array)] = [
         ("prompt_rows", .int64(prompt.flatMap { $0.map(Int64.init) }, shape: [prompt.count, 11])),
         ("frames", .int64(frames.flatMap { $0.map(Int64.init) }, shape: [F, 11])),
@@ -273,7 +289,7 @@ func decodeCommand(_ args: Args) throws {
     try writeWav(frames: try readFrames(framesPath), to: wavPath)
 }
 
-/// drama generate --text "..." [--ref clip_codes.npy --ref-text "..."] --out frames.npy [--trace-frames timings.csv [--trace-stages]]
+/// drama generate --text "..." [--ref clip_codes.npy --ref-text "..."] [--reference-sampling [--epsilon-cutoff x]] --out frames.npy [--trace-frames timings.csv [--trace-stages]]
 func generate(_ args: Args) throws {
     guard let text = args["text"], let outPath = args["out"] else { fail("usage: drama generate --text <text> [--ref codes.npy --ref-text <transcript>] --out frames.npy") }
     let model = try loadModel(args)
@@ -287,7 +303,8 @@ func generate(_ args: Args) throws {
         refs.append(Drama3Prompt.Reference(transcript: args["ref-text"] ?? "", codes: codes))
     }
     var config = GenerationConfig()
-    config.temperature = args.double("temperature", 0.7); config.topK = args.int("top-k", 30); config.topP = args.double("top-p", 0.7)
+    let sampling = samplingParams(args)
+    config.temperature = sampling.temperature; config.topK = sampling.topK; config.topP = sampling.topP; config.samplingRule = sampling.rule
     // --text-cap keeps the app's text-derived frame cap; otherwise a fixed cap, 600 frames unless --max-frames.
     if args["max-frames"] != nil || !args.flags.contains("text-cap") { config.maxNewFrames = args.int("max-frames", 600) }
     config.chunking = args["chunking"].flatMap(GenerationConfig.Chunking.init(rawValue:)) ?? .reference
@@ -472,7 +489,7 @@ func dbench(_ args: Args) throws {
     try DispatchBench.tax(counts: counts, repeats: args.int("repeats", 7))
 }
 
-/// drama fbench --rows prompt_rows.npy [--warm] [--steps 48] [--repeats 3] [--seed 0] [--parts]
+/// drama fbench --rows prompt_rows.npy [--warm] [--reference-sampling] [--steps 48] [--repeats 3] [--seed 0] [--parts]
 /// GPU time per pipelined decode frame (the spacing of the frames' GPU end
 /// times) with the dispatch count per frame; --parts instead times the parts
 /// of one frame (samplers, tower, backbone) in separate command buffers.
@@ -483,12 +500,13 @@ func fbench(_ args: Args) throws {
     if args.flags.contains("warm") { print(String(format: "warm-up walk: %.2fs", model.benchWarmUp())) }
     let prompt = try readFrames(rowsPath)
     let steps = args.int("steps", 48), repeats = args.int("repeats", 3), seed = UInt64(args.int("seed", 0))
+    let sampling = samplingParams(args)
     if args.flags.contains("parts") {
         let session = try GenerationSession(model: model, prompt: prompt)
         var sampler = Sampler(seed: seed)
-        for _ in 0..<steps { _ = try session.step(.vendorDefaults, sampler: &sampler) }
+        for _ in 0..<steps { _ = try session.step(sampling, sampler: &sampler) }
         _ = session.lastHidden
-        for (part, ms) in try model.profileFrameParts(position: prompt.count + steps, repeats: repeats, params: .vendorDefaults) {
+        for (part, ms) in try model.profileFrameParts(position: prompt.count + steps, repeats: repeats, params: sampling) {
             let t = ms.sorted()
             print(String(format: "part %@: median %.3f ms [%.3f .. %.3f], %d repeats", part, t[t.count / 2], t.first!, t.last!, t.count))
         }
@@ -503,7 +521,7 @@ func fbench(_ args: Args) throws {
         var sampler = Sampler(seed: seed)
         var frames: [Frame] = []
         for _ in 0..<steps {
-            guard let f = try session.step(.vendorDefaults, sampler: &sampler).frame else { break }
+            guard let f = try session.step(sampling, sampler: &sampler).frame else { break }
             frames.append(f)
         }
         model.tally = nil

@@ -568,6 +568,7 @@ final class WordCoverageTests: XCTestCase {
         let old = Data(#"{"temperature":0.7,"maxRetries":0,"minSpokenRatio":0}"#.utf8)
         let config = try JSONDecoder().decode(GenerationConfig.self, from: old)
         XCTAssertEqual(config.wordVerification, .required)
+        XCTAssertEqual(config.samplingRule, .vendor)
         XCTAssertEqual(config.maxRetries, 0)
         XCTAssertEqual(try GenerationPlan(text: "Hello.", references: [], config: config).streaming, .sentence)
         XCTAssertEqual(GenerationConfig.make(expressiveness: 0.5).wordVerification, .required)

@@ -49,6 +49,10 @@ public struct GenerationConfig: Sendable, Codable, Equatable {
     /// Top-p nucleus kept before sampling. Default 0.7, the vendor's value.
     /// 1 keeps every candidate up to top-k.
     public var topP: Double = 0.7
+    /// How the frame's codes are drawn. Default ``SamplingRule/vendor``. The
+    /// reference rule is meant for temperature 1, top-p 1 and top-k 0, which
+    /// it reads as no cap.
+    public var samplingRule: SamplingRule = .vendor
     /// The most frames one chunk may run. Defaults to the text's expected
     /// duration times 1.5, plus 2 s. Slow reference voices extend the expected
     /// duration using their transcript length and audio duration.
@@ -115,14 +119,14 @@ public struct GenerationConfig: Sendable, Codable, Equatable {
     /// The measured defaults.
     public init() {}
 
-    package var samplingParams: SamplingParams { SamplingParams(temperature: temperature, topK: topK, topP: topP) }
+    package var samplingParams: SamplingParams { SamplingParams(temperature: temperature, topK: topK, topP: topP, rule: samplingRule) }
 
     public enum WordVerification: String, Sendable, Codable {
         case required, uncheckedPreview
     }
 
     enum CodingKeys: String, CodingKey {
-        case wordVerification, temperature, topK, topP, frameCap, seed, chunkBytes, chunking
+        case wordVerification, temperature, topK, topP, samplingRule, frameCap, seed, chunkBytes, chunking
         case stopAfterSilenceSeconds, minSpokenRatio, maxRetries, stopOnLoop, retryWithoutEOSBelow
         case capSecondsPerCue, streaming
     }
@@ -134,6 +138,7 @@ public struct GenerationConfig: Sendable, Codable, Equatable {
         temperature = try values.decodeIfPresent(Double.self, forKey: .temperature) ?? temperature
         topK = try values.decodeIfPresent(Int.self, forKey: .topK) ?? topK
         topP = try values.decodeIfPresent(Double.self, forKey: .topP) ?? topP
+        samplingRule = try values.decodeIfPresent(SamplingRule.self, forKey: .samplingRule) ?? samplingRule
         frameCap = try values.decodeIfPresent(FrameCap.self, forKey: .frameCap) ?? frameCap
         seed = try values.decodeIfPresent(UInt64.self, forKey: .seed)
         chunkBytes = try values.decodeIfPresent(Int.self, forKey: .chunkBytes) ?? chunkBytes
