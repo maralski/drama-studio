@@ -222,6 +222,7 @@ enum EnglishNumbers {
                 while joinedWord(digit) == "oh" { digit += 1 }
                 return isDigit(joinedWord(digit)) && (digit > index + 1 || isDigit(joinedWord(digit + 1)))
             case "double", "triple", "point": return isDigit(joinedWord(index + 1))
+            case "hundred", "thousand": return true
             default: return false
             }
         }
@@ -384,8 +385,10 @@ enum EnglishNumbers {
     }
 
     /// A run of number words with no single reading, such as "twenty four
-    /// seven", is several numbers, each the longest start that has one.
+    /// seven", is several numbers, each the longest start that has one. A
+    /// bare "hundred" is 100 only on its own.
     private static func numbers(_ run: [String]) -> [Part] {
+        if run == ["hundred"] || run == ["thousand"] { return [.number([Kind.cardinal.reading(String(scales[run[0]]!))], currency: nil)] }
         var parts: [Part] = []
         var rest = run[...]
         while !rest.isEmpty {

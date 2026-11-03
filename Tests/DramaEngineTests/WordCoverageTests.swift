@@ -174,6 +174,21 @@ final class WordCoverageTests: XCTestCase {
         ], false)
     }
 
+    func testABareHundredOrThousandIsANumberOnlyOnItsOwn() {
+        assertMatch([
+            ("He came third in the hundred metre sprint.", "He came third in the 100 metre sprint."),
+            ("They sailed past the thousand islands.", "They sailed past the 1000 islands."),
+            ("It was built in the nineteen hundreds.", "It was built in the 1900s."),
+            ("There were hundreds of people.", "There were hundreds of people."),
+        ], true)
+        assertMatch([
+            ("He came third in the hundred metre sprint.", "He came third in the 200 metre sprint."),
+            ("There were hundreds of people.", "There were 100s of people."),
+            ("There were hundreds of people.", "There were 100 of people."),
+            ("The code is 25 100.", "The code is two five hundred."),
+        ], false)
+    }
+
     func testUnspacedCommaListsAreSeparateNumbers() {
         assertMatch([("Count 3,2,1 and go.", "Count 3, 2, 1 and go."),
                      ("Count 3,2,1 and go.", "Count three, two, one and go."),
