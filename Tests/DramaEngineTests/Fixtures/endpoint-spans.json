@@ -120,9 +120,9 @@
         }
       ]
     },
-    "expectedPrimary": false,
+    "expectedPrimary": true,
     "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedCandidate": true
   },
   {
     "key": "preset-captain--s1--before-last-word",
@@ -616,9 +616,9 @@
         }
       ]
     },
-    "expectedPrimary": false,
+    "expectedPrimary": true,
     "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedCandidate": true
   },
   {
     "key": "preset-night-owl--s1--complete",

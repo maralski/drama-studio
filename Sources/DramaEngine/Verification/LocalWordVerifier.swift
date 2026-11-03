@@ -198,11 +198,21 @@ package struct LocalWordVerifier: Sendable {
         var text = ""
         var spans: [Span] = []
 
-        func uncertainSpans(confidenceFloor: Double = 0.5) -> [String] {
-            spans.filter { $0.confidence < confidenceFloor }.map(\.text)
+        /// Apple reports correct words at 0.35-0.49 often enough that 0.5 rejected
+        /// half of all correct generated clips; the independent check still applies.
+        static let confidenceFloor = 0.3
+        /// A clipped final word also scores below this, so the last word keeps it
+        /// and goes through end-of-audio confirmation instead.
+        static let endOfAudioFloor = 0.5
+
+        func uncertainSpans(confidenceFloor: Double = Self.confidenceFloor) -> [String] {
+            let last = spans.lastIndex { $0.text.contains { $0.isLetter || $0.isNumber } }
+            return spans.indices.filter {
+                spans[$0].confidence < ($0 == last ? max(confidenceFloor, Self.endOfAudioFloor) : confidenceFloor)
+            }.map { spans[$0].text }
         }
 
-        func matches(line: String, locale: Locale, confidenceFloor: Double = 0.5) -> Bool {
+        func matches(line: String, locale: Locale, confidenceFloor: Double = Self.confidenceFloor) -> Bool {
             WordCoverage.matches(line: line, transcript: text, locale: locale,
                                  uncertainSpans: uncertainSpans(confidenceFloor: confidenceFloor))
         }
@@ -210,9 +220,9 @@ package struct LocalWordVerifier: Sendable {
         func canConfirmEndOfAudio(line: String, locale: Locale) -> Bool {
             guard WordCoverage.matches(line: line, transcript: text, locale: locale) else { return false }
             let lexical = spans.filter { !WordCoverage.tokens($0.text, locale: locale).isEmpty }
-            guard let last = lexical.last, last.confidence < 0.5,
+            guard let last = lexical.last, last.confidence < Self.endOfAudioFloor,
                   WordCoverage.tokens(last.text, locale: locale).count == 1 else { return false }
-            return lexical.dropLast().allSatisfy { $0.confidence >= 0.5 }
+            return lexical.dropLast().allSatisfy { $0.confidence >= Self.endOfAudioFloor }
         }
 
         func boundaryWordSpan(previousLine: String, currentLine: String, locale: Locale) -> Int? {

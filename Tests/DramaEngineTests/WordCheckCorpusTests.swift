@@ -34,7 +34,7 @@ final class WordCheckCorpusTests: XCTestCase {
         let correct = clips.filter(\.speaksLine)
         let correctAccepted = correct.filter(accepted).count
         print("word-check corpus: \(correctAccepted)/\(correct.count) correct clips accepted")
-        XCTAssertGreaterThanOrEqual(correctAccepted, 125)
+        XCTAssertGreaterThanOrEqual(correctAccepted, 132)
     }
 
     func testMatcherSpeed() throws {

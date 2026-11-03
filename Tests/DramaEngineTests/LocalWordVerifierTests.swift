@@ -97,6 +97,18 @@ final class LocalWordVerifierTests: XCTestCase {
         XCTAssertTrue(confirmed.matches(line: "Go on Monday.", locale: locale, confidenceFloor: 0.9))
     }
 
+    func testNativeGateAcceptsInteriorWordsDownToTheFloorButNotAnUncertainEnding() {
+        let locale = Locale(identifier: "en_AU")
+        func recognition(_ middle: Double, _ last: Double) -> LocalWordVerifier.Recognition {
+            .init(text: "Go on Monday.", spans: [.init(text: "Go", confidence: 0.99), .init(text: " on", confidence: middle),
+                                                .init(text: " Monday.", confidence: last)])
+        }
+        XCTAssertTrue(recognition(0.35, 0.99).matches(line: "Go on Monday.", locale: locale))
+        XCTAssertFalse(recognition(0.29, 0.99).matches(line: "Go on Monday.", locale: locale))
+        XCTAssertFalse(recognition(0.99, 0.45).matches(line: "Go on Monday.", locale: locale))
+        XCTAssertTrue(recognition(0.99, 0.45).canConfirmEndOfAudio(line: "Go on Monday.", locale: locale))
+    }
+
     func testTimeoutCancelsTheRecognitionWorker() {
         let stopped = DispatchSemaphore(value: 0)
         XCTAssertThrowsError(try LocalWordVerifier.blocking(timeout: .milliseconds(20), shouldContinue: { true }) {
