@@ -109,6 +109,16 @@ final class LocalWordVerifierTests: XCTestCase {
         XCTAssertTrue(recognition(0.99, 0.45).canConfirmEndOfAudio(line: "Go on Monday.", locale: locale))
     }
 
+    func testEndOfAudioConfirmationAcceptsInteriorWordsDownToTheFloor() {
+        let locale = Locale(identifier: "en_AU")
+        func recognition(_ middle: Double) -> LocalWordVerifier.Recognition {
+            .init(text: "Go on Monday.", spans: [.init(text: "Go", confidence: 0.99), .init(text: " on", confidence: middle),
+                                                .init(text: " Monday.", confidence: 0.45)])
+        }
+        XCTAssertTrue(recognition(0.4).canConfirmEndOfAudio(line: "Go on Monday.", locale: locale))
+        XCTAssertFalse(recognition(0.29).canConfirmEndOfAudio(line: "Go on Monday.", locale: locale))
+    }
+
     func testTimeoutCancelsTheRecognitionWorker() {
         let stopped = DispatchSemaphore(value: 0)
         XCTAssertThrowsError(try LocalWordVerifier.blocking(timeout: .milliseconds(20), shouldContinue: { true }) {

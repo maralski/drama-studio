@@ -222,7 +222,7 @@ package struct LocalWordVerifier: Sendable {
             let lexical = spans.filter { !WordCoverage.tokens($0.text, locale: locale).isEmpty }
             guard let last = lexical.last, last.confidence < Self.endOfAudioFloor,
                   WordCoverage.tokens(last.text, locale: locale).count == 1 else { return false }
-            return lexical.dropLast().allSatisfy { $0.confidence >= Self.endOfAudioFloor }
+            return lexical.dropLast().allSatisfy { $0.confidence >= Self.confidenceFloor }
         }
 
         func boundaryWordSpan(previousLine: String, currentLine: String, locale: Locale) -> Int? {
@@ -242,8 +242,8 @@ package struct LocalWordVerifier: Sendable {
                 // A number token can stand for several spoken words, so it never qualifies.
                 guard ordinal == firstCurrent, spanWords[index].count == 1, !WordCoverage.isNumber(spanWords[index][0]),
                       span.hasReportedConfidence, span.confidence.isFinite,
-                      span.confidence > 0, span.confidence < 0.5 else { continue }
-                let remaining = spans.enumerated().filter { $0.offset != index && $0.element.confidence < 0.5 }.map { $0.element.text }
+                      span.confidence > 0, span.confidence < Self.endOfAudioFloor else { continue }
+                let remaining = spans.enumerated().filter { $0.offset != index && $0.element.confidence < Self.endOfAudioFloor }.map { $0.element.text }
                 if WordCoverage.matches(line: line, transcript: text, locale: locale, uncertainSpans: remaining) { return index }
             }
             return nil
