@@ -362,7 +362,7 @@ final class WordCoverageTests: XCTestCase {
             ("It is 25°C outside.", "It is 25 degrees Celsius outside."),
             ("Drive at 50 km/h.", "Drive at 50 kilometres per hour."),
             ("Drive at 50 mph.", "Drive at fifty miles per hour."),
-            ("The board is 6 in wide.", "The board is six inches wide."),
+            ("The board is 6 inches wide.", "The board is six inch wide."),
             ("It takes 5 min.", "It takes five minutes."),
         ], true)
         assertMatch([
@@ -375,6 +375,8 @@ final class WordCoverageTests: XCTestCase {
             ("It weighs 5 kg.", "It weighs 6 kilograms."),
             ("It took hours.", "It took hour."),
             ("Wait a second.", "Wait a sec."),
+            ("Win 5 in a row.", "Win five inches a row."),
+            ("Come home at 2 in the morning.", "Come home at two inches the morning."),
         ], false)
     }
 
