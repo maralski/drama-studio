@@ -129,6 +129,7 @@ final class WordCoverageTests: XCTestCase {
             ("I'll take two. Three if you have them.", "I'll take two three if you have them"),
             ("Table for two. Seven o'clock.", "Table for two seven o'clock"),
             ("Rooms 5, 6 and 7 are free.", "Rooms five six and seven are free."),
+            ("Agent 007 reports for duty.", "Agent oh oh seven reports for duty."),
             ("Agent 007 reports for duty.", "Agent zero, zero, seven reports for duty."),
         ], true)
         assertMatch([
@@ -138,6 +139,8 @@ final class WordCoverageTests: XCTestCase {
             ("Table for two. Seven o'clock.", "Table for twenty seven o'clock"),
             ("Two, three.", "Twenty three."),
             ("Three two one go", "Three, two, go"),
+            ("Agent 007 reports for duty.", "Agent oh seven reports for duty."),
+            ("Meet at 10:5.", "Meet at ten five."),
         ], false)
     }
 

@@ -131,7 +131,8 @@ enum EnglishNumbers {
             return .written(readings, currency: currency)
         }
         if separator == ":" {
-            return .written([Kind.paired.reading(fraction.count == 2 ? trimmed + "." + fraction : digits + ":" + fraction)], currency: currency)
+            guard fraction.count == 2 else { return nil }
+            return .written([Kind.paired.reading(trimmed + "." + fraction)], currency: currency)
         }
         let shortened = String(fraction.reversed().drop { $0 == "0" }.reversed())
         var readings: Set = [Kind.decimal.reading(trimmed + "." + fraction),
@@ -167,7 +168,10 @@ enum EnglishNumbers {
             if units[word] != nil || tens[word] != nil || decades[word] != nil { return true }
             switch word {
             case "a": return joinedWord(index + 1).map { scales[$0] != nil || currencyWords[$0] != nil } == true
-            case "oh": return joinedWord(index + 1) != "oh" && isDigit(joinedWord(index + 1)) && isDigit(joinedWord(index + 2))
+            case "oh":
+                var digit = index + 1
+                while joinedWord(digit) == "oh" { digit += 1 }
+                return isDigit(joinedWord(digit)) && (digit > index + 1 || isDigit(joinedWord(digit + 1)))
             case "double", "triple", "point": return isDigit(joinedWord(index + 1))
             default: return false
             }
