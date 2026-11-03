@@ -293,6 +293,19 @@ final class WordCoverageTests: XCTestCase {
                      ("The pan is aluminium.", "The pan is aluminum."), ("It is our speciality.", "It is our specialty.")], false)
     }
 
+    func testAPossessiveApostropheIsSilentButAContractionIsNot() {
+        assertMatch([
+            ("My neighbour's favourite flavour.", "My neighbors favorite flavor."),
+            ("My neighbours' favourite flavour.", "My neighbor's favorite flavor."),
+            ("He's here.", "He is here."),
+        ], true)
+        assertMatch([
+            ("It's tail is long.", "Its tail is long."),
+            ("My neighbour's favourite flavour.", "My neighbour favourite flavour."),
+            ("My neighbour's favourite flavour.", "My neighbourhood favourite flavour."),
+        ], false)
+    }
+
     func testCompoundSpacingMatches() {
         assertMatch([("The website is down.", "The web site is down."), ("Read the ebook.", "Read the e book.")], true)
         assertMatch([("The website is down.", "The web is down.")], false)

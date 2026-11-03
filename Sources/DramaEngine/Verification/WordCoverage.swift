@@ -47,6 +47,8 @@ package enum WordCoverage {
     private static let contractionPattern = try! NSRegularExpression(
         pattern: "\\b(" + alternation(englishForms.contractions.keys) + ")\\b")
     private static let cannot = try! NSRegularExpression(pattern: #"\bcannot\b"#)
+    /// The apostrophe of a possessive is silent: neighbor's, neighbors, neighbors'.
+    private static let possessive = try! NSRegularExpression(pattern: #"(?<=\p{L})'(?=s(?!\p{L}))|(?<=\p{L}s)'(?!\p{L})"#)
     /// A sign before a number, or between two numbers with a space each side.
     private static let signs = [("-", "minus"), ("−", "minus"), ("+", "plus")].map { symbol, spoken in
         let symbol = NSRegularExpression.escapedPattern(for: symbol)
@@ -106,6 +108,7 @@ package enum WordCoverage {
             text = cannot.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: "can not")
             text = expandingOrdinals(text, locale: locale)
             text = replacing(contractionPattern, in: text) { englishForms.contractions[$0] }
+            text = possessive.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: "")
             for (symbol, spoken) in signs {
                 text = symbol.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text),
                                                        withTemplate: NSRegularExpression.escapedTemplate(for: spoken))
