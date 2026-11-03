@@ -10,6 +10,11 @@
 #   REPO            GitHub repository the assets are published to
 #   NOTARY_PROFILE  notarytool keychain profile; with a Developer ID
 #                   Application identity it signs, notarizes and staples
+#   CODEC_ZIP       an earlier release's codec zip to ship again when its
+#                   contents equal the local models. Setup reuses installed
+#                   codecs by archive digest, and zipping the same models
+#                   again gives a new digest, so a fresh zip makes every
+#                   user download the codec again.
 set -euo pipefail
 
 root=${0:A:h:h}
@@ -58,8 +63,13 @@ for package in $packages; do
     ditto --norsrc --noextattr "$codec_dir/$package" "$codec_stage/$package"
 done
 cp -p LICENSE-FISH-AUDIO NOTICE "$codec_stage/"
-print "Zipping the codec models"
-ditto -c -k --norsrc --noextattr "$codec_stage" "$zip"
+if [[ -n ${CODEC_ZIP:-} ]]; then
+    print "Reusing the codec zip $CODEC_ZIP"
+    cp "$CODEC_ZIP" "$zip"
+else
+    print "Zipping the codec models"
+    ditto -c -k --norsrc --noextattr "$codec_stage" "$zip"
+fi
 
 roundtrip="$work/roundtrip"
 mkdir "$roundtrip"
@@ -73,6 +83,10 @@ fi
 for package in $packages; do
     [[ -f "$roundtrip/$package/Manifest.json" ]] || { print -u2 "$package unpacked without its Manifest.json."; exit 1; }
 done
+if ! diff -rq "$codec_stage" "$roundtrip" >&2; then
+    print -u2 "The codec zip's contents differ from the local models and licenses."
+    exit 1
+fi
 
 zip_bytes=$(stat -f %z "$zip")
 if (( zip_bytes > asset_limit )); then
