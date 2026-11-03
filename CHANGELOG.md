@@ -7,6 +7,30 @@ adds one, and a patch release changes neither.
 
 ## Unreleased
 
+## 2.1.3
+
+- Accept the different ways the same words are spoken and written in the
+  word check. English numbers match by value and kind: digits, cardinal,
+  paired ("nine thirty"), decimal, decade, money and units. A different value
+  or kind never matches. UK and US spellings, unit abbreviations, possessive
+  apostrophes and compound spacing also match.
+- Accept Apple's lossy number formats, such as "130" for "one thirty", only
+  from the Apple transcript. The independent recognizer still needs an exact
+  reading.
+- Check currency. "£12" no longer matches speech that says "twelve dollars".
+- Keep leading zeros. "Agent 007" no longer matches "Agent seven".
+- Accept every cue, including typed `[cues]` and directions such as
+  `(laughing)`. On a cued line, ignore short recognition labels and inserted
+  sounds such as "ugh"; every scripted word is still required.
+- Lower Apple's per-word confidence floor from 0.5 to 0.3 for interior words.
+  The final word keeps 0.5 and end-of-audio confirmation.
+- Bump the acceptance policy to revision 7. Takes checked under an earlier
+  revision show "earlier word check" until they are generated again.
+- Match the expected words about 16 times faster by compiling patterns once.
+- Add `tools/word_check_eval`, which measures the check on 841 recorded
+  Drama 3 clips. Across them, correct clips accepted rose from 255/508 to
+  426/508, and wrong clips accepted fell from 3/241 to 0/241.
+
 ## 2.1.2
 
 - Compare the installed codec archive's recorded SHA-256 with the release's

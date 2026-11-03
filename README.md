@@ -612,7 +612,7 @@ wait, and 1 on any other error, after printing the server's message.
 
 ## Using the engine in your own app
 
-`DramaEngine` is a Swift library, version 2.1.2 (`DramaEngineVersion.string`,
+`DramaEngine` is a Swift library, version 2.1.3 (`DramaEngineVersion.string`,
 `CHANGELOG.md`). Add this repository as a package dependency and the
 `DramaEngine` product to a target; the app, the server and the CLI are not
 needed. The public API includes `ModelLocation` and `DramaSetup` for the
@@ -958,12 +958,31 @@ or generation history. Cue retries alternate the requested sampling with broader
 ask for precise enunciation. Exhausted retries report a failure. Reference pace affects
 the time allowance, not the words that must be spoken.
 
-Explicit recognition labels such as `*gasp*` or `(gasps)` count as nonverbal
-annotations only when the script requests that cue family. Ordinary spoken
-words remain required. The native checker selects an installed regional locale
-from your macOS language preferences, with a deterministic fallback.
+The check accepts the different ways the same words are spoken and written.
+An English number matches any reading with the same value and kind: "1,200"
+matches "twelve hundred", "3:30" matches "three thirty", and "$4.99" matches
+"four ninety-nine". A different value or kind never matches, so "three, two,
+one" never matches "321", "2.5" never matches "25", and "50 cents" never
+matches "50 dollars". UK and US spellings, unit abbreviations such as "kg",
+silent possessive apostrophes and compound spacing also match. Apple's
+transcriber writes some times and decimals without the separator, such as
+"130" for "one thirty". Those forms are accepted only from Apple; the
+independent recognizer must still give a reading that only the right speech
+produces.
 
-Acceptance policy revision 5 records the verified-sentence boundary rule.
+When a line has any cue, such as `[sighs]`, a typed `[groans]`, `<whisper>`
+or a direction like `(laughing)`, the check ignores short recognition labels
+such as `*gasp*` or `(laughs)` and inserted sounds such as "ugh". Every
+scripted word is still required, in order. On a line without a cue, a label or
+inserted sound fails the check. The native checker selects an installed
+regional locale from your macOS language preferences, with a deterministic
+fallback.
+
+`tools/word_check_eval` measures the check on 841 recorded Drama 3 clips.
+See its README.
+
+Acceptance policy revision 7 records these matching rules. Takes checked under
+an earlier revision show "earlier word check" until they are generated again.
 Archived takes retain their original check revision; playback does not upgrade
 their verification history. Opt-in local audits record the exact PCM identities,
 unit indices, token and confidence-span positions used by the boundary check.
