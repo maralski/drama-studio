@@ -312,6 +312,8 @@ final class WordCoverageTests: XCTestCase {
             ("It takes 5 min.", "It takes 5 seconds."),
             ("It is 5 km away.", "It is 5 away."),
             ("It weighs 5 kg.", "It weighs 6 kilograms."),
+            ("It took hours.", "It took hour."),
+            ("Wait a second.", "Wait a sec."),
         ], false)
     }
 
