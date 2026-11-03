@@ -128,7 +128,7 @@ enum EnglishNumbers {
         let significant = digits.drop { $0 == "0" }
         let trimmed = significant.isEmpty ? "0" : String(significant)
         if decade {
-            guard separator == nil, let readings = decadeReadings(digits) else { return nil }
+            guard separator == nil, let readings = decadeReadings(digits, inScript: profile == .script) else { return nil }
             return .written(readings, currency: currency)
         }
         guard let separator, let fraction else {
@@ -159,13 +159,15 @@ enum EnglishNumbers {
         return .written(readings, currency: currency)
     }
 
-    /// "1990s" may be read "nineties", but "1600s" never "hundreds" alone, so
-    /// a century keeps only its full reading.
-    private static func decadeReadings(_ digits: String) -> Set<Reading>? {
+    /// A script's "1990s" may be read "nineties", but "1600s" never "hundreds"
+    /// alone. A spoken century, or one a recognizer wrote, was heard, so it
+    /// keeps only its full reading.
+    private static func decadeReadings(_ digits: String, inScript: Bool) -> Set<Reading>? {
         guard [2, 4].contains(digits.count), digits.hasSuffix("0") else { return nil }
         let short = Kind.decade.reading(digits.suffix(2) + "s")
         guard digits.count == 4 else { return [short] }
-        return digits.hasSuffix("00") ? [Kind.decade.reading(digits + "s")] : [Kind.decade.reading(digits + "s"), short]
+        let full = Kind.decade.reading(digits + "s")
+        return inScript && !digits.hasSuffix("00") ? [full, short] : [full]
     }
 
     /// Groups number words and written numbers into number tokens, turns a
@@ -356,7 +358,7 @@ enum EnglishNumbers {
         if let tensWord = decadeWords[last] {
             let spoken = readings(Array(run.dropLast()) + [tensWord])
             let years = values(spoken, .cardinal) + values(spoken, .paired).map { $0.replacingOccurrences(of: ".", with: "") }
-            return Set(years.compactMap(decadeReadings).joined())
+            return Set(years.compactMap { decadeReadings($0, inScript: false) }.joined())
         }
         if let point = run.firstIndex(of: "point") {
             var fraction = run[(point + 1)...], scale: Int?

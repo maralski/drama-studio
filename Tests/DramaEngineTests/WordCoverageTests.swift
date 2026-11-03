@@ -54,7 +54,6 @@ final class WordCoverageTests: XCTestCase {
             ("They raised $2,500,000.", "They raised 2.5 million dollars."),
             ("About 100 came.", "About a hundred came."),
             ("About 700 came.", "About seven hundred came."),
-            ("Back in the 1990s.", "Back in the nineties."),
             ("Back in the 1990s.", "Back in the nineteen nineties."),
             ("Back in the 90s.", "Back in the '90s."),
             ("Take the 5th door.", "Take the fifth door."),
@@ -96,9 +95,15 @@ final class WordCoverageTests: XCTestCase {
         assertMatch([
             ("The castle dates from the 1600s.", "The castle dates from the sixteen hundreds."),
             ("It was built in the 1900s.", "It was built in the nineteen hundreds."),
-            ("Back in the 1990s.", "Back in the 90s."),
         ], true)
+        assertHeard([("Back in the 1990s.", "Back in the 90s."), ("Back in the 1990s.", "Back in the nineties.")], true)
+        assertHeard([("Back in the 90s.", "Back in the 1990s."), ("Back in the nineties.", "Back in the 1990s."),
+                     ("Back in the nineteen nineties.", "Back in the 90s.")], false)
         assertMatch([
+            ("Back in the 1990s.", "Back in the eighteen nineties."),
+            ("Back in the 1990s.", "Back in the 1890s."),
+            ("Back in the 2020s.", "Back in the nineteen twenties."),
+            ("Back in the 2020s.", "Back in the 1920s."),
             ("The castle dates from the 1600s.", "The castle dates from the 1700s."),
             ("The castle dates from the 1600s.", "The castle dates from the seventeen hundreds."),
             ("The castle dates from the 2000s.", "The castle dates from the 1900s."),
