@@ -17,23 +17,13 @@ https://github.com/user-attachments/assets/273c2a56-71da-4f1f-95a5-c74141b42930
 ### System requirements
 
 - Apple silicon Mac. Speech generation requires macOS 26 or later and an
-  installed on-device speech model for the script language. The app opens on
-  macOS 15 but cannot generate speech there. Intel Macs are not supported by
-  the engine.
+  installed on-device speech model for the script language. Intel Macs are not
+  supported by the engine.
 - About 49 GB of free disk for the model, codec and setup caches. Allow more
   space for generated audio, saved projects and app updates.
 - 64 GB or more of unified memory is recommended. This is not a verified
-  minimum. Generation has been tested on an M3 Max with 128 GB. An M1 Mac Mini
-  with 16 GB failed twice with a GPU out-of-memory error before producing audio,
-  despite paging. See the [hardware test](docs/ui-verification.md#16-gib-mac-mini-hardware-test).
-  32 GB and 64 GB Macs remain untested. The engine maps about 41 GB of model weights.
-- A display that can fit a 900 by 640 point studio window.
-- An internet connection for the initial downloads and update checks.
-  Speech generation runs locally after setup.
-
-The setup memory override (`DRAMA_STUDIO_MEMORY_GB`, see
-[Build and run](#build-and-run)) tests the warning only. It does not simulate
-a lower-memory Mac or establish that generation works on one.
+  minimum. Generation has been tested on an M3 Max with 128 GB. The engine maps
+  about 41 GB of model weights.
 
 1. Download `DramaStudio-<version>.dmg` from the
    [latest release](https://github.com/maralski/drama-studio/releases/latest).
@@ -51,8 +41,7 @@ a lower-memory Mac or establish that generation works on one.
    Drama Studio generates nothing until you agree.
 5. Wait for the downloads. The window shows the progress of each file, the
    total, and the time left:
-   - the Drama 3 weights from Hugging Face, 41.5 GB, pinned to revision
-     `e0a9218`;
+   - the Drama 3 weights from Hugging Face, 41.5 GB;
    - the Core ML voice codec from the release, 1.5 GB.
 
    You can pause, or quit and open the app again. The download continues
@@ -114,8 +103,7 @@ HTTPS and the published checksum for authenticity.
 After restart, setup compares the installed codec's recorded archive SHA-256
 with the digest shipped in the updated app. Matching codecs are reused even
 when the release URL changes. A changed digest or missing codec models triggers
-a verified download and installation. Older installs without a recorded digest
-need one verified download to establish it.
+a verified download and installation.
 
 ## What you get
 
@@ -148,8 +136,6 @@ need one verified download to establish it.
   is accepted. A disagreement retries generation; an unavailable checker stops
   generation. These checks reduce word errors but cannot guarantee recognition
   accuracy or acting quality.
-  Older takes without word-check history are kept for playback
-  and export, but do not automatically become voice references or retake history.
   Voice auditions always use checked generation.
   Recognition checks word coverage, not acting quality or perfect cue execution.
 - **Document narration**: a PowerPoint deck, a PDF or an EPUB opens as
@@ -218,8 +204,7 @@ need the bootstrap and staging steps above. The English and multilingual models
 use about 975 MB on disk; recognition runs locally with no script hints. English
 uses `small.en`; other supported languages use `small`. Only the selected model
 is loaded. Recognition requires both an installed Apple model and a supported
-independent model language. Older native-only checks remain recorded in project
-files, but their audio is excluded from automatic checked-reference reuse.
+independent model language.
 
 Run the retained wrong-word and complete-ending controls with
 `swift test -c release --filter LocalWordVerifierTests`. On macOS 26 these controls
@@ -254,7 +239,8 @@ release DMG and the codec zip and writes the zip's URL and SHA-256 into the
 app. `DRAMA_STUDIO_HOME=<folder>` moves the downloads, the codec, the tuning
 and the settings into one folder and ignores the Hugging Face cache, to try a
 first run without touching your own. `DRAMA_STUDIO_MEMORY_GB=16` shows the
-low-memory warning on a Mac that has enough. `tools/pin_model_plan.py --check`
+low-memory warning on a Mac that has enough; it changes only the warning, not
+the memory the engine can use. `tools/pin_model_plan.py --check`
 compares the pinned download plan with Hugging Face.
 
 ## Documents
@@ -289,10 +275,7 @@ speaker picker. The editor edits the selected section.
   settings, voice assignments, session voices, and every take with its original
   text, voice assignments, codes, and audio. Library assignments still refer to
   voices in the local library. Save updates the current project; **Save Project
-  As** creates a copy. Projects are saved in format 4, which versions before
-  1.1.0 cannot open.
-  Older projects still open, with a verification warning for audio whose
-  generation history was not stored.
+  As** creates a copy.
 - Import, Open Project, and Quit offer Save, Discard Changes, or Cancel when
   work is unsaved. A failed or cancelled save leaves the current session open.
   After editing pauses for two seconds, the app writes a recovery draft in the
@@ -957,9 +940,8 @@ and the w2 and 4096x2048 families in the packed path.
 
 ## Streaming
 
-Default sentence chunking keeps short complete sentences separate. It no longer
-folds a short opening sentence into the next one, which could let the model end
-after the opening and omit the rest of that chunk.
+Default sentence chunking keeps short complete sentences separate, so the
+model cannot end after a short opening sentence and omit the rest of its chunk.
 
 `GenerationConfig.streaming` requests when decoded audio leaves the engine.
 Unless word verification is set to `.uncheckedPreview` and retries are off,
@@ -1009,10 +991,7 @@ fallback.
 `tools/word_check_eval` measures the check on 841 recorded Drama 3 clips.
 See its README.
 
-Acceptance policy revision 7 records these matching rules. Takes checked under
-an earlier revision show "earlier word check" until they are generated again.
-Archived takes retain their original check revision; playback does not upgrade
-their verification history. Opt-in local audits record the exact PCM identities,
+Acceptance policy revision 7 records these matching rules. Opt-in local audits record the exact PCM identities,
 unit indices, token and confidence-span positions used by the boundary check.
 
 
@@ -1222,13 +1201,10 @@ affiliated with or endorsed by Fish Audio.
 ### Optional usage information
 
 During setup, you can choose to share anonymous usage information to help
-improve Drama Studio; existing installs are asked once. Sharing is off unless
-you enable it. Only counts of app
+improve Drama Studio. Sharing is off unless you enable it. Only counts of app
 launches, generation outcomes and setup failures are included. Scripts, audio,
 voices, file names and personal identifiers are excluded. Change your choice
-at any time in Settings > General > Privacy. Counts are sent at most once a
-minute to a relay on Cloudflare, which handles the connection's IP address at
-its edge and forwards only the totals to New Relic.
+at any time in Settings > General > Privacy.
 
 See [usage monitoring configuration](docs/usage-monitoring.md) for release setup
 and the data contract.
