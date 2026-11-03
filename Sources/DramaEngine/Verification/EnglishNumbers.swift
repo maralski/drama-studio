@@ -22,6 +22,9 @@ enum EnglishNumbers {
         case decimal = "f"
         /// "nineties" is 90s.
         case decade = "s"
+        /// Number words that form no reading, such as "twelve five"; they match
+        /// only the same words.
+        case words = "w"
 
         func reading(_ value: String) -> String { String(rawValue) + value }
     }
@@ -229,7 +232,7 @@ enum EnglishNumbers {
 
     private static func spokenReadings(_ run: [String]) -> Set<String> {
         let readings = readings(run)
-        return readings.isEmpty ? [run.joined(separator: " ")] : readings
+        return readings.isEmpty ? [Kind.words.reading(run.joined(separator: " "))] : readings
     }
 
     private static func readings(_ run: [String]) -> Set<String> {
