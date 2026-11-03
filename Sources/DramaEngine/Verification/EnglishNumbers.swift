@@ -123,7 +123,7 @@ enum EnglishNumbers {
     /// "." or ":"; `decade` marks a trailing "s" or "'s"; `currency` is the
     /// currency a symbol beside it names.
     static func written(integer: String?, separator: String?, fraction: String?, decade: Bool, currency: String?,
-                        profile: WordCoverage.RecognizerProfile?) -> Piece? {
+                        profile: WordCoverage.RecognizerProfile) -> Piece? {
         let digits = (integer ?? "0").replacingOccurrences(of: ",", with: "")
         let significant = digits.drop { $0 == "0" }
         let trimmed = significant.isEmpty ? "0" : String(significant)
@@ -172,7 +172,7 @@ enum EnglishNumbers {
     /// currency symbol or a currency word after a number into a currency token,
     /// names a unit after a number, and applies the spellings to the other words.
     static func tokens(_ pieces: [(piece: Piece, gap: Gap)], forms: WordCoverage.EnglishForms,
-                       profile: WordCoverage.RecognizerProfile?) -> [String] {
+                       profile: WordCoverage.RecognizerProfile) -> [String] {
         func word(_ index: Int) -> String? {
             guard index < pieces.count, case .word(let word) = pieces[index].piece else { return nil }
             return word

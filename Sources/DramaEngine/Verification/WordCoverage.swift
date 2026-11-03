@@ -7,8 +7,10 @@ import Synchronization
 /// Compares an audio-only transcript with the requested words. No aggregate
 /// error threshold: even one missing word, repetition or negation fails.
 package enum WordCoverage {
-    /// How a recognizer writes the numbers it hears. The script has no profile.
+    /// Who wrote the text, which decides how its numbers may have been said.
     package enum RecognizerProfile: Sendable {
+        /// The line as written, read aloud in any of its numbers' common ways.
+        case script
         /// Keeps what was said: "one thirty" is 1.30 and "one hundred thirty" is 130.
         case exact
         /// Apple's SpeechTranscriber writes both as 130, and "two point five
@@ -101,15 +103,7 @@ package enum WordCoverage {
         return result
     }
 
-    package static func tokens(_ text: String, locale: Locale) -> [String] {
-        tokens(text, locale: locale, profile: nil)
-    }
-
     package static func tokens(_ text: String, locale: Locale, profile: RecognizerProfile) -> [String] {
-        tokens(text, locale: locale, profile: .some(profile))
-    }
-
-    private static func tokens(_ text: String, locale: Locale, profile: RecognizerProfile?) -> [String] {
         let english = locale.language.languageCode?.identifier == "en"
         var original = text
         if english {
@@ -163,7 +157,7 @@ package enum WordCoverage {
         return words
     }
 
-    private static func englishPieces(_ text: String, profile: RecognizerProfile?) -> [(piece: EnglishNumbers.Piece, gap: EnglishNumbers.Gap)] {
+    private static func englishPieces(_ text: String, profile: RecognizerProfile) -> [(piece: EnglishNumbers.Piece, gap: EnglishNumbers.Gap)] {
         var numbers: [(range: Range<String.Index>, piece: EnglishNumbers.Piece)] = []
         for match in writtenNumber.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
             func group(_ index: Int) -> String? { Range(match.range(at: index), in: text).map { String(text[$0]) } }
@@ -204,7 +198,7 @@ package enum WordCoverage {
         let spoken = DirectorsNote.spokenWords(line)
         let ns = spoken as NSString
         return tokens(directionPattern.stringByReplacingMatches(in: spoken, range: NSRange(location: 0, length: ns.length), withTemplate: " "),
-                      locale: locale)
+                      locale: locale, profile: .script)
     }
 
     package static func matches(line: String, transcript: String, locale: Locale, profile: RecognizerProfile,
@@ -315,7 +309,7 @@ package enum WordCoverage {
         let script = Set(expectedTokens(line, locale: locale))
         var text = transcript
         for label in labels.reversed() {
-            guard let range = Range(label.range, in: text), script.isDisjoint(with: tokens(String(text[range]), locale: locale)) else { continue }
+            guard let range = Range(label.range, in: text), script.isDisjoint(with: tokens(String(text[range]), locale: locale, profile: .script)) else { continue }
             text.replaceSubrange(range, with: " ")
         }
         return text
