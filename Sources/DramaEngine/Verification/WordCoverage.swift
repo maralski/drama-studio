@@ -119,7 +119,7 @@ package enum WordCoverage {
         return words
     }
 
-    private static func englishPieces(_ text: String) -> [(piece: EnglishNumbers.Piece, joined: Bool)] {
+    private static func englishPieces(_ text: String) -> [(piece: EnglishNumbers.Piece, gap: EnglishNumbers.Gap)] {
         var numbers: [(range: Range<String.Index>, readings: Set<String>)] = []
         for match in writtenNumber.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
             func group(_ index: Int) -> String? { Range(match.range(at: index), in: text).map { String(text[$0]) } }
@@ -142,9 +142,10 @@ package enum WordCoverage {
         }
         found.sort { $0.range.lowerBound < $1.range.lowerBound }
         return found.indices.map { index in
-            let gap = index > 0 ? text[found[index - 1].range.upperBound..<found[index].range.lowerBound] : "."
-            let joined = gap.allSatisfy { $0.isWhitespace || $0 == "," }
-            return (found[index].piece, joined)
+            let between = index > 0 ? text[found[index - 1].range.upperBound..<found[index].range.lowerBound] : "."
+            let gap: EnglishNumbers.Gap = between.allSatisfy(\.isWhitespace) ? .space
+                : between.allSatisfy({ $0.isWhitespace || $0 == "," }) ? .comma : .other
+            return (found[index].piece, gap)
         }
     }
 

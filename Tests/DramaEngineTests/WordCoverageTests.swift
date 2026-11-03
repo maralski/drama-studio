@@ -24,7 +24,6 @@ final class WordCoverageTests: XCTestCase {
             ("It costs 1,200 dollars.", "It costs one thousand two hundred dollars."),
             ("Agent 007 reports for duty.", "Agent double oh seven reports for duty."),
             ("Agent 007 reports for duty.", "Agent zero zero seven reports for duty."),
-            ("Room 0142 is open.", "Room one four two is open."),
             ("Call 555 0142 now.", "Call five five five oh one four two now."),
             ("Call 555-0142 now.", "Call 555 0142 now."),
             ("Call 555-0142 now.", "Call five five five, oh one four two now."),
@@ -53,7 +52,39 @@ final class WordCoverageTests: XCTestCase {
             ("It fell 12%.", "It fell twelve percent."),
         ], true)
         assertMatch([("Call 555 0142 now.", "Call five five five one four two now."),
+                     ("Room 0142 is open.", "Room one four two is open."),
                      ("Call 555. 0142 is mine.", "Call 5550142 is mine.")], false)
+    }
+
+    func testSpokenReadingsOfDifferentKindsAndSeparateNumbersNeverMerge() {
+        assertMatch([
+            ("Count down: three, two, one.", "Count down: three hundred twenty one."),
+            ("Count down: three, two, one.", "Count down: 321."),
+            ("Rooms 5, 6 and 7 are free.", "Rooms fifty six and seven are free."),
+            ("Chapter 2, 3 and 4.", "Chapter 23 and 4."),
+            ("In 2019, 300 people came.", "In 201, 9300 people came."),
+            ("one two three four five six seven", "one million two hundred thirty four thousand five hundred sixty seven"),
+            ("I have two, oh well.", "I have twenty well."),
+        ], false)
+        assertMatch([
+            ("Call me on 555 0142 when you land.", "Call me on 555 0142 when you land"),
+            ("Call me on 555 0142 when you land.", "Call me on 555-0142 when you land."),
+            ("Call me on 555 0142 when you land.", "Call me on 5550142 when you land."),
+            ("Call me on five five five, oh one four two, when you land.", "Call me on 555 0142 when you land"),
+            ("Call me on five five five, oh one four two, when you land.", "Call me on 555-0142 when you land."),
+            ("Call me on five five five, oh one four two, when you land.", "Call me on 5550142 when you land."),
+            ("Three. Two. One. Go!", "Three, two, one, go!"),
+            ("In 2019, 300 people came.", "In 2019, 300 people came."),
+        ], true)
+    }
+
+    func testClockTimesAndLeadingZerosDoNotReadAsCardinals() {
+        assertMatch([
+            ("Meet at 3:30.", "Meet at three hundred and thirty."),
+            ("Meet at 1:30.", "Meet at one hundred and thirty."),
+            ("Agent 007.", "Agent seven."),
+        ], false)
+        assertMatch([("Meet at 3:30.", "Meet at 330."), ("Meet at 330.", "Meet at three hundred and thirty.")], true)
     }
 
     func testWrongNumbersAndWordsStillFail() {

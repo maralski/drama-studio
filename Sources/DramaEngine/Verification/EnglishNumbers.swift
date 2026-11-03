@@ -2,18 +2,36 @@
 // SPDX-License-Identifier: Apache-2.0
 import Foundation
 
-/// English numbers as the set of values they can mean. One number becomes one
+/// English numbers as the set of readings they can have. One number becomes one
 /// token, `#` followed by its readings joined with `|`, so token ordinals stay
 /// one per spoken unit and two numbers match when their readings intersect.
-/// Integer readings are digit strings ("1200", "007"); a written decimal or a
-/// clock reads as "a.b"; a spoken "point" decimal reads as "pa.b"; a decade
-/// reads as "1990s". An integer reading never contains a point, so "2.5" and
-/// "25" cannot match.
+/// Each reading starts with its `Kind`, so a digit-by-digit "three two one"
+/// and a cardinal "three hundred twenty one" never match each other, while a
+/// written "321" carries both.
 enum EnglishNumbers {
+    enum Kind: Character {
+        /// Digit by digit, leading zeros kept: "double oh seven" is 007.
+        case digits = "d"
+        /// "three hundred twenty one", "twelve hundred", "two point five million".
+        case cardinal = "c"
+        /// Two groups, the second always two digits: "seven forty seven" is 7.47,
+        /// "nine thirty" is 9.30, "nineteen oh five" is 19.05.
+        case paired = "t"
+        /// "two point five" is 2.5.
+        case decimal = "f"
+        /// "nineties" is 90s.
+        case decade = "s"
+
+        func reading(_ value: String) -> String { String(rawValue) + value }
+    }
+
     enum Piece {
         case word(String)
         case written(Set<String>)
     }
+
+    /// What separates a piece from the one before it.
+    enum Gap { case space, comma, other }
 
     private static let units: [String: Int] = Dictionary(uniqueKeysWithValues: zip(
         ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve",
@@ -27,7 +45,6 @@ enum EnglishNumbers {
                                       "trillion": 1_000_000_000_000]
     private static let scales = largeScales.merging(["hundred": 100]) { $1 }
     private static let currencies: Set<String> = ["dollar", "dollars", "cent", "cents", "pound", "pounds", "euro", "euros"]
-    private static let mergedReadingLimit = 64
 
     static func token(_ readings: Set<String>) -> String { "#" + readings.sorted().joined(separator: "|") }
 
@@ -46,36 +63,52 @@ enum EnglishNumbers {
         let significant = digits.drop { $0 == "0" }
         let trimmed = significant.isEmpty ? "0" : String(significant)
         if decade {
-            guard separator == nil, [2, 4].contains(digits.count), digits.hasSuffix("0") else { return nil }
-            return digits.count == 4 ? [digits + "s", String(digits.suffix(2)) + "s"] : [digits + "s"]
+            guard separator == nil else { return nil }
+            return decadeReadings(digits)
         }
-        guard let separator, let fraction else { return [digits, trimmed] }
+        guard let separator, let fraction else {
+            guard digits == trimmed else { return [Kind.digits.reading(digits)] }
+            var readings: Set = [Kind.digits.reading(digits), Kind.cardinal.reading(digits)]
+            if (3...4).contains(digits.count) {
+                readings.insert(Kind.paired.reading(digits.dropLast(2) + "." + digits.suffix(2)))
+            }
+            return readings
+        }
         if separator == ":" {
-            return fraction.count == 2 ? [trimmed + "." + fraction, trimmed + fraction] : [digits + ":" + fraction]
+            return [Kind.paired.reading(fraction.count == 2 ? trimmed + "." + fraction : digits + ":" + fraction)]
         }
-        var readings: Set<String> = [trimmed + "." + fraction, "p" + trimmed + "." + fraction]
+        var readings: Set = [Kind.decimal.reading(trimmed + "." + fraction)]
+        if fraction.count == 2 { readings.insert(Kind.paired.reading(trimmed + "." + fraction)) }
         let shortened = fraction.reversed().drop { $0 == "0" }
-        if !shortened.isEmpty { readings.insert("p" + trimmed + "." + String(shortened.reversed())) }
+        if !shortened.isEmpty { readings.insert(Kind.decimal.reading(trimmed + "." + String(shortened.reversed()))) }
         return readings
+    }
+
+    private static func decadeReadings(_ digits: String) -> Set<String>? {
+        guard [2, 4].contains(digits.count), digits.hasSuffix("0") else { return nil }
+        let short = Kind.decade.reading(digits.suffix(2) + "s")
+        return digits.count == 4 ? [Kind.decade.reading(digits + "s"), short] : [short]
     }
 
     /// Groups number words and written numbers into number tokens, drops
     /// currency words beside a number, and applies `spellings` to the rest.
-    /// `joined` is true when only whitespace or commas separate a piece from the
-    /// one before, as in a phone number written "five five five, oh one four two".
-    static func tokens(_ pieces: [(piece: Piece, joined: Bool)], spellings: [String: String]) -> [String] {
+    static func tokens(_ pieces: [(piece: Piece, gap: Gap)], spellings: [String: String]) -> [String] {
         enum Part { case word(String), number(Set<String>) }
         func word(_ index: Int) -> String? {
             guard index < pieces.count, case .word(let word) = pieces[index].piece else { return nil }
             return word
         }
-        func joinedWord(_ index: Int) -> String? { index < pieces.count && pieces[index].joined ? word(index) : nil }
+        func joinedWord(_ index: Int) -> String? { index < pieces.count && pieces[index].gap == .space ? word(index) : nil }
         func isDigit(_ word: String?) -> Bool { word == "oh" || word.flatMap { units[$0] }.map { $0 < 10 } == true }
         func startsRun(_ index: Int) -> Bool {
             guard let word = word(index) else { return false }
             if units[word] != nil || tens[word] != nil || decades[word] != nil { return true }
-            if word == "a" { return joinedWord(index + 1).flatMap { scales[$0] } != nil }
-            return ["double", "triple", "point"].contains(word) && isDigit(joinedWord(index + 1))
+            switch word {
+            case "a": return joinedWord(index + 1).flatMap { scales[$0] } != nil
+            case "oh": return joinedWord(index + 1) != "oh" && isDigit(joinedWord(index + 1)) && isDigit(joinedWord(index + 2))
+            case "double", "triple", "point": return isDigit(joinedWord(index + 1))
+            default: return false
+            }
         }
         func runEnd(from start: Int) -> Int {
             guard startsRun(start) else { return start }
@@ -94,30 +127,28 @@ enum EnglishNumbers {
             return end
         }
 
-        var parts: [(part: Part, joined: Bool)] = []
+        var parts: [(part: Part, gap: Gap)] = []
         var index = 0
         while index < pieces.count {
-            let joined = pieces[index].joined
+            let gap = pieces[index].gap
             if case .written(let readings) = pieces[index].piece {
-                if let scale = joinedWord(index + 1).flatMap({ scales[$0] }) {
-                    parts.append((.number(multiplied(readings, by: scale)), joined)); index += 2
-                } else {
-                    parts.append((.number(readings), joined)); index += 1
-                }
+                let scaled = joinedWord(index + 1).flatMap { scales[$0] }.map { multiplied(readings, by: $0) } ?? []
+                parts.append((.number(scaled.isEmpty ? readings : scaled), gap))
+                index += scaled.isEmpty ? 1 : 2
                 continue
             }
             let end = runEnd(from: index)
             if end > index {
-                parts.append((.number(spokenReadings((index..<end).compactMap(word))), joined)); index = end
+                parts.append((.number(spokenReadings((index..<end).compactMap(word))), gap)); index = end
             } else {
-                parts.append((.word(word(index)!), joined)); index += 1
+                parts.append((.word(word(index)!), gap)); index += 1
             }
         }
 
         var merged: [Part] = []
-        for (part, joined) in parts {
-            if joined, case .number(let right) = part, case .number(let left)? = merged.last,
-               let both = concatenated(left, right) {
+        for (part, gap) in parts {
+            if case .number(let right) = part, case .number(let left)? = merged.last,
+               let both = joined(left, right, across: gap) {
                 merged[merged.count - 1] = .number(both)
             } else {
                 merged.append(part)
@@ -145,33 +176,39 @@ enum EnglishNumbers {
         return result
     }
 
-    private static func isInteger(_ reading: String) -> Bool { !reading.isEmpty && reading.allSatisfy { ("0"..."9").contains($0) } }
+    private static func values(_ readings: Set<String>, _ kind: Kind) -> [String] {
+        readings.filter { $0.first == kind.rawValue }.map { String($0.dropFirst()) }.sorted()
+    }
 
-    private static func concatenated(_ left: Set<String>, _ right: Set<String>) -> Set<String>? {
-        // Inside a longer number every leading zero is spoken: "555 0142" never reads as "555142".
-        func padded(_ readings: Set<String>) -> [String] {
-            readings.filter { reading in
-                isInteger(reading) && !readings.contains { $0.count > reading.count && $0.hasSuffix(reading) && $0.hasPrefix("0") }
-            }.sorted()
+    /// One identifier from two digit groups, as in a phone number. Groups
+    /// separated by a space join when both can be read digit by digit; across a
+    /// comma only spoken digit runs join, so "three, two, one" stays three numbers.
+    private static func joined(_ left: Set<String>, _ right: Set<String>, across gap: Gap) -> Set<String>? {
+        func onlyDigits(_ readings: Set<String>) -> Bool { readings.allSatisfy { $0.first == Kind.digits.rawValue } }
+        switch gap {
+        case .space: break
+        case .comma: guard onlyDigits(left), onlyDigits(right) else { return nil }
+        case .other: return nil
         }
-        let lefts = padded(left), rights = padded(right)
+        let lefts = values(left, .digits), rights = values(right, .digits)
         guard !lefts.isEmpty, !rights.isEmpty else { return nil }
         var readings = Set<String>()
         for first in lefts {
             for second in rights {
-                readings.insert(first + second)
-                if second.count == 2 { readings.insert(first + "." + second) }
+                readings.insert(Kind.digits.reading(first + second))
+                if gap == .space, second.count == 2, first.count <= 2, !first.hasPrefix("0") {
+                    readings.insert(Kind.paired.reading(first + "." + second))
+                }
             }
         }
-        return Set(readings.sorted().prefix(mergedReadingLimit))
+        return readings
     }
 
     private static func multiplied(_ readings: Set<String>, by scale: Int) -> Set<String> {
-        Set(readings.compactMap { reading in
-            let value = reading.hasPrefix("p") ? String(reading.dropFirst()) : reading
-            guard !value.contains("s"), !value.contains(":"),
-                  let decimal = Decimal(string: value, locale: Locale(identifier: "en_US_POSIX")) else { return nil }
-            return NSDecimalNumber(decimal: decimal * Decimal(scale)).stringValue
+        Set((values(readings, .cardinal) + values(readings, .decimal)).compactMap { value in
+            Decimal(string: value, locale: Locale(identifier: "en_US_POSIX")).map {
+                Kind.cardinal.reading(NSDecimalNumber(decimal: $0 * Decimal(scale)).stringValue)
+            }
         })
     }
 
@@ -183,27 +220,28 @@ enum EnglishNumbers {
     private static func readings(_ run: [String]) -> Set<String> {
         guard let last = run.last else { return [] }
         if let tensWord = decades[last] {
-            let years = readings(Array(run.dropLast()) + [tensWord]).filter { isInteger($0) && [2, 4].contains($0.count) && $0.hasSuffix("0") }
-            return Set(years.flatMap { $0.count == 4 ? [$0 + "s", String($0.suffix(2)) + "s"] : [$0 + "s"] })
+            let spoken = readings(Array(run.dropLast()) + [tensWord])
+            let years = values(spoken, .cardinal) + values(spoken, .paired).map { $0.replacingOccurrences(of: ".", with: "") }
+            return Set(years.compactMap(decadeReadings).joined())
         }
         if let point = run.firstIndex(of: "point") {
             var fraction = run[(point + 1)...], scale: Int?
             if let last = fraction.last, let large = largeScales[last] { scale = large; fraction = fraction.dropLast() }
             guard let whole = point == 0 ? 0 : cardinal(run[..<point]), !fraction.isEmpty,
                   fraction.allSatisfy({ $0 == "oh" || units[$0].map { $0 < 10 } == true }) else { return [] }
-            let decimal = "\(whole)." + fraction.map { $0 == "oh" ? "0" : String(units[$0]!) }.joined()
-            return scale.map { multiplied([decimal], by: $0) } ?? ["p" + decimal]
+            let decimal = Kind.decimal.reading("\(whole)." + fraction.map { $0 == "oh" ? "0" : String(units[$0]!) }.joined())
+            return scale.map { multiplied([decimal], by: $0) } ?? [decimal]
         }
         var readings = Set<String>()
-        if let value = cardinal(run[...]) { readings.insert(String(value)) }
-        if let digits = digitSequence(run) { readings.insert(digits) }
+        if let value = cardinal(run[...]) { readings.insert(Kind.cardinal.reading(String(value))) }
+        if let digits = digitSequence(run) { readings.insert(Kind.digits.reading(digits)) }
         for split in 1..<min(3, run.count) {
             guard let first = small(run[..<split]) else { continue }
             let rest = run[split...]
             if let second = small(rest), second >= 10 {
-                readings.formUnion(["\(first)\(second)", "\(first).\(second)"])
+                readings.insert(Kind.paired.reading("\(first).\(second)"))
             } else if rest.count == 2, rest.first == "oh", let digit = units[rest.last!], digit < 10 {
-                readings.formUnion(["\(first)0\(digit)", "\(first).0\(digit)"])
+                readings.insert(Kind.paired.reading("\(first).0\(digit)"))
             }
         }
         if run.count > 1, let scale = largeScales[last] {
