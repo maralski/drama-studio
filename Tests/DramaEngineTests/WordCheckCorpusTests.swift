@@ -4,7 +4,8 @@ import XCTest
 @testable import DramaEngine
 
 /// Real recognizer output for generated clips: `pos` and `spell` clips speak
-/// the line, `neg` and `negspell` clips speak a different line.
+/// the line, `neg` and `negspell` clips speak a different line, and `drop`
+/// clips leave a word out.
 final class WordCheckCorpusTests: XCTestCase {
     private struct Clip: Decodable {
         struct Span: Decodable { var text: String; var confidence: Double }
@@ -16,8 +17,8 @@ final class WordCheckCorpusTests: XCTestCase {
     }
     private let locale = Locale(identifier: "en_AU")
 
-    private func corpus() throws -> [Clip] {
-        let url = try XCTUnwrap(Bundle.module.url(forResource: "word-check-corpus", withExtension: "json", subdirectory: "Fixtures"))
+    private func corpus(_ name: String = "word-check-corpus") throws -> [Clip] {
+        let url = try XCTUnwrap(Bundle.module.url(forResource: name, withExtension: "json", subdirectory: "Fixtures"))
         return try JSONDecoder().decode([Clip].self, from: Data(contentsOf: url))
     }
 
@@ -35,6 +36,19 @@ final class WordCheckCorpusTests: XCTestCase {
         let correctAccepted = correct.filter(accepted).count
         print("word-check corpus: \(correctAccepted)/\(correct.count) correct clips accepted")
         XCTAssertGreaterThanOrEqual(correctAccepted, 132)
+    }
+
+    /// Lines with every kind of cue Drama Studio offers. About a dozen correct
+    /// clips performed only the cue's sound or cut the line short.
+    func testCuedLinesAcceptCorrectSpeechAndRejectEveryWrongClip() throws {
+        let clips = try corpus("word-check-cues")
+        XCTAssertEqual(clips.count, 132)
+        let wrongAccepted = clips.filter { !$0.speaksLine && accepted($0) }.map(\.id)
+        XCTAssertEqual(wrongAccepted, [])
+        let correct = clips.filter(\.speaksLine)
+        let correctAccepted = correct.filter(accepted).count
+        print("word-check cues: \(correctAccepted)/\(correct.count) correct clips accepted")
+        XCTAssertGreaterThanOrEqual(correctAccepted, 76)
     }
 
     func testMatcherSpeed() throws {
