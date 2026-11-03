@@ -94,6 +94,93 @@ package struct Sampler {
         }
         return order[best]
     }
+
+    /// Returns the index into `logits` under Fish Audio's reference sampling.
+    ///
+    /// Rank r of the sorted row stays when it is under top-k, its cumulative mass
+    /// is within top-p and its probability is at least `epsilon`; then only ids
+    /// below `legal` stay, the most probable legal one always. Untruncated draws
+    /// race every legal index in index order instead of sorting.
+    mutating func sample(_ logits: [Float], _ draw: ReferenceDraw) -> Int {
+        let t = max(draw.temperature, 1e-5)
+        let n = logits.count
+        let legal = min(draw.legal, n)
+        if draw.untruncated(n: n) {
+            let maxValue = Double(logits[0..<legal].max()!)
+            var best = 0
+            var bestScore = -Double.infinity
+            for i in 0..<legal {
+                let score = exp((Double(logits[i]) - maxValue) / t) / rng.exponential()
+                if score > bestScore { bestScore = score; best = i }
+            }
+            return best
+        }
+        var order = Array(0..<n)
+        order.sort { logits[$0] > logits[$1] || (logits[$0] == logits[$1] && $0 < $1) }
+        let values = order.map { Double(logits[$0]) / t }
+        let maxValue = values[0]
+        var expSum = 0.0
+        for v in values { expSum += exp(v - maxValue) }
+        var kept: [Int] = []
+        var cumulative = 0.0
+        for r in 0..<n {
+            let p = exp(values[r] - maxValue) / expSum
+            cumulative += p
+            let isLegal = order[r] < legal
+            let ranked = (draw.topK < 1 || r < draw.topK) && (draw.topP >= 1 || cumulative <= draw.topP) && p >= draw.epsilon
+            if ranked {
+                if isLegal { kept.append(r) }
+                if kept.count == Self.maxKept { break }
+            } else if kept.isEmpty {
+                if isLegal { kept.append(r); break }
+            } else {
+                break
+            }
+        }
+        var keptSum = 0.0
+        for r in kept { keptSum += exp(values[r] - maxValue) }
+        var best = kept[0]
+        var bestScore = -Double.infinity
+        for r in kept {
+            let score = exp(values[r] - maxValue) / keptSum / rng.exponential()
+            if score > bestScore { bestScore = score; best = r }
+        }
+        return order[best]
+    }
+
+    /// The most ranks a truncated reference draw keeps: the GPU sampler's buffer.
+    /// An epsilon of 1e-3 already keeps at most 1000.
+    static let maxKept = 1024
+
+    /// Residual code `head + 1` from that head's 4096 logits.
+    mutating func sampleResidual(_ logits: [Float], _ params: SamplingParams) -> Int {
+        switch params.rule {
+        case .vendor: sample(logits, temperature: params.temperature, topK: params.topK, topP: params.topP)
+        case .reference: sample(logits, ReferenceDraw(params, epsilon: 0, legal: ModelConstants.residualCodebookSize))
+        }
+    }
+}
+
+/// One draw under the reference rule.
+struct ReferenceDraw {
+    var temperature: Double
+    /// Below 1: no cap.
+    var topK: Int
+    var topP: Double
+    var epsilon: Double
+    /// Ids from here on are never drawn.
+    var legal: Int
+
+    init(_ params: SamplingParams, epsilon: Double, legal: Int) {
+        temperature = params.temperature
+        topK = params.topK
+        topP = params.topP
+        self.epsilon = epsilon
+        self.legal = legal
+    }
+
+    /// No rule drops a legal id, so the draw needs no sort.
+    func untruncated(n: Int) -> Bool { (topK < 1 || topK >= n) && topP >= 1 && epsilon <= 0 }
 }
 
 /// A laughter loop in the code stream. The repetition-aware redraw forbids a
@@ -138,11 +225,21 @@ struct MainTokenSampler {
     func isSemantic(_ id: Int32) -> Bool { id >= config.semanticStart && id <= config.semanticEnd }
 
     /// `history` is every main token so far, including the current row.
-    func sample(candidateLogits: [Float], history: ArraySlice<Int32>, temperature: Double, topK: Int, topP: Double, sampler: inout Sampler) -> Int32 {
-        let first = candidates[sampler.sample(candidateLogits, temperature: temperature, topK: topK, topP: topP)]
-        let retry = candidates[sampler.sample(candidateLogits, temperature: Self.retryTemperature, topK: Self.retryTopK, topP: Self.retryTopP)]
+    func sample(candidateLogits: [Float], history: ArraySlice<Int32>, params: SamplingParams, sampler: inout Sampler) -> Int32 {
         let window = history.suffix(Self.windowFrames)
-        let repeated = window.contains(first) && isSemantic(first)
-        return repeated ? retry : first
+        switch params.rule {
+        case .vendor:
+            let first = candidates[sampler.sample(candidateLogits, temperature: params.temperature, topK: params.topK, topP: params.topP)]
+            let retry = candidates[sampler.sample(candidateLogits, temperature: Self.retryTemperature, topK: Self.retryTopK, topP: Self.retryTopP)]
+            // Only audio tokens are redrawn: the window starts in the prompt, whose user turn ends in eos.
+            return window.contains(first) && isSemantic(first) ? retry : first
+        case .reference(let epsilon):
+            let first = candidates[sampler.sample(candidateLogits, ReferenceDraw(params, epsilon: epsilon, legal: candidateLogits.count))]
+            guard window.contains(first) else { return first }
+            // The most probable candidate, the lowest id on a tie.
+            var top = 0
+            for i in candidateLogits.indices where candidateLogits[i] > candidateLogits[top] { top = i }
+            return candidates[top]
+        }
     }
 }

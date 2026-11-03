@@ -8,11 +8,13 @@ package struct SamplingParams: Equatable {
     package var temperature: Double
     package var topK: Int
     package var topP: Double
+    package var rule: SamplingRule
 
-    package init(temperature: Double, topK: Int, topP: Double) {
+    package init(temperature: Double, topK: Int, topP: Double, rule: SamplingRule = .vendor) {
         self.temperature = temperature
         self.topK = topK
         self.topP = topP
+        self.rule = rule
     }
 
     /// The vendor's settings, which the CLI's timing commands use.
@@ -37,6 +39,14 @@ struct SamplerKernelParams {
     var retryTopK: UInt32
     var retryTopPHi: Float, retryTopPLo: Float
     var windowFrames: UInt32
+    var reference: UInt32
+    /// The main token's epsilon under the reference rule.
+    var epsilonHi: Float, epsilonLo: Float
+    var residualCodes: UInt32
+    /// Whether the reference draw needs no sort, with `n` as the main token's
+    /// count and as a tower head's; each kernel reads its own.
+    var mainRace: UInt32
+    var towerRace: UInt32
 
     static func split(_ x: Double) -> (Float, Float) {
         let hi = Float(x)
@@ -65,6 +75,19 @@ struct SamplerKernelParams {
         retryTopK = UInt32(MainTokenSampler.retryTopK)
         retryTopPHi = rtopP.0; retryTopPLo = rtopP.1
         windowFrames = UInt32(MainTokenSampler.windowFrames)
+        residualCodes = UInt32(ModelConstants.residualCodebookSize)
+        switch p.rule {
+        case .vendor:
+            reference = 0
+            epsilonHi = 0; epsilonLo = 0
+            mainRace = 0; towerRace = 0
+        case .reference(let epsilon):
+            let e = Self.split(epsilon)
+            reference = 1
+            epsilonHi = e.0; epsilonLo = e.1
+            mainRace = ReferenceDraw(p, epsilon: epsilon, legal: n).untruncated(n: n) ? 1 : 0
+            towerRace = ReferenceDraw(p, epsilon: 0, legal: ModelConstants.residualCodebookSize).untruncated(n: n) ? 1 : 0
+        }
     }
 }
 

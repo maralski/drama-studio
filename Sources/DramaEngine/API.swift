@@ -196,6 +196,23 @@ public extension GenerationConfig {
     }
 }
 
+/// Which rules turn a frame's logits into codes.
+public enum SamplingRule: Sendable, Codable, Equatable {
+    /// fish-speech v3.0.0-beta's: a semantic main token that repeats one of the
+    /// last 16 is drawn again at temperature 1, top-k 30, top-p 0.95; every
+    /// residual head draws from all 4096 columns.
+    case vendor
+    /// Fish Audio's reference sampling for Drama 3 (fish-speech 0f8a12e): the
+    /// main token also drops candidates below `epsilon` probability, and any
+    /// main token, eos included, that repeats one of the last 16 is replaced
+    /// by the most probable candidate; residual codes come only from the
+    /// codec's 1024 entries. Meant for temperature 1, top-p 1 and top-k 0.
+    case reference(epsilon: Double)
+
+    /// The reference rule's epsilon when none is given.
+    public static let referenceEpsilon = 1e-3
+}
+
 /// When decoded audio leaves the engine.
 public enum StreamingMode: Sendable, Codable, Equatable {
     /// Each chunk's audio arrives as one ``SpeechEvent/audio(samples:chunkIndex:)``

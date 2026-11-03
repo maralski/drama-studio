@@ -190,6 +190,11 @@ struct SamplerParams {
     uint retryTopK;
     float retryTopPHi, retryTopPLo;
     uint windowFrames;
+    uint reference;
+    float epsilonHi, epsilonLo;
+    uint residualCodes;
+    uint mainRace;
+    uint towerRace;
 };
 
 // Candidate record for the extraction: (value desc, index asc) ordering, carrying
@@ -243,12 +248,15 @@ struct SamplerShared {
     ulong keptU[SAMPLE_MAX_KEPT];
 };
 
-// One draw of the CPU `Sampler.sample`: returns the index into `logits`. Every
+// One draw of the CPU `Sampler.sample`, or with `reference` of its reference
+// draw (top-k 0 meaning no cap, `epsilon`, ids from `legal` on never drawn):
+// returns the index into `logits`, and `top` the most probable index. Every
 // thread of the SAMPLE_TG-wide threadgroup must call it; `rng` is advanced on
 // thread 0 only. `bad` is set when a logit is not finite.
 inline uint sample_one(device const float* logits, uint n, df t, df topP, uint topK,
+                       bool reference, df epsilon, uint legal,
                        thread ulong* rng, threadgroup SamplerShared& sh,
-                       uint tid, uint lane, uint sg, thread bool& bad) {
+                       uint tid, uint lane, uint sg, thread bool& bad, thread uint& top) {
     float v[SAMPLE_SLOTS];
     df e[SAMPLE_SLOTS];
     float localMax = -INFINITY;
@@ -295,15 +303,21 @@ inline uint sample_one(device const float* logits, uint n, df t, df topP, uint t
     uint taken = 0;
     df cumulative = df_make(0.0f, 0.0f);
     df keptSum = df_make(0.0f, 0.0f);
-    uint limit = min(clamp(topK, 1u, uint(SAMPLE_MAX_KEPT)), n);
+    uint kept = 0;
+    // The reference draw walks ranks until one fails its rules; it keeps at most
+    // SAMPLE_MAX_KEPT, as the CPU does.
+    uint limit = reference ? n : min(clamp(topK, 1u, uint(SAMPLE_MAX_KEPT)), n);
     // Top-p 1 keeps every candidate up to top-k, as on the CPU; see `Sampler`.
     bool nucleus = df_gt(df_make(1.0f, 0.0f), topP);
+    // Set once the reference ranks stop before a legal id: the next round looks
+    // for the most probable legal id alone.
+    bool legalOnly = false;
     for (uint i = 0; i < limit; i++) {
         Cand best;
         best.val = -INFINITY; best.idx = 0xffffffffu; best.ehi = 0.0f; best.elo = 0.0f;
         for (uint s = 0; s < SAMPLE_SLOTS; s++) {
             uint idx = tid + s * SAMPLE_TG;
-            if (idx < n && !(taken & (1u << s))) {
+            if (idx < n && !(taken & (1u << s)) && (!legalOnly || idx < legal)) {
                 Cand c;
                 c.val = v[s]; c.idx = idx; c.ehi = e[s].hi; c.elo = e[s].lo;
                 if (cand_better(c, best)) best = c;
@@ -318,24 +332,41 @@ inline uint sample_one(device const float* logits, uint n, df t, df topP, uint t
             Cand w = cand_simd_best(lane < SAMPLE_SG ? sh.partials[lane] : none);
             if (lane == 0) {
                 df term = df_make(w.ehi, w.elo);
-                cumulative = df_add(cumulative, df_div(term, expSum));
-                bool dropped = i > 0 && nucleus && df_gt(cumulative, topP);
-                if (!dropped) {
-                    sh.keptIdx[i] = w.idx;
-                    sh.keptE[i] = term;
+                df probability = df_div(term, expSum);
+                cumulative = df_add(cumulative, probability);
+                bool keep, stop, searchLegal = false;
+                if (!reference) {
+                    keep = !(i > 0 && nucleus && df_gt(cumulative, topP));
+                    stop = !keep;
+                } else if (legalOnly) {
+                    keep = true;
+                    stop = true;
+                } else {
+                    bool ranked = (topK == 0 || i < topK) && !(nucleus && df_gt(cumulative, topP)) && !df_gt(epsilon, probability);
+                    bool isLegal = w.idx < legal;
+                    keep = isLegal && (ranked || kept == 0);
+                    stop = ranked ? kept + (keep ? 1 : 0) == SAMPLE_MAX_KEPT : (kept > 0 || isLegal);
+                    searchLegal = !ranked && !stop;
+                }
+                if (keep) {
+                    sh.keptIdx[kept] = w.idx;
+                    sh.keptE[kept] = term;
                     keptSum = df_add(keptSum, term);
-                    sh.kept = i + 1;
+                    kept++;
+                    sh.kept = kept;
                 }
                 sh.winner = w.idx;
-                sh.stop = dropped ? 1u : 0u;
+                sh.stop = stop ? 1u : (searchLegal ? 2u : 0u);
             }
         }
         threadgroup_barrier(mem_flags::mem_threadgroup);
-        if (sh.stop != 0u) break;
+        if (i == 0) top = sh.winner;
+        if (sh.stop == 1u) break;
+        legalOnly = sh.stop == 2u;
         uint w = sh.winner;
         if (w % SAMPLE_TG == tid) taken |= 1u << (w / SAMPLE_TG);
     }
-    uint kept = sh.kept;
+    kept = sh.kept;
 
     if (tid == 0) {
         sh.keptSum = keptSum;
@@ -358,6 +389,79 @@ inline uint sample_one(device const float* logits, uint n, df t, df topP, uint t
             if (df_gt(s, bestScore)) { bestScore = s; best = j; }
         }
         sh.pick = sh.keptIdx[best];
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    uint pick = sh.pick;
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    return pick;
+}
+
+inline bool race_better(df a, uint ai, df b, uint bi) { return df_gt(a, b) || (a.hi == b.hi && a.lo == b.lo && ai < bi); }
+
+// The untruncated reference draw: the argmax over legal indices of
+// exp((logit - max) / t) / E, one exponential E per index drawn in index
+// order, as the CPU `Sampler` does; `top` is the most probable index. Same
+// calling rules as sample_one.
+inline uint sample_race(device const float* logits, uint n, df t, uint legal,
+                        thread ulong* rng, threadgroup SamplerShared& sh,
+                        uint tid, uint lane, uint sg, thread bool& bad, thread uint& top) {
+    float v[SAMPLE_SLOTS];
+    Cand best;
+    best.val = -INFINITY; best.idx = 0xffffffffu; best.ehi = 0.0f; best.elo = 0.0f;
+    for (uint s = 0; s < SAMPLE_SLOTS; s++) {
+        uint i = tid + s * SAMPLE_TG;
+        float x = i < n ? logits[i] : -INFINITY;
+        if (i < n && !isfinite(x)) { bad = true; x = -INFINITY; }
+        v[s] = x;
+        Cand c;
+        c.val = x; c.idx = i; c.ehi = 0.0f; c.elo = 0.0f;
+        if (i < legal && cand_better(c, best)) best = c;
+    }
+    best = cand_simd_best(best);
+    if (lane == 0) sh.partials[sg] = best;
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (sg == 0) {
+        Cand none;
+        none.val = -INFINITY; none.idx = 0xffffffffu; none.ehi = 0.0f; none.elo = 0.0f;
+        Cand w = cand_simd_best(lane < SAMPLE_SG ? sh.partials[lane] : none);
+        if (lane == 0) { sh.winner = w.idx; sh.maxVal = w.val; }
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    top = sh.winner;
+    float maxVal = sh.maxVal;
+
+    df bestScore = df_make(-INFINITY, 0.0f);
+    uint bestIdx = 0xffffffffu;
+    const uint slotsPerBatch = SAMPLE_MAX_KEPT / SAMPLE_TG;
+    for (uint s0 = 0; s0 < SAMPLE_SLOTS && s0 * SAMPLE_TG < legal; s0 += slotsPerBatch) {
+        uint base = s0 * SAMPLE_TG;
+        if (tid == 0) {
+            uint count = min(uint(SAMPLE_MAX_KEPT), legal - base);
+            for (uint j = 0; j < count; j++) sh.keptU[j] = (xoshiro_next(rng) >> 11) + 1;
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        for (uint s = s0; s < min(s0 + slotsPerBatch, uint(SAMPLE_SLOTS)); s++) {
+            uint i = tid + s * SAMPLE_TG;
+            if (i < legal) {
+                df e = df_exp(df_div(df_two_sum(v[s], -maxVal), t));
+                df score = df_div(e, df_neg(df_log_unit(sh.keptU[i - base])));
+                if (df_gt(score, bestScore)) { bestScore = score; bestIdx = i; }
+            }
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+    }
+    for (uint mask = 16; mask >= 1; mask >>= 1) {
+        df o = df_make(simd_shuffle_xor(bestScore.hi, mask), simd_shuffle_xor(bestScore.lo, mask));
+        uint oi = simd_shuffle_xor(bestIdx, mask);
+        if (race_better(o, oi, bestScore, bestIdx)) { bestScore = o; bestIdx = oi; }
+    }
+    if (lane == 0) { sh.sums[sg] = bestScore; sh.keptIdx[sg] = bestIdx; }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (tid == 0) {
+        for (uint g = 1; g < SAMPLE_SG; g++) {
+            if (race_better(sh.sums[g], sh.keptIdx[g], bestScore, bestIdx)) { bestScore = sh.sums[g]; bestIdx = sh.keptIdx[g]; }
+        }
+        sh.pick = bestIdx;
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
     uint pick = sh.pick;
@@ -398,7 +502,16 @@ kernel void sample_tower(device const float* logits [[buffer(0)]],
     ulong s[4];
     load_rng(rng, p.rngIn, s);
     bool bad = false;
-    uint pick = sample_one(logits, p.n, df_make(p.tHi, p.tLo), df_make(p.topPHi, p.topPLo), p.topK, s, sh, tid, lane, sg, bad);
+    uint top;
+    df t = df_make(p.tHi, p.tLo), topP = df_make(p.topPHi, p.topPLo);
+    uint pick;
+    if (p.reference == 0u) {
+        pick = sample_one(logits, p.n, t, topP, p.topK, false, df_make(0.0f, 0.0f), p.n, s, sh, tid, lane, sg, bad, top);
+    } else if (p.towerRace != 0u) {
+        pick = sample_race(logits, p.n, t, p.residualCodes, s, sh, tid, lane, sg, bad, top);
+    } else {
+        pick = sample_one(logits, p.n, t, topP, p.topK, true, df_make(0.0f, 0.0f), p.residualCodes, s, sh, tid, lane, sg, bad, top);
+    }
     if (tid == 0) {
         store_rng(rng, p.rngOut, s);
         int code = bad ? 0 : int(pick);
@@ -408,9 +521,11 @@ kernel void sample_tower(device const float* logits [[buffer(0)]],
     }
 }
 
-// The main token: two draws over the 4097 candidates (eos, then the semantic
-// band), the second with the retry settings; the retry wins when the first pick
-// is semantic and repeats a main token of the last `windowFrames` rows.
+// The main token over the 4097 candidates (eos, then the semantic band). The
+// vendor rule draws twice, the second with the retry settings, and the retry
+// wins when the first pick is semantic and repeats a main token of the last
+// `windowFrames` rows. The reference rule draws once and replaces any
+// repeating pick with the most probable candidate.
 [[max_total_threads_per_threadgroup(SAMPLE_TG)]]
 kernel void sample_main(device const float* logits [[buffer(0)]],
                         device ulong* rng [[buffer(1)]],
@@ -426,14 +541,26 @@ kernel void sample_main(device const float* logits [[buffer(0)]],
     ulong s[4];
     load_rng(rng, p.rngIn, s);
     bool bad = false;
-    uint first = sample_one(logits, p.n, df_make(p.tHi, p.tLo), df_make(p.topPHi, p.topPLo), p.topK, s, sh, tid, lane, sg, bad);
-    uint retry = sample_one(logits, p.n, df_make(p.retryTHi, p.retryTLo), df_make(p.retryTopPHi, p.retryTopPLo), p.retryTopK, s, sh, tid, lane, sg, bad);
+    uint top;
+    df t = df_make(p.tHi, p.tLo), topP = df_make(p.topPHi, p.topPLo);
+    bool reference = p.reference != 0u;
+    uint first, retry;
+    if (!reference) {
+        first = sample_one(logits, p.n, t, topP, p.topK, false, df_make(0.0f, 0.0f), p.n, s, sh, tid, lane, sg, bad, top);
+        retry = sample_one(logits, p.n, df_make(p.retryTHi, p.retryTLo), df_make(p.retryTopPHi, p.retryTopPLo), p.retryTopK,
+                           false, df_make(0.0f, 0.0f), p.n, s, sh, tid, lane, sg, bad, top);
+    } else {
+        first = p.mainRace != 0u
+            ? sample_race(logits, p.n, t, p.n, s, sh, tid, lane, sg, bad, top)
+            : sample_one(logits, p.n, t, topP, p.topK, true, df_make(p.epsilonHi, p.epsilonLo), p.n, s, sh, tid, lane, sg, bad, top);
+        retry = top;
+    }
     if (tid == 0) {
         store_rng(rng, p.rngOut, s);
         int firstId = first == 0 ? p.eos : p.semanticStart + int(first) - 1;
         int retryId = retry == 0 ? p.eos : p.semanticStart + int(retry) - 1;
         bool repeated = false;
-        if (first != 0) {
+        if (first != 0 || reference) {
             uint from = p.position + 1 >= p.windowFrames ? p.position + 1 - p.windowFrames : 0;
             for (uint r = from; r <= p.position; r++) repeated = repeated || frames[r * 11] == firstId;
         }

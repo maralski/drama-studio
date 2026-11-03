@@ -15,6 +15,14 @@ final class SamplerParityTests: XCTestCase {
     static let settings = [SamplingParams(temperature: 0.7, topK: 30, topP: 0.7), SamplingParams(temperature: 1.0, topK: 30, topP: 0.95)]
     /// Keeps more candidates than a sampler threadgroup has threads.
     static let wide = SamplingParams(temperature: 1.0, topK: 600, topP: 1.0)
+    /// The reference rule at its recommended settings: residual heads race every
+    /// legal code unsorted, the main token sorts down to the epsilon.
+    static let reference = SamplingParams(temperature: 1.0, topK: 0, topP: 1.0, rule: .reference(epsilon: SamplingRule.referenceEpsilon))
+    /// The reference rule truncated: sorted residual draws, where a peak above
+    /// code 1023 leaves no legal rank inside top-p.
+    static let referenceTruncated = [SamplingParams(temperature: 0.7, topK: 30, topP: 0.7, rule: .reference(epsilon: SamplingRule.referenceEpsilon)),
+                                      SamplingParams(temperature: 1.0, topK: 0, topP: 0.95, rule: .reference(epsilon: 0))]
+    static let referenceSettings = [reference] + referenceTruncated
     static let codebookSize = ModelConstants.codebookSize
     static let candidates = ModelConstants.codebookSize + 1
 
@@ -144,7 +152,10 @@ final class SamplerParityTests: XCTestCase {
             var cpu = Sampler(state: start)
             var mismatches = 0
             var firstMismatch = -1
-            for (i, row) in rows.enumerated() where cpu.sample(row, temperature: p.temperature, topK: p.topK, topP: p.topP) != gpu.picks[i] {
+            if case .reference = p.rule {
+                XCTAssertTrue(gpu.picks.allSatisfy { $0 < ModelConstants.residualCodebookSize }, "\(label) \(p): a residual code outside the codec's codebook")
+            }
+            for (i, row) in rows.enumerated() where cpu.sampleResidual(row, p) != gpu.picks[i] {
                 mismatches += 1
                 if firstMismatch < 0 { firstMismatch = i }
             }
@@ -154,16 +165,16 @@ final class SamplerParityTests: XCTestCase {
     }
 
     func testUniformLogits() throws {
-        try checkTower(Self.uniformRows(count: Self.samplesPerSet, n: Self.codebookSize, seed: 1, peak: false), seed: 11, label: "uniform", settings: Self.settings + [Self.wide])
+        try checkTower(Self.uniformRows(count: Self.samplesPerSet, n: Self.codebookSize, seed: 1, peak: false), seed: 11, label: "uniform", settings: Self.settings + [Self.wide] + Self.referenceSettings)
     }
 
     func testPeakedLogits() throws {
-        try checkTower(Self.uniformRows(count: Self.samplesPerSet, n: Self.codebookSize, seed: 2, peak: true), seed: 12, label: "peaked", settings: Self.settings + [Self.wide])
+        try checkTower(Self.uniformRows(count: Self.samplesPerSet, n: Self.codebookSize, seed: 2, peak: true), seed: 12, label: "peaked", settings: Self.settings + [Self.wide] + Self.referenceSettings)
     }
 
     func testRealTowerLogits() throws {
         guard let dump = try Self.dumpRows() else { throw XCTSkip("eval/out/perf/dump_before.npz not present") }
-        try checkTower(Self.cycled(dump.tower, count: Self.samplesPerSet), seed: 13, label: "real tower", settings: Self.settings + [Self.wide])
+        try checkTower(Self.cycled(dump.tower, count: Self.samplesPerSet), seed: 13, label: "real tower", settings: Self.settings + [Self.wide] + Self.referenceSettings)
     }
 
     /// The main-token path: candidate mapping, the retry draw and the
@@ -187,7 +198,7 @@ final class SamplerParityTests: XCTestCase {
                 for (i, row) in rows.enumerated() {
                     var probe = cpu
                     let first = reference.candidates[probe.sample(row, temperature: p.temperature, topK: p.topK, topP: p.topP)]
-                    let main = reference.sample(candidateLogits: row, history: mains[...], temperature: p.temperature, topK: p.topK, topP: p.topP, sampler: &cpu)
+                    let main = reference.sample(candidateLogits: row, history: mains[...], params: p, sampler: &cpu)
                     if main != first { retries += 1 }
                     if main != gpu.picks[i] { mismatches += 1 }
                     mains.append(main)
@@ -195,6 +206,59 @@ final class SamplerParityTests: XCTestCase {
                 XCTAssertEqual(mismatches, 0, "\(label) \(p): main tokens differ")
                 XCTAssertEqual(cpu.state, gpu.end, "\(label) \(p): generator state differs")
                 XCTAssertGreaterThan(retries, 0, "\(label) \(p): the repetition retry never triggered")
+            }
+        }
+    }
+
+    /// The reference rule's main token: one draw with the epsilon cutoff, and
+    /// any pick repeating the window, eos as well as audio, replaced by the
+    /// most probable candidate.
+    func testReferenceMainToken() throws {
+        guard let loc = ModelLocation.huggingFaceCache(), loc.isComplete else { throw XCTSkip("drama-3 not downloaded") }
+        let config = try ModelConfig(url: loc.directory.appendingPathComponent("config.json"))
+        let mainSampler = MainTokenSampler(config: config)
+        var g = SeededGenerator(seed: 7)
+        // Every third row makes eos likely but not the most probable, so a
+        // repeated eos is replaced by an audio token.
+        var rows = Self.uniformRows(count: Self.samplesPerSet / 2, n: Self.candidates, seed: 4, peak: false)
+        for i in stride(from: 0, to: rows.count, by: 3) {
+            rows[i][0] = 15
+            rows[i][1 + Int(g.next() % UInt64(Self.codebookSize))] = 16
+        }
+        var sets: [(String, [[Float]])] = [("mixed", rows), ("peaked", Self.uniformRows(count: Self.samplesPerSet / 2, n: Self.candidates, seed: 3, peak: true))]
+        if let dump = try Self.dumpRows() { sets.append(("real", Self.cycled(dump.cand, count: Self.samplesPerSet / 2))) }
+        let history = [config.eos] + (1..<MainTokenSampler.windowFrames).map { _ in config.semanticStart + Int32(g.next() % UInt64(Self.codebookSize)) }
+        for (label, rows) in sets {
+            let harness = try Harness(n: Self.candidates, frameRows: history.count + rows.count + 1)
+            for p in Self.referenceSettings {
+                guard case .reference(let epsilon) = p.rule else { continue }
+                let start = Sampler(seed: 22).state
+                let gpu = try harness.mainPicks(rows, history: history, start: start, settings: p)
+                var cpu = Sampler(state: start)
+                var mains = history
+                var mismatches = 0, eosReplaced = 0, audioReplaced = 0
+                for (i, row) in rows.enumerated() {
+                    var probe = cpu
+                    let first = mainSampler.candidates[probe.sample(row, ReferenceDraw(p, epsilon: epsilon, legal: row.count))]
+                    let main = mainSampler.sample(candidateLogits: row, history: mains[...], params: p, sampler: &cpu)
+                    XCTAssertEqual(cpu.state, probe.state, "\(label) \(p): the replacement must not draw")
+                    if mains.suffix(MainTokenSampler.windowFrames).contains(first) {
+                        let top = mainSampler.candidates[row.indices.max { row[$0] < row[$1] || (row[$0] == row[$1] && $0 > $1) }!]
+                        XCTAssertEqual(main, top, "\(label) \(p): a repeated pick must become the most probable candidate")
+                        if main != first { if first == config.eos { eosReplaced += 1 } else { audioReplaced += 1 } }
+                    } else {
+                        XCTAssertEqual(main, first)
+                    }
+                    if main != gpu.picks[i] { mismatches += 1 }
+                    mains.append(main)
+                }
+                XCTAssertEqual(mismatches, 0, "\(label) \(p): main tokens differ")
+                XCTAssertEqual(cpu.state, gpu.end, "\(label) \(p): generator state differs")
+                if label == "mixed" {
+                    XCTAssertGreaterThan(audioReplaced, 0, "\(label) \(p): no repeated audio token was replaced")
+                    // Top-p 0.7 leaves eos out of the truncated settings' draws.
+                    if p == Self.reference { XCTAssertGreaterThan(eosReplaced, 0, "\(label) \(p): no repeated eos was replaced") }
+                }
             }
         }
     }
