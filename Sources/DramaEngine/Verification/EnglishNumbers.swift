@@ -8,7 +8,8 @@ import Foundation
 /// Each reading starts with its `Kind`, so a digit-by-digit "three two one"
 /// and a cardinal "three hundred twenty one" never match each other, while a
 /// written "321" carries both. A currency becomes its own token after the
-/// number: `¤dollar` when spoken, `¤?dollar` when only a symbol implies it.
+/// number: `¤dollar` when spoken, `¤?dollar` when only a symbol implies it,
+/// and `¤?dollar|cent` when Apple's symbol may stand for either.
 enum EnglishNumbers {
     enum Kind: Character {
         /// Digit by digit, leading zeros kept: "double oh seven" is 007.
@@ -91,7 +92,7 @@ enum EnglishNumbers {
             return !Set(left.dropFirst().split(separator: "|")).isDisjoint(with: right.dropFirst().split(separator: "|"))
         }
         guard let first = currency(left), let second = currency(right) else { return false }
-        return first == second
+        return !Set(first.split(separator: "|")).isDisjoint(with: second.split(separator: "|"))
     }
 
     /// How many of `tokens` together spell out `run`, a number read only digit
@@ -132,6 +133,8 @@ enum EnglishNumbers {
         }
         guard let separator, let fraction else {
             guard digits == trimmed else { return .written([Kind.digits.reading(digits)], currency: currency) }
+            // Apple writes "seventy five cents" as $75.
+            let currency = profile == .apple && currency == "dollar" && digits.count <= 2 ? "dollar|cent" : currency
             var readings: Set = [Kind.digits.reading(digits), Kind.cardinal.reading(digits)]
             // The exact recognizer writes "one thirty" as 1.30, so its 130 may be
             // "one hundred thirty"; a first pair that is no clock hour is a year.

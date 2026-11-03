@@ -243,10 +243,26 @@ final class WordCoverageTests: XCTestCase {
             ("It costs $4.99.", "It costs four dollars ninety."),
             ("It costs $5.50.", "It costs five pounds fifty."),
             ("It costs $1.", "It costs a pound."),
-            ("A stamp now costs 50 cents.", "A stamp now costs $50."),
             ("A stamp now costs 50 cents.", "A stamp now costs fifty dollars."),
-            ("A stamp now costs ¢50.", "A stamp now costs $50."),
             ("A stamp now costs $.50.", "A stamp now costs fifty dollars."),
+        ], false)
+    }
+
+    func testAppleMayWriteCentsAsABareDollarAmount() {
+        let cents = [
+            ("A stamp now costs 50 cents.", "A stamp now costs $50."),
+            ("A stamp now costs ¢50.", "A stamp now costs $50."),
+            ("It costs seventy-five cents.", "It costs $75."),
+        ]
+        assertHeard(cents, true, heardBy: [.apple])
+        assertHeard(cents, false, heardBy: [.exact])
+        assertHeard([("It costs fifty dollars.", "It costs $50.")], true)
+        assertHeard([
+            ("It costs $75.", "It costs 75 cents."),
+            ("It costs 75 cents.", "It costs $75.00."),
+            ("It costs 75 cents.", "It costs $750."),
+            ("It costs 75 cents.", "It costs €75."),
+            ("It costs 75 cents.", "It costs $76."),
         ], false)
     }
 
