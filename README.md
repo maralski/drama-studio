@@ -1,5 +1,7 @@
 # Drama Studio
 
+[![M8ven Score](https://m8ven.ai/badge/mcp/maralski-drama-studio-v1yf5v?v=dd3db85408ed7f788d9da639b5dcb5ba)](https://m8ven.ai/mcp/maralski-drama-studio-v1yf5v?s=readme)
+
 By Peter Marelas. A native macOS app that runs Fish Audio's [Drama 3](https://huggingface.co/fishaudio/drama-3)
 text-to-speech model locally on Apple silicon. The 35B mixture-of-experts
 backbone and the codebook tower run on hand-written Metal compute kernels that
