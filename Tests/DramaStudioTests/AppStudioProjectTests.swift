@@ -9,8 +9,8 @@ final class AppStudioProjectTests: XCTestCase {
     private func fixture() throws -> (project: StudioProject, audio: [Float]) {
         let document = try PPTXImporter.importPackage(ZipArchive(data: PPTXFixture.package(PPTXFixture.standard)), fallbackTitle: "deck")
         let takes = [
-            NarrationTake(segmentID: document.segments[0].id, sampleRange: 0..<(20 * 2048), sentences: [.init(text: "Good morning, everyone.", frames: 12), .init(text: "Today we cover the numbers.", frames: 8)]),
-            NarrationTake(segmentID: document.segments[1].id, sampleRange: 61_440..<91_001, sentences: [.init(text: "Revenue grew twelve percent.", frames: 15)]),
+            NarrationTake(segmentID: document.segments[0].id, sampleRange: 0..<(20 * 2048), sentences: [.init(text: "Good morning, everyone.", samples: 12 * 2048), .init(text: "Today we cover the numbers.", samples: 8 * 2048)]),
+            NarrationTake(segmentID: document.segments[1].id, sampleRange: 61_440..<91_001, sentences: [.init(text: "Revenue grew twelve percent.", samples: 15 * 2048)]),
         ]
         var audio = [Float](repeating: 0, count: 91_001)
         for take in takes {

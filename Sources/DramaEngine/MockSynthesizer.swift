@@ -1,6 +1,5 @@
 // Copyright 2026 Peter Marelas
 // SPDX-License-Identifier: Apache-2.0
-import AVFoundation
 import Foundation
 
 /// A stand-in engine for previews, tests, and working on an app without the
@@ -47,21 +46,21 @@ public actor MockSynthesizer: SpeechSynthesizer {
         try await load { _, detail in onPhase(detail) }
     }
 
-    /// Reads the clip's length and returns made-up codes of that length.
-    public func encodeReference(audioURL: URL, transcript: String, name: String) async throws -> ReferenceVoice {
-        let file = try AVAudioFile(forReading: audioURL)
-        let seconds = Double(file.length) / file.processingFormat.sampleRate
-        let frameCount = max(1, Int((seconds * Double(ModelConstants.sampleRate) / Double(ModelConstants.samplesPerFrame)).rounded()))
+    /// Stands in for Drama 3 without its weights.
+    public nonisolated var engineDescription: EngineDescription {
+        EngineDescription(engine: .drama3, modelID: "fishaudio/drama-3", snapshot: "mock", isMock: true)
+    }
+
+    public nonisolated var isTuned: Bool? { false }
+
+    /// Made-up Drama 3 codes as long as the clip.
+    public func encodeVoice(samples: [Float], transcript: String) async throws -> VoiceEncoding {
+        let frameCount = max(1, Int((Double(samples.count) / Double(ModelConstants.samplesPerFrame)).rounded()))
         let codes = (0..<ModelConstants.numCodebooks).map { book in
             let size = book == 0 ? ModelConstants.codebookSize : ModelConstants.residualCodebookSize
             return (0..<frameCount).map { Int32(($0 * 31 + book * 17) % size) }
         }
-        return ReferenceVoice(name: name, transcript: transcript, codes: codes, sourceFileName: audioURL.lastPathComponent)
-    }
-
-    /// A sine sweep, 2048 samples per frame at 44.1 kHz.
-    public func decode(frames: [Frame]) async throws -> [Float] {
-        Self.sweep(frameCount: frames.count, pitch: 1)
+        return .drama3(codes: codes)
     }
 
     /// Streams the real engine's event sequence for `request`, with a sweep
@@ -107,7 +106,7 @@ public actor MockSynthesizer: SpeechSynthesizer {
 
         for (index, text) in lines.enumerated() {
             emit(.chunkStarted(index: index, count: lines.count, text: text))
-            let promptRows = 24 + text.utf8.count / 3 + request.references.reduce(0) { $0 + ($1.codes.first?.count ?? 0) }
+            let promptRows = 24 + text.utf8.count / 3 + request.references.reduce(0) { $0 + ($1.encodings[.drama3]?.sampleCount ?? 0) / ModelConstants.samplesPerFrame }
             timings.promptRows += promptRows
             emit(.prefill(rows: promptRows))
 
@@ -136,10 +135,10 @@ public actor MockSynthesizer: SpeechSynthesizer {
             timings.framesGenerated += target
 
             samples += audio
-            sentences.append(SpokenSentence(text: text, frames: target))
+            sentences.append(SpokenSentence(text: text, samples: audio.count))
             emit(.audio(samples: audio, chunkIndex: index))
         }
-        let take = Take(text: plan.turnText, codes: (0..<ModelConstants.numCodebooks).map { c in frames.map { $0[1 + c] } })
+        let take = Take(text: plan.turnText, context: .drama3(codes: (0..<ModelConstants.numCodebooks).map { c in frames.map { $0[1 + c] } }))
         emit(.finished(SpeechResult(take: take, samples: samples, timings: timings, finishedByEOS: true, sentences: sentences)))
     }
 

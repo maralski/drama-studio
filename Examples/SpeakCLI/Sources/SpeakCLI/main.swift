@@ -33,7 +33,7 @@ if mock {
 }
 
 try await engine.load { phase in print("load: \(phase)") }
-let voice = try await engine.encodeReference(audioURL: clip, transcript: transcript, name: "Clip")
+let (voice, _) = try await engine.cloneVoice(audioURL: clip, transcript: transcript, name: "Clip")
 print("voice: \(String(format: "%.1f", voice.durationSeconds)) s clip")
 
 var request = SpeechRequest(text: text, references: [voice])

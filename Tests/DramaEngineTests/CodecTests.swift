@@ -134,7 +134,7 @@ final class CodecTests: XCTestCase {
             try file.write(from: buffer)
         }
 
-        let samples = try DramaCodec.loadAudio(url: url)
+        let samples = try ReferenceAudio.load(url: url)
         XCTAssertEqual(Double(samples.count), Double(DramaCodec.sampleRate), accuracy: 64)
         let middle = samples[10_000 ..< 30_000]
         let peak = middle.map(abs).max() ?? 0

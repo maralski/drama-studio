@@ -117,14 +117,10 @@ public struct EngineInfo: Sendable, Equatable {
     public var version: String
 
     public init(describing synthesizer: any SpeechSynthesizer, version: String) {
-        if let engine = synthesizer as? DramaSynthesizer {
-            kind = .metal
-            snapshot = engine.location.directory.lastPathComponent
-        } else {
-            kind = .mock
-            snapshot = "mock"
-        }
-        modelID = "fishaudio/drama-3"
+        let description = synthesizer.engineDescription
+        kind = description.isMock ? .mock : .metal
+        snapshot = description.snapshot
+        modelID = description.modelID
         self.version = version
     }
 }
@@ -194,7 +190,7 @@ public final class APIService: Sendable {
     private func handle(_ request: APIRequest) async throws -> APIResponse {
         switch request {
         case .health:
-            let tuned: Bool? = if let engine = synthesizer as? DramaSynthesizer { engine.isTuned } else { false }
+            let tuned = synthesizer.isTuned
             return .json(Health(modelLoaded: await synthesizer.isLoaded, engine: info.kind.rawValue, busy: await isBusy(), tuned: tuned, version: info.version,
                                 estimate: await jobs.progress))
         case .models:
@@ -202,11 +198,11 @@ public final class APIService: Sendable {
         case .listVoices:
             return .json(VoiceList(voices: await voices.allVoices().map(VoiceSummary.init)))
         case .addVoice(let new):
-            var voice = try await withAudioFile(new.audio, field: "the clip") { url in
-                try await synthesizer.encodeReference(audioURL: url, transcript: new.transcript, name: new.name)
+            var (voice, clip) = try await withAudioFile(new.audio, field: "the clip") { url in
+                try await synthesizer.cloneVoice(audioURL: url, transcript: new.transcript, name: new.name)
             }
             voice.sourceFileName = new.fileName
-            try await voices.add(voice)
+            try await voices.add(voice, clip: clip)
             return .json(VoiceSummary(voice), status: .created)
         case .deleteVoice(let key):
             guard case .success(let voice) = VoiceLookup.find(key, in: await voices.allVoices()) else {
@@ -325,7 +321,7 @@ public final class APIService: Sendable {
             let elapsed = ContinuousClock.now - start
             var headers = format == .pcm ? Self.pcmHeaders(contentType: format.contentType) : ["Content-Type": format.contentType]
             headers["X-Drama-Take-Id"] = takeID.uuidString
-            headers["X-Drama-Frames"] = String(result.take.frameCount)
+            headers["X-Drama-Frames"] = String(result.take.apiFrames)
             headers["X-Drama-Word-Coverage"] = result.wordCoverage.rawValue
             headers["X-Drama-Generated-Frames"] = String(result.timings.framesGenerated)
             headers["X-Drama-Verification-Seconds"] = String(format: "%.3f", result.timings.verificationSeconds)
@@ -356,7 +352,7 @@ public final class APIService: Sendable {
                 var sentences = 0
                 if let result = try await forward(request, framing: framing, job: job, into: out, sentences: &sentences) {
                     await remember(result.take)
-                    Self.send(framing.done(["take_id": takeID.uuidString, "frames": result.take.frameCount,
+                    Self.send(framing.done(["take_id": takeID.uuidString, "frames": result.take.apiFrames,
                                             "word_coverage": result.wordCoverage.rawValue,
                                             "seconds": Self.seconds(result.samples)]), to: out)
                 }
@@ -476,7 +472,7 @@ public final class APIService: Sendable {
         var encoded: [ReferenceVoice] = []
         for (index, clip) in clips.enumerated() {
             encoded.append(try await withAudioFile(clip.audio, field: "references[\(index)]") { url in
-                try await synthesizer.encodeReference(audioURL: url, transcript: clip.transcript, name: "Reference \(index + 1)")
+                try await synthesizer.cloneVoice(audioURL: url, transcript: clip.transcript, name: "Reference \(index + 1)").voice
             })
         }
         return encoded
@@ -580,8 +576,8 @@ struct TakeSummary: Encodable {
         input = entry.line
         text = entry.take.text
         seconds = (entry.take.durationSeconds * 1000).rounded() / 1000
-        frames = entry.take.frameCount
-        codes_base64 = TakeCodes.encode(entry.take.codes)
+        frames = entry.take.apiFrames
+        codes_base64 = entry.take.apiCodesBase64
         previous_take_ids = entry.lineage.dropLast().map(\.uuidString)
     }
 }

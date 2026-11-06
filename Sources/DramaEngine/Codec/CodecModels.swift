@@ -126,6 +126,14 @@ public actor DramaCodec {
         }
     }
 
+    /// A clip for a voice saved before the library kept clips, decoded from
+    /// its Drama 3 codes; nil when the voice has no Drama 3 encoding. Loads
+    /// only the codec, not the model.
+    public static func recreateClip(of voice: ReferenceVoice, directory: URL = DramaCodec.defaultDirectory) async throws -> [Float]? {
+        guard case .drama3(let codes)? = voice.encodings[.drama3] else { return nil }
+        return try await DramaCodec(directory: directory).decode(codes: codes)
+    }
+
     /// `[10][T]` codes to `T * 2048` mono samples at 44.1 kHz.
     public func decode(codes: [[Int32]]) async throws -> [Float] {
         var audio: [Float] = []
@@ -191,68 +199,6 @@ public actor DramaCodec {
         return codes
     }
 
-
-    /// Reads any format AVFoundation can open, averages the channels to mono, and
-    /// resamples to 44.1 kHz.
-    public static func loadAudio(url: URL) throws -> [Float] {
-        let file = try AVAudioFile(forReading: url)
-        let format = file.processingFormat
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(file.length)) else {
-            throw CodecError.audio("cannot allocate \(file.length) frames")
-        }
-        try file.read(into: buffer)
-        guard let channels = buffer.floatChannelData else { throw CodecError.audio("no float channel data") }
-
-        let count = Int(buffer.frameLength)
-        let channelCount = Int(format.channelCount)
-        var mono = [Float](repeating: 0, count: count)
-        for c in 0 ..< channelCount {
-            let channel = UnsafeBufferPointer(start: channels[c], count: count)
-            for i in 0 ..< count { mono[i] += channel[i] }
-        }
-        if channelCount > 1 {
-            let scale = 1 / Float(channelCount)
-            for i in 0 ..< count { mono[i] *= scale }
-        }
-        if format.sampleRate == Double(sampleRate) { return mono }
-        return try resample(mono, from: format.sampleRate)
-    }
-
-    private static func resample(_ samples: [Float], from rate: Double) throws -> [Float] {
-        guard let source = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: rate, channels: 1, interleaved: false),
-              let target = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: Double(sampleRate), channels: 1, interleaved: false),
-              let converter = AVAudioConverter(from: source, to: target),
-              let input = AVAudioPCMBuffer(pcmFormat: source, frameCapacity: AVAudioFrameCount(max(samples.count, 1)))
-        else { throw CodecError.audio("cannot build a \(rate) Hz to \(sampleRate) Hz converter") }
-        converter.sampleRateConverterQuality = AVAudioQuality.max.rawValue
-        converter.sampleRateConverterAlgorithm = AVSampleRateConverterAlgorithm_Mastering
-        input.frameLength = AVAudioFrameCount(samples.count)
-        samples.withUnsafeBufferPointer { input.floatChannelData![0].update(from: $0.baseAddress!, count: samples.count) }
-
-        let chunk: AVAudioFrameCount = 65_536
-        var out: [Float] = []
-        out.reserveCapacity(Int(Double(samples.count) * Double(sampleRate) / rate) + Int(chunk))
-        var fed = false
-        while true {
-            guard let buffer = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: chunk) else {
-                throw CodecError.audio("cannot allocate output buffer")
-            }
-            var error: NSError?
-            let status = converter.convert(to: buffer, error: &error) { _, inputStatus in
-                if fed {
-                    inputStatus.pointee = .endOfStream
-                    return nil
-                }
-                fed = true
-                inputStatus.pointee = .haveData
-                return input
-            }
-            if let error { throw CodecError.audio(error.localizedDescription) }
-            out.append(contentsOf: UnsafeBufferPointer(start: buffer.floatChannelData![0], count: Int(buffer.frameLength)))
-            if status == .endOfStream || status == .error || (status == .inputRanDry && buffer.frameLength == 0) { break }
-        }
-        return out
-    }
 
     private static func compiledModel(named name: String, in directory: URL) async throws -> URL {
         let fm = FileManager.default

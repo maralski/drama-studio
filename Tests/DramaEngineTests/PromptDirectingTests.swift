@@ -7,7 +7,7 @@ final class PromptDirectingTests: XCTestCase {
     func testCustomDesignNamesStayOutOfFreshReusedAndDirectedPrompts() throws {
         for name in ["My narrator", "Dr. Élodie", "声の案内人", "A voice: with punctuation"] {
             let design = VoiceDesign(name: name, description: "calm, clear storyteller", scene: "a quiet room")
-            let voice = Take(text: name + ": An earlier sample.", codes: Self.codes(3))
+            let voice = Take(text: name + ": An earlier sample.", context: .drama3(codes: Self.codes(3)))
             let line = "First sentence. Second sentence."
             for (previous, note) in [([], nil), ([voice], nil), ([voice], "warmer")] as [([Take], String?)] {
                 let plan = try GenerationPlan(text: line, references: [], character: design,
@@ -43,8 +43,8 @@ final class PromptDirectingTests: XCTestCase {
     func testDesignedVoiceReferenceDoesNotSpeakNameInLaterTakes() throws {
         let duke = VoiceDesign(name: "The Duke", description: "silky theatrical villain")
         let line = "Oh, you came all this way to stop me? [laughs] How delightfully brave of you."
-        let voice = Take(text: "The Duke: " + line, codes: Self.codes(3))
-        let older = Take(text: "The Duke: A different line.", codes: Self.codes(4))
+        let voice = Take(text: "The Duke: " + line, context: .drama3(codes: Self.codes(3)))
+        let older = Take(text: "The Duke: A different line.", context: .drama3(codes: Self.codes(4)))
         let plan = try GenerationPlan(text: line, references: [], character: duke, previousTakes: [voice, older], config: GenerationConfig())
         XCTAssertEqual(plan.chunks.map(\.turn), ["Oh, you came all this way to stop me?", "[laughs] How delightfully brave of you."])
         XCTAssertEqual(plan.history.map(\.text), ["A different line."])
@@ -86,7 +86,7 @@ final class PromptDirectingTests: XCTestCase {
 
     func testDesignLayoutTagsEveryTurnWithoutSpeakingTheName() throws {
         let rendered = try Drama3Prompt.render(text: "Pray ye never find out.", character: Self.captain,
-                                               history: [Take(text: "Ahoy there.", codes: Self.codes(2))])
+                                               history: [Drama3Prompt.HistoryTurn(text: "Ahoy there.", codes: Self.codes(2))])
         XCTAssertEqual(rendered, "<|im_start|>system\n" + Self.captainSystem + "<|im_end|>\n"
             + "<|im_start|>user\n<|speaker:0|>: Ahoy there.<|im_end|>\n<|im_start|>assistant\n<|voice|><codes:2><|im_end|>\n"
             + "<|im_start|>user\n<|speaker:0|>: Pray ye never find out.<|im_end|>\n<|im_start|>assistant\n<|voice|>")
@@ -139,9 +139,9 @@ final class PromptDirectingTests: XCTestCase {
 
     func testDesignedRetakeUsesTheFirstTakeAsVoiceAndTheLastTwoAsHistory() throws {
         let line = "[low and menacing] Ye want to know? Pray."
-        let first = Take(text: "Captain: [low and menacing] Ye want to know? Pray.", codes: Self.codes(3))
-        let second = Take(text: "Captain: Direction: angrier\nLine: [angrier] Ye want to know? [angrier] Pray.", codes: Self.codes(4))
-        let third = Take(text: "Captain: Direction: faster\nLine: [faster] Ye want to know? [faster] Pray.", codes: Self.codes(5))
+        let first = Take(text: "Captain: [low and menacing] Ye want to know? Pray.", context: .drama3(codes: Self.codes(3)))
+        let second = Take(text: "Captain: Direction: angrier\nLine: [angrier] Ye want to know? [angrier] Pray.", context: .drama3(codes: Self.codes(4)))
+        let third = Take(text: "Captain: Direction: faster\nLine: [faster] Ye want to know? [faster] Pray.", context: .drama3(codes: Self.codes(5)))
         let secondScript = "Direction: angrier\nLine: [angrier] Ye want to know? [angrier] Pray."
         let thirdScript = "Direction: faster\nLine: [faster] Ye want to know? [faster] Pray."
         let plan = try GenerationPlan(text: line, references: [], character: Self.captain, previousTakes: [first, second, third], note: "softer and warmer", config: GenerationConfig())
@@ -149,8 +149,8 @@ final class PromptDirectingTests: XCTestCase {
         let script = "Direction: softer and warmer\nLine: [softer and warmer] [low and menacing] Ye want to know?"
         XCTAssertEqual(plan, try GenerationPlan(text: line, references: [], character: Self.captain, previousTakes: [first, second, third], note: "softer and warmer", config: GenerationConfig()))
         XCTAssertNil(plan.character)
-        XCTAssertEqual(plan.references, [Drama3Prompt.Reference(transcript: "Ye want to know? Pray.", codes: first.codes)])
-        XCTAssertEqual(plan.history, [Take(text: secondScript, codes: second.codes), Take(text: thirdScript, codes: third.codes)])
+        XCTAssertEqual(plan.references, [Drama3Prompt.Reference(transcript: "Ye want to know? Pray.", codes: first.dramaCodes)])
+        XCTAssertEqual(plan.history, [Drama3Prompt.HistoryTurn(text: secondScript, codes: second.dramaCodes), Drama3Prompt.HistoryTurn(text: thirdScript, codes: third.dramaCodes)])
         XCTAssertEqual(plan.chunks, [GenerationPlan.Chunk(turn: script, line: "[low and menacing] Ye want to know?"),
                                      GenerationPlan.Chunk(turn: "Direction: softer and warmer\nLine: [softer and warmer] Pray.", line: "Pray.")])
         XCTAssertEqual(plan.turnText, turn)
@@ -185,32 +185,32 @@ final class PromptDirectingTests: XCTestCase {
     }
 
     func testDefaultVoiceRetakeClonesTheFirstTake() throws {
-        let first = Take(text: "It was a dark and stormy night.", codes: Self.codes(3))
+        let first = Take(text: "It was a dark and stormy night.", context: .drama3(codes: Self.codes(3)))
         let plan = try GenerationPlan(text: "It was a dark and stormy night.", references: [], previousTakes: [first], note: "whispered", config: GenerationConfig())
-        XCTAssertEqual(plan.references, [Drama3Prompt.Reference(transcript: "It was a dark and stormy night.", codes: first.codes)])
-        XCTAssertEqual(plan.history, [first])
+        XCTAssertEqual(plan.references, [Drama3Prompt.Reference(transcript: "It was a dark and stormy night.", codes: first.dramaCodes)])
+        XCTAssertEqual(plan.history, [Drama3Prompt.HistoryTurn(first)])
         XCTAssertEqual(plan.turnText, "Direction: whispered\nLine: [whispered] It was a dark and stormy night.")
     }
 
     func testATakeOfTheSameTurnIsTheVoiceButNeverHistory() throws {
         let line = "It was a dark and stormy night."
-        let first = Take(text: line, codes: Self.codes(3))
+        let first = Take(text: line, context: .drama3(codes: Self.codes(3)))
         let plain = try GenerationPlan(text: line, references: [], previousTakes: [first], config: GenerationConfig())
-        XCTAssertEqual(plain.references.map(\.codes), [first.codes], "still the voice")
+        XCTAssertEqual(plain.references.map(\.codes), [first.dramaCodes], "still the voice")
         XCTAssertEqual(plain.history, [], "replaying the same turn copies its audio")
-        let angrier = Take(text: "Direction: angrier\nLine: [angrier] It was a dark and stormy night.", codes: Self.codes(4))
+        let angrier = Take(text: "Direction: angrier\nLine: [angrier] It was a dark and stormy night.", context: .drama3(codes: Self.codes(4)))
         let again = try GenerationPlan(text: line, references: [], previousTakes: [first, angrier], note: "angrier", config: GenerationConfig())
-        XCTAssertEqual(again.history, [first], "the same note again leaves out the take it would copy")
+        XCTAssertEqual(again.history, [Drama3Prompt.HistoryTurn(first)], "the same note again leaves out the take it would copy")
     }
 
     func testClonedRetakeKeepsTheClipAndIsolatesSentences() throws {
         let clip = Drama3Prompt.Reference(transcript: "My own voice.", codes: Self.codes(6))
         let line = "The first sentence is long enough to stand. The second one is long enough too."
-        let take = Take(text: line, codes: Self.codes(4))
+        let take = Take(text: line, context: .drama3(codes: Self.codes(4)))
         let retake = try GenerationPlan(text: line, references: [clip], previousTakes: [take], note: "slower, with more pauses", config: GenerationConfig())
         XCTAssertEqual(retake.references, [clip])
         XCTAssertEqual(retake.chunks.map(\.line), ["The first sentence is long enough to stand.", "The second one is long enough too."])
-        XCTAssertEqual(retake.history, [take])
+        XCTAssertEqual(retake.history, [Drama3Prompt.HistoryTurn(take)])
         let plain = try GenerationPlan(text: line, references: [clip], config: GenerationConfig())
         XCTAssertEqual(plain.chunks.count, 2, "without a note the line is cut into sentences")
         XCTAssertEqual(plain.turnText, line)

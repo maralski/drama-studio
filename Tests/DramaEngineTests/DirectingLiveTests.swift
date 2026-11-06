@@ -26,7 +26,7 @@ final class DirectingLiveTests: XCTestCase {
             let r = try XCTUnwrap(result)
             try Self.wav(r.samples).write(to: directory.appending(path: "\(name).wav"))
             try JSONEncoder().encode(r.take.text).write(to: directory.appending(path: "\(name).turn.json"))
-            print("live \(name): \(r.take.frameCount) frames, \(String(format: "%.2f", r.take.durationSeconds)) s, turn \(r.take.text.debugDescription)")
+            print("live \(name): \(r.take.dramaCodes.first?.count ?? 0) frames, \(String(format: "%.2f", r.take.durationSeconds)) s, turn \(r.take.text.debugDescription)")
             return r
         }
 

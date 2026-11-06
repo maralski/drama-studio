@@ -12,7 +12,7 @@ final class LocalWordVerifierTests: XCTestCase {
         ] {
             let verifier = try LocalWordVerifier.prepare(text: line, shouldContinue: { true })
             let url = try XCTUnwrap(Bundle.module.url(forResource: fixture, withExtension: "wav", subdirectory: "Fixtures"))
-            let samples = try DramaCodec.loadAudio(url: url)
+            let samples = try ReferenceAudio.load(url: url)
             XCTAssertTrue(try verifier.check(samples: samples, line: line, shouldContinue: { true }), fixture)
             XCTAssertFalse(try verifier.check(samples: samples, line: wrong, shouldContinue: { true }), fixture)
         }
@@ -24,7 +24,7 @@ final class LocalWordVerifierTests: XCTestCase {
         let verifier: LocalWordVerifier
         verifier = try LocalWordVerifier.prepare(text: line, shouldContinue: { true })
         let url = try XCTUnwrap(Bundle.module.url(forResource: "golden-instead-of-garden", withExtension: "wav", subdirectory: "Fixtures"))
-        let samples = try DramaCodec.loadAudio(url: url)
+        let samples = try ReferenceAudio.load(url: url)
         XCTAssertFalse(try verifier.check(samples: samples, line: line, shouldContinue: { true }),
                        "The listener heard golden; a native garden transcript must not certify this recording.")
     }
@@ -60,7 +60,7 @@ final class LocalWordVerifierTests: XCTestCase {
         let second = "[pause] Pray ye never find out."
         let verifier = try LocalWordVerifier.prepare(text: first + " " + second, shouldContinue: { true })
         let url = try XCTUnwrap(Bundle.module.url(forResource: "captain-joined-refray", withExtension: "wav", subdirectory: "Fixtures"))
-        let samples = try DramaCodec.loadAudio(url: url)
+        let samples = try ReferenceAudio.load(url: url)
         XCTAssertTrue(try verifier.check(samples: Array(samples[..<206_848]), line: first, shouldContinue: { true }))
         XCTAssertTrue(try verifier.check(samples: Array(samples[206_848...]), line: second, shouldContinue: { true }))
         XCTAssertFalse(try verifier.check(samples: samples, line: first + " " + second, shouldContinue: { true }))
@@ -72,7 +72,7 @@ final class LocalWordVerifierTests: XCTestCase {
         let verifier: LocalWordVerifier
         verifier = try LocalWordVerifier.prepare(text: line, shouldContinue: { true })
         let url = try XCTUnwrap(Bundle.module.url(forResource: "terminal-monday", withExtension: "wav", subdirectory: "Fixtures"))
-        let samples = try DramaCodec.loadAudio(url: url)
+        let samples = try ReferenceAudio.load(url: url)
         XCTAssertTrue(try verifier.check(samples: samples, line: line, shouldContinue: { true }))
         // Fixed sample boundaries from the retained failure: before the final
         // word, and inside its voiced portion. Neither contains the full ending.
@@ -159,7 +159,7 @@ final class LocalWordVerifierTests: XCTestCase {
         let records = try JSONDecoder().decode([Recording].self, from: Data(contentsOf: URL(filePath: path)))
         for record in records {
             let verifier = try LocalWordVerifier.prepare(text: record.line, shouldContinue: { true })
-            XCTAssertEqual(try verifier.check(samples: DramaCodec.loadAudio(url: URL(filePath: record.audio)),
+            XCTAssertEqual(try verifier.check(samples: ReferenceAudio.load(url: URL(filePath: record.audio)),
                                               line: record.line, shouldContinue: { true }), record.matches, record.audio)
         }
     }

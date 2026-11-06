@@ -7,6 +7,27 @@ adds one, and a patch release changes neither.
 
 ## Unreleased
 
+Breaking: voices, takes and sentence timing no longer assume Drama 3, so a
+second engine can share them.
+
+- `Take` holds `text` and a `TakeContext`; `.drama3(codes:)` carries the
+  codes. `frameCount` and `frames` are gone; `sampleCount` and
+  `durationSeconds` remain. Takes saved with `codes` still decode.
+- `ReferenceVoice` holds `encodings`, one `VoiceEncoding` per
+  `SpeechEngineID`, and `clipSampleCount`. Voices saved with `codes` decode
+  with a Drama 3 encoding.
+- `SpokenSentence` counts `samples` instead of `frames`. Records saved with
+  `frames` still decode.
+- `SpeechSynthesizer` replaces `encodeReference(audioURL:transcript:name:)`
+  with `encodeVoice(samples:transcript:)` and the `cloneVoice` extension, drops
+  `decode(frames:)`, and adds `engineDescription` and `isTuned`.
+- `SpeechResult.frames` is gone. `Drama3Prompt.HistoryTurn` is its own type.
+- `DramaCodec.loadAudio` is now `ReferenceAudio.load(url:)`, which reads the
+  whole file in blocks. `ReferenceAudio.write(_:to:)` stores a clip.
+  `DramaCodec.recreateClip(of:directory:)` decodes a voice's Drama 3 codes.
+- The app's project format is 5. It still opens formats 1 to 4. The voice
+  library keeps each voice's clip beside its JSON file.
+
 ## 2.1.3
 
 - Accept the different ways the same words are spoken and written in the

@@ -8,8 +8,12 @@ import Foundation
 /// `VoiceDirectory`.
 public protocol VoiceStore: Sendable {
     func allVoices() async -> [ReferenceVoice]
-    func add(_ voice: ReferenceVoice) async throws
+    /// Keeps the voice and, when given, its clip as mono 44.1 kHz samples.
+    func add(_ voice: ReferenceVoice, clip: [Float]?) async throws
+    /// Removes the voice and its clip.
     func remove(_ id: ReferenceVoice.ID) async throws
+    /// The voice's clip, or nil when the store has none.
+    func clip(for id: ReferenceVoice.ID) async throws -> [Float]?
 }
 
 public struct VoiceDirectory: VoiceStore {
@@ -37,17 +41,35 @@ public struct VoiceDirectory: VoiceStore {
 
     public func allVoices() async -> [ReferenceVoice] { load().voices }
 
-    public func add(_ voice: ReferenceVoice) throws {
+    /// Writes the clip before the voice file, so a voice file never names a clip that is not there yet.
+    public func add(_ voice: ReferenceVoice, clip: [Float]?) throws {
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        var voice = voice
+        voice.clipSampleCount = clip?.count
+        if let clip {
+            try ReferenceAudio.write(clip, to: clipFile(for: voice.id))
+        } else {
+            try? FileManager.default.removeItem(at: clipFile(for: voice.id))
+        }
         try JSONEncoder().encode(voice).write(to: file(for: voice.id), options: .atomic)
     }
 
     public func remove(_ id: ReferenceVoice.ID) throws {
         try FileManager.default.removeItem(at: file(for: id))
+        if FileManager.default.fileExists(atPath: clipFile(for: id).path) { try FileManager.default.removeItem(at: clipFile(for: id)) }
+    }
+
+    public func clip(for id: ReferenceVoice.ID) throws -> [Float]? {
+        let clip = clipFile(for: id)
+        return FileManager.default.fileExists(atPath: clip.path) ? try ReferenceAudio.load(url: clip) : nil
     }
 
     private func file(for id: ReferenceVoice.ID) -> URL {
         url.appending(path: "\(id.uuidString).json")
+    }
+
+    private func clipFile(for id: ReferenceVoice.ID) -> URL {
+        url.appending(path: "\(id.uuidString).wav")
     }
 }
 

@@ -22,7 +22,7 @@ enum Captions {
         for take in takes {
             var cursor = take.sampleRange.lowerBound
             for sentence in take.sentences {
-                let end = min(cursor + sentence.frames * ModelConstants.samplesPerFrame, take.sampleRange.upperBound)
+                let end = min(cursor + sentence.samples, take.sampleRange.upperBound)
                 let text = spokenText(sentence.text)
                 if !text.isEmpty, end > cursor { cues.append(Cue(startSample: cursor, endSample: end, text: text)) }
                 cursor = end

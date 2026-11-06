@@ -18,11 +18,14 @@ public enum PromptError: Error, CustomStringConvertible, Equatable {
     case tooLong(Int)
     /// The request has both a designed voice and reference voices.
     case voiceConflict
+    /// The named voice has no Drama 3 encoding.
+    case notEncoded(String)
 
     /// A message for a person.
     public var description: String {
         switch self {
         case .voiceConflict: return "a designed character and reference voices can't be combined"
+        case .notEncoded(let name): return "the voice \(name) has not been encoded for Drama 3"
         case .emptyText(let w): return "\(w): text must not be empty"
         case .structuralToken(let w, let t): return "\(w): \(t) is written by the prompt builder"
         case .badSpeakerTag(let w): return "\(w): speaker tags must be <|speaker:0|> to <|speaker:15|>"
@@ -77,13 +80,33 @@ public enum Drama3Prompt: Sendable {
         public var transcript: String
         /// `[10][T]` codec codes.
         public var codes: [[Int32]]
-        /// Creates a reference. `ReferenceVoice` converts as
-        /// `Reference(transcript: voice.transcript, codes: voice.codes)`.
+        /// Creates a reference.
         public init(transcript: String, codes: [[Int32]]) { self.transcript = transcript; self.codes = codes }
+
+        /// The voice's Drama 3 encoding as a reference.
+        /// - Throws: ``PromptError/notEncoded(_:)`` when the voice has no Drama 3 encoding.
+        package init(_ voice: ReferenceVoice) throws {
+            guard case .drama3(let codes)? = voice.encodings[.drama3] else { throw PromptError.notEncoded(voice.name) }
+            self.init(transcript: voice.transcript, codes: codes)
+        }
     }
 
-    /// An earlier turn fed back as history.
-    public typealias HistoryTurn = Take
+    /// An earlier turn fed back as history: its user turn text and its codes.
+    public struct HistoryTurn: Sendable, Hashable {
+        /// The user turn as the prompt held it.
+        public var text: String
+        /// `[10][T]` codec codes.
+        public var codes: [[Int32]]
+        /// Creates a turn.
+        public init(text: String, codes: [[Int32]]) { self.text = text; self.codes = codes }
+
+        /// A Drama 3 take as a turn.
+        package init(_ take: Take) {
+            switch take.context {
+            case .drama3(let codes): self.init(text: take.text, codes: codes)
+            }
+        }
+    }
     /// A designed voice, which replaces the instruction with its description.
     public typealias Character = VoiceDesign
 

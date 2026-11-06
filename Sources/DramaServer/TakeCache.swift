@@ -22,6 +22,22 @@ public enum TakeCodes {
     }
 }
 
+extension Take {
+    /// The take's length in Drama 3 frames, as the HTTP API reports it.
+    var apiFrames: Int {
+        switch context {
+        case .drama3(let codes): codes.first?.count ?? 0
+        }
+    }
+
+    /// The take's codes as the HTTP API's `codes_base64`.
+    var apiCodesBase64: String {
+        switch context {
+        case .drama3(let codes): TakeCodes.encode(codes)
+        }
+    }
+}
+
 /// The last takes the server generated, so a client can retake by id.
 public actor TakeCache {
     public struct Entry: Sendable, Equatable {

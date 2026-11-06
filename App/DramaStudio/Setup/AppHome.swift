@@ -22,6 +22,9 @@ enum AppHome {
         support.appending(path: "Models/\(ModelDownloadPlan.drama3.folderName)", directoryHint: .isDirectory)
     }
 
+    /// The voice library: one JSON file per voice, with its clip beside it.
+    static var voices: URL { support.appending(path: "Voices", directoryHint: .isDirectory) }
+
     /// Where the codec zip waits between its download and its unpacking.
     static var downloads: URL { support.appending(path: "Downloads", directoryHint: .isDirectory) }
 

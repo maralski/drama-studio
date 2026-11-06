@@ -142,7 +142,7 @@ func recog(_ items: [Item], dir: URL) throws {
     for item in items {
         guard let wav = audioURL(item, in: dir) else { continue }
         let line = item.check ?? item.text
-        let samples = try DramaCodec.loadAudio(url: wav)
+        let samples = try ReferenceAudio.load(url: wav)
         let (native, spans) = try blocking { try await nativeTranscript(wav, locale: locale) }
         let independent = try whisper.transcript(pcm16: PCM16.encode(samples), deadline: deadline(), shouldContinue: { true })
         let verifier = try LocalWordVerifier.prepare(text: line, shouldContinue: { true })
@@ -165,7 +165,7 @@ func decide(_ items: [Item], dir: URL, out: URL) throws {
     for item in items {
         guard let wav = audioURL(item, in: dir) else { continue }
         let line = item.check ?? item.text
-        let samples = try DramaCodec.loadAudio(url: wav)
+        let samples = try ReferenceAudio.load(url: wav)
         let verifier = try LocalWordVerifier.prepare(text: line, shouldContinue: { true })
         let start = ContinuousClock.now
         let accepted = try verifier.check(samples: samples, line: line, shouldContinue: { true })

@@ -251,10 +251,39 @@ public enum FrameCap: Sendable, Codable, Equatable {
     }
 }
 
-/// A cloned voice: a clip's transcript plus the codec codes of the clip.
-/// ``SpeechSynthesizer/encodeReference(audioURL:transcript:name:)`` makes one.
-/// It is `Codable`, so a voice library can store it and skip the encoder
-/// next time.
+/// A text-to-speech engine that a voice encoding, a take or a synthesizer belongs to.
+public enum SpeechEngineID: String, Codable, CodingKeyRepresentable, Sendable, Hashable, CaseIterable {
+    /// Fish Audio's Drama 3.
+    case drama3
+    /// Ming-3.0-tts.
+    case ming
+}
+
+/// What one engine needs to clone a voice, made from the voice's clip by
+/// ``SpeechSynthesizer/encodeVoice(samples:transcript:)``.
+public enum VoiceEncoding: Codable, Sendable, Hashable {
+    /// `[10][T]` Drama 3 codec codes, one row per codebook.
+    case drama3(codes: [[Int32]])
+
+    /// The engine that reads this encoding.
+    public var engine: SpeechEngineID {
+        switch self {
+        case .drama3: .drama3
+        }
+    }
+
+    /// The length of the audio the encoding stands for, at 44.1 kHz.
+    public var sampleCount: Int {
+        switch self {
+        case .drama3(let codes): (codes.first?.count ?? 0) * ModelConstants.samplesPerFrame
+        }
+    }
+}
+
+/// A cloned voice: a clip's transcript plus one encoding of the clip per
+/// engine that has read it. The clip itself lives in the voice library,
+/// beside the voice. A voice saved before encodings existed decodes with a
+/// Drama 3 encoding and no clip.
 public struct ReferenceVoice: Sendable, Codable, Identifiable, Equatable {
     /// A stable identity for a voice library.
     public var id: UUID
@@ -262,45 +291,126 @@ public struct ReferenceVoice: Sendable, Codable, Identifiable, Equatable {
     public var name: String
     /// What the clip says, word for word. A wrong transcript weakens the clone.
     public var transcript: String
-    /// `[10][T]` codec codes, one row per codebook.
-    public var codes: [[Int32]]
+    /// The clip encoded for each engine, keyed by the encoding's own engine.
+    public private(set) var encodings: [SpeechEngineID: VoiceEncoding]
+    /// The stored clip's length in 44.1 kHz samples; nil when the library has
+    /// no clip for this voice.
+    public var clipSampleCount: Int?
     /// The clip's file name, for display.
     public var sourceFileName: String?
-    /// The clip's length in seconds: frames times 2048 samples at 44.1 kHz.
-    public var durationSeconds: Double { Double(codes.first?.count ?? 0) * Double(ModelConstants.samplesPerFrame) / Double(ModelConstants.sampleRate) }
 
-    /// Creates a voice from codes you already have.
-    public init(id: UUID = UUID(), name: String, transcript: String, codes: [[Int32]], sourceFileName: String? = nil) {
+    /// Creates a voice from encodings you already have.
+    public init(id: UUID = UUID(), name: String, transcript: String, encodings: [VoiceEncoding], clipSampleCount: Int? = nil, sourceFileName: String? = nil) {
         self.id = id
         self.name = name
         self.transcript = transcript
-        self.codes = codes
+        self.encodings = Dictionary(encodings.map { ($0.engine, $0) }, uniquingKeysWith: { _, last in last })
+        self.clipSampleCount = clipSampleCount
         self.sourceFileName = sourceFileName
+    }
+
+    /// Adds the encoding, replacing any earlier one for its engine.
+    public mutating func store(_ encoding: VoiceEncoding) {
+        encodings[encoding.engine] = encoding
+    }
+
+    /// The clip's length in seconds, or the longest encoding's when there is no clip.
+    public var durationSeconds: Double {
+        Double(clipSampleCount ?? encodings.values.map(\.sampleCount).max() ?? 0) / Double(ModelConstants.sampleRate)
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, name, transcript, encodings, clipSampleCount, sourceFileName, codes }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        transcript = try container.decode(String.self, forKey: .transcript)
+        clipSampleCount = try container.decodeIfPresent(Int.self, forKey: .clipSampleCount)
+        sourceFileName = try container.decodeIfPresent(String.self, forKey: .sourceFileName)
+        if let encodings = try container.decodeIfPresent([SpeechEngineID: VoiceEncoding].self, forKey: .encodings) {
+            guard encodings.allSatisfy({ $0.key == $0.value.engine }) else {
+                throw DecodingError.dataCorruptedError(forKey: .encodings, in: container, debugDescription: "an encoding is filed under another engine")
+            }
+            self.encodings = encodings
+        } else {
+            encodings = [.drama3: .drama3(codes: try container.decode([[Int32]].self, forKey: .codes))]
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(transcript, forKey: .transcript)
+        try container.encode(encodings, forKey: .encodings)
+        try container.encodeIfPresent(clipSampleCount, forKey: .clipSampleCount)
+        try container.encodeIfPresent(sourceFileName, forKey: .sourceFileName)
+    }
+}
+
+/// What the engine that made a take needs to continue from it: as history,
+/// or as the voice reference of a later request.
+public enum TakeContext: Codable, Sendable, Hashable {
+    /// `[10][T]` Drama 3 codec codes, one row per codebook.
+    case drama3(codes: [[Int32]])
+
+    /// The engine that made the take.
+    public var engine: SpeechEngineID {
+        switch self {
+        case .drama3: .drama3
+        }
+    }
+
+    /// The length of the take's audio, at 44.1 kHz.
+    public var sampleCount: Int {
+        switch self {
+        case .drama3(let codes): (codes.first?.count ?? 0) * ModelConstants.samplesPerFrame
+        }
+    }
+
+    /// The take as a voice encoding, so a voice saved from a take needs no encoder.
+    public var voiceEncoding: VoiceEncoding {
+        switch self {
+        case .drama3(let codes): .drama3(codes: codes)
+        }
     }
 }
 
 /// One read of a line: the user turn text exactly as it went into the prompt,
-/// and the codes the model answered with. Fed back as history or as the voice
+/// and the engine's context for it. Fed back as history or as the voice
 /// reference, a take reproduces that turn.
 public struct Take: Sendable, Codable, Hashable {
     /// The user turn as the prompt held it, including a character's
     /// `Name: ` or a director's note.
     public var text: String
-    /// `[10][T]` codec codes, one row per codebook.
-    public var codes: [[Int32]]
-    /// Creates a take from stored text and codes.
-    public init(text: String, codes: [[Int32]]) {
+    /// What the engine that made the take needs to continue from it.
+    public var context: TakeContext
+    /// Creates a take from stored text and context.
+    public init(text: String, context: TakeContext) {
         self.text = text
-        self.codes = codes
+        self.context = context
     }
 
-    /// Audio frames in the take.
-    public var frameCount: Int { codes.first?.count ?? 0 }
-    /// The take's length in seconds: frames times 2048 samples at 44.1 kHz.
-    public var durationSeconds: Double { Double(frameCount) * Double(ModelConstants.samplesPerFrame) / Double(ModelConstants.sampleRate) }
-    /// The codes as model frames, for ``SpeechSynthesizer/decode(frames:)``.
-    public var frames: [Frame] {
-        (0..<frameCount).map { t in [codes[0][t] + ModelConstants.semanticStart] + codes.map { $0[t] } }
+    /// The length of the take's audio, at 44.1 kHz.
+    public var sampleCount: Int { context.sampleCount }
+    /// The take's length in seconds.
+    public var durationSeconds: Double { Double(sampleCount) / Double(ModelConstants.sampleRate) }
+
+    private enum CodingKeys: String, CodingKey { case text, context, codes }
+
+    /// Takes saved before contexts existed hold `codes` and decode as Drama 3 takes.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        text = try container.decode(String.self, forKey: .text)
+        context = try container.decodeIfPresent(TakeContext.self, forKey: .context)
+            ?? .drama3(codes: try container.decode([[Int32]].self, forKey: .codes))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(text, forKey: .text)
+        try container.encode(context, forKey: .context)
     }
 }
 
@@ -422,17 +532,33 @@ public enum SpeechEvent: Sendable {
     case finished(SpeechResult)
 }
 
-/// One chunk of a request: the script text it spoke and its frame count, so
-/// callers can time captions and highlights.
+/// One chunk of a request: the script text it spoke and the length of its
+/// audio, so callers can time captions and highlights.
 public struct SpokenSentence: Sendable, Codable, Equatable {
     /// The script text of the chunk.
     public var text: String
-    /// Frames the chunk took. Each is 2048 samples at 44.1 kHz.
-    public var frames: Int
+    /// The chunk's audio length, in 44.1 kHz samples.
+    public var samples: Int
     /// Creates a sentence record.
-    public init(text: String, frames: Int) {
+    public init(text: String, samples: Int) {
         self.text = text
-        self.frames = frames
+        self.samples = samples
+    }
+
+    private enum CodingKeys: String, CodingKey { case text, samples, frames }
+
+    /// Records saved before sample timing hold Drama 3 `frames` of 2048 samples.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        text = try container.decode(String.self, forKey: .text)
+        samples = try container.decodeIfPresent(Int.self, forKey: .samples)
+            ?? container.decode(Int.self, forKey: .frames) * ModelConstants.samplesPerFrame
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(text, forKey: .text)
+        try container.encode(samples, forKey: .samples)
     }
 }
 
@@ -444,7 +570,7 @@ public struct SpeechResult: Sendable {
     /// or zero-error guarantee. Mock and preview audio are unchecked.
     public enum WordCoverage: String, Sendable { case recognized, unchecked }
     public var wordCoverage: WordCoverage
-    /// The whole request as one take: its turn text and every chunk's codes in order.
+    /// The whole request as one take: its turn text and the engine's context for every chunk in order.
     public var take: Take
     /// All of the request's audio, 44.1 kHz mono.
     public var samples: [Float]
@@ -453,7 +579,7 @@ public struct SpeechResult: Sendable {
     /// True when every chunk ended because the model finished speaking,
     /// rather than at the frame cap or the silence stop.
     public var finishedByEOS: Bool
-    /// Every chunk in order; their frames add up to the take's.
+    /// Every chunk in order; their samples add up to the take's.
     public var sentences: [SpokenSentence]
     /// Creates a result.
     public init(take: Take, samples: [Float], timings: SpeechTimings, finishedByEOS: Bool, sentences: [SpokenSentence] = [], wordCoverage: WordCoverage = .unchecked) {
@@ -464,30 +590,63 @@ public struct SpeechResult: Sendable {
         self.finishedByEOS = finishedByEOS
         self.sentences = sentences
     }
+}
 
-    /// The take's codes as model frames.
-    public var frames: [Frame] { take.frames }
+/// What a synthesizer reports about itself, for status and model listings.
+public struct EngineDescription: Sendable, Equatable {
+    /// The engine whose voice encodings and takes the synthesizer reads and writes.
+    public var engine: SpeechEngineID
+    /// The model's public id, such as `fishaudio/drama-3`.
+    public var modelID: String
+    /// The loaded snapshot's folder name, or `mock`.
+    public var snapshot: String
+    /// True for a stand-in that runs without the model.
+    public var isMock: Bool
+    /// Creates a description.
+    public init(engine: SpeechEngineID, modelID: String, snapshot: String, isMock: Bool) {
+        self.engine = engine
+        self.modelID = modelID
+        self.snapshot = snapshot
+        self.isMock = isMock
+    }
 }
 
 /// A text-to-speech engine. ``DramaSynthesizer`` is the Metal implementation;
 /// ``MockSynthesizer`` stands in for previews and tests.
 public protocol SpeechSynthesizer: Sendable {
+    /// Which engine this is, and which model it runs.
+    var engineDescription: EngineDescription { get }
+    /// Nil until the engine loads; then whether its kernels run a schedule
+    /// tuned for this Mac. Engines without tuning report false.
+    var isTuned: Bool? { get }
     /// Loads weights and compiles kernels, reporting each phase that takes
     /// long enough to name. Safe to call more than once.
     func load(onPhase: @escaping @Sendable (String) -> Void) async throws
     /// Whether ``load(onPhase:)`` has finished.
     var isLoaded: Bool { get async }
-    /// Encodes a reference clip (any format AVFoundation reads) to codec codes.
-    func encodeReference(audioURL: URL, transcript: String, name: String) async throws -> ReferenceVoice
-    /// Decodes codes to 44.1 kHz mono samples, 2048 per frame.
-    func decode(frames: [Frame]) async throws -> [Float]
+    /// Encodes a voice clip, mono 44.1 kHz samples, for this engine.
+    /// `transcript` must say what the clip says.
+    func encodeVoice(samples: [Float], transcript: String) async throws -> VoiceEncoding
     /// Streams events for one request. Cancel by cancelling the consuming task.
     func synthesize(_ request: SpeechRequest) -> AsyncThrowingStream<SpeechEvent, Error>
 }
 
 public extension SpeechSynthesizer {
+    /// The engine whose voice encodings and takes this synthesizer reads and writes.
+    var engine: SpeechEngineID { engineDescription.engine }
+
     /// Loads without reporting phases.
     func load() async throws { try await load { _ in } }
+
+    /// Clones a voice from a clip in any format AVFoundation reads. Returns
+    /// the voice, encoded for this engine, and the clip as mono 44.1 kHz
+    /// samples for the voice library to keep.
+    func cloneVoice(audioURL: URL, transcript: String, name: String) async throws -> (voice: ReferenceVoice, clip: [Float]) {
+        let clip = try ReferenceAudio.load(url: audioURL)
+        let encoding = try await encodeVoice(samples: clip, transcript: transcript)
+        return (ReferenceVoice(name: name, transcript: transcript, encodings: [encoding], clipSampleCount: clip.count,
+                               sourceFileName: audioURL.lastPathComponent), clip)
+    }
 }
 
 /// Where the Drama 3 weights live: a snapshot folder holding `config.json`,

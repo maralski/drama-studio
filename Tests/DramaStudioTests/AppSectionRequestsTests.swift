@@ -7,11 +7,11 @@ import XCTest
 final class AppSectionRequestsTests: XCTestCase {
     private typealias Segment = NarrationDocument.Segment
 
-    private let voice = ReferenceVoice(name: "Ann", transcript: "a", codes: [[1]])
+    private let voice = ReferenceVoice(name: "Ann", transcript: "a", encodings: [.drama3(codes: [[1]])])
     private let config = GenerationConfig()
 
     private func take(_ n: Int32, frames: Int = 1) -> Take {
-        Take(text: "take \(n)", codes: Array(repeating: Array(repeating: n, count: frames), count: 10))
+        Take(text: "take \(n)", context: .drama3(codes: Array(repeating: Array(repeating: n, count: frames), count: 10)))
     }
 
     /// Four narrator sections, a second speaker between the second and third.

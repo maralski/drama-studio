@@ -11,13 +11,15 @@ model picks a voice of its own, which changes from request to request.
 
 ### Clone a voice from a clip
 
-Give ``SpeechSynthesizer/encodeReference(audioURL:transcript:name:)`` a clip
+Give ``SpeechSynthesizer/cloneVoice(audioURL:transcript:name:)`` a clip
 and what it says. It reads any format AVFoundation opens, mixes the channels
-to mono, resamples to 44.1 kHz, and encodes the clip to codec codes. A 10 s
-clip takes about 2.1 s on an M3 Max.
+to mono, resamples to 44.1 kHz, and encodes the clip for the engine with
+``SpeechSynthesizer/encodeVoice(samples:transcript:)``. Drama 3 encodes it to
+codec codes; a 10 s clip takes about 2.1 s on an M3 Max. It returns the voice
+and the clip's samples.
 
 ```swift
-let voice = try await engine.encodeReference(
+let (voice, clip) = try await engine.cloneVoice(
     audioURL: clipURL,
     transcript: "What the clip says, word for word.",
     name: "Narrator")
@@ -34,15 +36,20 @@ Cloning a real person's voice without their consent is not permitted by the
 
 ### Keep a voice library
 
-``ReferenceVoice`` is `Codable` and holds the codes, so store it and skip the
-encoder next time. ``ReferenceVoice/durationSeconds`` gives the clip's length.
+``ReferenceVoice`` is `Codable` and holds one ``VoiceEncoding`` per engine
+that has read the clip, so store it and skip the encoder next time. Keep the
+clip too: another engine encodes the voice from the clip, not from Drama 3
+codes. ``ReferenceAudio/write(_:to:)`` stores it as a WAV that
+``ReferenceAudio/load(url:)`` reads back unchanged. For a voice stored before
+clips were kept, ``DramaCodec/recreateClip(of:directory:)`` decodes its Drama 3
+codes. ``ReferenceVoice/durationSeconds`` gives the clip's length.
 Every frame of a reference is one prompt row, and a prompt holds at most
 ``Drama3Prompt/maxRows`` (8192) rows, so keep clips short.
 
 ### Record a clip
 
 Record with AVFoundation, for example `AVAudioRecorder` writing a WAV, then
-pass the file to `encodeReference`. Recording needs the microphone: add
+pass the file to `cloneVoice`. Recording needs the microphone: add
 `NSMicrophoneUsageDescription` to the app's `Info.plist`, and under the App
 Sandbox or the Hardened Runtime the `com.apple.security.device.audio-input`
 entitlement. Nothing else in DramaEngine needs the microphone.

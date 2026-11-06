@@ -368,7 +368,7 @@ extension APIRequest {
                 guard let decoded = TakeCodes.decode(codes) else {
                     throw APIError.bad("\(field).codes_base64 must be base64 of 16-bit little-endian codes, 10 codebooks of equal length, each code below 4096.")
                 }
-                return .inline(Take(text: text, codes: decoded))
+                return .inline(Take(text: text, context: .drama3(codes: decoded)))
             default:
                 throw APIError.bad("\(field) needs either take_id, or text and codes_base64.")
             }

@@ -47,7 +47,7 @@ against ``MockSynthesizer`` in previews and tests:
 func speak(_ text: String, cloning clip: URL, transcript: String,
            with engine: some SpeechSynthesizer) async throws -> (result: SpeechResult, streamed: [Float]) {
     try await engine.load { phase in print(phase) }
-    let voice = try await engine.encodeReference(audioURL: clip, transcript: transcript, name: "Narrator")
+    let (voice, _) = try await engine.cloneVoice(audioURL: clip, transcript: transcript, name: "Narrator")
     var request = SpeechRequest(text: text, references: [voice])
     request.config.wordVerification = .uncheckedPreview
     request.config.streaming = .defaultLowLatency
@@ -86,8 +86,8 @@ The table lists the main public types and their uses.
 | Area | Types |
 | --- | --- |
 | Setup | ``ModelLocation``, ``DramaSetup``, ``SetupReport``, ``SetupItem`` |
-| Engines | ``SpeechSynthesizer``, ``DramaSynthesizer``, ``MockSynthesizer`` |
-| Requests | ``SpeechRequest``, ``ReferenceVoice``, ``VoiceDesign``, ``Take``, ``GenerationConfig``, ``StreamingMode``, ``FrameCap`` |
+| Engines | ``SpeechSynthesizer``, ``SpeechEngineID``, ``EngineDescription``, ``DramaSynthesizer``, ``MockSynthesizer`` |
+| Requests | ``SpeechRequest``, ``ReferenceVoice``, ``VoiceEncoding``, ``ReferenceAudio``, ``VoiceDesign``, ``Take``, ``TakeContext``, ``GenerationConfig``, ``StreamingMode``, ``FrameCap`` |
 | Results | ``SpeechEvent``, ``SpeechResult``, ``SpokenSentence``, ``SpeechTimings``, ``StreamedAudio``, ``GenerationEstimate`` |
 | Text | ``Drama3Chunking``, ``Drama3Prompt``, ``PronunciationDictionary``, ``PronunciationRule`` |
 | Codec | ``DramaCodec`` |
@@ -118,6 +118,8 @@ release changed.
 - ``SpeechSynthesizer``
 - ``DramaSynthesizer``
 - ``MockSynthesizer``
+- ``SpeechEngineID``
+- ``EngineDescription``
 - ``SpeechRequest``
 - ``GenerationConfig``
 - ``FrameCap``
@@ -126,8 +128,11 @@ release changed.
 
 - <doc:Voices>
 - ``ReferenceVoice``
+- ``VoiceEncoding``
+- ``ReferenceAudio``
 - ``VoiceDesign``
 - ``Take``
+- ``TakeContext``
 
 ### Streaming audio
 

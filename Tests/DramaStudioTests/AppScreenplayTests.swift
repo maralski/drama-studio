@@ -11,8 +11,8 @@ final class AppScreenplayTests: XCTestCase {
         Engineer: [curious] Does the speech run on this Mac?
         Herald: [confident] Speech runs locally on Apple silicon.
         """, asScreenplay: true).get()
-        let herald = ReferenceVoice(name: "Herald", transcript: "A herald speaks.", codes: Array(repeating: [1], count: 10))
-        let newsreader = ReferenceVoice(name: "Newsreader", transcript: "A newsreader speaks.", codes: Array(repeating: [2], count: 10))
+        let herald = ReferenceVoice(name: "Herald", transcript: "A herald speaks.", encodings: [.drama3(codes: Array(repeating: [1], count: 10))])
+        let newsreader = ReferenceVoice(name: "Newsreader", transcript: "A newsreader speaks.", encodings: [.drama3(codes: Array(repeating: [2], count: 10))])
         let casting = Casting(speakers: prepared.speakers,
                               assignments: [0: .library(herald.id), 1: .library(newsreader.id)], library: [herald, newsreader])
         let plan = try GenerationPlan(SpeechRequest(text: prepared.text, references: casting.references))
@@ -93,8 +93,8 @@ final class AppScreenplayTests: XCTestCase {
     }
 
     func testCastingSendsReferencesInSpeakerOrderAndFlagsGaps() {
-        let a = ReferenceVoice(name: "A", transcript: "a", codes: [[1]])
-        let b = ReferenceVoice(name: "B", transcript: "b", codes: [[2]])
+        let a = ReferenceVoice(name: "A", transcript: "a", encodings: [.drama3(codes: [[1]])])
+        let b = ReferenceVoice(name: "B", transcript: "b", encodings: [.drama3(codes: [[2]])])
         let speakers = (0..<3).map { Speaker(index: $0, name: "S\($0)") }
 
         let full = Casting(speakers: speakers, assignments: [0: .library(a.id), 1: .library(b.id)], library: [a, b])

@@ -12,10 +12,11 @@ actor RecordingSynthesizer: SpeechSynthesizer {
 
     var isLoaded: Bool { get async { await mock.isLoaded } }
     func load(onPhase: @escaping @Sendable (String) -> Void) async throws { try await mock.load(onPhase: onPhase) }
-    func encodeReference(audioURL: URL, transcript: String, name: String) async throws -> ReferenceVoice {
-        try await mock.encodeReference(audioURL: audioURL, transcript: transcript, name: name)
+    nonisolated var engineDescription: EngineDescription { mock.engineDescription }
+    nonisolated var isTuned: Bool? { mock.isTuned }
+    func encodeVoice(samples: [Float], transcript: String) async throws -> VoiceEncoding {
+        try await mock.encodeVoice(samples: samples, transcript: transcript)
     }
-    func decode(frames: [Frame]) async throws -> [Float] { try await mock.decode(frames: frames) }
     private func record(_ request: SpeechRequest) { requests.append(request) }
     nonisolated func synthesize(_ request: SpeechRequest) -> AsyncThrowingStream<SpeechEvent, Error> {
         let inner = mock.synthesize(request)
@@ -182,7 +183,7 @@ final class APIRouteTests: XCTestCase {
         _ = await send("POST", "/v1/audio/speech", json: ["input": "Cookbook shape.", "references": [["audio_base64": Self.clip.base64EncodedString(), "text": "Hello there."]]])
         request = await engine.requests.last
         XCTAssertEqual(request?.references.map(\.transcript), ["Hello there."])
-        XCTAssertEqual(request?.references.first?.codes.count, ModelConstants.numCodebooks)
+        XCTAssertEqual(request?.references.first?.dramaCodes?.count, ModelConstants.numCodebooks)
     }
 
     func testSpeechBadRequests() async {

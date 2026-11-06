@@ -59,7 +59,7 @@ final class FrameBudgetTests: XCTestCase {
 
     func testVoiceTimingAppliesWhenAnEarlierTakeSuppliesTheReference() throws {
         let take = Take(text: "Hey there my name is Joey and I love you",
-                        codes: Array(repeating: Array(repeating: 1, count: 142), count: 10))
+                        context: .drama3(codes: Array(repeating: Array(repeating: 1, count: 142), count: 10)))
         let plan = try GenerationPlan(text: "Hey there my name is Joey and I love you", references: [],
                                       previousTakes: [take], config: GenerationConfig())
         XCTAssertEqual(GenerationEstimate(plan: plan).expectedFrames, [142])

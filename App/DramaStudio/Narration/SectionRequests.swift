@@ -40,9 +40,9 @@ enum SectionRequests {
         let earlier = document.segments.prefix { $0.id != segment.id }
             .filter { !$0.skip && ($0.speakerTag ?? 0) == speaker }
             .compactMap { takes[$0.id] }
-            .filter { $0.frameCount > 0 }
+            .filter { $0.sampleCount > 0 }
         var previous: [Take] = []
-        if let anchor = casting.voiceTake ?? (casting.references.isEmpty ? earlier.first : nil), anchor.frameCount > 0 {
+        if let anchor = casting.voiceTake ?? (casting.references.isEmpty ? earlier.first : nil), anchor.sampleCount > 0 {
             previous.append(anchor)
         }
         if let latest = earlier.last, !previous.contains(latest) { previous.append(latest) }

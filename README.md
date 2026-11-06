@@ -269,13 +269,13 @@ speaker picker. The editor edits the selected section.
   or outdated sections. Export asks before writing outdated or incomplete audio.
   Earlier takes remain available, including after a project is reopened.
 - Export writes the whole narration, Per Section (numbered files and a
-  `manifest.csv`), Captions as SRT or WebVTT, timed from the frames each
+  `manifest.csv`), Captions as SRT or WebVTT, timed from the audio each
   sentence took, and for a deck a Slide Narration Package: `slide-NN.wav` per
   narrated slide and a `README.txt` on adding them with Insert > Audio. The
   app does not change the deck.
 - **Save Project** writes a `.dramaproj` bundle with the document or script,
   settings, voice assignments, session voices, and every take with its original
-  text, voice assignments, codes, and audio. Library assignments still refer to
+  text, voice assignments, engine context, and audio. Library assignments still refer to
   voices in the local library. Save updates the current project; **Save Project
   As** creates a copy.
 - Import, Open Project, and Quit offer Save, Discard Changes, or Cancel when
@@ -618,7 +618,7 @@ import DramaEngine
 let report = DramaSetup.check(location: .huggingFaceCache())
 guard let location = report.location, report.isReady else { fatalError(report.fixes.joined(separator: "\n")) }
 let engine = DramaSynthesizer(location: location, codecDirectory: DramaCodec.defaultDirectory)
-let voice = try await engine.encodeReference(audioURL: clip, transcript: "What the clip says.", name: "Narrator")
+let (voice, _) = try await engine.cloneVoice(audioURL: clip, transcript: "What the clip says.", name: "Narrator")
 var request = SpeechRequest(text: "Hello there.", references: [voice])
 request.config.streaming = .defaultLowLatency
 request.config.wordVerification = .uncheckedPreview // Words are not checked before playback.

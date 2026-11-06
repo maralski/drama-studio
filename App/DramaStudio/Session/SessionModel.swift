@@ -532,7 +532,7 @@ final class SessionModel {
         let matching = takes.filter { $0.hasCurrentWordCheck && !$0.isIncomplete && $0.basis == currentPlainBasis }
         let voice = casting.voiceTake.flatMap { $0 == matching.first?.take ? nil : $0 }
         start(SpeechRequest(text: script.text, references: casting.references, character: casting.character, note: note,
-                            previousTakes: (voice.map { [$0] } ?? []) + matching.map(\.take), config: config),
+                            previousTakes: (voice.map { [$0] } ?? []) + matching.compactMap(\.take), config: config),
               as: .take(note: note, recordsVoice: casting.recordsVoice))
     }
 
@@ -654,7 +654,7 @@ final class SessionModel {
         }
         guard start < audio.count else { return }
         let number = section.flatMap { sectionTakes[$0]?.nextNumber } ?? ((takes.last?.number ?? 0) + 1)
-        let partial = SessionTake(number: number, note: "Stopped early", take: Take(text: generationBasis?.text ?? "", codes: []),
+        let partial = SessionTake(number: number, note: "Stopped early", take: nil,
                                   samples: Array(audio[start...]), basis: generationBasis, isIncomplete: true)
         if let section {
             if sectionTakes[section] == nil { sectionTakes[section] = SectionTakes(first: partial) }
@@ -774,7 +774,7 @@ final class SessionModel {
     /// The take's sentences in the script's own words where the dictionary rewrote them.
     private func sentences(of result: SpeechResult) -> [NarrationTake.Sentence] {
         let texts = SentenceLocator.scriptTexts(spoken: result.sentences.map(\.text), original: scriptLines, rewrite: pronunciation.apply)
-        return zip(texts, result.sentences).map { NarrationTake.Sentence(text: $0, frames: $1.frames) }
+        return zip(texts, result.sentences).map { NarrationTake.Sentence(text: $0, samples: $1.samples) }
     }
 
     private func addTake(_ result: SpeechResult, note: String?, recordsVoice: VoiceChoice?) {
@@ -1052,15 +1052,15 @@ final class SessionModel {
     @discardableResult
     func saveVoice(fromTake id: SessionTake.ID, name: String) -> Bool {
         if let blocker = voiceSaveBlocker(forTake: id) { notice = blocker; return false }
-        guard let take = visibleTakes.first(where: { $0.id == id }),
+        guard let take = visibleTakes.first(where: { $0.id == id }), let source = take.take,
               let sourceSpeaker = voiceSpeaker(of: take) else { return false }
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { notice = "Give the voice a name."; return false }
         let character = take.basis?.voices[sourceSpeaker]?.design
-        let transcript = DirectorsNote.spokenText(ofTurn: take.take.text, character: character)
-        let voice = ReferenceVoice(name: name, transcript: transcript, codes: take.take.codes)
+        let transcript = DirectorsNote.spokenText(ofTurn: source.text, character: character)
+        let voice = ReferenceVoice(name: name, transcript: transcript, encodings: [source.context.voiceEncoding])
         do {
-            try library.add(voice)
+            try library.add(voice, clip: take.samples)
             let speaker = document != nil ? (selectedSegment?.speakerTag ?? 0)
                 : ((try? prepared.get()).flatMap { $0.speakers.count == 1 ? $0.speakers.first?.index : nil } ?? sourceSpeaker)
             setVoice(.library(voice.id), forSpeaker: speaker)
@@ -1080,15 +1080,15 @@ final class SessionModel {
         guard let speaker = voiceSpeaker(of: take) else {
             return "Save a single-speaker take or section so the reference contains only one voice."
         }
-        guard take.take.frameCount > 0,
-              !DirectorsNote.spokenText(ofTurn: take.take.text, character: take.basis?.voices[speaker]?.design).isEmpty else {
+        guard let source = take.take, source.sampleCount > 0,
+              !DirectorsNote.spokenText(ofTurn: source.text, character: take.basis?.voices[speaker]?.design).isEmpty else {
             return "This take has no voice reference to save."
         }
         return nil
     }
 
     private func voiceSpeaker(of take: SessionTake) -> Int? {
-        guard let script = try? Screenplay.prepare(Drama3Prompt.withSpeakerTag(take.basis?.text ?? take.take.text), asScreenplay: false).get(),
+        guard let script = try? Screenplay.prepare(Drama3Prompt.withSpeakerTag(take.basis?.text ?? take.take?.text ?? ""), asScreenplay: false).get(),
               script.speakers.count == 1 else { return nil }
         return document != nil ? (take.basis?.voices.keys.first ?? selectedSegment?.speakerTag ?? 0) : script.speakers[0].index
     }
@@ -1099,9 +1099,10 @@ final class SessionModel {
         guard let take = sessionVoices[choice] else { return }
         let design = choice.design
         let voice = ReferenceVoice(name: design?.name ?? "Surprise voice",
-                                   transcript: DirectorsNote.spokenText(ofTurn: take.text, character: design), codes: take.codes)
+                                   transcript: DirectorsNote.spokenText(ofTurn: take.text, character: design), encodings: [take.context.voiceEncoding])
+        let clip = (takes + sectionTakes.values.flatMap(\.takes)).first { $0.take == take }?.samples
         do {
-            try library.add(voice)
+            try library.add(voice, clip: clip)
             setVoice(.library(voice.id), for: speaker)
         } catch {
             notice = "Couldn't keep the voice: \(error.localizedDescription)"
@@ -1111,12 +1112,14 @@ final class SessionModel {
     @discardableResult
     func encodeVoice(clip: URL, transcript: String, name: String) async throws -> ReferenceVoice {
         if let refusal = generationRefusal() { throw GenerationRefused(message: refusal) }
-        let voice = try await synthesizer.encodeReference(audioURL: clip, transcript: transcript, name: name)
+        let (voice, samples) = try await synthesizer.cloneVoice(audioURL: clip, transcript: transcript, name: name)
         try Task.checkCancellation()
-        try library.add(voice)
-        return voice
+        try library.add(voice, clip: samples)
+        return library.voice(voice.id) ?? voice
     }
 
+    /// Plays the voice's stored clip. A voice saved before the library kept
+    /// clips plays its Drama 3 codes through the codec instead.
     func togglePreview(_ voice: ReferenceVoice) {
         let wasPreviewing = previewingVoice == voice.id
         stopPreview()
@@ -1124,9 +1127,15 @@ final class SessionModel {
         previewingVoice = voice.id
         Task {
             do {
-                let samples = try await synthesizer.decode(frames: voice.frames)
+                let stored = try library.clip(for: voice.id)
+                let clip = if let stored { stored } else { try await DramaCodec.recreateClip(of: voice, directory: AppHome.codec) }
                 guard previewingVoice == voice.id else { return }
-                try previewPlayer.play(samples, from: 0)
+                guard let clip else {
+                    previewingVoice = nil
+                    notice = "\(voice.name) has no clip to preview."
+                    return
+                }
+                try previewPlayer.play(clip, from: 0)
             } catch {
                 previewingVoice = nil
                 notice = "Couldn't preview \(voice.name): \(Self.describe(error))"
@@ -1269,7 +1278,7 @@ final class SessionModel {
         expressiveness = project.expressiveness
         screenplayMode = project.document == nil && Screenplay.looksLikeScreenplay(project.script)
         for stored in project.takes where stored.sampleRange.upperBound <= audio.count && !stored.sampleRange.isEmpty {
-            let take = SessionTake(number: 1, note: nil, take: stored.take ?? Take(text: "", codes: []),
+            let take = SessionTake(number: 1, note: nil, take: stored.take,
                                    samples: Array(audio[stored.sampleRange]), sentences: stored.sentences)
             if project.document != nil {
                 sectionTakes[stored.segmentID] = SectionTakes(first: take)
@@ -1329,7 +1338,7 @@ struct SessionTake: Identifiable, Equatable {
     var id = UUID()
     let number: Int
     let note: String?
-    let take: Take
+    let take: Take?
     let samples: [Float]
     var sentences: [NarrationTake.Sentence] = []
     var basis: TakesBasis? = nil

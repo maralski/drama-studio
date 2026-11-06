@@ -8,7 +8,7 @@ package struct GenerationPlan: Sendable, Equatable {
     package var references: [Drama3Prompt.Reference]
     /// Set only for the design layout, where the builder tags speaker zero.
     package var character: Drama3Prompt.Character?
-    package var history: [Take]
+    package var history: [Drama3Prompt.HistoryTurn]
     package var chunks: [Chunk]
     package var streaming: StreamingMode
     /// The whole request's user turn, as its take records it.
@@ -60,7 +60,7 @@ package struct GenerationPlan: Sendable, Equatable {
         self.references = references
         self.character = nil
         if references.isEmpty, let voice = previousTakes.first {
-            self.references = [Drama3Prompt.Reference(transcript: DirectorsNote.spokenText(ofTurn: voice.text, character: character), codes: voice.codes)]
+            self.references = [Drama3Prompt.Reference(transcript: DirectorsNote.spokenText(ofTurn: voice.text, character: character), codes: Drama3Prompt.HistoryTurn(voice).codes)]
         } else if references.isEmpty {
             self.character = character
         }
@@ -77,14 +77,14 @@ package struct GenerationPlan: Sendable, Equatable {
         self.turnText = turnText
         // A take of the very turn being generated, as history, makes the model
         // replay that take's audio: measured envelope correlation 0.93 to 0.99.
-        history = Array(previousTakes.filter { $0.text != turnText }.suffix(Self.historyTakes))
+        history = previousTakes.filter { $0.text != turnText }.suffix(Self.historyTakes).map(Drama3Prompt.HistoryTurn.init)
         if let character {
-            history = history.map { Take(text: character.removingName(from: $0.text), codes: $0.codes) }
+            history = history.map { Drama3Prompt.HistoryTurn(text: character.removingName(from: $0.text), codes: $0.codes) }
         }
     }
 
     package init(_ request: SpeechRequest) throws {
-        try self.init(text: request.text, references: request.references.map { Drama3Prompt.Reference(transcript: $0.transcript, codes: $0.codes) },
+        try self.init(text: request.text, references: request.references.map(Drama3Prompt.Reference.init),
                       character: request.character, previousTakes: request.previousTakes, note: request.note, config: request.config)
     }
 }

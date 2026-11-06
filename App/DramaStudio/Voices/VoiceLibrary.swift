@@ -23,8 +23,8 @@ final class VoiceLibrary: VoiceStore {
 
     func allVoices() -> [ReferenceVoice] { voices }
 
-    func add(_ voice: ReferenceVoice) throws {
-        try files.add(voice)
+    func add(_ voice: ReferenceVoice, clip: [Float]?) throws {
+        try files.add(voice, clip: clip)
         reload()
     }
 
@@ -33,18 +33,11 @@ final class VoiceLibrary: VoiceStore {
         reload()
     }
 
+    func clip(for id: ReferenceVoice.ID) throws -> [Float]? {
+        try files.clip(for: id)
+    }
+
     func voice(_ id: ReferenceVoice.ID?) -> ReferenceVoice? {
         voices.first { $0.id == id }
-    }
-}
-
-extension ReferenceVoice {
-    var frameCount: Int { codes.first?.count ?? 0 }
-
-    var frames: [Frame] {
-        (0..<frameCount).map { t in
-            let column = codes.map { $0[t] }
-            return [column[0] + ModelConstants.semanticStart] + column
-        }
     }
 }

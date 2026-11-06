@@ -52,7 +52,7 @@ struct VoiceLibraryView: View {
                 if let pendingRemoval { model.removeVoice(pendingRemoval.id) }
             }
         } message: {
-            Text("The voice's codes are deleted from your library. The original clip is not touched.")
+            Text("The voice and its copy of the clip are deleted from your library. The original file is not touched.")
         }
     }
 
@@ -86,7 +86,7 @@ private struct VoiceRow: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(voice.name).font(.body.weight(.medium))
-                Text("\(voice.durationSeconds, format: .number.precision(.fractionLength(1))) s \u{00B7} \(voice.frameCount) frames")
+                Text("\(voice.durationSeconds, format: .number.precision(.fractionLength(1))) s")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
                 Text(voice.transcript)

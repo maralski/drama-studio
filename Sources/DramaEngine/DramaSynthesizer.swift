@@ -97,24 +97,15 @@ public actor DramaSynthesizer: SpeechSynthesizer {
         tuned.withLock { $0 = fromCache }
     }
 
-    /// Clones a voice from a clip: loads the engine if needed, reads the
-    /// clip (any format AVFoundation opens), mixes it to mono at 44.1 kHz, and
-    /// encodes it. A 10 s clip takes about 2.1 s in the encoder on an M3 Max.
-    /// `transcript` must say what the clip says.
-    public func encodeReference(audioURL: URL, transcript: String, name: String) async throws -> ReferenceVoice {
-        try await load()
-        let samples = try DramaCodec.loadAudio(url: audioURL)
-        let codes = try await codec!.encode(samples: samples)
-        return ReferenceVoice(name: name, transcript: transcript, codes: codes, sourceFileName: audioURL.lastPathComponent)
+    public nonisolated var engineDescription: EngineDescription {
+        EngineDescription(engine: .drama3, modelID: "fishaudio/drama-3", snapshot: location.directory.lastPathComponent, isMock: false)
     }
 
-    /// Decodes frames to 44.1 kHz mono samples, 2048 per frame, loading the
-    /// engine if needed. The decoder takes about 1.5 s per 512-frame window
-    /// (23.8 s of audio) on an M3 Max.
-    public func decode(frames: [Frame]) async throws -> [Float] {
+    /// Encodes a clip to Drama 3 codec codes, loading the engine if needed.
+    /// A 10 s clip takes about 2.1 s in the encoder on an M3 Max.
+    public func encodeVoice(samples: [Float], transcript: String) async throws -> VoiceEncoding {
         try await load()
-        let codes = (0..<ModelConstants.numCodebooks).map { c in frames.map { $0[1 + c] } }
-        return try await codec!.decode(codes: codes)
+        return .drama3(codes: try await codec!.encode(samples: samples))
     }
 
     /// A 2048-sample frame whose RMS is under this is silent.
@@ -204,8 +195,8 @@ public actor DramaSynthesizer: SpeechSynthesizer {
         let allFrames = results.flatMap(\.frames)
         let allSamples = results.flatMap(\.samples)
         let eos = results.allSatisfy(\.finishedByEOS)
-        let take = Take(text: plan.turnText, codes: (0..<ModelConstants.numCodebooks).map { c in allFrames.map { $0[1 + c] } })
-        let sentences = results.map { SpokenSentence(text: plan.chunks[$0.index].line, frames: $0.frames.count) }
+        let take = Take(text: plan.turnText, context: .drama3(codes: (0..<ModelConstants.numCodebooks).map { c in allFrames.map { $0[1 + c] } }))
+        let sentences = results.map { SpokenSentence(text: plan.chunks[$0.index].line, samples: $0.frames.count * ModelConstants.samplesPerFrame) }
         guard !results.isEmpty else { throw PromptError.emptyText("spoken words") }
         continuation.yield(.finished(SpeechResult(take: take, samples: allSamples, timings: timings, finishedByEOS: eos, sentences: sentences,
                                                 wordCoverage: request.config.wordVerification == .required ? .recognized : .unchecked)))

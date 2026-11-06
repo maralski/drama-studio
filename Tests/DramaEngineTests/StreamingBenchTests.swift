@@ -112,10 +112,10 @@ final class StreamingBenchTests: XCTestCase {
                 if mode == .lowLatency || mode == .lowLatency32 {
                     XCTAssertGreaterThan(partials, 0, "\(mode.rawValue) must deliver audio before the chunk completes")
                 }
-                XCTAssertEqual(r.samples.count, r.take.frameCount * ModelConstants.samplesPerFrame, "\(mode.rawValue): every frame decoded")
+                XCTAssertEqual(r.samples.count, r.take.sampleCount, "\(mode.rawValue): every frame decoded")
                 let timestamp = ISO8601DateFormatter().string(from: Date())
-                print(String(format: "BENCH\t%@\t%d\t%@\t%d\t%.1f\t%.1f\t%.2f\t%.2f\t%.1f\t%.2f\t%.2f\t%d", timestamp, run, mode.rawValue, r.take.frameCount,
-                             Double(loopFrames) / max(loopSeconds, 1e-9), Double(r.take.frameCount) / wall, firstAudio ?? -1, wall, cpu, cpu / wall,
+                print(String(format: "BENCH\t%@\t%d\t%@\t%d\t%.1f\t%.1f\t%.2f\t%.2f\t%.1f\t%.2f\t%.2f\t%d", timestamp, run, mode.rawValue, r.take.dramaCodes[0].count,
+                             Double(loopFrames) / max(loopSeconds, 1e-9), Double(r.take.dramaCodes[0].count) / wall, firstAudio ?? -1, wall, cpu, cpu / wall,
                              r.timings.codecSeconds, retries))
             }
         }

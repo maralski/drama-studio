@@ -60,12 +60,12 @@ final class SynthesizerIntegrationTests: XCTestCase {
         let result = try XCTUnwrap(completed)
         XCTAssertEqual(result.wordCoverage, .recognized)
         XCTAssertEqual(result.samples, delivered)
-        XCTAssertEqual(result.samples.count, result.frames.count * ModelConstants.samplesPerFrame)
+        XCTAssertEqual(result.samples.count, result.take.sampleCount)
         XCTAssertEqual(result.sentences.map(\.text), [
             "[low and menacing] Ye want to know what's out past the reef?", "[pause] Pray ye never find out."
         ])
         XCTAssertEqual(result.take.text, "Captain: " + line)
-        XCTAssertGreaterThan(result.timings.framesGenerated, result.frames.count,
+        XCTAssertGreaterThan(result.timings.framesGenerated, result.take.dramaCodes[0].count,
                              "The known rejected first attempt must be replaced before completion")
     }
 
@@ -89,13 +89,13 @@ final class SynthesizerIntegrationTests: XCTestCase {
         let result = try XCTUnwrap(completed)
         XCTAssertEqual(result.wordCoverage, .recognized)
         XCTAssertEqual(result.samples, delivered)
-        XCTAssertEqual(result.samples.count, result.frames.count * ModelConstants.samplesPerFrame)
+        XCTAssertEqual(result.samples.count, result.take.sampleCount)
         XCTAssertEqual(result.sentences.map(\.text), [
             "[with bright eager excitement] Guess what, guess what!",
             "[laughs] I found a frog in the garden and his name is Mister Hops!"
         ])
         XCTAssertEqual(result.take.text, "Mia: " + line)
-        XCTAssertGreaterThan(result.timings.framesGenerated, result.frames.count)
+        XCTAssertGreaterThan(result.timings.framesGenerated, result.take.dramaCodes[0].count)
     }
 
     private static let captainJoinVoice = VoiceDesign(
@@ -126,13 +126,13 @@ final class SynthesizerIntegrationTests: XCTestCase {
         }
         let r = try XCTUnwrap(result)
         XCTAssertEqual(audioChunks, 1)
-        XCTAssertEqual(r.frames.count, frames)
-        XCTAssertEqual(r.samples.count, r.frames.count * ModelConstants.samplesPerFrame)
-        XCTAssertEqual(r.sentences, [SpokenSentence(text: request.text, frames: frames)])
+        XCTAssertEqual(r.take.dramaCodes[0].count, frames)
+        XCTAssertEqual(r.samples.count, r.take.sampleCount)
+        XCTAssertEqual(r.sentences, [SpokenSentence(text: request.text, samples: frames * 2048)])
         let rms = (r.samples.reduce(0) { $0 + $1 * $1 } / Float(r.samples.count)).squareRoot()
         XCTAssertGreaterThan(rms, 0.02, "decoded audio should contain speech")
-        XCTAssertGreaterThan(Double(r.frames.count) * 2048 / 44100, 2.0)
-        print("integration: \(r.frames.count) frames, \(String(format: "%.1f", Double(r.samples.count) / 44100))s audio, rms \(rms), \(String(format: "%.1f", r.timings.framesPerSecond)) frames/s, codec \(String(format: "%.2f", r.timings.codecSeconds))s")
+        XCTAssertGreaterThan(Double(r.take.dramaCodes[0].count) * 2048 / 44100, 2.0)
+        print("integration: \(r.take.dramaCodes[0].count) frames, \(String(format: "%.1f", Double(r.samples.count) / 44100))s audio, rms \(rms), \(String(format: "%.1f", r.timings.framesPerSecond)) frames/s, codec \(String(format: "%.2f", r.timings.codecSeconds))s")
     }
 
     /// Low latency: each chunk's partials, in order, are exactly its audio, and

@@ -26,9 +26,8 @@ final class AppNarrationDocumentTests: XCTestCase {
         }
     }
 
-    func testTakeDerivesFramesAndSecondsAndRoundTripsThroughJSON() throws {
-        let take = NarrationTake(segmentID: UUID(), sampleRange: 44_100..<132_300, sentences: [.init(text: "One.", frames: 20), .init(text: "Two.", frames: 23)])
-        XCTAssertEqual(take.frames, 43)
+    func testTakeDerivesSecondsAndRoundTripsThroughJSON() throws {
+        let take = NarrationTake(segmentID: UUID(), sampleRange: 44_100..<132_300, sentences: [.init(text: "One.", samples: 20 * 2048), .init(text: "Two.", samples: 23 * 2048)])
         XCTAssertEqual(take.seconds, 2.0)
 
         let document = NarrationDocument(title: "T", source: .pdf, segments: [.init(index: 1, label: "Page 1", text: "Hi", speakerTag: 2, skip: true)])
@@ -38,15 +37,15 @@ final class AppNarrationDocumentTests: XCTestCase {
 
     func testTakeCarriesItsCodesAndDecodesWithoutThem() throws {
         let id = UUID()
-        let codes = Take(text: "One. Two.", codes: Array(repeating: [1, 2, 3], count: 10))
-        let take = NarrationTake(segmentID: id, sampleRange: 0..<6144, sentences: [.init(text: "One.", frames: 3)], take: codes)
+        let codes = Take(text: "One. Two.", context: .drama3(codes: Array(repeating: [1, 2, 3], count: 10)))
+        let take = NarrationTake(segmentID: id, sampleRange: 0..<6144, sentences: [.init(text: "One.", samples: 3 * 2048)], take: codes)
         XCTAssertEqual(try JSONDecoder().decode(NarrationTake.self, from: JSONEncoder().encode(take)).take, codes)
 
         let older = """
         {"segmentID":"\(id.uuidString)","sampleRange":[0,6144],"sentences":[{"text":"One.","frames":3}]}
         """
         let decoded = try JSONDecoder().decode(NarrationTake.self, from: Data(older.utf8))
-        XCTAssertEqual(decoded, NarrationTake(segmentID: id, sampleRange: 0..<6144, sentences: [.init(text: "One.", frames: 3)]))
+        XCTAssertEqual(decoded, NarrationTake(segmentID: id, sampleRange: 0..<6144, sentences: [.init(text: "One.", samples: 3 * 2048)]))
         XCTAssertNil(decoded.take)
     }
 }

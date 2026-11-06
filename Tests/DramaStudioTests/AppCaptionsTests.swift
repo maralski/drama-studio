@@ -7,12 +7,12 @@ import XCTest
 final class AppCaptionsTests: XCTestCase {
     private let takes = [
         NarrationTake(segmentID: UUID(), sampleRange: 0..<(30 * 2048), sentences: [
-            .init(text: "<|speaker:0|> Hello there.", frames: 10),
-            .init(text: "[laughs] How are <whisper>you</whisper>?", frames: 20),
+            .init(text: "<|speaker:0|> Hello there.", samples: 10 * 2048),
+            .init(text: "[laughs] How are <whisper>you</whisper>?", samples: 20 * 2048),
         ]),
         NarrationTake(segmentID: UUID(), sampleRange: 88_200..<(88_200 + 50 * 2048), sentences: [
-            .init(text: "<|speaker:1|>", frames: 7),
-            .init(text: "Q&A\nnext.", frames: 43),
+            .init(text: "<|speaker:1|>", samples: 7 * 2048),
+            .init(text: "Q&A\nnext.", samples: 43 * 2048),
         ]),
     ]
 
@@ -67,7 +67,7 @@ final class AppCaptionsTests: XCTestCase {
     }
 
     func testSentencesNeverRunPastTheirTake() {
-        let take = NarrationTake(segmentID: UUID(), sampleRange: 1000..<5000, sentences: [.init(text: "Long.", frames: 3), .init(text: "Lost.", frames: 2)])
+        let take = NarrationTake(segmentID: UUID(), sampleRange: 1000..<5000, sentences: [.init(text: "Long.", samples: 3 * 2048), .init(text: "Lost.", samples: 2 * 2048)])
         XCTAssertEqual(Captions.cues(for: [take]), [.init(startSample: 1000, endSample: 5000, text: "Long.")])
         XCTAssertEqual(Captions.render(cues: [], as: .webVTT), "WEBVTT\n")
         XCTAssertEqual(Captions.render(cues: [], as: .srt), "")

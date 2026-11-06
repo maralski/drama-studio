@@ -60,13 +60,35 @@ struct NarrationDocument: Codable, Sendable, Equatable {
 struct NarrationTake: Codable, Sendable, Equatable {
     struct Sentence: Codable, Sendable, Equatable {
         var text: String
-        var frames: Int
+        /// The sentence's audio length, in 44.1 kHz samples.
+        var samples: Int
+
+        init(text: String, samples: Int) {
+            self.text = text
+            self.samples = samples
+        }
+
+        private enum CodingKeys: String, CodingKey { case text, samples, frames }
+
+        /// Projects before format 5 time sentences in Drama 3 frames of 2048 samples.
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            text = try container.decode(String.self, forKey: .text)
+            samples = try container.decodeIfPresent(Int.self, forKey: .samples)
+                ?? container.decode(Int.self, forKey: .frames) * ModelConstants.samplesPerFrame
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(text, forKey: .text)
+            try container.encode(samples, forKey: .samples)
+        }
     }
 
     var segmentID: NarrationDocument.Segment.ID
     var sampleRange: Range<Int>
     var sentences: [Sentence]
-    /// The codes and turn text, so a reopened project still has history. Absent in older projects.
+    /// The turn text and engine context, so a reopened project still has history. Absent in older projects.
     var take: Take?
 
     init(segmentID: NarrationDocument.Segment.ID, sampleRange: Range<Int>, sentences: [Sentence], take: Take? = nil) {
@@ -76,6 +98,5 @@ struct NarrationTake: Codable, Sendable, Equatable {
         self.take = take
     }
 
-    var frames: Int { sentences.reduce(0) { $0 + $1.frames } }
     var seconds: Double { Double(sampleRange.count) / Double(ModelConstants.sampleRate) }
 }

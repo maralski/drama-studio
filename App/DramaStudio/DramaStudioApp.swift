@@ -27,7 +27,7 @@ struct DramaStudioApp: App {
         if CommandLine.arguments.dropFirst().first == "--check-words" {
             exit(WordCheckDiagnostic.run(Array(CommandLine.arguments.dropFirst(2))))
         }
-        let model = SessionModel(synthesizer: ModelSetup.makeSynthesizer(), library: VoiceLibrary())
+        let model = SessionModel(synthesizer: ModelSetup.makeSynthesizer(), library: VoiceLibrary(directory: AppHome.voices))
         let server = APIServerController(session: model)
         let presence = AppPresence()
         let updater = AppUpdater()

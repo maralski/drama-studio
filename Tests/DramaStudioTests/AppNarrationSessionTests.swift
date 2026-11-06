@@ -58,7 +58,7 @@ final class AppNarrationSessionTests: XCTestCase {
         XCTAssertTrue(session.saveVoice(fromTake: take.id, name: "Guest from take"))
         let voice = try XCTUnwrap(session.library.voices.first)
         XCTAssertEqual(voice.transcript, "A word from our guest.")
-        XCTAssertEqual(voice.codes, take.take.codes)
+        XCTAssertEqual(voice.dramaCodes, take.take?.dramaCodes)
         XCTAssertEqual(session.voice(for: Speaker(index: 2, name: "Guest")), .library(voice.id))
         XCTAssertEqual(session.voice(for: Speaker(index: 0, name: "Narrator")), .modelDefault)
         session.narrateSelectedSection()
@@ -132,7 +132,7 @@ final class AppNarrationSessionTests: XCTestCase {
 
         XCTAssertEqual(synthesizer.requests.count, 5)
         XCTAssertEqual(synthesizer.requests.last?.text, "First we go through the numbers. Then we take your questions.")
-        XCTAssertEqual(synthesizer.requests.last?.previousTakes, [before[0]!.take], "history is the earlier section, never the later ones")
+        XCTAssertEqual(synthesizer.requests.last?.previousTakes, [before[0]!.take!], "history is the earlier section, never the later ones")
         let section = try XCTUnwrap(session.sectionTakes[document.segments[1].id])
         XCTAssertEqual(section.takes.map(\.number), [1, 2])
         XCTAssertEqual(section.chosenID, section.takes[1].id)
@@ -193,8 +193,8 @@ final class AppNarrationSessionTests: XCTestCase {
     func testSaveThenOpenRoundTripsSourceCastingSettingsTakesAndAudio() async throws {
         let session = makeSession()
         session.open(document())
-        let voice = ReferenceVoice(name: "Ann", transcript: "Hi.", codes: Array(repeating: [1, 2, 3], count: 10))
-        try session.library.add(voice)
+        let voice = ReferenceVoice(name: "Ann", transcript: "Hi.", encodings: [.drama3(codes: Array(repeating: [1, 2, 3], count: 10))])
+        try session.library.add(voice, clip: nil)
         session.setVoice(.library(voice.id), forSpeaker: 1)
         session.expressiveness = 0.8
         session.generate()
@@ -251,7 +251,7 @@ final class AppNarrationSessionTests: XCTestCase {
         XCTAssertTrue(reopened.openProject(from: bundle))
         reopened.narrateSection(deck.segments[4].id)
         await finish(reopened)
-        XCTAssertEqual(synthesizer.requests.last?.previousTakes, [first.take, second.take])
+        XCTAssertEqual(synthesizer.requests.last?.previousTakes, [first.take!, second.take!])
     }
 
     func testPlainScriptProjectRoundTripsItsExportedTake() async throws {

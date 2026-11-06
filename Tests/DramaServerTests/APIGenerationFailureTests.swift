@@ -7,8 +7,9 @@ import XCTest
 private struct WordCheckFailureSynthesizer: SpeechSynthesizer {
     var isLoaded: Bool { true }
     func load(onPhase: @escaping @Sendable (String) -> Void) async throws {}
-    func encodeReference(audioURL: URL, transcript: String, name: String) async throws -> ReferenceVoice { throw CancellationError() }
-    func decode(frames: [Frame]) async throws -> [Float] { [] }
+    var engineDescription: EngineDescription { EngineDescription(engine: .drama3, modelID: "fishaudio/drama-3", snapshot: "test", isMock: true) }
+    var isTuned: Bool? { false }
+    func encodeVoice(samples: [Float], transcript: String) async throws -> VoiceEncoding { throw CancellationError() }
     func synthesize(_ request: SpeechRequest) -> AsyncThrowingStream<SpeechEvent, Error> {
         AsyncThrowingStream { out in
             out.yield(.chunkStarted(index: 0, count: 2, text: "First sentence."))

@@ -14,7 +14,7 @@ struct ArchivedTake: Codable, Sendable, Equatable {
     var id: UUID
     var number: Int
     var note: String?
-    var take: Take
+    var take: Take?
     var sentences: [NarrationTake.Sentence]
     var basis: TakesBasis?
     var isIncomplete: Bool

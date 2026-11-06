@@ -89,7 +89,7 @@ final class APITakeTests: XCTestCase {
                                                                      "previous_takes": [["text": "Say it again.", "codes_base64": TakeCodes.encode(codes)]]])
         XCTAssertEqual(response.status, .ok, text(response))
         let request = try await lastRequest()
-        XCTAssertEqual(request.previousTakes, [Take(text: "Say it again.", codes: codes)])
+        XCTAssertEqual(request.previousTakes, [Take(text: "Say it again.", context: .drama3(codes: codes))])
         XCTAssertEqual(request.note, "faster")
     }
 

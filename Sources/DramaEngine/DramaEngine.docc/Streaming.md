@@ -97,8 +97,8 @@ while a chunk is generated again.
 ### Time captions and highlights
 
 ``SpeechResult/sentences`` lists every chunk with its script text and its
-frame count, in order. A chunk starts at the sum of the earlier chunks'
-frames times 2048 samples, so captions and a highlight of the sentence being
+length in samples, in order. A chunk starts at the sum of the earlier chunks'
+samples, so captions and a highlight of the sentence being
 spoken need no other timing.
 
 ### Cancel a request

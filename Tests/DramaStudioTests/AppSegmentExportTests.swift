@@ -14,8 +14,8 @@ final class AppSegmentExportTests: XCTestCase {
 
     private func takes() -> [NarrationTake] {
         [
-            NarrationTake(segmentID: document.segments[1].id, sampleRange: 0..<44_100, sentences: [.init(text: "b", frames: 21)]),
-            NarrationTake(segmentID: document.segments[2].id, sampleRange: 50_000..<72_050, sentences: [.init(text: "c", frames: 10)]),
+            NarrationTake(segmentID: document.segments[1].id, sampleRange: 0..<44_100, sentences: [.init(text: "b", samples: 21 * 2048)]),
+            NarrationTake(segmentID: document.segments[2].id, sampleRange: 50_000..<72_050, sentences: [.init(text: "c", samples: 10 * 2048)]),
             NarrationTake(segmentID: UUID(), sampleRange: 72_050..<72_050, sentences: []),
         ]
     }

@@ -16,10 +16,11 @@ final class RecordingSynthesizer: SpeechSynthesizer, @unchecked Sendable {
 
     func load(onPhase: @escaping @Sendable (String) -> Void) async throws { try await mock.load(onPhase: onPhase) }
     var isLoaded: Bool { get async { await mock.isLoaded } }
-    func encodeReference(audioURL: URL, transcript: String, name: String) async throws -> ReferenceVoice {
-        try await mock.encodeReference(audioURL: audioURL, transcript: transcript, name: name)
+    var engineDescription: EngineDescription { mock.engineDescription }
+    var isTuned: Bool? { mock.isTuned }
+    func encodeVoice(samples: [Float], transcript: String) async throws -> VoiceEncoding {
+        try await mock.encodeVoice(samples: samples, transcript: transcript)
     }
-    func decode(frames: [Frame]) async throws -> [Float] { try await mock.decode(frames: frames) }
     func synthesize(_ request: SpeechRequest) -> AsyncThrowingStream<SpeechEvent, Error> {
         let gain = Float(lock.withLock {
             sent.append(request)
@@ -118,7 +119,7 @@ final class AppDirectingTests: XCTestCase {
         let saved = try XCTUnwrap(session.library.voices.first)
         XCTAssertEqual(saved.name, "My narrator")
         XCTAssertEqual(saved.transcript, "These are the words of the voice I want to keep.")
-        XCTAssertEqual(saved.codes, selected.take.codes)
+        XCTAssertEqual(saved.dramaCodes, selected.take?.dramaCodes)
         XCTAssertEqual(session.voice(for: Speaker(index: 0, name: "Narrator")), .library(saved.id))
         XCTAssertEqual(session.takes.count, 3)
         XCTAssertNotEqual(session.visibleExportTakeID, selected.id, "Saving a voice must not change the export take")
@@ -146,7 +147,7 @@ final class AppDirectingTests: XCTestCase {
         XCTAssertTrue(session.saveVoice(fromTake: take.id, name: "Selected performance"))
         let saved = try XCTUnwrap(session.library.voices.first)
         XCTAssertEqual(saved.transcript, "Hello there.")
-        XCTAssertEqual(saved.codes, take.take.codes)
+        XCTAssertEqual(saved.dramaCodes, take.take?.dramaCodes)
     }
 
     func testSavedVoiceConditionsASingleNonzeroSpeakerAfterEditing() async throws {
@@ -158,7 +159,7 @@ final class AppDirectingTests: XCTestCase {
         await finish(session.generate, in: session)
         XCTAssertTrue(session.casting.ignored.isEmpty)
         let request = try XCTUnwrap(synthesizer.requests.last)
-        XCTAssertEqual(request.references.first?.codes, take.take.codes)
+        XCTAssertEqual(request.references.first?.dramaCodes, take.take?.dramaCodes)
         let plan = try GenerationPlan(request)
         let prompt = try Drama3Prompt.render(text: plan.chunks[0].turn, references: plan.references, history: plan.history)
         XCTAssertTrue(prompt.contains("\nText: <|speaker:2|> Hello there.\nSpeech: "), prompt)
@@ -318,7 +319,7 @@ final class AppDirectingTests: XCTestCase {
         let kept = try XCTUnwrap(session.library.voices.first)
         XCTAssertEqual(kept.name, "Nana")
         XCTAssertEqual(kept.transcript, "Once there was a lighthouse.")
-        XCTAssertEqual(kept.codes, take.codes)
+        XCTAssertEqual(kept.dramaCodes, take.dramaCodes)
         XCTAssertEqual(session.voice(for: speaker), .library(kept.id))
         XCTAssertEqual(session.casting.references, [kept])
         XCTAssertNil(session.casting.character)
@@ -374,7 +375,7 @@ final class AppDirectingTests: XCTestCase {
         XCTAssertEqual(session.takes.map(\.number), [1, 2, 3])
         XCTAssertEqual(session.takes.last?.note, "softer and warmer")
         XCTAssertEqual(session.selectedTakeID, session.takes.last?.id)
-        XCTAssertTrue(session.takes[2].take.text.hasPrefix("Direction: softer and warmer"), session.takes[2].take.text)
+        XCTAssertTrue(session.takes[2].take?.text.hasPrefix("Direction: softer and warmer") == true, session.takes[2].take?.text ?? "")
     }
 
     func testRetakeLeadsWithTheSessionVoiceUnlessItIsTheFirstTake() async throws {
@@ -442,7 +443,7 @@ final class AppDirectingTests: XCTestCase {
         XCTAssertEqual(session.script, "[sighs] Once there was a lighthouse.")
         XCTAssertEqual(session.state, .idle)
         let samples = session.auditionAudio
-        XCTAssertEqual(samples.count, audition.take.frameCount * ModelConstants.samplesPerFrame, "Each generated sample is queued once")
+        XCTAssertEqual(samples.count, audition.take.sampleCount, "Each generated sample is queued once")
         session.stopPreview()
         session.replayAudition()
         XCTAssertTrue(session.isPlayingAudition)

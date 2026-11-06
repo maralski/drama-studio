@@ -8,7 +8,7 @@ import XCTest
 func speak(_ text: String, cloning clip: URL, transcript: String,
            with engine: some SpeechSynthesizer) async throws -> (result: SpeechResult, streamed: [Float]) {
     try await engine.load { phase in print(phase) }
-    let voice = try await engine.encodeReference(audioURL: clip, transcript: transcript, name: "Narrator")
+    let (voice, _) = try await engine.cloneVoice(audioURL: clip, transcript: transcript, name: "Narrator")
     var request = SpeechRequest(text: text, references: [voice])
     request.config.wordVerification = .uncheckedPreview
     request.config.streaming = .defaultLowLatency
@@ -37,8 +37,8 @@ final class SDKUsageTests: XCTestCase {
 
         XCTAssertEqual(result.sentences.map(\.text), Drama3Chunking.splitSentencesTagged(text))
         XCTAssertEqual(streamed, result.samples)
-        XCTAssertEqual(result.samples.count, result.take.frameCount * ModelConstants.samplesPerFrame)
-        XCTAssertEqual(result.sentences.map(\.frames).reduce(0, +), result.take.frameCount)
+        XCTAssertEqual(result.samples.count, result.take.sampleCount)
+        XCTAssertEqual(result.sentences.map(\.samples).reduce(0, +), result.take.sampleCount)
     }
 
     func testDocumentedLowLatencySamplesStream() throws {

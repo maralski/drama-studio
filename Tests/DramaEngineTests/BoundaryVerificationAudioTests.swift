@@ -4,7 +4,7 @@ import XCTest
 final class BoundaryVerificationAudioTests: XCTestCase {
     private func samples(_ name: String) throws -> [Float] {
         let url = try XCTUnwrap(Bundle.module.url(forResource: name, withExtension: "wav", subdirectory: "Fixtures"))
-        return try DramaCodec.loadAudio(url: url)
+        return try ReferenceAudio.load(url: url)
     }
     private func verifier(_ text: String) throws -> LocalWordVerifier {
         let config = GenerationConfig()

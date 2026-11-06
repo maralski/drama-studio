@@ -39,7 +39,7 @@ final class AppSessionTests: XCTestCase {
         let result = try XCTUnwrap(session.result)
         XCTAssertEqual(result.sentences.map(\.text), Array(repeating: "This sentence is about forty bytes long.", count: 3))
         XCTAssertEqual(session.audio.count, result.samples.count)
-        XCTAssertEqual(session.audio.count, result.frames.count * ModelConstants.samplesPerFrame)
+        XCTAssertEqual(session.audio.count, result.take.sampleCount)
         XCTAssertTrue(session.canExport)
         XCTAssertEqual(usage, [.generationSucceeded])
     }
@@ -63,10 +63,10 @@ final class AppSessionTests: XCTestCase {
         let firstChunk = session.audio
         await waitUntil { !session.state.isGenerating }
         let result = try XCTUnwrap(session.result)
-        XCTAssertEqual(firstChunk.count, result.sentences[0].frames * ModelConstants.samplesPerFrame)
+        XCTAssertEqual(firstChunk.count, result.sentences[0].samples)
         XCTAssertEqual(firstChunk, Array(result.samples.prefix(firstChunk.count)))
         XCTAssertEqual(session.audio, result.samples)
-        XCTAssertEqual(session.audio.count, result.frames.count * ModelConstants.samplesPerFrame)
+        XCTAssertEqual(session.audio.count, result.take.sampleCount)
         XCTAssertEqual(session.takes.last?.samples, result.samples)
     }
 
@@ -154,8 +154,9 @@ final class AppSessionTests: XCTestCase {
         try AudioExporter.write([Float](repeating: 0.1, count: 44_100), to: clip, as: .wav16)
         try await session.encodeVoice(clip: clip, transcript: "Hello.", name: "Ann")
         let ann = try XCTUnwrap(session.library.voices.first)
-        XCTAssertEqual(ann.frameCount, 22)
-        XCTAssertEqual(ann.durationSeconds, 22 * 2048 / 44_100, accuracy: 1e-9)
+        XCTAssertEqual(ann.dramaCodes?.first?.count, 22)
+        XCTAssertEqual(try session.library.clip(for: ann.id)?.count, 44_100, "the library keeps the clip")
+        XCTAssertEqual(ann.durationSeconds, 1, accuracy: 1e-9, "the stored clip sets the length")
 
         session.screenplayMode = true
         session.script = "ANN: Hi.\nBEN: Hello."
@@ -171,8 +172,8 @@ final class AppSessionTests: XCTestCase {
 
     func testVoiceLibraryPersistsAsJSONAndSurvivesReload() throws {
         let library = VoiceLibrary(directory: directory)
-        let voice = ReferenceVoice(name: "Narrator", transcript: "Once upon a time.", codes: Array(repeating: [1, 2, 3], count: 10), sourceFileName: "n.wav")
-        try library.add(voice)
+        let voice = ReferenceVoice(name: "Narrator", transcript: "Once upon a time.", encodings: [.drama3(codes: Array(repeating: [1, 2, 3], count: 10))], sourceFileName: "n.wav")
+        try library.add(voice, clip: nil)
         let files = try FileManager.default.contentsOfDirectory(atPath: directory.path)
         XCTAssertEqual(files, ["\(voice.id.uuidString).json"])
         try Data("not json".utf8).write(to: directory.appending(path: "broken.json"))
@@ -180,6 +181,5 @@ final class AppSessionTests: XCTestCase {
         let reloaded = VoiceLibrary(directory: directory)
         XCTAssertEqual(reloaded.voices, [voice])
         XCTAssertEqual(reloaded.unreadableFiles, ["broken.json"])
-        XCTAssertEqual(voice.frames[2], [3 + ModelConstants.semanticStart] + Array(repeating: 3, count: 10))
     }
 }

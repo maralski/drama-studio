@@ -5,9 +5,9 @@ import XCTest
 @testable import DramaStudio
 
 final class AppCastingTests: XCTestCase {
-    private let voice = ReferenceVoice(name: "Ann", transcript: "a", codes: [[1]])
+    private let voice = ReferenceVoice(name: "Ann", transcript: "a", encodings: [.drama3(codes: [[1]])])
     private let design = VoiceDesign(name: "Nana", description: "warm elderly woman")
-    private let take = Take(text: "Hello.", codes: [[7]])
+    private let take = Take(text: "Hello.", context: .drama3(codes: [[7]]))
     private let solo = [Speaker(index: 0, name: "Narrator")]
     private let duo = [Speaker(index: 0, name: "A"), Speaker(index: 1, name: "B")]
 

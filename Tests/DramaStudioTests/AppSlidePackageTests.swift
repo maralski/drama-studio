@@ -14,8 +14,8 @@ final class AppSlidePackageTests: XCTestCase {
 
     private func takes() -> [NarrationTake] {
         [
-            NarrationTake(segmentID: document.segments[0].id, sampleRange: 0..<44_100, sentences: [.init(text: "a", frames: 21)]),
-            NarrationTake(segmentID: document.segments[2].id, sampleRange: 44_100..<66_150, sentences: [.init(text: "c", frames: 10)]),
+            NarrationTake(segmentID: document.segments[0].id, sampleRange: 0..<44_100, sentences: [.init(text: "a", samples: 21 * 2048)]),
+            NarrationTake(segmentID: document.segments[2].id, sampleRange: 44_100..<66_150, sentences: [.init(text: "c", samples: 10 * 2048)]),
         ]
     }
 

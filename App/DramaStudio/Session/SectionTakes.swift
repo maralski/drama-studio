@@ -42,7 +42,7 @@ struct SentenceSpan: Equatable {
     static func spans(of sentences: [NarrationTake.Sentence], in range: Range<Int>, segmentID: NarrationDocument.Segment.ID?) -> [SentenceSpan] {
         var cursor = range.lowerBound
         return sentences.map { sentence in
-            let end = min(cursor + sentence.frames * ModelConstants.samplesPerFrame, range.upperBound)
+            let end = min(cursor + sentence.samples, range.upperBound)
             defer { cursor = end }
             return SentenceSpan(segmentID: segmentID, text: sentence.text, range: cursor..<end)
         }

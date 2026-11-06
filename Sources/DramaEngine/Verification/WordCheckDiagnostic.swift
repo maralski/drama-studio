@@ -12,7 +12,7 @@ package enum WordCheckDiagnostic {
         }
         do {
             let verifier = try LocalWordVerifier.prepare(text: arguments[1], shouldContinue: { true })
-            let samples = try DramaCodec.loadAudio(url: URL(fileURLWithPath: arguments[0]))
+            let samples = try ReferenceAudio.load(url: URL(fileURLWithPath: arguments[0]))
             let accepted = try verifier.check(samples: samples, line: arguments[1], shouldContinue: { true })
             let data = try JSONSerialization.data(withJSONObject: ["accepted": accepted, "policy_revision": WordVerificationPolicy.currentRevision,
                                                                   "policy_definition": WordVerificationPolicy.currentDefinition])

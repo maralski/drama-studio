@@ -66,7 +66,7 @@ final class CueStreamingTests: XCTestCase {
 
     func testSlowReferenceKeepsRetriesBeforeReleasingAudio() async throws {
         let voice = ReferenceVoice(name: "Slow narrator", transcript: "Hey there my name is Joey and I love you",
-                                   codes: Array(repeating: Array(repeating: 1, count: 142), count: 10))
+                                   encodings: [.drama3(codes: Array(repeating: Array(repeating: 1, count: 142), count: 10))])
         var config = GenerationConfig()
         config.streaming = .lowLatency(stepFrames: 16)
         let count = try await partials(for: SpeechRequest(text: line, references: [voice], config: config))
@@ -75,7 +75,7 @@ final class CueStreamingTests: XCTestCase {
 
     func testSlowPreviousTakeKeepsRetriesBeforeReleasingAudio() async throws {
         let take = Take(text: "Hey there my name is Joey and I love you",
-                        codes: Array(repeating: Array(repeating: 1, count: 142), count: 10))
+                        context: .drama3(codes: Array(repeating: Array(repeating: 1, count: 142), count: 10)))
         var config = GenerationConfig()
         config.streaming = .lowLatency(stepFrames: 16)
         let count = try await partials(for: SpeechRequest(text: line, previousTakes: [take], config: config))
@@ -84,7 +84,7 @@ final class CueStreamingTests: XCTestCase {
 
     func testFastReferenceKeepsRetriesBeforeReleasingAudio() async throws {
         let voice = ReferenceVoice(name: "Fast narrator", transcript: line,
-                                   codes: Array(repeating: Array(repeating: 1, count: 32), count: 10))
+                                   encodings: [.drama3(codes: Array(repeating: Array(repeating: 1, count: 32), count: 10))])
         var config = GenerationConfig()
         config.streaming = .lowLatency(stepFrames: 16)
         let count = try await partials(for: SpeechRequest(text: line, references: [voice], config: config))
@@ -93,7 +93,7 @@ final class CueStreamingTests: XCTestCase {
 
     func testSlowReferenceKeepsLowLatencyWhenRetriesAreDisabled() async throws {
         let voice = ReferenceVoice(name: "Slow narrator", transcript: "Hey there my name is Joey and I love you",
-                                   codes: Array(repeating: Array(repeating: 1, count: 142), count: 10))
+                                   encodings: [.drama3(codes: Array(repeating: Array(repeating: 1, count: 142), count: 10))])
         var noAttempts = GenerationConfig()
         noAttempts.streaming = .lowLatency(stepFrames: 16)
         noAttempts.maxRetries = 0
