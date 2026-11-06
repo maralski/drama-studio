@@ -12,6 +12,7 @@ DerivedData/
 dist/
 /Vendor/WordRecognition/
 !Tests/DramaEngineTests/Fixtures/*.wav
+!Tests/DramaStudioTests/Fixtures/FormatV4/**/*.wav
 .DS_Store
 .claude/
 __pycache__/

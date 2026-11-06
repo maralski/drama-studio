@@ -39,7 +39,7 @@ let package = Package(
         .testTarget(name: "DramaEngineTests", dependencies: ["DramaEngine", "WordRecognitionProtocol"], path: "Tests/DramaEngineTests", resources: [.copy("Fixtures")]),
         .testTarget(name: "DramaServerTests", dependencies: ["DramaServer", "DramaEngine"], path: "Tests/DramaServerTests"),
         .testTarget(name: "DramaMCPTests", dependencies: ["DramaMCP"], path: "Tests/DramaMCPTests"),
-        .testTarget(name: "DramaStudioTests", dependencies: ["DramaStudio", "DramaEngine", "DramaServer"], path: "Tests/DramaStudioTests"),
+        .testTarget(name: "DramaStudioTests", dependencies: ["DramaStudio", "DramaEngine", "DramaServer"], path: "Tests/DramaStudioTests", resources: [.copy("Fixtures/FormatV4")]),
     ],
     swiftLanguageVersions: [.v5]
 )
