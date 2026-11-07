@@ -6,6 +6,10 @@ import PackageDescription
 // tools/make_xcframework.sh sets this to archive DramaEngine as a framework.
 let engineLibraryType: Product.Library.LibraryType? = Context.environment["DRAMA_ENGINE_DYNAMIC"] == "1" ? .dynamic : nil
 
+// The Ming-3.0-tts port is a sibling checkout (~/projects/ming next to ~/projects/drama-studio).
+// MING_PACKAGE_PATH points a worktree or another layout at it.
+let mingPackagePath = Context.environment["MING_PACKAGE_PATH"] ?? "../ming"
+
 let package = Package(
     name: "DramaStudio",
     platforms: [.macOS(.v15)],
@@ -18,6 +22,9 @@ let package = Package(
         .executable(name: "drama-say", targets: ["drama-say"]),
         .executable(name: "drama-word-recognizer", targets: ["drama-word-recognizer"]),
     ],
+    dependencies: [
+        .package(path: mingPackagePath),
+    ],
     targets: [
         // Run tools/bootstrap_word_recognition.py before a clean build.
         .binaryTarget(name: "whisper", path: "Vendor/WordRecognition/whisper.xcframework"),
@@ -25,7 +32,7 @@ let package = Package(
         .executableTarget(name: "drama-word-recognizer", dependencies: ["WordRecognitionProtocol", "whisper"]),
         .target(
             name: "DramaEngine",
-            dependencies: ["WordRecognitionProtocol"],
+            dependencies: ["WordRecognitionProtocol", .product(name: "MingTTS", package: "ming")],
             path: "Sources/DramaEngine",
             resources: [.copy("Kernels"), .copy("CodecConversion"), .copy("Verification/EnglishSpokenForms.json")]
         ),
