@@ -473,6 +473,15 @@ final class WordCoverageTests: XCTestCase {
         XCTAssertFalse(WordCoverage.matches(line: "Peter and Élodie are here.", transcript: "Peter is here.", locale: english, profile: .exact))
     }
 
+    /// whisper writes a casually spoken "want to" as "wanna"; the words were still said.
+    func testCasualSpellingsOfWantToAndGoingToAreEquivalentButNotToOtherWords() {
+        XCTAssertTrue(WordCoverage.matches(line: "You want to know what happened?", transcript: "You wanna know what happened?", locale: english, profile: .exact))
+        XCTAssertTrue(WordCoverage.matches(line: "We're going to be late.", transcript: "We're gonna be late.", locale: english, profile: .exact))
+        XCTAssertTrue(WordCoverage.matches(line: "I gotta go.", transcript: "I got to go.", locale: english, profile: .exact))
+        XCTAssertFalse(WordCoverage.matches(line: "You want to know what happened?", transcript: "You know what happened?", locale: english, profile: .exact))
+        XCTAssertFalse(WordCoverage.matches(line: "You want to know what happened?", transcript: "You want a know what happened?", locale: english, profile: .exact))
+    }
+
     func testAnUncertainMatchingWordCannotCertifySpeech() {
         let line = "[clears throat] The garden gate is closed."
         XCTAssertFalse(WordCoverage.matches(line: line, transcript: "The garden gate is closed.", locale: english, profile: .exact, uncertainSpans: ["garden"]))
