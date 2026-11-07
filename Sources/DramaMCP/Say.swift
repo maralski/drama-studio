@@ -289,12 +289,14 @@ extension SayCommand {
             let (reply, chunks) = try await environment.api.bytes(for: call)
             guard reply.ok else { throw SayExit.failure(reply) }
             trace.take(reply)
+            for notice in reply.notices ?? [] { environment.writeStandardError("drama-say: \(notice)\n") }
             try await environment.play(trace.watching(chunks))
             trace.finished()
         case .file, .standardOutput:
             let reply = try await environment.api.send(call)
             guard reply.ok else { throw SayExit.failure(reply) }
             trace.take(reply)
+            for notice in reply.notices ?? [] { environment.writeStandardError("drama-say: \(notice)\n") }
             guard case .file(let url) = output else { return environment.writeStandardOutput(reply.body) }
             do {
                 try reply.body.write(to: url, options: .atomic)

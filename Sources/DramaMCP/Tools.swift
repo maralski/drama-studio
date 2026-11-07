@@ -63,7 +63,7 @@ extension MCPTool {
 
     static let synthesizeSpeech = MCPTool(
         name: "synthesize_speech",
-        description: "Speak text with Fish Audio Drama 3 running locally in Drama Studio and save it as a 44.1 kHz 16-bit mono WAV file. Pass voice as an id or name from list_voices to clone that voice, or character (a name, a description of the voice, and optionally a scene) to design one, or neither for the model's own voice. The text may carry performance cues such as [laughs], [sighs] or <whisper>quiet words</whisper>, and multi-speaker scripts tag turns with <|speaker:0|>, <|speaker:1|>. Generation takes about as long as the audio on the Metal engine and the studio runs one generation at a time, so a busy studio returns an error: wait a few seconds and call again. Returns the file path, the audio length in seconds, the frame count, the generation time and a take_id that retake_with_note accepts. Set play to true to also play the file through the Mac's speakers.",
+        description: "Speak text with Fish Audio Drama 3 running locally in Drama Studio and save it as a 44.1 kHz 16-bit mono WAV file. Pass voice as an id or name from list_voices to clone that voice, or character (a name, a description of the voice, and optionally a scene) to design one, or neither for the model's own voice. The text may carry performance cues such as [laughs], [sighs] or <whisper>quiet words</whisper>, and multi-speaker scripts tag turns with <|speaker:0|>, <|speaker:1|>. Generation takes about as long as the audio on the Metal engine and the studio runs one generation at a time, so a busy studio returns an error: wait a few seconds and call again. Returns the file path, the audio length in seconds, the frame count, the generation time and a take_id that retake_with_note accepts, plus notices naming any cue or note the engine could not perform (its words are still spoken). Set play to true to also play the file through the Mac's speakers.",
         inputSchema: [
             "type": "object",
             "properties": [
@@ -139,6 +139,7 @@ extension MCPTool {
         ]
         if let take = reply.header("X-Drama-Take-Id") { result["take_id"] = .string(take) }
         if let frames = reply.header("X-Drama-Frames").flatMap(Int.init) { result["frames"] = .int(frames) }
+        if let notices = reply.notices { result["notices"] = .array(notices.map(JSON.string)) }
         return .object(result)
     }
 

@@ -110,4 +110,50 @@ final class APIEngineNeutralTests: XCTestCase {
             XCTAssertEqual(text(response), "\(error)\n")
         }
     }
+
+    private static let whisperNotice = "<whisper> isn't performed by this engine; its words are kept."
+
+    private func notices(_ header: String?) throws -> [String] {
+        try JSONSerialization.jsonObject(with: Data(XCTUnwrap(header, "no X-Drama-Notices header").utf8)) as? [String] ?? []
+    }
+
+    private func doneNotices(_ response: APIResponse) async throws -> [String] {
+        let events = try await streamed(response)
+        let done = try XCTUnwrap(events.components(separatedBy: "event: done\ndata: ").last?.components(separatedBy: "\n").first)
+        let fields = try JSONSerialization.jsonObject(with: Data(done.utf8)) as? [String: Any]
+        return fields?["notices"] as? [String] ?? []
+    }
+
+    func testWhatMingCannotPerformReachesTheClient() async throws {
+        let line = "<whisper>Keep the light lit.</whisper> All night."
+        let file = await send("POST", "/v1/audio/speech", json: ["input": line])
+        XCTAssertEqual(try notices(file.headers["X-Drama-Notices"]), [Self.whisperNotice])
+
+        let pcm = await send("POST", "/v1/audio/speech", json: ["input": line, "stream": true])
+        XCTAssertEqual(try notices(pcm.headers["X-Drama-Notices"]), [Self.whisperNotice], "known before the run, so a raw PCM stream carries it too")
+        _ = try await streamed(pcm)
+
+        let events = await service.respond(to: HTTPRequest(method: "GET", path: "/v1/audio/speech/stream", query: ["input": line]))
+        let eventNotices = try await doneNotices(events)
+        XCTAssertEqual(eventNotices, [Self.whisperNotice])
+
+        let body = AsyncThrowingStream<Data, Error> { $0.yield(Data("\(line)\n<whisper>Again.</whisper>\n".utf8)); $0.finish() }
+        let live = await service.respond(to: HTTPRequest(method: "POST", path: "/v1/audio/speech/live", headers: ["Accept": "text/event-stream"]), body: body)
+        let liveNotices = try await doneNotices(live)
+        XCTAssertEqual(liveNotices, [Self.whisperNotice], "once per session, not once per sentence")
+
+        let note = await send("POST", "/v1/audio/speech", json: ["input": "Keep the light lit.", "note": "with a café shrug"])
+        XCTAssertEqual(try notices(note.headers["X-Drama-Notices"]), ["The note \"with a café shrug\" names no emotion this engine performs."])
+        XCTAssertTrue(note.headers["X-Drama-Notices"]?.allSatisfy(\.isASCII) == true, "a header value stays ASCII")
+    }
+
+    func testDrama3PerformsTheCueAndSendsNoNotices() async throws {
+        try engines.select(.drama3)
+        let file = await send("POST", "/v1/audio/speech", json: ["input": "<whisper>Keep the light lit.</whisper>"])
+        XCTAssertEqual(file.status, .ok)
+        XCTAssertNil(file.headers["X-Drama-Notices"])
+        let events = await service.respond(to: HTTPRequest(method: "GET", path: "/v1/audio/speech/stream", query: ["input": "<whisper>Hi.</whisper>"]))
+        let eventNotices = try await doneNotices(events)
+        XCTAssertEqual(eventNotices, [])
+    }
 }

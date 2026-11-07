@@ -310,6 +310,7 @@ public final class APIService: Sendable {
             var headers = framing.headers
             headers["X-Drama-Take-Id"] = takeID.uuidString
             headers["X-Drama-Estimated-Seconds"] = String(format: "%.1f", estimate.remainingSeconds(at: 0) ?? 0)
+            headers["X-Drama-Notices"] = Self.header(outline.notices)
             return APIResponse(status: .ok, headers: headers, body: .chunked(body), abandon: { generation.cancel() })
         case .file(let format):
             let start = ContinuousClock.now
@@ -332,6 +333,7 @@ public final class APIService: Sendable {
             }
             headers["X-Drama-Samples"] = String(result.take.sampleCount)
             headers["X-Drama-Word-Coverage"] = result.wordCoverage.rawValue
+            headers["X-Drama-Notices"] = Self.header(result.notices)
             headers["X-Drama-Verification-Seconds"] = String(format: "%.3f", result.timings.verificationSeconds)
             headers["X-Drama-Seconds"] = String(format: "%.3f", Double(result.samples.count) / Double(AudioEncoding.sampleRate))
             headers["X-Drama-Generation-Seconds"] = String(format: "%.3f", Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18)
@@ -363,6 +365,7 @@ public final class APIService: Sendable {
                     var done: [String: Any] = ["take_id": takeID.uuidString, "samples": result.take.sampleCount,
                                                "word_coverage": result.wordCoverage.rawValue, "seconds": Self.seconds(result.samples)]
                     if let frames = result.take.apiFrames { done["frames"] = frames }
+                    if !result.notices.isEmpty { done["notices"] = result.notices.map(\.message) }
                     Self.send(framing.done(done), to: out)
                 }
                 await jobs.release(job)
@@ -417,6 +420,7 @@ public final class APIService: Sendable {
             var takeIDs: [String] = []
             var sentences = 0
             var seconds = 0.0
+            var notices: [SpeechNotice] = []
             func say(_ sentence: String) async throws {
                 let context = spoken.count <= 3 ? spoken : [spoken[0]] + spoken.suffix(2)
                 let request = Self.speechRequest(speaking: sentence, rules: rules, parameters: parameters,
@@ -424,6 +428,7 @@ public final class APIService: Sendable {
                 await jobs.begin(job, estimate: GenerationEstimate(outline: try SpeechOutline(request, engine: synthesizer.engine)))
                 guard let result = try await forward(request, framing: framing, job: job, into: out, sentences: &sentences) else { return }
                 spoken.append(result.take)
+                notices += result.notices.filter { !notices.contains($0) }
                 seconds += Self.seconds(result.samples)
                 let id = UUID()
                 await takes.insert(TakeCache.Entry(id: id, take: result.take, line: sentence, casting: parameters.casting,
@@ -437,7 +442,9 @@ public final class APIService: Sendable {
                     }
                 }
                 for sentence in lines.finish().flatMap({ text.append(line: $0) }) + text.flush() { try await say(sentence) }
-                Self.send(framing.done(["sentences": sentences, "seconds": (seconds * 1000).rounded() / 1000, "take_ids": takeIDs]), to: out)
+                var done: [String: Any] = ["sentences": sentences, "seconds": (seconds * 1000).rounded() / 1000, "take_ids": takeIDs]
+                if !notices.isEmpty { done["notices"] = notices.map(\.message) }
+                Self.send(framing.done(done), to: out)
                 await jobs.release(job)
                 out.finish()
             } catch {
@@ -453,6 +460,16 @@ public final class APIService: Sendable {
 
     private static func send(_ data: Data, to out: AsyncThrowingStream<Data, Error>.Continuation) {
         if !data.isEmpty { out.yield(data) }
+    }
+
+    /// What the engine could not perform, as a JSON array of messages in
+    /// ASCII so it fits a header; nil when there is nothing to say.
+    private static func header(_ notices: [SpeechNotice]) -> String? {
+        guard !notices.isEmpty,
+              let json = try? JSONSerialization.data(withJSONObject: notices.map(\.message), options: .withoutEscapingSlashes) else { return nil }
+        return String(decoding: json, as: UTF8.self).unicodeScalars.map { scalar in
+            scalar.isASCII ? String(scalar) : String(scalar).utf16.map { String(format: "\\u%04x", $0) }.joined()
+        }.joined()
     }
 
     private static func seconds(_ samples: [Float]) -> Double {

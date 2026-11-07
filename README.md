@@ -416,7 +416,9 @@ by codebook, as `GET /v1/takes/{id}` returns them.
 A file response carries `X-Drama-Frames`, `X-Drama-Seconds`,
 `X-Drama-Generation-Seconds`, `X-Drama-Word-Coverage` (`recognized` or
 `unchecked`), `X-Drama-Generated-Frames` (including rejected attempts) and
-`X-Drama-Verification-Seconds`. A sentence that still fails the word check
+`X-Drama-Verification-Seconds`. When the engine cannot perform part of the
+request as written, such as a cue Ming has no tag for, `X-Drama-Notices` holds
+a JSON array of one-sentence messages; the words are still spoken. A sentence that still fails the word check
 after its retries, or a missing word checker, fails the request with `500`
 and a plain-text message. The engine runs one generation at a time. A
 request that arrives while another runs, through the API or in the window, gets
@@ -445,8 +447,8 @@ replaced for any voice.
 
 The audio is always 16-bit little-endian mono at 44.1 kHz, as the
 `X-Drama-Format: pcm_s16le_mono` and `X-Drama-Sample-Rate: 44100` headers say.
-`stream: true` and the event stream also send `X-Drama-Take-Id` and
-`X-Drama-Estimated-Seconds` before the first audio.
+`stream: true` and the event stream also send `X-Drama-Take-Id`,
+`X-Drama-Estimated-Seconds` and any `X-Drama-Notices` before the first audio.
 
 **PCM.** `stream: true` on `POST /v1/audio/speech` answers with
 `Transfer-Encoding: chunked` and raw PCM in the HTTP chunks. A chunk boundary
@@ -470,7 +472,7 @@ and these events:
 | --- | --- |
 | `audio` | Base64 of the next PCM bytes, a whole number of frames. |
 | `sentence` | `{"index", "text", "seconds"}` after the last audio of each sentence. |
-| `done` | `{"take_id", "frames", "word_coverage", "seconds"}` once the take is complete. |
+| `done` | `{"take_id", "frames", "word_coverage", "seconds"}` once the take is complete, with `notices`, an array of messages, when the engine could not perform part of the request. |
 | `error` | `{"message"}`, after which the stream ends. |
 
 The route still needs the bearer token, and the server sends no CORS headers,
@@ -505,7 +507,8 @@ request body:
   `voice` is given, and the last two are context.
 - The response is chunked PCM as for `stream: true`. Send
   `Accept: text/event-stream` to get the events above instead, with `done`
-  carrying `{"sentences", "seconds", "take_ids"}`. The response ends once the
+  carrying `{"sentences", "seconds", "take_ids"}` and any `notices` of the
+  session. The response ends once the
   body has ended and its last sentence is spoken.
 - The session holds the engine from the request to the end of the response,
   so other requests get `429` meanwhile.

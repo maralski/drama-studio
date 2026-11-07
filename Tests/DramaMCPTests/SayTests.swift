@@ -190,6 +190,16 @@ final class SayTests: XCTestCase {
         XCTAssertTrue(verbose.captured.standardError.contains("take T9"), verbose.captured.standardError)
     }
 
+    func testWhatTheEngineCouldNotPerformIsPrintedOnStandardError() async throws {
+        let header = #"["<whisper> isn't performed by this engine; its words are kept."]"#
+        let ok = APIReply(status: 200, headers: ["X-Drama-Notices": header], body: Data([1, 0]))
+        for arguments in [["Hi"], ["-o", "-", "Hi"]] {
+            let result = await run(arguments, replies: ["POST /v1/audio/speech": ok])
+            XCTAssertEqual(result.status, 0)
+            XCTAssertEqual(result.captured.standardError, "drama-say: <whisper> isn't performed by this engine; its words are kept.\n", "\(arguments)")
+        }
+    }
+
     /// Catches a usage error that reaches the studio or exits with the wrong status.
     func testUsageErrorExits64WithoutCallingTheStudio() async {
         let (status, captured, api) = await run(["-v", "A", "--character", "B: c", "Hi"], replies: [:])

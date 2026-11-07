@@ -27,6 +27,12 @@ public struct APIReply: Sendable, Equatable {
 
     public var ok: Bool { (200..<300).contains(status) }
     public var text: String { String(decoding: body, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines) }
+    /// What the engine could not perform as asked, from `X-Drama-Notices`; nil when it performed everything.
+    public var notices: [String]? {
+        guard let data = header("X-Drama-Notices").map({ Data($0.utf8) }), let list = try? JSONSerialization.jsonObject(with: data) as? [String] else { return nil }
+        return list
+    }
+
     public func header(_ name: String) -> String? { headers.first { $0.key.caseInsensitiveCompare(name) == .orderedSame }?.value }
 }
 

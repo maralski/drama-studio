@@ -114,6 +114,19 @@ final class MCPServerTests: XCTestCase {
         XCTAssertEqual(sent, ["input": "Hello.", "voice": "Narrator", "expressiveness": 0.8, "response_format": "wav"])
     }
 
+    func testSynthesizeReportsWhatTheEngineCouldNotPerform() async throws {
+        let notice = "<whisper> isn't performed by this engine; its words are kept."
+        let header = #"["<whisper> isn't performed by this engine; its words are kept."]"#
+        let api = StubAPI(["POST /v1/audio/speech": APIReply(status: 200, headers: ["X-Drama-Notices": header], body: Data("RIFF".utf8))])
+        let reply = try await call(server(api), "synthesize_speech", ["text": "<whisper>Hi.</whisper>"])
+        XCTAssertEqual(reply["result"]?["structuredContent"]?["notices"], [.string(notice)])
+        guard case .array(let content)? = reply["result"]?["content"] else { return XCTFail("\(reply)") }
+        XCTAssertTrue(content.first?["text"]?.string?.contains("isn't performed") == true, "\(content)")
+
+        let plain = try await call(server(StubAPI(["POST /v1/audio/speech": APIReply(status: 200, body: Data("RIFF".utf8))])), "synthesize_speech", ["text": "Hi."])
+        XCTAssertNil(plain["result"]?["structuredContent"]?["notices"])
+    }
+
     func testCharacterAndRetakeWithNoteSpeakThroughTheSpeechRoute() async throws {
         let api = StubAPI(["POST /v1/audio/speech": APIReply(status: 200, headers: ["X-Drama-Take-Id": "TAKE-2", "X-Drama-Frames": "10"], body: Data("RIFF".utf8))])
         let character: JSON = ["name": "Captain", "description": "gravelly old male voice"]
