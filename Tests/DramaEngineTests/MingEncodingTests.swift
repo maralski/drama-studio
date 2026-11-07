@@ -47,6 +47,17 @@ final class MingEncodingTests: XCTestCase {
         XCTAssertNil(voice.encodings[.ming])
     }
 
+    func testAReferenceClipLosesItsTrailingSilenceButKeepsItsSpeech() {
+        let frame = ModelConstants.samplesPerFrame
+        let speech = (0..<frame * 20).map { sin(Float($0) * 2 * .pi * 220 / 44_100) * 0.3 }
+        let silence = [Float](repeating: 0.001, count: frame * 6)
+        let trimmed = MingSynthesizer.trimmed(speech + silence)
+        XCTAssertEqual(trimmed.count, speech.count, "six silent frames go, the speech stays whole")
+        XCTAssertEqual(trimmed, speech)
+        XCTAssertEqual(MingSynthesizer.trimmed(speech), speech, "a clip that ends in speech is unchanged")
+        XCTAssertEqual(MingSynthesizer.trimmed(speech + silence + speech).count, speech.count * 2 + silence.count, "an inner pause is not trailing")
+    }
+
     func testBadShapesAreRejectedAtTheBoundary() throws {
         XCTAssertThrowsError(try MingVoiceEncoding(transcript: "x", sampleCount: 10, latents: [Float](repeating: 0, count: 65), speakerEmbedding: [Float](repeating: 0, count: 192)))
         XCTAssertThrowsError(try MingVoiceEncoding(transcript: "x", sampleCount: 10, latents: [Float](repeating: 0, count: 64), speakerEmbedding: [Float](repeating: 0, count: 191)))

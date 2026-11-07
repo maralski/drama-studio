@@ -45,7 +45,8 @@ final class AppRealModelMingCheck: XCTestCase {
         let voice = try await session.encodeVoice(clip: clip, transcript: transcript, name: "Ming clip")
         XCTAssertEqual(Set(voice.encodings.keys), [.ming])
         guard case .ming(let reference)? = voice.encodings[.ming] else { return XCTFail("a Ming encoding") }
-        XCTAssertEqual(reference.sampleCount, voice.clipSampleCount)
+        XCTAssertLessThanOrEqual(reference.sampleCount, try XCTUnwrap(voice.clipSampleCount), "the encoding covers the clip up to its trailing silence")
+        XCTAssertGreaterThan(reference.sampleCount, try XCTUnwrap(voice.clipSampleCount) * 3 / 4)
         print("MING-CHECK (a) cloned \(voice.name): \(reference.latentRows) latent rows for \(reference.sampleCount) samples")
         session.setVoice(.library(voice.id), forSpeaker: 0)
         let a = try await generate("The lamp was lit before the fog rolled in.", as: "a-clone")
