@@ -5,7 +5,9 @@ import XCTest
 @testable import DramaStudio
 
 /// Drives the app's session on the real Ming model, and once on Drama 3, against
-/// the same home as ``AppRealModelCheck`` plus `MING_WEIGHTS`. Every line runs
+/// the same home as ``AppRealModelCheck`` plus `MING_WEIGHTS`. The home's
+/// `Voices` holds at least one voice saved before clips were kept (JSON only,
+/// as in a real library); it is copied, never changed. Every line runs
 /// with the word check on. The wav of each take lands in `DRAMA_APP_CHECK_OUT`
 /// (default: the work folder). Run under tools/with-gpu-lock:
 ///
@@ -27,7 +29,8 @@ final class AppRealModelMingCheck: XCTestCase {
         out = environment["DRAMA_APP_CHECK_OUT"].map { URL(filePath: $0, directoryHint: .isDirectory) } ?? work.appending(path: "out")
         try FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
 
-        let library = VoiceLibrary(directory: work.appending(path: "Voices"))
+        let voices = work.appending(path: "Voices")
+        let library = VoiceLibrary(directory: voices, codecDirectory: home.appending(path: "Codec"))
         let models = try FileManager.default.contentsOfDirectory(at: home.appending(path: "Models"), includingPropertiesForKeys: nil)
         let engines = try SpeechEngines(selected: .ming, factories: [
             .ming: .ming(location: ming),
@@ -48,8 +51,14 @@ final class AppRealModelMingCheck: XCTestCase {
         let a = try await generate("The lamp was lit before the fog rolled in.", as: "a-clone")
         XCTAssertEqual(a.take.take?.context.engine, .ming)
 
-        let old = ReferenceVoice(name: "Old Drama voice", transcript: transcript, encodings: [.drama3(codes: MockSynthesizer.codes(frameCount: 80))])
-        try library.add(old, clip: try ReferenceAudio.load(url: clip))
+        let saved = try XCTUnwrap(try FileManager.default.contentsOfDirectory(at: home.appending(path: "Voices"), includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "json" }.sorted { $0.path < $1.path }.first, "a JSON-only voice in the home")
+        try FileManager.default.copyItem(at: saved, to: voices.appending(path: saved.lastPathComponent))
+        library.reload()
+        let old = try XCTUnwrap(library.voices.first { $0.id.uuidString == saved.deletingPathExtension().lastPathComponent })
+        let oldClip = voices.appending(path: "\(old.id.uuidString).wav")
+        XCTAssertNil(old.clipSampleCount)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: oldClip.path), "the old voice starts with no clip")
         session.setVoice(.library(old.id), forSpeaker: 0)
         let b = try await generate("Fog swallowed the harbor by midnight.", as: "b-old-voice")
         XCTAssertEqual(b.take.take?.context.engine, .ming)
@@ -57,7 +66,10 @@ final class AppRealModelMingCheck: XCTestCase {
         XCTAssertEqual(Set(stored.encodings.keys), [.drama3, .ming])
         let onDisk = try JSONSerialization.jsonObject(with: Data(contentsOf: work.appending(path: "Voices/\(old.id.uuidString).json"))) as? [String: Any]
         XCTAssertEqual(Set((onDisk?["encodings"] as? [String: Any] ?? [:]).keys), ["drama3", "ming"], "the Ming encoding is on disk")
-        print("MING-CHECK (b) \(old.name) now has \(stored.encodings.keys.map(\.rawValue).sorted())")
+        let recreated = try ReferenceAudio.load(url: oldClip)
+        XCTAssertEqual(recreated.count, (old.dramaCodes?[0].count ?? 0) * ModelConstants.samplesPerFrame, "the clip was recreated from the Drama 3 codes and kept")
+        try ReferenceAudio.write(recreated, to: out.appending(path: "b-old-voice-recreated-clip.wav"))
+        print("MING-CHECK (b) \(old.name) had no clip; recreated \(recreated.count) samples, now has \(stored.encodings.keys.map(\.rawValue).sorted())")
 
         let c = try await generate("[laughs] You should have seen his face. [sighs] Then it was over.", as: "c-cues")
         XCTAssertEqual(c.result.notices, [], "every cue maps to a tag")
