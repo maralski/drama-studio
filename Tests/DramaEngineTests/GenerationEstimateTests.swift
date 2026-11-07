@@ -15,8 +15,8 @@ final class GenerationEstimateTests: XCTestCase {
     }
 
     func testChunksComeFromTheGeneratorsPlan() throws {
-        let plan = try GenerationPlan(text: lines.joined(separator: " "), references: [], config: GenerationConfig())
-        XCTAssertEqual(GenerationEstimate(plan: plan).expectedFrames, GenerationEstimate(lines: lines).expectedFrames)
+        let outline = try SpeechOutline(SpeechRequest(text: lines.joined(separator: " ")), engine: .drama3)
+        XCTAssertEqual(GenerationEstimate(outline: outline).expectedFrames, GenerationEstimate(lines: lines).expectedFrames)
     }
 
     /// Frames at a steady 20 frames/s, far from the 35 the estimate starts with:

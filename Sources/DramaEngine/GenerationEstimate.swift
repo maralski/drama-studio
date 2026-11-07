@@ -58,10 +58,6 @@ public struct GenerationEstimate: Sendable, Equatable {
         expectedFrames = lines.map { Int((FrameGenerator.expectedSeconds(for: $0) * Self.audioFramesPerSecond).rounded()) }
     }
 
-    package init(plan: GenerationPlan) {
-        expectedFrames = plan.chunks.map { Int((plan.expectedSeconds(for: $0.line) * Self.audioFramesPerSecond).rounded()) }
-    }
-
     /// An estimate in the outline's engine's steps, starting at that engine's typical rate.
     public init(outline: SpeechOutline) {
         let capabilities = outline.engine.capabilities

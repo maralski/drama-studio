@@ -12,7 +12,8 @@ public struct SpeechOutline: Sendable, Equatable {
     /// The script text of each turn, cues as written.
     public let lines: [String]
     /// Expected spoken seconds per turn, at 16 characters per second or the
-    /// slowest reference voice's pace.
+    /// slowest reference voice's pace. On Drama 3 without reference voices,
+    /// the first earlier Drama 3 take is the voice and sets the pace.
     public let expectedSeconds: [Double]
     public let notices: [SpeechNotice]
 
@@ -26,7 +27,10 @@ public struct SpeechOutline: Sendable, Equatable {
         var config = request.config
         if engine == .ming { config.chunking = .sentences }
         lines = GenerationPlan.lines(text: text, config: config)
-        let voices = request.references.map { (DirectorsNote.spokenWords($0.transcript), $0.durationSeconds) }
+        var voices = request.references.map { (DirectorsNote.spokenWords($0.transcript), $0.durationSeconds) }
+        if voices.isEmpty, engine == .drama3, let take = request.previousTakes.first(where: { $0.context.engine == .drama3 }) {
+            voices = [(DirectorsNote.spokenWords(DirectorsNote.spokenText(ofTurn: take.text, character: request.character)), take.durationSeconds)]
+        }
         expectedSeconds = lines.map { SpokenPace.expectedSeconds(line: $0, voices: voices) }
         var notices: [SpeechNotice] = []
         let foreign = request.previousTakes.filter { $0.context.engine != engine }

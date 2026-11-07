@@ -4,14 +4,17 @@ import XCTest
 @testable import DramaEngine
 
 final class FrameBudgetTests: XCTestCase {
+    private static func voice(_ reference: Drama3Prompt.Reference) -> ReferenceVoice {
+        ReferenceVoice(name: "Joey", transcript: reference.transcript, encodings: [.drama3(codes: reference.codes)])
+    }
+
     func testSlowReferenceSetsThePoemTiming() throws {
         let reference = Drama3Prompt.Reference(
             transcript: "Hey there my name is Joey and I love you",
             codes: Array(repeating: Array(repeating: 1, count: 142), count: 10))
-        let plan = try GenerationPlan(
-            text: "Here is a poem for you.\nThe morning light begins to break, Across the quiet, misty lake.",
-            references: [reference], config: GenerationConfig())
-        XCTAssertEqual(GenerationEstimate(plan: plan).expectedFrames, [82, 227],
+        let text = "Here is a poem for you.\nThe morning light begins to break, Across the quiet, misty lake."
+        let plan = try GenerationPlan(text: text, references: [reference], config: GenerationConfig())
+        XCTAssertEqual(GenerationEstimate(outline: try SpeechOutline(SpeechRequest(text: text, references: [Self.voice(reference)]), engine: .drama3)).expectedFrames, [82, 227],
                        "A slow reference must not use the generic 16 characters/second timing.")
         let line = try XCTUnwrap(plan.chunks.last).line
         let expected = plan.expectedSeconds(for: line)
@@ -35,7 +38,7 @@ final class FrameBudgetTests: XCTestCase {
         let plan = try GenerationPlan(text: line, references: [reference], config: config)
         let allowance = plan.expectedSeconds(for: line)
         XCTAssertEqual(allowance, 7.291065759637188, accuracy: 1e-9)
-        XCTAssertEqual(GenerationEstimate(plan: plan).expectedFrames, [157])
+        XCTAssertEqual(GenerationEstimate(outline: try SpeechOutline(SpeechRequest(text: line, references: [Self.voice(reference)]), engine: .drama3)).expectedFrames, [157])
         XCTAssertEqual(FrameGenerator.frameBudget(for: line, config: config, expectedSeconds: allowance), 279)
         let expected = FrameGenerator.expectedSeconds(for: line)
         XCTAssertEqual(expected, 1.9375)
@@ -53,16 +56,16 @@ final class FrameBudgetTests: XCTestCase {
         for references in [[], [reference]] {
             let plan = try GenerationPlan(text: "Twelve chars", references: references, config: GenerationConfig())
             XCTAssertEqual(plan.expectedSeconds(for: "Twelve chars"), 0.75)
-            XCTAssertEqual(GenerationEstimate(plan: plan).expectedFrames, [16])
+            let request = SpeechRequest(text: "Twelve chars", references: references.map(Self.voice))
+            XCTAssertEqual(GenerationEstimate(outline: try SpeechOutline(request, engine: .drama3)).expectedFrames, [16])
         }
     }
 
     func testVoiceTimingAppliesWhenAnEarlierTakeSuppliesTheReference() throws {
         let take = Take(text: "Hey there my name is Joey and I love you",
                         context: .drama3(codes: Array(repeating: Array(repeating: 1, count: 142), count: 10)))
-        let plan = try GenerationPlan(text: "Hey there my name is Joey and I love you", references: [],
-                                      previousTakes: [take], config: GenerationConfig())
-        XCTAssertEqual(GenerationEstimate(plan: plan).expectedFrames, [142])
+        let request = SpeechRequest(text: "Hey there my name is Joey and I love you", previousTakes: [take])
+        XCTAssertEqual(GenerationEstimate(outline: try SpeechOutline(request, engine: .drama3)).expectedFrames, [142])
     }
 
     func testPassageMarkupDoesNotCountAsSpokenText() {
