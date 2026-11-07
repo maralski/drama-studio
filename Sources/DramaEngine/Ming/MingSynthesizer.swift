@@ -71,13 +71,10 @@ public actor MingSynthesizer: SpeechSynthesizer {
     }
 
     /// Encodes a clip for cloning, loading the engine if needed. About 260 ms
-    /// for a 12 s clip on an M3 Max. Trailing silence is cut first, as it is
-    /// from a take's excerpt: Ming continues a reference from its last moment,
-    /// and a clone of a clip that ends in silence stops early and clips its
-    /// final word.
+    /// for a 12 s clip on an M3 Max.
     public func encodeVoice(samples: [Float], transcript: String) async throws -> VoiceEncoding {
         let model = try await loadedModel()
-        return .ming(reference: try Self.encode(Self.trimmed(samples), transcript: transcript, with: model))
+        return .ming(reference: try Self.encode(samples, transcript: transcript, with: model))
     }
 
     static func encode(_ samples: [Float], transcript: String, with model: MingTTSModel) throws -> MingVoiceEncoding {
