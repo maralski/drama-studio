@@ -1,6 +1,7 @@
 // Copyright 2026 Peter Marelas
 // SPDX-License-Identifier: Apache-2.0
 import DramaEngine
+import DramaServer
 import XCTest
 @testable import DramaStudio
 
@@ -81,6 +82,34 @@ final class AppMixedEngineTests: XCTestCase {
         XCTAssertEqual(stored.encodings[.ming]?.sampleCount, clip.count)
         XCTAssertEqual(try library.clip(for: old.id)?.count, clip.count, "the clip is untouched")
         XCTAssertEqual(session.takes.last?.take?.context.engine, .ming)
+        AppHome.defaults.removeObject(forKey: ModelSetup.engineKey)
+    }
+
+    func testAVoiceSavedWithoutAClipSpeaksOnMingFromItsDramaCodes() async throws {
+        guard DramaCodec.modelsExist(in: AppHome.codec) else { throw XCTSkip("codec models not converted") }
+        let voices = directory.appending(path: "Voices")
+        try FileManager.default.createDirectory(at: voices, withIntermediateDirectories: true)
+        let fixture = try XCTUnwrap(Bundle.module.url(forResource: "FormatV4", withExtension: nil)).appending(path: "Voices")
+        let name = try XCTUnwrap(FileManager.default.contentsOfDirectory(atPath: fixture.path).first { $0.hasSuffix(".json") })
+        try FileManager.default.copyItem(at: fixture.appending(path: name), to: voices.appending(path: name))
+        let library = VoiceLibrary(directory: voices)
+        let old = try XCTUnwrap(library.voices.first)
+        let wav = voices.appending(path: "\(old.id.uuidString).wav")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: wav.path), "the voice starts with no clip")
+
+        let session = try makeSession(library: library)
+        session.engine = .ming
+        session.setVoice(.library(old.id), forSpeaker: 0)
+        await generate(session, "Speak with the old voice.")
+        if case .failed(let message) = session.state { XCTFail(message) }
+        XCTAssertEqual(session.takes.last?.take?.context.engine, .ming)
+
+        let frames = try XCTUnwrap(old.dramaCodes?.first?.count)
+        XCTAssertEqual(try ReferenceAudio.load(url: wav).count, frames * ModelConstants.samplesPerFrame, "the recreated clip is kept as the voice's wav")
+        let stored = try XCTUnwrap(VoiceDirectory(url: voices).load().voices.first)
+        var expected = old
+        expected.store(try XCTUnwrap(stored.encodings[.ming], "the Ming encoding is on disk"))
+        XCTAssertEqual(stored, expected, "the voice file gains only the Ming encoding")
         AppHome.defaults.removeObject(forKey: ModelSetup.engineKey)
     }
 
