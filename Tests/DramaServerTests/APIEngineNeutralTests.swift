@@ -4,6 +4,19 @@ import DramaEngine
 import DramaServer
 import XCTest
 
+/// Refuses every request the way an engine does once it runs.
+private struct RefusingSynthesizer: SpeechSynthesizer {
+    var error: any Error
+    var isLoaded: Bool { true }
+    func load(onPhase: @escaping @Sendable (String) -> Void) async throws {}
+    var engineDescription: EngineDescription { EngineDescription(engine: .drama3, modelID: "fishaudio/drama-3", snapshot: "test", isMock: true) }
+    var isTuned: Bool? { false }
+    func encodeVoice(samples: [Float], transcript: String) async throws -> VoiceEncoding { throw error }
+    func synthesize(_ request: SpeechRequest) -> AsyncThrowingStream<SpeechEvent, Error> {
+        AsyncThrowingStream { $0.finish(throwing: error) }
+    }
+}
+
 /// The API behind the engine registry: a voice encoded for one engine speaks
 /// on the other, and what an engine cannot perform reaches the client.
 final class APIEngineNeutralTests: XCTestCase {
@@ -85,5 +98,16 @@ final class APIEngineNeutralTests: XCTestCase {
         let events = try await streamed(response)
         XCTAssertTrue(events.contains("event: done"), events)
         XCTAssertFalse(events.contains("event: error"), events)
+    }
+
+    func testARequestTheEngineRefusesIsTheClientsMistake() async throws {
+        for error: any Error in [PromptError.structuralToken("text", "<|im_start|>"), EngineError.noClip(voiceName: "Keeper")] {
+            let refusing = APIService(synthesizer: RefusingSynthesizer(error: error), voices: VoiceDirectory(url: directory), token: nil, version: "test",
+                                      pronunciation: { PronunciationDictionary() })
+            let response = await refusing.respond(to: HTTPRequest(method: "POST", path: "/v1/audio/speech",
+                                                                  body: try JSONSerialization.data(withJSONObject: ["input": "Hello."])))
+            XCTAssertEqual(response.status, .badRequest, text(response))
+            XCTAssertEqual(text(response), "\(error)\n")
+        }
     }
 }

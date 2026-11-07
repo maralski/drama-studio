@@ -22,6 +22,7 @@ public struct SpeechOutline: Sendable, Equatable {
         if request.character != nil && !request.references.isEmpty { throw PromptError.voiceConflict }
         let text = request.text
         guard !UnicodeWhitespace.strip(text).isEmpty else { throw PromptError.emptyText("text") }
+        if request.note.flatMap(DirectorsNote.clean) != nil, DirectorsNote.sentences(text).isEmpty { throw PromptError.emptyText("line") }
         var config = request.config
         if engine == .ming { config.chunking = .sentences }
         lines = GenerationPlan.lines(text: text, config: config)

@@ -181,6 +181,11 @@ public final class APIService: Sendable {
                 return try await handle(api)
             } catch let error as APIError {
                 return .error(error)
+            } catch let error as PromptError {
+                return .error(.bad(error.description))
+            } catch let error as EngineError {
+                guard case .noClip = error else { return .error(APIError(.internalServerError, error.description)) }
+                return .error(.bad(error.description))
             } catch {
                 return .error(APIError(.internalServerError, Self.describe(error)))
             }
@@ -280,19 +285,19 @@ public final class APIService: Sendable {
         let fromLibrary = try await libraryReferences(for: resolved.casting)
         guard await !engineBusyElsewhere(), let job = await jobs.claim() else { throw busy }
         let request: SpeechRequest
-        let plan: GenerationPlan
+        let outline: SpeechOutline
         do {
             var references = fromLibrary ?? []
             if fromLibrary == nil { references = try await encodedClips(for: resolved.casting) }
             request = Self.speechRequest(speaking: resolved.line, rules: rules, parameters: parameters,
                                          references: references, character: resolved.character, previousTakes: resolved.previous)
-            plan = try GenerationPlan(request)
+            outline = try SpeechOutline(request, engine: synthesizer.engine)
         } catch {
             await jobs.release(job)
-            if let error = error as? PromptError { throw APIError.bad(error.description) }
             throw error
         }
-        await jobs.begin(job, estimate: GenerationEstimate(plan: plan))
+        let estimate = GenerationEstimate(outline: outline)
+        await jobs.begin(job, estimate: estimate)
         let takeID = UUID()
         let remember: @Sendable (Take) async -> Void = { [takes] take in
             await takes.insert(TakeCache.Entry(id: takeID, take: take, line: resolved.line, casting: resolved.casting, character: resolved.character,
@@ -304,7 +309,7 @@ public final class APIService: Sendable {
             let (body, generation) = stream(request, framing: framing, job: job, takeID: takeID, remember: remember)
             var headers = framing.headers
             headers["X-Drama-Take-Id"] = takeID.uuidString
-            headers["X-Drama-Estimated-Seconds"] = String(format: "%.1f", GenerationEstimate(plan: plan).remainingSeconds(at: 0) ?? 0)
+            headers["X-Drama-Estimated-Seconds"] = String(format: "%.1f", estimate.remainingSeconds(at: 0) ?? 0)
             return APIResponse(status: .ok, headers: headers, body: .chunked(body), abandon: { generation.cancel() })
         case .file(let format):
             let start = ContinuousClock.now
@@ -416,7 +421,7 @@ public final class APIService: Sendable {
                 let context = spoken.count <= 3 ? spoken : [spoken[0]] + spoken.suffix(2)
                 let request = Self.speechRequest(speaking: sentence, rules: rules, parameters: parameters,
                                                  references: references, character: parameters.character, previousTakes: context)
-                await jobs.begin(job, estimate: GenerationEstimate(plan: try GenerationPlan(request)))
+                await jobs.begin(job, estimate: GenerationEstimate(outline: try SpeechOutline(request, engine: synthesizer.engine)))
                 guard let result = try await forward(request, framing: framing, job: job, into: out, sentences: &sentences) else { return }
                 spoken.append(result.take)
                 seconds += Self.seconds(result.samples)
