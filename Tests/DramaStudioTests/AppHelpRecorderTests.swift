@@ -254,18 +254,18 @@ private final class StubCapture: AudioCapturing {
 final class AppGenerationClockTests: XCTestCase {
     func testRestoredAudioWithoutGenerationTelemetryIsNotStoppedEarly() {
         XCTAssertEqual(
-            TransportBar.summary(audioSeconds: 6.5, frames: nil, framesPerSecond: nil, generationSeconds: nil),
+            TransportBar.summary(audioSeconds: 6.5, speed: nil, generationSeconds: nil),
             "6.5 s of audio"
         )
     }
 
-    func testSummaryShowsAudioFramesSpeedAndGenerationTime() {
+    func testSummaryShowsAudioSpeedAndGenerationTime() {
         XCTAssertEqual(
-            TransportBar.summary(audioSeconds: 23.6, frames: 559, framesPerSecond: 38.2, generationSeconds: 15.2),
-            "23.6 s of audio \u{00B7} 559 frames \u{00B7} 38 frames/s \u{00B7} generated in 15.2 s"
+            TransportBar.summary(audioSeconds: 23.6, speed: 1.55, generationSeconds: 15.2),
+            "23.6 s of audio \u{00B7} 1.6x real time \u{00B7} generated in 15.2 s"
         )
         XCTAssertEqual(
-            TransportBar.summary(audioSeconds: 4, frames: nil, framesPerSecond: nil, generationSeconds: 2.04),
+            TransportBar.summary(audioSeconds: 4, speed: nil, generationSeconds: 2.04),
             "4.0 s of audio (stopped early) \u{00B7} generated in 2.0 s"
         )
         XCTAssertEqual(TransportBar.seconds(12.44), "12.4 s")

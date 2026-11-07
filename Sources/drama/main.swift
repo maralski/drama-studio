@@ -525,26 +525,37 @@ func fbench(_ args: Args) throws {
                  t[t.count / 2], t.first!, t.last!, c[c.count / 2], t.count, steps))
 }
 
-/// drama serve [--port 8780] [--no-token]: the app's HTTP API, headless.
-/// DRAMA_PREVIEW_ENGINE=1 serves the mock engine, as in the app.
+/// drama serve [--port 8780] [--no-token] [--engine drama3|ming] [--ming-weights <dir>]:
+/// the app's HTTP API, headless, on one engine. DRAMA_PREVIEW_ENGINE=1 serves
+/// the mock engine, as in the app; MING_WEIGHTS names the Ming checkpoint.
 func serve(_ args: Args) throws -> Never {
     guard let port = UInt16(exactly: args.int("port", Int(APIService.defaultPort))) else { fail("--port must be between 0 and 65535") }
-    let synthesizer: any SpeechSynthesizer
+    guard let engine = SpeechEngineID(rawValue: args["engine"] ?? "drama3") else { fail("--engine must be drama3 or ming") }
+    let factory: SpeechEngines.Factory
     if ProcessInfo.processInfo.environment["DRAMA_PREVIEW_ENGINE"] == "1" {
-        synthesizer = MockSynthesizer()
+        factory = .mock(engine)
     } else {
-        guard let location = args["model"].map({ ModelLocation(directory: URL(fileURLWithPath: $0)) }) ?? ModelLocation.huggingFaceCache(), location.isComplete else {
-            fail("no complete model found; pass --model <dir> or run: hf download fishaudio/drama-3")
+        switch engine {
+        case .drama3:
+            guard let location = args["model"].map({ ModelLocation(directory: URL(fileURLWithPath: $0)) }) ?? ModelLocation.huggingFaceCache(), location.isComplete else {
+                fail("no complete model found; pass --model <dir> or run: hf download fishaudio/drama-3")
+            }
+            guard DramaCodec.modelsExist() else { fail("the Core ML codec models are missing; run Sources/DramaEngine/CodecConversion/convert_codec.py") }
+            factory = .drama3(location: location, codecDirectory: DramaCodec.defaultDirectory)
+        case .ming:
+            guard let location = args["ming-weights"].map({ MingLocation(directory: URL(fileURLWithPath: $0)) }) ?? MingLocation.fromEnvironment(), location.isComplete else {
+                fail("no complete Ming checkpoint found; pass --ming-weights <dir> or set MING_WEIGHTS")
+            }
+            factory = .ming(location: location)
         }
-        guard DramaCodec.modelsExist() else { fail("the Core ML codec models are missing; run Sources/DramaEngine/CodecConversion/convert_codec.py") }
-        synthesizer = DramaSynthesizer(location: location, codecDirectory: DramaCodec.defaultDirectory)
     }
+    let synthesizer = try SpeechEngines(selected: engine, factories: [engine: factory], voices: VoiceDirectory())
     let token = args.flags.contains("no-token") ? nil : try APIToken.loadOrCreate()
     let service = APIService(synthesizer: synthesizer, voices: VoiceDirectory(), token: token, version: "cli")
     let server = APIServer(service: service, port: port) { state in
         switch state {
         case .listening(let port):
-            print("Drama API on http://127.0.0.1:\(port) (\(service.info.kind.rawValue) engine)")
+            print("Drama API on http://127.0.0.1:\(port) (\(service.info.kind.rawValue) \(engine.capabilities.name) engine)")
             print(token == nil ? "no bearer token (--no-token)" : "bearer token in \(APIToken.defaultURL.path)")
             fflush(stdout)
         case .failed(let message):

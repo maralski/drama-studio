@@ -37,6 +37,11 @@ final class VoiceLibrary: VoiceStore {
         try files.clip(for: id)
     }
 
+    func storeEncoding(_ encoding: VoiceEncoding, for id: ReferenceVoice.ID) throws {
+        try files.storeEncoding(encoding, for: id)
+        reload()
+    }
+
     func voice(_ id: ReferenceVoice.ID?) -> ReferenceVoice? {
         voices.first { $0.id == id }
     }

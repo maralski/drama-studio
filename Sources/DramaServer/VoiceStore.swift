@@ -6,7 +6,7 @@ import Foundation
 /// Where the API keeps reference voices. The app passes its `VoiceLibrary`
 /// so voices added over HTTP show up in the window; the CLI and tests use a
 /// `VoiceDirectory`.
-public protocol VoiceStore: Sendable {
+public protocol VoiceStore: VoiceEncodingStore {
     func allVoices() async -> [ReferenceVoice]
     /// Keeps the voice and, when given, its clip as mono 44.1 kHz samples.
     func add(_ voice: ReferenceVoice, clip: [Float]?) async throws
@@ -62,6 +62,13 @@ public struct VoiceDirectory: VoiceStore {
     public func clip(for id: ReferenceVoice.ID) throws -> [Float]? {
         let clip = clipFile(for: id)
         return FileManager.default.fileExists(atPath: clip.path) ? try ReferenceAudio.load(url: clip) : nil
+    }
+
+    /// Rewrites the voice file with `encoding` added; the clip is untouched.
+    public func storeEncoding(_ encoding: VoiceEncoding, for id: ReferenceVoice.ID) throws {
+        var voice = try JSONDecoder().decode(ReferenceVoice.self, from: Data(contentsOf: file(for: id)))
+        voice.store(encoding)
+        try JSONEncoder().encode(voice).write(to: file(for: id), options: .atomic)
     }
 
     private func file(for id: ReferenceVoice.ID) -> URL {

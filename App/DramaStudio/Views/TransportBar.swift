@@ -115,10 +115,10 @@ struct TransportBar: View {
     }
 
     /// A restored project has audio but no generation telemetry or clock.
-    static func summary(audioSeconds: TimeInterval, frames: Int?, framesPerSecond: Double?, generationSeconds: TimeInterval?) -> String {
+    static func summary(audioSeconds: TimeInterval, speed: Double?, generationSeconds: TimeInterval?) -> String {
         var parts = ["\(seconds(audioSeconds)) of audio"]
-        if let frames, let framesPerSecond {
-            parts += ["\(frames) frames", "\(Int(framesPerSecond.rounded())) frames/s"]
+        if let speed, speed > 0 {
+            parts.append("\(speed.formatted(.number.precision(.fractionLength(1))))x real time")
         } else if generationSeconds != nil {
             parts[0] += " (stopped early)"
         }
@@ -177,8 +177,7 @@ private struct StatusLine: View {
         }
         return TransportBar.summary(
             audioSeconds: model.duration,
-            frames: model.result?.timings.framesGenerated,
-            framesPerSecond: model.result?.timings.framesPerSecond,
+            speed: model.result?.speed,
             generationSeconds: model.generationClock?.duration
         )
     }

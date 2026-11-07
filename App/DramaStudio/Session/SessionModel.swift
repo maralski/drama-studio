@@ -100,6 +100,8 @@ final class SessionModel {
 
     let library: VoiceLibrary
     private(set) var synthesizer: any SpeechSynthesizer
+    /// What the engine cannot perform in the request under way or last run, for the user to see.
+    private(set) var notices: [SpeechNotice] = []
     /// Why generation is refused right now; the app asks its setup coordinator.
     @ObservationIgnored var generationRefusal: @MainActor () -> String? = { nil }
     @ObservationIgnored private let pronunciationURL: URL
@@ -600,12 +602,14 @@ final class SessionModel {
         case .audition: generationBasis = nil
         }
         pronunciation = (try? PronunciationDictionary.load(from: pronunciationURL)) ?? PronunciationDictionary()
-        scriptLines = (try? GenerationPlan(request))?.chunks.map(\.line) ?? []
+        let outline = try? SpeechOutline(request, engine: engine)
+        scriptLines = outline?.lines ?? []
+        notices = outline?.notices ?? []
         request.text = pronunciation.apply(to: request.text)
         telemetry = GenerationTelemetry()
         streamed = StreamedAudio()
         liveChunks = [:]
-        estimate = (try? GenerationPlan(request)).map(GenerationEstimate.init(plan:))
+        estimate = (try? SpeechOutline(request, engine: engine)).map(GenerationEstimate.init(outline:))
         estimateStart = .now
         state = .loading(progress: 0, detail: "Starting engine", playing: state.isPlaying)
         run += 1
@@ -909,6 +913,25 @@ final class SessionModel {
     func refreshEngineState() {
         Task { modelLoaded = await synthesizer.isLoaded }
     }
+
+    /// The engine new takes use. With a registry it is the registry's
+    /// selection, kept in the `speechEngine` default; with one engine it is that engine.
+    var engine: SpeechEngineID {
+        get { (synthesizer as? SpeechEngines)?.selected ?? synthesizer.engine }
+        set {
+            guard let engines = synthesizer as? SpeechEngines, newValue != engines.selected else { return }
+            do {
+                try engines.select(newValue)
+                AppHome.defaults.set(newValue.rawValue, forKey: ModelSetup.engineKey)
+                refreshEngineState()
+            } catch {
+                notice = Self.describe(error)
+            }
+        }
+    }
+
+    /// Engines the session can switch to.
+    var availableEngines: Set<SpeechEngineID> { (synthesizer as? SpeechEngines)?.available ?? [synthesizer.engine] }
 
     private func settleAfterGeneration(_ next: PlaybackState) {
         state = next

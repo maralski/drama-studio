@@ -15,11 +15,36 @@ enum ModelSetup {
 
     static var customPath: String { AppHome.defaults.string(forKey: customDirectoryKey) ?? "" }
 
-    /// The mock under the preview engine or before any weights are found.
-    static func makeSynthesizer() -> any SpeechSynthesizer {
-        if isPreviewEngine { return MockSynthesizer() }
-        guard let location = location(customPath: customPath) else { return MockSynthesizer() }
-        return DramaSynthesizer(location: location, codecDirectory: AppHome.codec, tuningDirectory: AppHome.tuning)
+    /// The engine new takes use: the `speechEngine` default, or `DRAMA_ENGINE=ming` for test runs.
+    static let engineKey = "speechEngine"
+    static var selectedEngine: SpeechEngineID {
+        let raw = ProcessInfo.processInfo.environment["DRAMA_ENGINE"] ?? AppHome.defaults.string(forKey: engineKey) ?? ""
+        return SpeechEngineID(rawValue: raw) ?? .drama3
+    }
+
+    /// `MING_WEIGHTS`, else the `mingDirectory` default; nil unless complete.
+    static let mingDirectoryKey = "mingDirectory"
+    static func mingLocation() -> MingLocation? {
+        if let location = MingLocation.fromEnvironment() { return location }
+        guard let path = AppHome.defaults.string(forKey: mingDirectoryKey), !path.isEmpty else { return nil }
+        let location = MingLocation(directory: URL(filePath: path, directoryHint: .isDirectory))
+        return location.isComplete ? location : nil
+    }
+
+    /// Every installed engine behind one synthesizer, with the chosen one
+    /// selected. Under the preview engine both are mocks. Drama 3 always has a
+    /// factory, so setup can attach its weights later; it is a mock until then.
+    static func makeEngines(library: VoiceLibrary) -> SpeechEngines {
+        var factories: [SpeechEngineID: SpeechEngines.Factory] = [:]
+        if isPreviewEngine {
+            factories = [.drama3: .mock(.drama3), .ming: .mock(.ming)]
+        } else {
+            factories[.drama3] = location(customPath: customPath).map { .drama3(location: $0, codecDirectory: AppHome.codec, tuningDirectory: AppHome.tuning) }
+                ?? .mock(.drama3)
+            if let ming = mingLocation() { factories[.ming] = .ming(location: ming) }
+        }
+        let selected = factories[selectedEngine] != nil ? selectedEngine : .drama3
+        return try! SpeechEngines(selected: selected, factories: factories, voices: library)
     }
 
     /// The folder chosen in Settings when there is one; then the setup
@@ -108,13 +133,14 @@ extension SetupServices {
         let bundle = CodecBundle(info: Bundle.main.infoDictionary)
         let terms = TermsAgreement(defaults: AppHome.defaults)
         let weights = PlanDownload(plan: plan, directory: AppHome.models, downloader: downloader)
-        let attach: @MainActor () -> any SpeechSynthesizer = {
-            guard !ModelSetup.isPreviewEngine, let location = ModelSetup.location(customPath: ModelSetup.customPath) else { return session.synthesizer }
-            if let engine = session.synthesizer as? DramaSynthesizer, engine.location == location { return engine }
-            let engine = DramaSynthesizer(location: location, codecDirectory: AppHome.codec, tuningDirectory: AppHome.tuning)
-            session.replaceSynthesizer(engine)
-            server.restart()
-            return engine
+        /// Gives the registry a Drama 3 factory for the downloaded weights, once.
+        let attach: @MainActor () async -> Void = {
+            guard !ModelSetup.isPreviewEngine, let location = ModelSetup.location(customPath: ModelSetup.customPath),
+                  let engines = session.synthesizer as? SpeechEngines else { return }
+            let factory = SpeechEngines.Factory.drama3(location: location, codecDirectory: AppHome.codec, tuningDirectory: AppHome.tuning)
+            guard engines.description(of: .drama3) != factory.description else { return }
+            await engines.register(.drama3, factory)
+            session.refreshEngineState()
         }
         return SetupServices(
             facts: {
@@ -144,8 +170,12 @@ extension SetupServices {
                     try? FileManager.default.removeItem(at: archive)
                 }.value
             },
-            tune: { detail in try await attach().load(onPhase: detail) },
-            attachEngine: { _ = attach() },
+            tune: { detail in
+                await attach()
+                guard let engines = session.synthesizer as? SpeechEngines else { return try await session.synthesizer.load(onPhase: detail) }
+                try await engines.load(.drama3, onPhase: detail)
+            },
+            attachEngine: { Task { await attach() } },
             prepareFirstLine: { session.prepareFirstLine() },
             chooseUsage: { UsageMonitoring.shared.choose(enabled: $0) },
             recordUsage: { UsageMonitoring.shared.record($0) }
