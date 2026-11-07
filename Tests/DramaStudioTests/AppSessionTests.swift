@@ -155,7 +155,8 @@ final class AppSessionTests: XCTestCase {
         try await session.encodeVoice(clip: clip, transcript: "Hello.", name: "Ann")
         let ann = try XCTUnwrap(session.library.voices.first)
         XCTAssertEqual(ann.dramaCodes?.first?.count, 22)
-        XCTAssertEqual(try session.library.clip(for: ann.id)?.count, 44_100, "the library keeps the clip")
+        let kept = try await session.library.clip(for: ann.id)
+        XCTAssertEqual(kept?.count, 44_100, "the library keeps the clip")
         XCTAssertEqual(ann.durationSeconds, 1, accuracy: 1e-9, "the stored clip sets the length")
 
         session.screenplayMode = true

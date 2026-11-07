@@ -17,6 +17,9 @@ public enum CodecError: Error, CustomStringConvertible {
     /// A model file takes another frame count than its name promises; it was
     /// built by an older `convert_codec.py`.
     case wrongShape(URL, String)
+    /// The voice has Drama 3 codes but no clip, and the codec that decodes
+    /// them is not in the directory.
+    case noCodecForClip(voiceName: String, directory: URL)
 
     /// A message for a person.
     public var description: String {
@@ -26,6 +29,8 @@ public enum CodecError: Error, CustomStringConvertible {
         case .unexpectedOutput(let m): return "unexpected codec output: \(m)"
         case .audio(let m): return "audio: \(m)"
         case .wrongShape(let url, let m): return "codec model \(url.lastPathComponent) \(m); rebuild it with DramaSetup.prepare or Sources/DramaEngine/CodecConversion/convert_codec.py"
+        case .noCodecForClip(let name, let directory):
+            return "the voice \(name) was saved without a clip, and recreating it from its Drama 3 codes needs the voice codec, which is not in \(directory.path); set up Drama 3 to get it"
         }
     }
 }
@@ -128,9 +133,11 @@ public actor DramaCodec {
 
     /// A clip for a voice saved before the library kept clips, decoded from
     /// its Drama 3 codes; nil when the voice has no Drama 3 encoding. Loads
-    /// only the codec, not the model.
+    /// only the codec, not the model, and fails with
+    /// ``CodecError/noCodecForClip(voiceName:directory:)`` when it is missing.
     public static func recreateClip(of voice: ReferenceVoice, directory: URL = DramaCodec.defaultDirectory) async throws -> [Float]? {
         guard case .drama3(let codes)? = voice.encodings[.drama3] else { return nil }
+        guard modelsExist(in: directory) else { throw CodecError.noCodecForClip(voiceName: voice.name, directory: directory) }
         return try await DramaCodec(directory: directory).decode(codes: codes)
     }
 

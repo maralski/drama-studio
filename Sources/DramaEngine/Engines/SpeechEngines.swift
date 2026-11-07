@@ -7,6 +7,7 @@ import Synchronization
 /// engine cloned. A library of voice files conforms.
 public protocol VoiceEncodingStore: Sendable {
     /// The voice's clip as mono 44.1 kHz samples, or nil when the store has none.
+    /// A store may recreate a missing clip, for example from the voice's Drama 3 codes.
     func clip(for id: ReferenceVoice.ID) async throws -> [Float]?
     /// Adds `encoding` to the stored voice, leaving its clip and other encodings alone.
     func storeEncoding(_ encoding: VoiceEncoding, for id: ReferenceVoice.ID) async throws

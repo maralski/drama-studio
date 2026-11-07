@@ -12,18 +12,21 @@ public protocol VoiceStore: VoiceEncodingStore {
     func add(_ voice: ReferenceVoice, clip: [Float]?) async throws
     /// Removes the voice and its clip.
     func remove(_ id: ReferenceVoice.ID) async throws
-    /// The voice's clip, or nil when the store has none.
-    func clip(for id: ReferenceVoice.ID) async throws -> [Float]?
 }
 
 public struct VoiceDirectory: VoiceStore {
     public let url: URL
+    /// The Drama 3 codec that recreates the clip of a voice saved without one.
+    public let codecDirectory: URL
 
     public static var defaultURL: URL {
         URL.applicationSupportDirectory.appending(path: "DramaStudio/Voices", directoryHint: .isDirectory)
     }
 
-    public init(url: URL = VoiceDirectory.defaultURL) { self.url = url }
+    public init(url: URL = VoiceDirectory.defaultURL, codecDirectory: URL = DramaCodec.defaultDirectory) {
+        self.url = url
+        self.codecDirectory = codecDirectory
+    }
 
     public func load() -> (voices: [ReferenceVoice], unreadable: [String]) {
         let files = (try? FileManager.default.contentsOfDirectory(at: url, includingPropertiesForKeys: nil)) ?? []
@@ -59,9 +62,19 @@ public struct VoiceDirectory: VoiceStore {
         if FileManager.default.fileExists(atPath: clipFile(for: id).path) { try FileManager.default.removeItem(at: clipFile(for: id)) }
     }
 
-    public func clip(for id: ReferenceVoice.ID) throws -> [Float]? {
+    /// The voice's clip. A voice saved before the library kept clips gets
+    /// one decoded from its Drama 3 codes, kept as its wav so that happens
+    /// once. Nil when the voice has neither.
+    public func clip(for id: ReferenceVoice.ID) async throws -> [Float]? {
         let clip = clipFile(for: id)
-        return FileManager.default.fileExists(atPath: clip.path) ? try ReferenceAudio.load(url: clip) : nil
+        if FileManager.default.fileExists(atPath: clip.path) { return try ReferenceAudio.load(url: clip) }
+        guard FileManager.default.fileExists(atPath: file(for: id).path) else { return nil }
+        let voice = try JSONDecoder().decode(ReferenceVoice.self, from: Data(contentsOf: file(for: id)))
+        guard let samples = try await DramaCodec.recreateClip(of: voice, directory: codecDirectory) else { return nil }
+        let partial = url.appending(path: "\(id.uuidString).partial.wav")
+        try ReferenceAudio.write(samples, to: partial)
+        _ = try FileManager.default.replaceItemAt(clip, withItemAt: partial)
+        return samples
     }
 
     /// Rewrites the voice file with `encoding` added; the clip is untouched.

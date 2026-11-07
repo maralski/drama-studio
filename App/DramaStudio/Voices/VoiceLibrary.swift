@@ -12,8 +12,8 @@ final class VoiceLibrary: VoiceStore {
     private(set) var unreadableFiles: [String] = []
     @ObservationIgnored private let files: VoiceDirectory
 
-    init(directory: URL = VoiceDirectory.defaultURL) {
-        files = VoiceDirectory(url: directory)
+    init(directory: URL = VoiceDirectory.defaultURL, codecDirectory: URL = AppHome.codec) {
+        files = VoiceDirectory(url: directory, codecDirectory: codecDirectory)
         reload()
     }
 
@@ -33,8 +33,8 @@ final class VoiceLibrary: VoiceStore {
         reload()
     }
 
-    func clip(for id: ReferenceVoice.ID) throws -> [Float]? {
-        try files.clip(for: id)
+    func clip(for id: ReferenceVoice.ID) async throws -> [Float]? {
+        try await files.clip(for: id)
     }
 
     func storeEncoding(_ encoding: VoiceEncoding, for id: ReferenceVoice.ID) throws {

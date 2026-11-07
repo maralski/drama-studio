@@ -1136,8 +1136,8 @@ final class SessionModel {
         return library.voice(voice.id) ?? voice
     }
 
-    /// Plays the voice's stored clip. A voice saved before the library kept
-    /// clips plays its Drama 3 codes through the codec instead.
+    /// Plays the voice's clip, which the library recreates for a voice saved
+    /// before it kept clips.
     func togglePreview(_ voice: ReferenceVoice) {
         let wasPreviewing = previewingVoice == voice.id
         stopPreview()
@@ -1145,8 +1145,7 @@ final class SessionModel {
         previewingVoice = voice.id
         Task {
             do {
-                let stored = try library.clip(for: voice.id)
-                let clip = if let stored { stored } else { try await DramaCodec.recreateClip(of: voice, directory: AppHome.codec) }
+                let clip = try await library.clip(for: voice.id)
                 guard previewingVoice == voice.id else { return }
                 guard let clip else {
                     previewingVoice = nil

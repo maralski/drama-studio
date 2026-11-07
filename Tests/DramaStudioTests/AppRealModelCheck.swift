@@ -77,7 +77,8 @@ final class AppRealModelCheck: XCTestCase {
         print("APP-CHECK generated \(take.samples.count) samples, \(take.sentences.count) sentences, coverage \(result.wordCoverage)")
 
         let voice = try await session.encodeVoice(clip: work.appending(path: "clip.aiff"), transcript: "The lighthouse keeper climbed the stairs every evening to light the lamp.", name: "Check clip")
-        let clip = try XCTUnwrap(try session.library.clip(for: voice.id), "the library keeps the clip")
+        let kept = try await session.library.clip(for: voice.id)
+        let clip = try XCTUnwrap(kept, "the library keeps the clip")
         XCTAssertEqual(voice.clipSampleCount, clip.count)
         XCTAssertEqual(Double(clip.count) / 44_100, 3.74, accuracy: 0.05, "the 22.05 kHz clip is stored at 44.1 kHz")
         XCTAssertNotNil(voice.encodings[.drama3])

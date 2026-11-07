@@ -123,18 +123,19 @@ final class AppFormatMigrationTests: XCTestCase {
         XCTAssertEqual(voice.dramaCodes, recorded["codes"] as? [[Int32]])
         XCTAssertEqual(voice.encodings.keys.sorted { $0.rawValue < $1.rawValue }, [.drama3])
         XCTAssertNil(voice.clipSampleCount)
-        XCTAssertNil(try VoiceDirectory(url: voices).clip(for: voice.id))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: voices.appending(path: "\(voice.id.uuidString).wav").path))
         XCTAssertEqual(voice.durationSeconds, Double((voice.dramaCodes?[0].count ?? 0) * 2048) / 44_100)
     }
 
-    func testVoiceClipIsKeptBesideTheVoiceAndDeletedWithIt() throws {
+    func testVoiceClipIsKeptBesideTheVoiceAndDeletedWithIt() async throws {
         let store = VoiceDirectory(url: directory.appending(path: "Voices"))
         let clip = (0..<30_000).map { Float(sin(Double($0) * 0.01)) * 0.5 }
         let voice = ReferenceVoice(name: "Ann", transcript: "Hi.", encodings: [.drama3(codes: Array(repeating: [1, 2], count: 10))])
         try store.add(voice, clip: clip)
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: store.url.path).sorted(),
                        ["\(voice.id.uuidString).json", "\(voice.id.uuidString).wav"])
-        XCTAssertEqual(try store.clip(for: voice.id), clip, "the clip reads back sample for sample")
+        let readBack = try await store.clip(for: voice.id)
+        XCTAssertEqual(readBack, clip, "the clip reads back sample for sample")
         let reloaded = try XCTUnwrap(store.load().voices.first)
         XCTAssertEqual(reloaded.clipSampleCount, 30_000)
         XCTAssertEqual(reloaded.durationSeconds, 30_000 / 44_100)

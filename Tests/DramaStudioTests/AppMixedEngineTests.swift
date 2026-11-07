@@ -80,7 +80,8 @@ final class AppMixedEngineTests: XCTestCase {
         let stored = try XCTUnwrap(library.voice(old.id))
         XCTAssertEqual(Set(stored.encodings.keys), [.drama3, .ming])
         XCTAssertEqual(stored.encodings[.ming]?.sampleCount, clip.count)
-        XCTAssertEqual(try library.clip(for: old.id)?.count, clip.count, "the clip is untouched")
+        let kept = try await library.clip(for: old.id)
+        XCTAssertEqual(kept?.count, clip.count, "the clip is untouched")
         XCTAssertEqual(session.takes.last?.take?.context.engine, .ming)
         AppHome.defaults.removeObject(forKey: ModelSetup.engineKey)
     }
@@ -110,7 +111,31 @@ final class AppMixedEngineTests: XCTestCase {
         var expected = old
         expected.store(try XCTUnwrap(stored.encodings[.ming], "the Ming encoding is on disk"))
         XCTAssertEqual(stored, expected, "the voice file gains only the Ming encoding")
+
+        let noCodec = directory.appending(path: "NoCodec")
+        let recreated = try await VoiceDirectory(url: voices, codecDirectory: noCodec).clip(for: old.id)
+        XCTAssertEqual(recreated?.count, frames * ModelConstants.samplesPerFrame, "a second lookup reads the wav without the codec")
         AppHome.defaults.removeObject(forKey: ModelSetup.engineKey)
+    }
+
+    func testAClipThatNeedsTheMissingCodecNamesTheVoiceAndTheCodec() async throws {
+        let voices = directory.appending(path: "Voices")
+        let noCodec = directory.appending(path: "NoCodec")
+        let store = VoiceDirectory(url: voices, codecDirectory: noCodec)
+        let old = ReferenceVoice(name: "Old", transcript: "Hi.", encodings: [.drama3(codes: MockSynthesizer.codes(frameCount: 4))])
+        try store.add(old, clip: nil)
+        do {
+            _ = try await store.clip(for: old.id)
+            XCTFail("expected the codec to be missing")
+        } catch {
+            XCTAssertEqual(String(describing: error), "the voice Old was saved without a clip, and recreating it from its Drama 3 codes needs the voice codec, which is not in \(noCodec.path); set up Drama 3 to get it")
+        }
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: voices.path), ["\(old.id.uuidString).json"], "no clip was written")
+
+        let unencoded = ReferenceVoice(name: "None", transcript: "Hi.", encodings: [])
+        try store.add(unencoded, clip: nil)
+        let none = try await store.clip(for: unencoded.id)
+        XCTAssertNil(none, "a voice with neither a clip nor Drama 3 codes has no clip")
     }
 
     func testUnsupportedCuesReachTheSessionBeforeAndAfterTheRun() async throws {
