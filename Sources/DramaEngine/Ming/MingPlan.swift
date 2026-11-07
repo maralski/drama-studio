@@ -48,7 +48,7 @@ package struct MingPlan: Sendable, Equatable {
         if !request.references.isEmpty {
             var encodings: [MingVoiceEncoding] = []
             for voice in request.references {
-                guard case .ming(let reference)? = voice.encodings[.ming] else { throw PromptError.notEncoded(voice.name) }
+                guard case .ming(let reference)? = voice.encodings[.ming] else { throw PromptError.notEncoded(voice.name, .ming) }
                 encodings.append(reference)
             }
             voice = .clone(encodings)

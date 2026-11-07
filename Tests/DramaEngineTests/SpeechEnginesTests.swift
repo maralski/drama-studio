@@ -129,6 +129,20 @@ final class SpeechEnginesTests: XCTestCase {
         XCTAssertEqual(GenerationEstimate(outline: drama).framesPerSecond, 35)
     }
 
+    func testAVoiceMissingAnEncodingNamesTheEngineThatNeedsIt() async throws {
+        let clip = [Float](repeating: 0.1, count: 44_100)
+        let drama = ReferenceVoice(name: "Keeper", transcript: "Hello there.",
+                                   encodings: [try await MockSynthesizer(engine: .drama3, pace: .instant).encodeVoice(samples: clip, transcript: "Hello there.")])
+        let ming = ReferenceVoice(name: "Keeper", transcript: "Hello there.",
+                                  encodings: [try await MockSynthesizer(engine: .ming, pace: .instant).encodeVoice(samples: clip, transcript: "Hello there.")])
+        XCTAssertThrowsError(try MingPlan(SpeechRequest(text: "Hi.", references: [drama]))) {
+            XCTAssertEqual(($0 as? PromptError)?.description, "the voice Keeper has not been encoded for Ming")
+        }
+        XCTAssertThrowsError(try GenerationPlan(SpeechRequest(text: "Hi.", references: [ming]))) {
+            XCTAssertEqual(($0 as? PromptError)?.description, "the voice Keeper has not been encoded for Drama 3")
+        }
+    }
+
     func testTheOutlineReportsWhatMingCannotPerform() throws {
         let outline = try SpeechOutline(SpeechRequest(text: "<whisper>Run.</whisper> [laughs] Now!"), engine: .ming)
         XCTAssertEqual(outline.lines, ["<whisper>Run.</whisper>", "[laughs] Now!"])

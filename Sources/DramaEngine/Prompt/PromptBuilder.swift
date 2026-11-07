@@ -18,8 +18,8 @@ public enum PromptError: Error, CustomStringConvertible, Equatable {
     case tooLong(Int)
     /// The request has both a designed voice and reference voices.
     case voiceConflict
-    /// The named voice has no Drama 3 encoding.
-    case notEncoded(String)
+    /// The named voice has no encoding for the engine.
+    case notEncoded(String, SpeechEngineID)
     /// The engine cannot take the request; the string says what.
     case engineUnsupported(SpeechEngineID, String)
 
@@ -27,7 +27,7 @@ public enum PromptError: Error, CustomStringConvertible, Equatable {
     public var description: String {
         switch self {
         case .voiceConflict: return "a designed character and reference voices can't be combined"
-        case .notEncoded(let name): return "the voice \(name) has not been encoded for Drama 3"
+        case .notEncoded(let name, let engine): return "the voice \(name) has not been encoded for \(engine.capabilities.name)"
         case .engineUnsupported(let engine, let what): return "\(engine.capabilities.name) can't \(what)"
         case .emptyText(let w): return "\(w): text must not be empty"
         case .structuralToken(let w, let t): return "\(w): \(t) is written by the prompt builder"
@@ -87,9 +87,9 @@ public enum Drama3Prompt: Sendable {
         public init(transcript: String, codes: [[Int32]]) { self.transcript = transcript; self.codes = codes }
 
         /// The voice's Drama 3 encoding as a reference.
-        /// - Throws: ``PromptError/notEncoded(_:)`` when the voice has no Drama 3 encoding.
+        /// - Throws: ``PromptError/notEncoded(_:_:)`` when the voice has no Drama 3 encoding.
         package init(_ voice: ReferenceVoice) throws {
-            guard case .drama3(let codes)? = voice.encodings[.drama3] else { throw PromptError.notEncoded(voice.name) }
+            guard case .drama3(let codes)? = voice.encodings[.drama3] else { throw PromptError.notEncoded(voice.name, .drama3) }
             self.init(transcript: voice.transcript, codes: codes)
         }
     }
