@@ -100,6 +100,17 @@ final class APIEngineNeutralTests: XCTestCase {
         XCTAssertFalse(events.contains("event: error"), events)
     }
 
+    func testAnEarlierDrama3TakeSetsTheEstimateWhenItIsTheVoice() async throws {
+        try engines.select(.drama3)
+        let line = "Hey there my name is Joey and I love you"
+        let slow = TakeCodes.encode(Array(repeating: Array(repeating: 1, count: 142), count: 10))
+        let response = await send("POST", "/v1/audio/speech", json: ["input": line, "stream": true,
+                                                                     "previous_takes": [["text": line, "codes_base64": slow]]])
+        XCTAssertEqual(response.status, .ok, text(response))
+        XCTAssertEqual(response.headers["X-Drama-Estimated-Seconds"], "4.8", "142 frames at 35 a second plus one prefill, paced on the take's voice")
+        _ = try await streamed(response)
+    }
+
     func testARequestTheEngineRefusesIsTheClientsMistake() async throws {
         for error: any Error in [PromptError.structuralToken("text", "<|im_start|>"), EngineError.noClip(voiceName: "Keeper")] {
             let refusing = APIService(synthesizer: RefusingSynthesizer(error: error), voices: VoiceDirectory(url: directory), token: nil, version: "test",
