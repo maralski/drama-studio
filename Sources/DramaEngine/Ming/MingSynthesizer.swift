@@ -154,6 +154,7 @@ public actor MingSynthesizer: SpeechSynthesizer {
             func attempt(_ number: Int) throws -> Attempt {
                 guard shouldContinue() else { throw CancellationError() }
                 var options = SynthesisOptions()
+                options.cfg = Self.guidance
                 options.seed = baseSeed &+ UInt64(number)
                 options.maxSteps = maxSteps
                 var pcm: [Float] = []
@@ -210,6 +211,13 @@ public actor MingSynthesizer: SpeechSynthesizer {
         continuation.yield(.finished(SpeechResult(take: take, samples: samples, timings: timings, finishedByEOS: finishedByEOS, sentences: sentences,
                                                 wordCoverage: config.wordVerification == .required ? .recognized : .unchecked, notices: plan.notices)))
     }
+
+    /// The flow head's classifier-free guidance scale. Ming's reference uses
+    /// 2.0. After a `[Laughter]` tag the model can keep laughing to the step
+    /// cap instead of returning to the words; on the harness's cue lines 3.0
+    /// made that worse (21 of 36 first passes against 24) and 1.5 better (29
+    /// of 36), so clones run at 1.5.
+    package static let guidance: Float = 1.5
 
     /// The most steps one sentence may run: the configured frame cap in
     /// seconds, plus ``GenerationConfig/capSecondsPerCue`` per cue as Drama 3
