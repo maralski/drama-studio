@@ -26,7 +26,7 @@ package enum SpeechAttemptAudit {
                                confirmationConfidenceSpans: [LocalWordVerifier.Recognition.Span] = [],
                                boundary: BoundaryWitness? = nil) {
         let path = (Bundle.main.object(forInfoDictionaryKey: "DSWordCheckAuditDirectory") as? String)
-            ?? (Bundle.main.bundleIdentifier == nil ? ProcessInfo.processInfo.environment["DS_WORD_CHECK_AUDIT_DIR"] : nil)
+            ?? (Bundle.main.bundleURL.pathExtension != "app" ? ProcessInfo.processInfo.environment["DS_WORD_CHECK_AUDIT_DIR"] : nil)
         guard let path else { return }
         do {
             func digest(_ samples: [Float]) -> String {
