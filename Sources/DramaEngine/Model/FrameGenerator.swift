@@ -174,7 +174,7 @@ package final class FrameGenerator {
                          note: String? = nil, config: GenerationConfig,
                          shouldContinue: () -> Bool = { true }, onEvent: (Event) -> Void) throws -> [ChunkResult] {
         let plan = try GenerationPlan(text: text, references: references, character: character, previousTakes: previousTakes, note: note, config: config)
-        let verifier = try LocalWordVerifier.prepare(plan: plan, config: config, shouldContinue: shouldContinue)
+        let verifier = try LocalWordVerifier.prepare(lines: plan.chunks.map(\.line), config: config, shouldContinue: shouldContinue)
         return try generate(plan: plan, config: config, verifier: verifier, shouldContinue: shouldContinue, onEvent: onEvent)
     }
 

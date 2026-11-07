@@ -173,7 +173,8 @@ public actor DramaSynthesizer: SpeechSynthesizer {
 
     private func run(_ request: SpeechRequest, continuation: AsyncThrowingStream<SpeechEvent, Error>.Continuation) async throws {
         let plan = try GenerationPlan(request)
-        let verifier = try LocalWordVerifier.prepare(plan: plan, config: request.config, shouldContinue: { !Task.isCancelled })
+        let outline = try SpeechOutline(request, engine: .drama3)
+        let verifier = try LocalWordVerifier.prepare(lines: plan.chunks.map(\.line), config: request.config, shouldContinue: { !Task.isCancelled })
         continuation.yield(.loadingModel(progress: 0, detail: "Loading Drama 3"))
         try await load { detail in continuation.yield(.loadingModel(progress: 0, detail: detail)) }
         continuation.yield(.loadingModel(progress: 1, detail: "Ready"))
@@ -198,8 +199,7 @@ public actor DramaSynthesizer: SpeechSynthesizer {
         let take = Take(text: plan.turnText, context: .drama3(codes: (0..<ModelConstants.numCodebooks).map { c in allFrames.map { $0[1 + c] } }))
         let sentences = results.map { SpokenSentence(text: plan.chunks[$0.index].line, samples: $0.frames.count * ModelConstants.samplesPerFrame) }
         guard !results.isEmpty else { throw PromptError.emptyText("spoken words") }
-        let notices = (try? SpeechOutline(request, engine: .drama3))?.notices ?? []
         continuation.yield(.finished(SpeechResult(take: take, samples: allSamples, timings: timings, finishedByEOS: eos, sentences: sentences,
-                                                wordCoverage: request.config.wordVerification == .required ? .recognized : .unchecked, notices: notices)))
+                                                wordCoverage: request.config.wordVerification == .required ? .recognized : .unchecked, notices: outline.notices)))
     }
 }

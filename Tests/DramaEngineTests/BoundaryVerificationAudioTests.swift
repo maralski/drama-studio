@@ -8,7 +8,7 @@ final class BoundaryVerificationAudioTests: XCTestCase {
     }
     private func verifier(_ text: String) throws -> LocalWordVerifier {
         let config = GenerationConfig()
-        return try XCTUnwrap(LocalWordVerifier.prepare(plan: GenerationPlan(text: text, references: [], config: config),
+        return try XCTUnwrap(LocalWordVerifier.prepare(lines: GenerationPlan(text: text, references: [], config: config).chunks.map(\.line),
                                                         config: config, shouldContinue: { true }))
     }
     func testNightOwlPairUsesOnlyThePlanBoundExperiment() throws {

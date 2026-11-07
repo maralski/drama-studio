@@ -529,7 +529,8 @@ public enum SpeechEvent: Sendable {
     case loadingModel(progress: Double, detail: String)
     /// Chunk `index` of `count` starts. `text` is the script text it speaks.
     case chunkStarted(index: Int, count: Int, text: String)
-    /// The chunk's prompt of `rows` rows has been read.
+    /// The chunk's prompt of `rows` rows has been read; 0 from an engine that
+    /// does not count prompt rows.
     case prefill(rows: Int)
     /// Step `index` of the current chunk is generated, in the engine's
     /// ``EngineCapabilities/samplesPerStep``. `maxFrames` is the chunk's step cap.

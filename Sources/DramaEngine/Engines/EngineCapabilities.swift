@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 import Foundation
 
-/// What one engine can do, as the app, the estimate and the API read it.
-/// ``SpeechEngineID/capabilities`` is the one table; adding an engine fails
-/// to compile until its row exists.
+/// What one engine can do. ``SpeechEngineID/capabilities`` is the one table:
+/// the estimate reads the step unit, the app's engine and cue pickers read
+/// the rest, and adding an engine fails to compile until its row exists.
 public struct EngineCapabilities: Sendable, Equatable {
     /// Which inline cues the engine performs.
     public enum CueVocabulary: Sendable, Equatable {

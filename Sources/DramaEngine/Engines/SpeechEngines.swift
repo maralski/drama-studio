@@ -68,6 +68,14 @@ public actor SpeechEngines: SpeechSynthesizer {
         self.voices = voices
     }
 
+    /// A registry of one engine that is already built, for tests and hosts with one engine.
+    public init(only synthesizer: any SpeechSynthesizer) {
+        let engine = synthesizer.engine
+        state = Mutex(State(factories: [engine: Factory(description: synthesizer.engineDescription) { synthesizer }], selected: engine,
+                            resident: (engine, synthesizer)))
+        voices = nil
+    }
+
     /// Engines with a factory.
     public nonisolated var available: Set<SpeechEngineID> { state.withLock { Set($0.factories.keys) } }
     /// What `engine` reports, without building it; nil without a factory.

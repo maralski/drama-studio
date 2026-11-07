@@ -12,14 +12,19 @@ package struct MingPlan: Sendable, Equatable {
         package var spoken: MingCues.Line
     }
 
-    /// Where the voice comes from. One source per request.
+    /// Where the voice comes from. One source per request. A designed or
+    /// built-in voice describes or names itself on the first chunk, which is
+    /// that chunk's one task, and is cloned from its audio for the rest.
     package enum Voice: Sendable, Equatable {
         /// Reference voices in speaker order; a chunk's speaker tag picks one.
         case clone([MingVoiceEncoding])
-        /// A designed character: described on the first chunk, then cloned from its audio.
         case design(String)
-        /// Nothing chose a voice: Ming's built-in voice, then cloned from the first chunk.
         case builtIn
+
+        /// The encodings chunks clone before any chunk has spoken.
+        package var references: [MingVoiceEncoding] {
+            if case .clone(let encodings) = self { encodings } else { [] }
+        }
     }
 
     package var chunks: [Chunk]
@@ -60,8 +65,7 @@ package struct MingPlan: Sendable, Equatable {
                 let tag = "<|speaker:\(chunk.spoken.speaker)|>"
                 if !notices.contains(.unsupportedCue(tag)) { notices.append(.unsupportedCue(tag)) }
             }
-        } else if let cue = chunks.first?.spoken.emotionCue, cue.hasPrefix("["), !notices.contains(.unsupportedCue(cue)) {
-            // Describing or naming the voice is the first chunk's one task, so its style cue is lost.
+        } else if case .cue(let cue, _)? = chunks.first?.spoken.style, !notices.contains(.unsupportedCue(cue)) {
             notices.append(.unsupportedCue(cue))
         }
         self.notices = notices

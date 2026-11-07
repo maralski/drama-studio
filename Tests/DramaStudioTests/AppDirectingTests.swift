@@ -77,9 +77,9 @@ final class AppDirectingTests: XCTestCase {
     private func finish(_ action: () -> Void, in session: SessionModel) async {
         let before = synthesizer.requests.count
         action()
-        XCTAssertEqual(synthesizer.requests.count, before + 1, "the action sent a request")
         let deadline = Date().addingTimeInterval(10)
-        while session.state.isGenerating, Date() < deadline { try? await Task.sleep(for: .milliseconds(10)) }
+        while synthesizer.requests.count == before || session.state.isGenerating, Date() < deadline { try? await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertEqual(synthesizer.requests.count, before + 1, "the action sent a request")
     }
 
     func testSurpriseVoiceIsReusedUntilItIsPickedAgain() async {

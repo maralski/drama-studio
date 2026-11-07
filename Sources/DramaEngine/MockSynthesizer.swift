@@ -117,8 +117,7 @@ public actor MockSynthesizer: SpeechSynthesizer {
         guard !UnicodeWhitespace.strip(request.text).isEmpty else { throw MockError.emptyText }
         let outline = try SpeechOutline(request, engine: engine)
         let lines = outline.lines
-        var streaming = request.config.streaming
-        if request.config.wordVerification == .required || (request.config.maxRetries > 0 && request.config.minSpokenRatio > 0) { streaming = .sentence }
+        let streaming = request.config.effectiveStreaming
 
         var rng = SplitMix64(seed: request.config.seed ?? UInt64.random(in: 0...UInt64.max))
         var frames: [Frame] = []

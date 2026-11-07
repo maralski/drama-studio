@@ -78,14 +78,24 @@ package enum MingCues {
         return nil
     }
 
+    /// Where a line's emotion came from, so a line whose voice cannot take a style can name what it lost.
+    package enum Style: Sendable, Equatable {
+        case note(String, Emotion)
+        case cue(String, Emotion)
+
+        package var emotion: Emotion {
+            switch self {
+            case .note(_, let emotion), .cue(_, let emotion): emotion
+            }
+        }
+    }
+
     /// One sentence as Ming speaks it.
     package struct Line: Sendable, Equatable {
         /// The text with Ming tags in place of cues, no passage or speaker tags.
         package var text: String
-        /// The emotion in force for this line, from the note or the last style cue at or before it.
-        package var emotion: Emotion?
-        /// The cue that set `emotion`, for reporting when the line's voice cannot take a style.
-        package var emotionCue: String?
+        /// The style in force for this line: the note's, or the last style cue's at or before it.
+        package var style: Style?
         /// The `<|speaker:N|>` the line led with, or 0.
         package var speaker: Int
     }
@@ -101,13 +111,15 @@ package enum MingCues {
     package static func translate(lines: [String], note: String?) -> Translation {
         var notices: [SpeechNotice] = []
         func report(_ notice: SpeechNotice) { if !notices.contains(notice) { notices.append(notice) } }
-        var noteEmotion: Emotion?
+        var style: Style?
         if let note = note.flatMap(DirectorsNote.clean) {
-            noteEmotion = note.lowercased().split(whereSeparator: { !$0.isLetter }).lazy.compactMap { noteWords[String($0)] }.first
-            if noteEmotion == nil { report(.unsupportedNote(note)) }
+            if let emotion = note.lowercased().split(whereSeparator: { !$0.isLetter }).lazy.compactMap({ noteWords[String($0)] }).first {
+                style = .note(note, emotion)
+            } else {
+                report(.unsupportedNote(note))
+            }
         }
-        var emotion = noteEmotion
-        var emotionCue = noteEmotion == nil ? nil : note
+        let noteStyle = style
         var out: [Line] = []
         for line in lines {
             var body = line
@@ -135,12 +147,11 @@ package enum MingCues {
                     if approximated { report(.approximatedCue(cue, as: tag)) }
                     text += " \(tag) "
                 case .emotion(let next):
-                    if noteEmotion != nil || styledHere {
+                    if noteStyle != nil || styledHere {
                         report(.unsupportedCue(cue))
                     } else {
                         if approximated { report(.approximatedCue(cue, as: next.rawValue)) }
-                        emotion = next
-                        emotionCue = cue
+                        style = .cue(cue, next)
                         styledHere = true
                     }
                     text += " "
@@ -152,7 +163,7 @@ package enum MingCues {
                 if !tagged.substring(with: match.range).hasPrefix("</") { report(.unsupportedCue("<\(tagged.substring(with: match.range(at: 1)))>")) }
                 text = (text as NSString).replacingCharacters(in: match.range, with: " ")
             }
-            out.append(Line(text: tidy(text), emotion: emotion, emotionCue: emotionCue, speaker: speaker))
+            out.append(Line(text: tidy(text), style: style, speaker: speaker))
         }
         return Translation(lines: out, notices: notices)
     }

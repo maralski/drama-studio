@@ -18,12 +18,12 @@ final class SpeechEnginesTests: XCTestCase {
     private final class Watched: Sendable {
         let made = Mutex<[SpeechEngineID: Int]>([:])
         let live = Mutex<[SpeechEngineID: WeakBox]>([:])
-        final class WeakBox: @unchecked Sendable { weak var engine: MockSynthesizer?; init(_ engine: MockSynthesizer) { self.engine = engine } }
+        struct WeakBox: Sendable { weak var engine: MockSynthesizer? }
         func factory(_ engine: SpeechEngineID) -> SpeechEngines.Factory {
             SpeechEngines.Factory(description: MockSynthesizer(engine: engine, pace: .instant).engineDescription) { [self] in
                 let mock = MockSynthesizer(engine: engine, pace: .instant)
                 made.withLock { $0[engine, default: 0] += 1 }
-                live.withLock { $0[engine] = WeakBox(mock) }
+                live.withLock { $0[engine] = WeakBox(engine: mock) }
                 return mock
             }
         }

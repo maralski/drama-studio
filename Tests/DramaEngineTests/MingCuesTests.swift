@@ -46,23 +46,23 @@ final class MingCuesTests: XCTestCase {
     func testTranslationSwapsTagsKeepsWordsAndReportsTheRest() {
         let translation = MingCues.translate(lines: ["[laughs] Oh no. [sighs] <whisper>not again</whisper> fine.", "[laughs nervously] Go [pause] now."], note: nil)
         XCTAssertEqual(translation.lines.map(\.text), ["[Laughter] Oh no. [Sigh] not again fine.", "[Laughter] Go now."])
-        XCTAssertEqual(translation.lines.map(\.emotion), [nil, nil])
+        XCTAssertEqual(translation.lines.map { $0.style?.emotion }, [nil, nil])
         XCTAssertEqual(translation.notices, [.unsupportedCue("<whisper>"), .approximatedCue("[laughs nervously]", as: "[Laughter]"), .unsupportedCue("[pause]")])
     }
 
     func testAStyleHoldsForLaterSentencesUntilAnotherReplacesIt() {
         let translation = MingCues.translate(lines: ["[heavy, deflated sadness] It is over.", "Nothing left.", "[with bright eager excitement] Or is it? [icy calm] No."], note: nil)
-        XCTAssertEqual(translation.lines.map(\.emotion), [.sad, .sad, .happy])
+        XCTAssertEqual(translation.lines.map { $0.style?.emotion }, [.sad, .sad, .happy])
         XCTAssertEqual(translation.lines.map(\.text), ["It is over.", "Nothing left.", "Or is it? No."])
         XCTAssertEqual(translation.notices, [.unsupportedCue("[icy calm]")])
     }
 
     func testANoteNamesTheEmotionAndWinsOverCues() {
         let directed = MingCues.translate(lines: ["[heavy, deflated sadness] It is over."], note: "much angrier, bite the words")
-        XCTAssertEqual(directed.lines.map(\.emotion), [.angry])
+        XCTAssertEqual(directed.lines.map { $0.style?.emotion }, [.angry])
         XCTAssertEqual(directed.notices, [.unsupportedCue("[heavy, deflated sadness]")])
         let vague = MingCues.translate(lines: ["It is over."], note: "softer and warmer")
-        XCTAssertEqual(vague.lines.map(\.emotion), [nil])
+        XCTAssertEqual(vague.lines.map { $0.style?.emotion }, [nil])
         XCTAssertEqual(vague.notices, [.unsupportedNote("softer and warmer")])
     }
 

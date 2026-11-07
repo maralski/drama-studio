@@ -6,8 +6,6 @@ import PackageDescription
 // tools/make_xcframework.sh sets this to archive DramaEngine as a framework.
 let engineLibraryType: Product.Library.LibraryType? = Context.environment["DRAMA_ENGINE_DYNAMIC"] == "1" ? .dynamic : nil
 
-// The Ming-3.0-tts port is a sibling checkout (~/projects/ming next to ~/projects/drama-studio).
-// MING_PACKAGE_PATH points a worktree or another layout at it.
 let mingPackagePath = Context.environment["MING_PACKAGE_PATH"] ?? "../ming"
 
 let package = Package(

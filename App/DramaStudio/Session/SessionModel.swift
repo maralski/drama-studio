@@ -99,7 +99,9 @@ final class SessionModel {
     @ObservationIgnored var playsWhileGenerating = true
 
     let library: VoiceLibrary
-    private(set) var synthesizer: any SpeechSynthesizer
+    /// Every engine the session can run, one resident at a time; the API server shares it.
+    let engines: SpeechEngines
+    var synthesizer: any SpeechSynthesizer { engines }
     /// What the engine cannot perform in the request under way or last run, for the user to see.
     private(set) var notices: [SpeechNotice] = []
     /// Why generation is refused right now; the app asks its setup coordinator.
@@ -124,9 +126,10 @@ final class SessionModel {
     /// The one segment a plain script's take stands for in captions and projects.
     static let plainSegmentID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
 
+    /// `synthesizer` is the engine registry, or one engine that becomes a registry of its own.
     init(synthesizer: any SpeechSynthesizer, library: VoiceLibrary,
          pronunciationURL: URL = PronunciationDictionary.defaultURL) {
-        self.synthesizer = synthesizer
+        engines = synthesizer as? SpeechEngines ?? SpeechEngines(only: synthesizer)
         self.library = library
         self.pronunciationURL = pronunciationURL
         let rate = AppHome.defaults.double(forKey: Self.playbackRateKey)
@@ -895,13 +898,6 @@ final class SessionModel {
         }
     }
 
-    /// Swaps in the engine once setup has put its files in place; a run under way stops first.
-    func replaceSynthesizer(_ next: any SpeechSynthesizer) {
-        stopGeneration()
-        synthesizer = next
-        refreshEngineState()
-    }
-
     /// The setup window's last step: a short line in the editor, ready for Generate.
     func prepareFirstLine() {
         replaceSource(with: .plain(Examples.firstLine.text))
@@ -914,12 +910,11 @@ final class SessionModel {
         Task { modelLoaded = await synthesizer.isLoaded }
     }
 
-    /// The engine new takes use. With a registry it is the registry's
-    /// selection, kept in the `speechEngine` default; with one engine it is that engine.
+    /// The engine new takes use, kept in the `speechEngine` default.
     var engine: SpeechEngineID {
-        get { (synthesizer as? SpeechEngines)?.selected ?? synthesizer.engine }
+        get { engines.selected }
         set {
-            guard let engines = synthesizer as? SpeechEngines, newValue != engines.selected else { return }
+            guard newValue != engines.selected else { return }
             do {
                 try engines.select(newValue)
                 AppHome.defaults.set(newValue.rawValue, forKey: ModelSetup.engineKey)
@@ -931,7 +926,7 @@ final class SessionModel {
     }
 
     /// Engines the session can switch to.
-    var availableEngines: Set<SpeechEngineID> { (synthesizer as? SpeechEngines)?.available ?? [synthesizer.engine] }
+    var availableEngines: Set<SpeechEngineID> { engines.available }
 
     private func settleAfterGeneration(_ next: PlaybackState) {
         state = next

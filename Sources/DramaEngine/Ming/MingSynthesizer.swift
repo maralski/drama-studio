@@ -38,9 +38,6 @@ public actor MingSynthesizer: SpeechSynthesizer {
     /// The longest take excerpt a later take clones. Longer references leave
     /// Ming's 512-position cache too little room to generate.
     package static let excerptSeconds = 10.0
-    /// Steps per second of audio.
-    static let stepsPerSecond = Double(ModelConstants.sampleRate) / Double(MingVoiceEncoding.samplesPerLatent)
-
     public nonisolated let location: MingLocation
     private var model: MingTTSModel?
     private var loading: Task<MingTTSModel, Error>?
@@ -125,12 +122,8 @@ public actor MingSynthesizer: SpeechSynthesizer {
         var samples: [Float] = []
         var chunkSamples: [[Float]] = []
         var finishedByEOS = true
-        var conditioning: MingConditioning
-        var cloned: [MingVoiceEncoding]
-        switch plan.voice {
-        case .clone(let encodings): cloned = encodings; conditioning = .zeroSpeaker
-        case .design, .builtIn: cloned = []; conditioning = .zeroSpeaker
-        }
+        var conditioning = MingConditioning.zeroSpeaker
+        var cloned = plan.voice.references
         let baseSeed = config.seed ?? UInt64.random(in: 0...UInt64.max)
 
         for (index, chunk) in plan.chunks.enumerated() {
@@ -145,7 +138,7 @@ public actor MingSynthesizer: SpeechSynthesizer {
             let task: MingTask
             if let reference = plan.reference(for: chunk, among: cloned) {
                 conditioning = .clone(try reference.mingReference())
-                task = chunk.spoken.emotion.map { .emotion($0.ming) } ?? .plain
+                task = chunk.spoken.style.map { .emotion($0.emotion.ming) } ?? .plain
             } else if case .design(let description) = plan.voice {
                 task = .voiceDesign(description)
             } else {
@@ -201,7 +194,6 @@ public actor MingSynthesizer: SpeechSynthesizer {
             sentences.append(SpokenSentence(text: chunk.line, samples: result.samples.count))
             if !result.samples.isEmpty { continuation.yield(.audio(samples: result.samples, chunkIndex: index)) }
             if cloned.isEmpty, !result.samples.isEmpty {
-                // Ming's own style tasks clone their first fragment for the rest; the designed or built-in voice holds the same way.
                 cloned = [try Self.encode(Self.trimmed(result.samples), transcript: text, with: model)]
             }
         }
@@ -222,7 +214,7 @@ public actor MingSynthesizer: SpeechSynthesizer {
     package static func stepCap(for line: String, config: GenerationConfig, expectedSeconds: Double) -> Int {
         let frames = FrameGenerator.frameBudget(for: line, config: config, expectedSeconds: expectedSeconds)
         let seconds = Double(frames) * Double(ModelConstants.samplesPerFrame) / Double(ModelConstants.sampleRate)
-        return max(1, Int((seconds * stepsPerSecond).rounded(.up)))
+        return max(1, Int((seconds * SpeechEngineID.ming.capabilities.stepsPerSecondOfAudio).rounded(.up)))
     }
 
     /// The opening sentences of a take, whole, up to ``excerptSeconds``; at

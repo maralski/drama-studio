@@ -39,7 +39,6 @@ final class AppRealModelMingCheck: XCTestCase {
         let transcript = "The lighthouse keeper climbed the stairs every evening to light the lamp."
         print("MING-CHECK memory at start \(Self.footprintGB()) GB")
 
-        // (a) Clone a voice from the clip on Ming and speak a line with it.
         let voice = try await session.encodeVoice(clip: clip, transcript: transcript, name: "Ming clip")
         XCTAssertEqual(Set(voice.encodings.keys), [.ming])
         guard case .ming(let reference)? = voice.encodings[.ming] else { return XCTFail("a Ming encoding") }
@@ -49,7 +48,6 @@ final class AppRealModelMingCheck: XCTestCase {
         let a = try await generate("The lamp was lit before the fog rolled in.", as: "a-clone")
         XCTAssertEqual(a.take.take?.context.engine, .ming)
 
-        // (b) An old voice with only a Drama encoding gains a Ming encoding from its clip, saved in the library.
         let old = ReferenceVoice(name: "Old Drama voice", transcript: transcript, encodings: [.drama3(codes: MockSynthesizer.codes(frameCount: 80))])
         try library.add(old, clip: try ReferenceAudio.load(url: clip))
         session.setVoice(.library(old.id), forSpeaker: 0)
@@ -61,12 +59,10 @@ final class AppRealModelMingCheck: XCTestCase {
         XCTAssertEqual(Set((onDisk?["encodings"] as? [String: Any] ?? [:]).keys), ["drama3", "ming"], "the Ming encoding is on disk")
         print("MING-CHECK (b) \(old.name) now has \(stored.encodings.keys.map(\.rawValue).sorted())")
 
-        // (c) Cues map to Ming tags and the word check still passes.
         let c = try await generate("[laughs] You should have seen his face. [sighs] Then it was over.", as: "c-cues")
         XCTAssertEqual(c.result.notices, [], "every cue maps to a tag")
         XCTAssertEqual(c.take.sentences.count, 2)
 
-        // (d) A follow-up take conditioned on the previous Ming take: the first checked take becomes the session voice.
         session.setVoice(.surprise, forSpeaker: 0)
         let d1 = try await generate("Nobody answered the door.", as: "d1-first")
         XCTAssertEqual(session.casting.voiceTake, d1.take.take, "the first take is the session voice")
@@ -76,13 +72,11 @@ final class AppRealModelMingCheck: XCTestCase {
         let d3 = try await settle(as: "d3-angrier-retake")
         XCTAssertEqual(d3.result.notices, [], "the note names an emotion Ming performs")
 
-        // A designed character: described on the first sentence, cloned for the second.
         session.setVoice(.designed(VoiceDesign(name: "Captain", description: "gravelly old male voice, weathered and slow")), forSpeaker: 0)
         let f = try await generate("You want to know what happened? Then sit down and listen.", as: "f-design")
         XCTAssertEqual(f.take.sentences.count, 2)
         print("MING-CHECK memory after Ming lines \(Self.footprintGB()) GB")
 
-        // (e) A project with a Drama 3 take and Ming takes saves, reopens and plays with its sentence timing.
         session.engine = .drama3
         session.setVoice(.library(voice.id), forSpeaker: 0)
         let e = try await generate("The keeper never spoke of that night again.", as: "e-drama")
@@ -112,7 +106,6 @@ final class AppRealModelMingCheck: XCTestCase {
         print("MING-CHECK (e) reopened \(reopened.takes.count) takes, \(reopened.sentenceSpans.count) sentences; playing at \(position): \"\(span.text)\"")
         reopened.togglePlayback()
 
-        // Back to Ming: the Drama engine is dropped before Ming loads again.
         session.engine = .ming
         session.setVoice(.library(voice.id), forSpeaker: 0)
         _ = try await generate("And the light kept turning.", as: "g-ming-again")

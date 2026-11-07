@@ -47,10 +47,7 @@ package struct GenerationPlan: Sendable, Equatable {
         let note = note.flatMap(DirectorsNote.clean)
         direction = note
         if note != nil, DirectorsNote.sentences(text).isEmpty { throw PromptError.emptyText("line") }
-        streaming = config.streaming
-        if config.wordVerification == .required || (config.maxRetries > 0 && config.minSpokenRatio > 0) {
-            streaming = .sentence
-        }
+        streaming = config.effectiveStreaming
         self.references = references
         self.character = nil
         let dramaTakes = previousTakes.compactMap(Drama3Prompt.HistoryTurn.init)
@@ -95,5 +92,13 @@ package struct GenerationPlan: Sendable, Equatable {
     package init(_ request: SpeechRequest) throws {
         try self.init(text: request.text, references: request.references.map(Drama3Prompt.Reference.init),
                       character: request.character, previousTakes: request.previousTakes, note: request.note, config: request.config)
+    }
+}
+
+extension GenerationConfig {
+    /// Sentence streaming whenever an attempt may be replaced: under required
+    /// word verification, or while retries and the spoken-ratio check are on.
+    package var effectiveStreaming: StreamingMode {
+        wordVerification == .required || (maxRetries > 0 && minSpokenRatio > 0) ? .sentence : streaming
     }
 }

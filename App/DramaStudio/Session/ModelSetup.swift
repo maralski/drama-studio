@@ -135,11 +135,10 @@ extension SetupServices {
         let weights = PlanDownload(plan: plan, directory: AppHome.models, downloader: downloader)
         /// Gives the registry a Drama 3 factory for the downloaded weights, once.
         let attach: @MainActor () async -> Void = {
-            guard !ModelSetup.isPreviewEngine, let location = ModelSetup.location(customPath: ModelSetup.customPath),
-                  let engines = session.synthesizer as? SpeechEngines else { return }
+            guard !ModelSetup.isPreviewEngine, let location = ModelSetup.location(customPath: ModelSetup.customPath) else { return }
             let factory = SpeechEngines.Factory.drama3(location: location, codecDirectory: AppHome.codec, tuningDirectory: AppHome.tuning)
-            guard engines.description(of: .drama3) != factory.description else { return }
-            await engines.register(.drama3, factory)
+            guard session.engines.description(of: .drama3) != factory.description else { return }
+            await session.engines.register(.drama3, factory)
             session.refreshEngineState()
         }
         return SetupServices(
@@ -172,8 +171,7 @@ extension SetupServices {
             },
             tune: { detail in
                 await attach()
-                guard let engines = session.synthesizer as? SpeechEngines else { return try await session.synthesizer.load(onPhase: detail) }
-                try await engines.load(.drama3, onPhase: detail)
+                try await session.engines.load(.drama3, onPhase: detail)
             },
             attachEngine: { Task { await attach() } },
             prepareFirstLine: { session.prepareFirstLine() },

@@ -189,6 +189,11 @@ cd tools && uv venv --python 3.12 .venv && uv pip install --python .venv/bin/pyt
   809 MB in fp32, decoder 353 MB and the 64-frame silence-probe decoder
   352 MB in fp16).
 
+- The Ming-3.0-tts Swift port (the `MingTTS` package) checked out beside
+  this repository as `../ming`, or named by `MING_PACKAGE_PATH`. The Ming
+  engine itself loads its checkpoint from `MING_WEIGHTS` and is off until
+  that variable, or the `mingDirectory` default, names a complete one.
+
 ## Build and run
 
 ```bash
