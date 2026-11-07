@@ -264,11 +264,14 @@ public enum SpeechEngineID: String, Codable, CodingKeyRepresentable, Sendable, H
 public enum VoiceEncoding: Codable, Sendable, Hashable {
     /// `[10][T]` Drama 3 codec codes, one row per codebook.
     case drama3(codes: [[Int32]])
+    /// Ming's clone conditioning for the clip.
+    case ming(reference: MingVoiceEncoding)
 
     /// The engine that reads this encoding.
     public var engine: SpeechEngineID {
         switch self {
         case .drama3: .drama3
+        case .ming: .ming
         }
     }
 
@@ -276,6 +279,7 @@ public enum VoiceEncoding: Codable, Sendable, Hashable {
     public var sampleCount: Int {
         switch self {
         case .drama3(let codes): (codes.first?.count ?? 0) * ModelConstants.samplesPerFrame
+        case .ming(let reference): reference.sampleCount
         }
     }
 }
@@ -354,11 +358,17 @@ public struct ReferenceVoice: Sendable, Codable, Identifiable, Equatable {
 public enum TakeContext: Codable, Sendable, Hashable {
     /// `[10][T]` Drama 3 codec codes, one row per codebook.
     case drama3(codes: [[Int32]])
+    /// Ming has no history, so a later take continues only by cloning this
+    /// one: `reference` encodes the take's opening sentences, up to about
+    /// 10 s so a request still fits Ming's 512-position cache, and
+    /// `sampleCount` is the whole take's length.
+    case ming(reference: MingVoiceEncoding, sampleCount: Int)
 
     /// The engine that made the take.
     public var engine: SpeechEngineID {
         switch self {
         case .drama3: .drama3
+        case .ming: .ming
         }
     }
 
@@ -366,6 +376,7 @@ public enum TakeContext: Codable, Sendable, Hashable {
     public var sampleCount: Int {
         switch self {
         case .drama3(let codes): (codes.first?.count ?? 0) * ModelConstants.samplesPerFrame
+        case .ming(_, let sampleCount): sampleCount
         }
     }
 
@@ -373,6 +384,7 @@ public enum TakeContext: Codable, Sendable, Hashable {
     public var voiceEncoding: VoiceEncoding {
         switch self {
         case .drama3(let codes): .drama3(codes: codes)
+        case .ming(let reference, _): .ming(reference: reference)
         }
     }
 }
@@ -497,11 +509,13 @@ public struct SpeechTimings: Sendable, Equatable {
     public var verificationSeconds: Double = 0
     /// Prompt rows read, summed over chunks.
     public var promptRows: Int = 0
-    /// Frames generated, retries included.
+    /// Generation steps, retries included. A step is the engine's
+    /// ``EngineCapabilities/samplesPerStep``: a 2048-sample frame for
+    /// Drama 3, a 3528-sample latent for Ming.
     public var framesGenerated: Int = 0
-    /// Frames generated per second of decode time; 0 before any decode. An
-    /// M3 Max generates 33 to 42 frames per second, 21.5 of which make a
-    /// second of audio.
+    /// Steps generated per second of decode time; 0 before any decode. An
+    /// M3 Max generates 33 to 42 Drama 3 frames per second, 21.5 of which make a
+    /// second of audio, or about 60 Ming steps, 12.5 of which make a second.
     public var framesPerSecond: Double { decodeSeconds > 0 ? Double(framesGenerated) / decodeSeconds : 0 }
     /// Zero timings.
     public init() {}
@@ -517,8 +531,8 @@ public enum SpeechEvent: Sendable {
     case chunkStarted(index: Int, count: Int, text: String)
     /// The chunk's prompt of `rows` rows has been read.
     case prefill(rows: Int)
-    /// Frame `index` of the current chunk is generated. `maxFrames` is the
-    /// chunk's frame cap.
+    /// Step `index` of the current chunk is generated, in the engine's
+    /// ``EngineCapabilities/samplesPerStep``. `maxFrames` is the chunk's step cap.
     case frame(index: Int, maxFrames: Int)
     /// The chunk spoke too little of its text and is being generated again.
     case retry(chunkIndex: Int, attempt: Int)
@@ -581,14 +595,49 @@ public struct SpeechResult: Sendable {
     public var finishedByEOS: Bool
     /// Every chunk in order; their samples add up to the take's.
     public var sentences: [SpokenSentence]
+    /// What the engine could not perform as written. ``SpeechOutline`` reports
+    /// the same notices before a run.
+    public var notices: [SpeechNotice]
     /// Creates a result.
-    public init(take: Take, samples: [Float], timings: SpeechTimings, finishedByEOS: Bool, sentences: [SpokenSentence] = [], wordCoverage: WordCoverage = .unchecked) {
+    public init(take: Take, samples: [Float], timings: SpeechTimings, finishedByEOS: Bool, sentences: [SpokenSentence] = [],
+                wordCoverage: WordCoverage = .unchecked, notices: [SpeechNotice] = []) {
         self.wordCoverage = wordCoverage
         self.take = take
         self.samples = samples
         self.timings = timings
         self.finishedByEOS = finishedByEOS
         self.sentences = sentences
+        self.notices = notices
+    }
+
+    /// Seconds of audio per second of prefill, decode and codec time;
+    /// comparable across engines. 0 before any generation.
+    public var speed: Double {
+        let busy = timings.prefillSeconds + timings.decodeSeconds + timings.codecSeconds
+        return busy > 0 ? Double(samples.count) / Double(ModelConstants.sampleRate) / busy : 0
+    }
+}
+
+/// Something an engine changed about a request because it cannot perform it
+/// as written. The words are always kept; only the direction is lost.
+public enum SpeechNotice: Sendable, Hashable, Codable {
+    /// A cue the engine has no equivalent for. Its markup was removed.
+    case unsupportedCue(String)
+    /// A cue performed as the nearest thing the engine has.
+    case approximatedCue(String, as: String)
+    /// A director's note the engine could not turn into a direction.
+    case unsupportedNote(String)
+    /// Earlier takes from another engine could not carry the voice or history into this request.
+    case otherEngineTakes(SpeechEngineID, count: Int)
+
+    /// One sentence for a person.
+    public var message: String {
+        switch self {
+        case .unsupportedCue(let cue): "\(cue) isn't performed by this engine; its words are kept."
+        case .approximatedCue(let cue, let tag): "\(cue) is performed as \(tag)."
+        case .unsupportedNote(let note): "The note \"\(note)\" names no emotion this engine performs."
+        case .otherEngineTakes(let engine, let count): "\(count) earlier \(count == 1 ? "take" : "takes") from \(engine.capabilities.name) can't carry the voice into this one."
+        }
     }
 }
 

@@ -133,11 +133,12 @@ extension MCPTool {
         var result: [String: JSON] = [
             "path": .string(url.path),
             "seconds": .double(Double(reply.header("X-Drama-Seconds") ?? "") ?? 0),
-            "frames": .int(Int(reply.header("X-Drama-Frames") ?? "") ?? 0),
+            "samples": .int(Int(reply.header("X-Drama-Samples") ?? "") ?? 0),
             "generation_seconds": .double(Double(reply.header("X-Drama-Generation-Seconds") ?? "") ?? 0),
             "played": .bool(play),
         ]
         if let take = reply.header("X-Drama-Take-Id") { result["take_id"] = .string(take) }
+        if let frames = reply.header("X-Drama-Frames").flatMap(Int.init) { result["frames"] = .int(frames) }
         return .object(result)
     }
 

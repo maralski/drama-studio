@@ -20,12 +20,15 @@ public enum PromptError: Error, CustomStringConvertible, Equatable {
     case voiceConflict
     /// The named voice has no Drama 3 encoding.
     case notEncoded(String)
+    /// The engine cannot take the request; the string says what.
+    case engineUnsupported(SpeechEngineID, String)
 
     /// A message for a person.
     public var description: String {
         switch self {
         case .voiceConflict: return "a designed character and reference voices can't be combined"
         case .notEncoded(let name): return "the voice \(name) has not been encoded for Drama 3"
+        case .engineUnsupported(let engine, let what): return "\(engine.capabilities.name) can't \(what)"
         case .emptyText(let w): return "\(w): text must not be empty"
         case .structuralToken(let w, let t): return "\(w): \(t) is written by the prompt builder"
         case .badSpeakerTag(let w): return "\(w): speaker tags must be <|speaker:0|> to <|speaker:15|>"
@@ -100,10 +103,11 @@ public enum Drama3Prompt: Sendable {
         /// Creates a turn.
         public init(text: String, codes: [[Int32]]) { self.text = text; self.codes = codes }
 
-        /// A Drama 3 take as a turn.
-        package init(_ take: Take) {
+        /// A Drama 3 take as a turn; nil for another engine's take.
+        package init?(_ take: Take) {
             switch take.context {
             case .drama3(let codes): self.init(text: take.text, codes: codes)
+            case .ming: return nil
             }
         }
     }

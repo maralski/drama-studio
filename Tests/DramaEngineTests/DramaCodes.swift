@@ -10,9 +10,11 @@ extension ReferenceVoice {
 }
 
 extension Take {
+    /// The take's Drama 3 codes; empty for another engine's take.
     var dramaCodes: [[Int32]] {
         switch context {
         case .drama3(let codes): codes
+        case .ming: []
         }
     }
 }

@@ -143,7 +143,7 @@ package final class FrameGenerator {
     }
 
     /// Prefer an accepted attempt, then eos, then the longer speech.
-    package static func better(_ a: ChunkResult, than b: ChunkResult, expectedSeconds: Double, config: GenerationConfig) -> Bool {
+    package static func better(_ a: some ChunkAttempt, than b: some ChunkAttempt, expectedSeconds: Double, config: GenerationConfig) -> Bool {
         let retryA = shouldRetry(end: a.end, spokenSeconds: a.spokenSeconds, expectedSeconds: expectedSeconds, config: config)
         let retryB = shouldRetry(end: b.end, spokenSeconds: b.spokenSeconds, expectedSeconds: expectedSeconds, config: config)
         if retryA != retryB { return !retryA }
@@ -195,7 +195,7 @@ package final class FrameGenerator {
         var sampler = Sampler(seed: config.seed ?? UInt64.random(in: 0...UInt64.max))
         var history = Drama3History()
         var results: [ChunkResult] = []
-        var previousProof: LocalWordVerifier.VerifiedRawUnit?
+        var chain = VerifiedChunkChain(verifier)
         /// Full-window decodes: streamed partials and each chunk's audio.
         let runner = DecodeRunner()
         defer { runner.drain() }
@@ -313,31 +313,18 @@ package final class FrameGenerator {
                     throw error
                 }
             }
-            var winner: LocalWordVerifier.VerifiedRawUnit?
             var result = try ChunkAttempts.run(index: index, maxRetries: maxRetries,
                                                expectedSeconds: expected, config: config,
                                                shouldContinue: shouldContinue, attempt: attempt,
                                                verify: { result in
-                                                   guard let verifier else { throw SpeechVerificationError.unavailable("the spoken-word verifier is missing") }
                                                    let start = Date()
                                                    defer { timings.verificationSeconds += Date().timeIntervalSince(start) }
-                                                   winner = nil
-                                                   guard let current = try verifier.checkUnit(samples: result.samples, at: index, shouldContinue: shouldContinue) else { return false }
-                                                   if index > 0 {
-                                                       guard let previousProof else { throw SpeechVerificationError.unavailable("the previous generated unit is not verified") }
-                                                       guard try verifier.checkAdjacent(previousProof, current, shouldContinue: shouldContinue) else { return false }
-                                                   }
-                                                   winner = current
-                                                   return true
+                                                   return try chain.accept(result.samples, at: index, shouldContinue: shouldContinue)
                                                }) { attempt, spoken in
                 onEvent(.retry(index: index, attempt: attempt, spokenSeconds: spoken, expectedSeconds: expected))
             }
-            if verifier != nil {
-                guard let winner else { throw SpeechVerificationError.unavailable("the selected generated unit is not verified") }
-                result.samples = winner.verifiedSamples
-            }
+            if let verified = try chain.commit() { result.samples = verified }
             if !finishing.contains(where: { $0.result.index == index }) { try finish(result) }
-            previousProof = winner
             if !result.frames.isEmpty { history.push(text: result.text, codes: result.codes) }
         }
         while let next = finishing.first {
@@ -359,15 +346,27 @@ extension SpeechTimings {
     }
 }
 
+/// What the acceptance loop judges an attempt by, from either engine.
+package protocol ChunkAttempt: Sendable {
+    var end: FrameGenerator.ChunkEnd { get }
+    var spokenSeconds: Double { get }
+}
+
+extension ChunkAttempt {
+    package var finishedByEOS: Bool { end == .eos }
+}
+
+extension FrameGenerator.ChunkResult: ChunkAttempt {}
+
 /// The production acceptance boundary, independent of model sampling so its
 /// retry, cancellation and exhaustion behavior can be exercised deterministically.
 package enum ChunkAttempts {
-    package static func run(index: Int, maxRetries: Int, expectedSeconds: Double, config: GenerationConfig,
-                            shouldContinue: () -> Bool,
-                            attempt: (Int) throws -> FrameGenerator.ChunkResult,
-                            verify: (FrameGenerator.ChunkResult) throws -> Bool,
-                            retry: (Int, Double) -> Void) throws -> FrameGenerator.ChunkResult {
-        var best: FrameGenerator.ChunkResult?
+    package static func run<Attempt: ChunkAttempt>(index: Int, maxRetries: Int, expectedSeconds: Double, config: GenerationConfig,
+                                                   shouldContinue: () -> Bool,
+                                                   attempt: (Int) throws -> Attempt,
+                                                   verify: (Attempt) throws -> Bool,
+                                                   retry: (Int, Double) -> Void) throws -> Attempt {
+        var best: Attempt?
         let attempts = max(0, maxRetries) + 1
         for number in 0..<attempts {
             guard shouldContinue() else { throw CancellationError() }

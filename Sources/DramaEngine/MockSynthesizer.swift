@@ -33,10 +33,15 @@ public actor MockSynthesizer: SpeechSynthesizer {
     }
 
     private let pace: Pace
+    /// The engine the mock stands in for; its encodings and takes carry that engine's context.
+    public nonisolated let engine: SpeechEngineID
     private var loaded = false
 
-    /// Creates a mock that works at `pace`.
-    public init(pace: Pace = .realistic) { self.pace = pace }
+    /// Creates a mock that works at `pace` and stands in for `engine`.
+    public init(engine: SpeechEngineID = .drama3, pace: Pace = .realistic) {
+        self.engine = engine
+        self.pace = pace
+    }
 
     /// Whether the pretend load has finished.
     public var isLoaded: Bool { loaded }
@@ -46,21 +51,37 @@ public actor MockSynthesizer: SpeechSynthesizer {
         try await load { _, detail in onPhase(detail) }
     }
 
-    /// Stands in for Drama 3 without its weights.
+    /// Stands in for the engine without its weights.
     public nonisolated var engineDescription: EngineDescription {
-        EngineDescription(engine: .drama3, modelID: "fishaudio/drama-3", snapshot: "mock", isMock: true)
+        switch engine {
+        case .drama3: EngineDescription(engine: .drama3, modelID: "fishaudio/drama-3", snapshot: "mock", isMock: true)
+        case .ming: EngineDescription(engine: .ming, modelID: MingSynthesizer.modelID, snapshot: "mock", isMock: true)
+        }
     }
 
     public nonisolated var isTuned: Bool? { false }
 
-    /// Made-up Drama 3 codes as long as the clip.
+    /// A made-up encoding as long as the clip, in the mock's engine.
     public func encodeVoice(samples: [Float], transcript: String) async throws -> VoiceEncoding {
-        let frameCount = max(1, Int((Double(samples.count) / Double(ModelConstants.samplesPerFrame)).rounded()))
-        let codes = (0..<ModelConstants.numCodebooks).map { book in
+        switch engine {
+        case .drama3: .drama3(codes: Self.codes(frameCount: max(1, Int((Double(samples.count) / Double(ModelConstants.samplesPerFrame)).rounded()))))
+        case .ming: .ming(reference: try Self.mingReference(transcript: transcript, sampleCount: max(1, samples.count)))
+        }
+    }
+
+    package static func codes(frameCount: Int) -> [[Int32]] {
+        (0..<ModelConstants.numCodebooks).map { book in
             let size = book == 0 ? ModelConstants.codebookSize : ModelConstants.residualCodebookSize
             return (0..<frameCount).map { Int32(($0 * 31 + book * 17) % size) }
         }
-        return .drama3(codes: codes)
+    }
+
+    /// Made-up latents, one row per 3528 samples, and a unit speaker embedding.
+    static func mingReference(transcript: String, sampleCount: Int) throws -> MingVoiceEncoding {
+        let rows = max(1, Int((Double(sampleCount) / Double(MingVoiceEncoding.samplesPerLatent)).rounded(.up)))
+        let latents = (0..<rows * MingVoiceEncoding.latentDim).map { Float($0 % 97) / 97 - 0.5 }
+        let embedding = (0..<MingVoiceEncoding.speakerEmbeddingDim).map { _ in Float(1) / Float(MingVoiceEncoding.speakerEmbeddingDim).squareRoot() }
+        return try MingVoiceEncoding(transcript: transcript, sampleCount: sampleCount, latents: latents, speakerEmbedding: embedding)
     }
 
     /// Streams the real engine's event sequence for `request`, with a sweep
@@ -94,8 +115,10 @@ public actor MockSynthesizer: SpeechSynthesizer {
     private func run(_ request: SpeechRequest, emit: @Sendable (SpeechEvent) -> Void) async throws {
         try await load { emit(.loadingModel(progress: $0, detail: $1)) }
         guard !UnicodeWhitespace.strip(request.text).isEmpty else { throw MockError.emptyText }
-        let plan = try GenerationPlan(request)
-        let lines = plan.chunks.map(\.line)
+        let outline = try SpeechOutline(request, engine: engine)
+        let lines = outline.lines
+        var streaming = request.config.streaming
+        if request.config.wordVerification == .required || (request.config.maxRetries > 0 && request.config.minSpokenRatio > 0) { streaming = .sentence }
 
         var rng = SplitMix64(seed: request.config.seed ?? UInt64.random(in: 0...UInt64.max))
         var frames: [Frame] = []
@@ -106,7 +129,7 @@ public actor MockSynthesizer: SpeechSynthesizer {
 
         for (index, text) in lines.enumerated() {
             emit(.chunkStarted(index: index, count: lines.count, text: text))
-            let promptRows = 24 + text.utf8.count / 3 + request.references.reduce(0) { $0 + ($1.encodings[.drama3]?.sampleCount ?? 0) / ModelConstants.samplesPerFrame }
+            let promptRows = 24 + text.utf8.count / 3 + request.references.reduce(0) { $0 + Int($1.durationSeconds * framesPerSecondOfAudio) }
             timings.promptRows += promptRows
             emit(.prefill(rows: promptRows))
 
@@ -128,9 +151,9 @@ public actor MockSynthesizer: SpeechSynthesizer {
                 let residual = (1..<ModelConstants.numCodebooks).map { _ in Int32(rng.next() % UInt64(ModelConstants.residualCodebookSize)) }
                 frames.append([c0 + ModelConstants.semanticStart, c0] + residual)
                 emit(.frame(index: frameIndex, maxFrames: budget))
-                if let step = plan.streaming.stepFrames, (frameIndex + 1) % step == 0 { stream(through: frameIndex + 1) }
+                if let step = streaming.stepFrames, (frameIndex + 1) % step == 0 { stream(through: frameIndex + 1) }
             }
-            if plan.streaming.stepFrames != nil { stream(through: target) }
+            if streaming.stepFrames != nil { stream(through: target) }
             timings.decodeSeconds += (ContinuousClock.now - start).seconds
             timings.framesGenerated += target
 
@@ -138,8 +161,12 @@ public actor MockSynthesizer: SpeechSynthesizer {
             sentences.append(SpokenSentence(text: text, samples: audio.count))
             emit(.audio(samples: audio, chunkIndex: index))
         }
-        let take = Take(text: plan.turnText, context: .drama3(codes: (0..<ModelConstants.numCodebooks).map { c in frames.map { $0[1 + c] } }))
-        emit(.finished(SpeechResult(take: take, samples: samples, timings: timings, finishedByEOS: true, sentences: sentences)))
+        let context: TakeContext = switch engine {
+        case .drama3: .drama3(codes: (0..<ModelConstants.numCodebooks).map { c in frames.map { $0[1 + c] } })
+        case .ming: .ming(reference: try Self.mingReference(transcript: DirectorsNote.spokenWords(request.text), sampleCount: samples.count), sampleCount: samples.count)
+        }
+        let take = Take(text: GenerationPlan.turnText(text: request.text, note: request.note, character: request.character), context: context)
+        emit(.finished(SpeechResult(take: take, samples: samples, timings: timings, finishedByEOS: true, sentences: sentences, notices: outline.notices)))
     }
 
     private func wait(_ seconds: Double) async throws {

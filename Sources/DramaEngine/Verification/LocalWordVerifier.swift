@@ -14,8 +14,12 @@ package struct LocalWordVerifier: Sendable {
     private let plannedLines: [String]?
 
     package static func prepare(plan: GenerationPlan, config: GenerationConfig, shouldContinue: () -> Bool) throws -> Self? {
+        try prepare(lines: plan.chunks.map(\.line), config: config, shouldContinue: shouldContinue)
+    }
+
+    /// A verifier for the planned `lines`, one per generated unit; nil unless the config requires word verification.
+    package static func prepare(lines: [String], config: GenerationConfig, shouldContinue: () -> Bool) throws -> Self? {
         guard config.wordVerification == .required else { return nil }
-        let lines = plan.chunks.map(\.line)
         return try prepare(text: lines.joined(separator: " "), plannedLines: lines, shouldContinue: shouldContinue)
     }
 

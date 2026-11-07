@@ -321,9 +321,12 @@ public final class APIService: Sendable {
             let elapsed = ContinuousClock.now - start
             var headers = format == .pcm ? Self.pcmHeaders(contentType: format.contentType) : ["Content-Type": format.contentType]
             headers["X-Drama-Take-Id"] = takeID.uuidString
-            headers["X-Drama-Frames"] = String(result.take.apiFrames)
+            if let frames = result.take.apiFrames {
+                headers["X-Drama-Frames"] = String(frames)
+                headers["X-Drama-Generated-Frames"] = String(result.timings.framesGenerated)
+            }
+            headers["X-Drama-Samples"] = String(result.take.sampleCount)
             headers["X-Drama-Word-Coverage"] = result.wordCoverage.rawValue
-            headers["X-Drama-Generated-Frames"] = String(result.timings.framesGenerated)
             headers["X-Drama-Verification-Seconds"] = String(format: "%.3f", result.timings.verificationSeconds)
             headers["X-Drama-Seconds"] = String(format: "%.3f", Double(result.samples.count) / Double(AudioEncoding.sampleRate))
             headers["X-Drama-Generation-Seconds"] = String(format: "%.3f", Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18)
@@ -352,9 +355,10 @@ public final class APIService: Sendable {
                 var sentences = 0
                 if let result = try await forward(request, framing: framing, job: job, into: out, sentences: &sentences) {
                     await remember(result.take)
-                    Self.send(framing.done(["take_id": takeID.uuidString, "frames": result.take.apiFrames,
-                                            "word_coverage": result.wordCoverage.rawValue,
-                                            "seconds": Self.seconds(result.samples)]), to: out)
+                    var done: [String: Any] = ["take_id": takeID.uuidString, "samples": result.take.sampleCount,
+                                               "word_coverage": result.wordCoverage.rawValue, "seconds": Self.seconds(result.samples)]
+                    if let frames = result.take.apiFrames { done["frames"] = frames }
+                    Self.send(framing.done(done), to: out)
                 }
                 await jobs.release(job)
                 out.finish()
@@ -567,8 +571,10 @@ struct TakeSummary: Encodable {
     var input: String
     var text: String
     var seconds: Double
-    var frames: Int
-    var codes_base64: String
+    var samples: Int
+    /// Drama 3 takes only; absent for another engine's take.
+    var frames: Int?
+    var codes_base64: String?
     var previous_take_ids: [String]
 
     init(_ entry: TakeCache.Entry) {
@@ -576,6 +582,7 @@ struct TakeSummary: Encodable {
         input = entry.line
         text = entry.take.text
         seconds = (entry.take.durationSeconds * 1000).rounded() / 1000
+        samples = entry.take.sampleCount
         frames = entry.take.apiFrames
         codes_base64 = entry.take.apiCodesBase64
         previous_take_ids = entry.lineage.dropLast().map(\.uuidString)
