@@ -58,6 +58,14 @@ final class MingEncodingTests: XCTestCase {
         XCTAssertEqual(MingSynthesizer.trimmed(speech + silence + speech).count, speech.count * 2 + silence.count, "an inner pause is not trailing")
     }
 
+    func testRetriesChangeTheGuidanceScaleAndTheFirstAttemptKeepsTheBestOne() {
+        XCTAssertEqual(MingSynthesizer.guidance(attempt: 0), 1.5)
+        let retries = (1...5).map { MingSynthesizer.guidance(attempt: $0) }
+        XCTAssertNotEqual(retries[0], MingSynthesizer.guidance(attempt: 0), "the first retry does not repeat the first attempt's scale")
+        XCTAssertEqual(Set(retries).count, 3, "retries reach every scale in the ladder")
+        XCTAssertTrue(retries.allSatisfy { $0 >= 1 && $0 <= 2 }, "no retry leaves the range the probes covered")
+    }
+
     func testBadShapesAreRejectedAtTheBoundary() throws {
         XCTAssertThrowsError(try MingVoiceEncoding(transcript: "x", sampleCount: 10, latents: [Float](repeating: 0, count: 65), speakerEmbedding: [Float](repeating: 0, count: 192)))
         XCTAssertThrowsError(try MingVoiceEncoding(transcript: "x", sampleCount: 10, latents: [Float](repeating: 0, count: 64), speakerEmbedding: [Float](repeating: 0, count: 191)))

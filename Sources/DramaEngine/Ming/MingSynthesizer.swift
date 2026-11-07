@@ -154,7 +154,7 @@ public actor MingSynthesizer: SpeechSynthesizer {
             func attempt(_ number: Int) throws -> Attempt {
                 guard shouldContinue() else { throw CancellationError() }
                 var options = SynthesisOptions()
-                options.cfg = Self.guidance
+                options.cfg = Self.guidance(attempt: number)
                 options.seed = baseSeed &+ UInt64(number)
                 options.maxSteps = maxSteps
                 var pcm: [Float] = []
@@ -212,12 +212,19 @@ public actor MingSynthesizer: SpeechSynthesizer {
                                                 wordCoverage: config.wordVerification == .required ? .recognized : .unchecked, notices: plan.notices)))
     }
 
-    /// The flow head's classifier-free guidance scale. Ming's reference uses
-    /// 2.0. After a `[Laughter]` tag the model can keep laughing to the step
-    /// cap instead of returning to the words; on the harness's cue lines 3.0
-    /// made that worse (21 of 36 first passes against 24) and 1.5 better (29
-    /// of 36), so clones run at 1.5.
-    package static let guidance: Float = 1.5
+    /// The flow head's classifier-free guidance scale per attempt. Ming's
+    /// reference uses 2.0. After a `[Laughter]` tag the model can keep
+    /// laughing to the step cap instead of returning to the words; on the
+    /// harness's cue lines 3.0 made that worse (21 of 36 first passes against
+    /// 24), 1.5 best (29) and 1.0 close (27, no line exhausted). Which scale
+    /// a voice derails at is the voice's own, and a new seed alone rarely
+    /// rescues it, so the first attempt runs at 1.5 and retries cycle through
+    /// the other two.
+    package static let guidanceLadder: [Float] = [1.5, 1.0, 2.0]
+
+    package static func guidance(attempt: Int) -> Float {
+        guidanceLadder[attempt % guidanceLadder.count]
+    }
 
     /// The most steps one sentence may run: the configured frame cap in
     /// seconds, plus ``GenerationConfig/capSecondsPerCue`` per cue as Drama 3
