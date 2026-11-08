@@ -22,6 +22,11 @@ enum AppHome {
         support.appending(path: "Models/\(ModelDownloadPlan.drama3.folderName)", directoryHint: .isDirectory)
     }
 
+    /// The folder Settings downloads the pinned Ming revision into.
+    static var mingModels: URL {
+        support.appending(path: "Models/\(SpeechEngineID.ming.install.plan.folderName)", directoryHint: .isDirectory)
+    }
+
     /// The voice library: one JSON file per voice, with its clip beside it.
     static var voices: URL { support.appending(path: "Voices", directoryHint: .isDirectory) }
 

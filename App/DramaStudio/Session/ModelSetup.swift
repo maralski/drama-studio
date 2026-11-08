@@ -22,13 +22,26 @@ enum ModelSetup {
         return SpeechEngineID(rawValue: raw) ?? .drama3
     }
 
-    /// `MING_WEIGHTS`, else the `mingDirectory` default; nil unless complete.
+    /// The folder chosen for Ming in Settings; empty for the default search.
     static let mingDirectoryKey = "mingDirectory"
+    static var mingCustomPath: String { AppHome.defaults.string(forKey: mingDirectoryKey) ?? "" }
+
+    /// Where Ming is, complete or not, so Settings can say what it lacks:
+    /// `MING_WEIGHTS`; else the folder chosen in Settings; else the app's own
+    /// download once it is complete; else the newest Hugging Face cache
+    /// snapshot; else a download under way. Nil when there is none of these.
+    static func mingCandidate(customPath: String) -> MingLocation? {
+        if ProcessInfo.processInfo.environment["MING_WEIGHTS"] != nil { return MingLocation.find() }
+        if !customPath.isEmpty { return MingLocation(directory: URL(filePath: customPath, directoryHint: .isDirectory)) }
+        let downloaded = MingLocation(directory: AppHome.mingModels)
+        if downloaded.isComplete { return downloaded }
+        if AppHome.usesHuggingFaceCache, let cached = MingLocation.find() { return cached }
+        return FileManager.default.fileExists(atPath: downloaded.directory.path) ? downloaded : nil
+    }
+
+    /// The Ming checkpoint the app runs; nil unless complete.
     static func mingLocation() -> MingLocation? {
-        if ProcessInfo.processInfo.environment["MING_WEIGHTS"] != nil { return MingLocation.find().flatMap { $0.isComplete ? $0 : nil } }
-        guard let path = AppHome.defaults.string(forKey: mingDirectoryKey), !path.isEmpty else { return nil }
-        let location = MingLocation(directory: URL(filePath: path, directoryHint: .isDirectory))
-        return location.isComplete ? location : nil
+        mingCandidate(customPath: mingCustomPath).flatMap { $0.isComplete ? $0 : nil }
     }
 
     /// Every installed engine behind one synthesizer, with the chosen one
@@ -136,10 +149,7 @@ extension SetupServices {
         /// Gives the registry a Drama 3 factory for the downloaded weights, once.
         let attach: @MainActor () async -> Void = {
             guard !ModelSetup.isPreviewEngine, let location = ModelSetup.location(customPath: ModelSetup.customPath) else { return }
-            let factory = SpeechEngines.Factory.drama3(location: location, codecDirectory: AppHome.codec, tuningDirectory: AppHome.tuning)
-            guard session.engines.description(of: .drama3) != factory.description else { return }
-            await session.engines.register(.drama3, factory)
-            session.refreshEngineState()
+            await session.install(.drama3, .drama3(location: location, codecDirectory: AppHome.codec, tuningDirectory: AppHome.tuning))
         }
         return SetupServices(
             facts: {

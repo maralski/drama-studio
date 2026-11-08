@@ -161,8 +161,10 @@ final class AppLayoutTests: XCTestCase {
         try await render(AddVoiceSheet(model: model), name: "add-voice", size: CGSize(width: 480, height: 560), in: directory)
         try await render(DesignVoiceSheet(model: model, speaker: Speaker(index: 0, name: "Narrator")),
                          name: "design-voice", size: CGSize(width: 520, height: 580), in: directory)
-        try await render(SettingsView(server: server, setup: setup, selection: .constant(.general)),
+        try await render(SettingsView(server: server, setup: setup, ming: MingInstall(session: model), selection: .constant(.general)),
                          name: "settings", size: CGSize(width: 560, height: 460), in: directory)
+        try await render(SettingsView(server: server, setup: setup, ming: MingInstall(session: model), selection: .constant(.general)),
+                         name: "settings-full", size: CGSize(width: 560, height: 1500), in: directory)
         try await render(PronunciationSettingsView(), name: "pronunciation", size: CGSize(width: 560, height: 460), in: directory)
         try await render(HelpWindowView(), name: "help", size: CGSize(width: 600, height: 400), in: directory)
         try await render(InspectorSheet(model: model, dismiss: {}), name: "inspector", size: CGSize(width: 380, height: 500), in: directory)

@@ -21,6 +21,7 @@ struct DramaStudioApp: App {
     @State private var presence: AppPresence
     @State private var updater: AppUpdater
     @State private var setup: SetupCoordinator
+    @State private var ming: MingInstall
 
     init() {
         if CommandLine.arguments.contains("--check-resources") { exit(Self.checkResources()) }
@@ -38,6 +39,7 @@ struct DramaStudioApp: App {
         _presence = State(initialValue: presence)
         _updater = State(initialValue: updater)
         _setup = State(initialValue: setup)
+        _ming = State(initialValue: MingInstall(session: model))
         model.recordUsage = { UsageMonitoring.shared.record($0) }
         UsageMonitoring.shared.record(.launch)
         model.confirmReplacement = { [weak model] message in
@@ -89,7 +91,7 @@ struct DramaStudioApp: App {
         .windowResizability(.contentMinSize)
 
         Settings {
-            SettingsView(server: server, setup: setup, selection: $settingsTab)
+            SettingsView(server: server, setup: setup, ming: ming, selection: $settingsTab)
                 .modifier(UpdateConfirmation())
                 .environment(updater)
                 .defaultAppStorage(AppHome.defaults)
@@ -157,6 +159,9 @@ struct StudioCommands: Commands {
             Button("Stop Generating") { model.stopGeneration() }
                 .keyboardShortcut(".")
                 .disabled(!model.state.isGenerating)
+            Divider()
+            Picker("Engine", selection: $model.engine) { EngineChoices(model: model) }
+                .disabled(model.state.isGenerating)
             Divider()
             Button(model.state.isPlaying ? "Pause" : "Play") { model.togglePlayback() }
                 .disabled(!model.canPlay)

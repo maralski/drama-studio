@@ -9,6 +9,7 @@ struct InspectorView: View {
 
     var body: some View {
         Form {
+            EngineSection(model: model)
             CastSection(model: model, designing: $designing)
             Section("Performance") {
                 HStack {
@@ -31,6 +32,50 @@ struct InspectorView: View {
         .formStyle(.grouped)
         .disabled(model.state.isGenerating)
         .sheet(item: $designing) { DesignVoiceSheet(model: model, speaker: $0) }
+    }
+}
+
+/// Which engine speaks new takes. Engines without their files show but
+/// can't be chosen; Settings says how to add them.
+private struct EngineSection: View {
+    @Bindable var model: SessionModel
+
+    var body: some View {
+        Section {
+            Picker("Engine", selection: $model.engine) { EngineChoices(model: model) }
+                .accessibilityLabel("Speech engine")
+            if let limits = model.engine.limits {
+                Text(limits).font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+/// One item per engine, the uninstalled ones disabled; the Inspector's
+/// picker and the Speech menu share it.
+struct EngineChoices: View {
+    let model: SessionModel
+
+    var body: some View {
+        ForEach(SpeechEngineID.allCases, id: \.self) { engine in
+            let installed = model.availableEngines.contains(engine)
+            Text(installed ? engine.capabilities.name : "\(engine.capabilities.name) (not installed)")
+                .tag(engine)
+                .selectionDisabled(!installed)
+        }
+    }
+}
+
+extension SpeechEngineID {
+    /// What the engine does differently from Drama 3, from its capabilities; nil for none.
+    var limits: String? {
+        let capabilities = capabilities
+        var limits: [String] = []
+        if case .fixed(let tags) = capabilities.cues { limits.append("performs \(tags.count) cues and drops the rest, with a notice") }
+        if !capabilities.history { limits.append("clones the line's first take instead of continuing earlier ones") }
+        if case .only(let languages) = capabilities.languages { limits.append("speaks \(languages.count) languages") }
+        guard !limits.isEmpty else { return nil }
+        return "\(capabilities.name) " + ListFormatter.localizedString(byJoining: limits) + "."
     }
 }
 

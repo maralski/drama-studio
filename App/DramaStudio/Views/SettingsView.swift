@@ -10,13 +10,14 @@ enum SettingsTab: Hashable { case general, updates, pronunciation }
 struct SettingsView: View {
     let server: APIServerController
     let setup: SetupCoordinator
+    let ming: MingInstall
     @Binding var selection: SettingsTab
     @State private var modelStatus: ModelSetup.Status?
 
     var body: some View {
         TabView(selection: $selection) {
             Tab("General", systemImage: "gearshape", value: SettingsTab.general) {
-                GeneralSettingsView(server: server, setup: setup, status: $modelStatus)
+                GeneralSettingsView(server: server, setup: setup, ming: ming, status: $modelStatus)
             }
             Tab("Updates", systemImage: "arrow.down.circle", value: SettingsTab.updates) {
                 UpdateSettingsView()
@@ -33,6 +34,7 @@ struct SettingsView: View {
 private struct GeneralSettingsView: View {
     let server: APIServerController
     let setup: SetupCoordinator
+    let ming: MingInstall
     @AppStorage(ModelSetup.customDirectoryKey) private var modelPath = ""
     @AppStorage(APIServerController.startsWithAppKey) private var startsWithApp = true
     @AppStorage(APIServerController.portKey) private var port = Int(APIService.defaultPort)
@@ -72,6 +74,7 @@ private struct GeneralSettingsView: View {
                     .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
                 }
             }
+            MingSection(install: ming)
             Section("Playback") {
                 Toggle(isOn: $streamsAudio) { HelpLabel("Stream audio while generating", help: .streaming) }
             }
@@ -133,6 +136,71 @@ private struct GeneralSettingsView: View {
         panel.canChooseDirectories = true
         panel.message = "Choose the folder that holds config.json, tokenizer.json, the safetensors shards, and codec.pth."
         if panel.runModal() == .OK, let url = panel.url { modelPath = url.path }
+    }
+}
+
+/// Ming is optional, so it lives here rather than in the setup window: where
+/// it was found, what it lacks, and a download of the pinned revision.
+private struct MingSection: View {
+    let install: MingInstall
+    @AppStorage(ModelSetup.mingDirectoryKey) private var path = ""
+
+    var body: some View {
+        Section("Ming") {
+            LabeledContent("Location") {
+                Text(location).textSelection(.enabled).lineLimit(2).truncationMode(.middle)
+            }
+            LabeledContent("Status") { status }
+            HStack {
+                Button("Choose Folder\u{2026}") { chooseFolder() }
+                Button("Use Default Location") { path = "" }
+                    .disabled(path.isEmpty)
+                Spacer()
+                download
+            }
+            if let gap = install.report?.items.first(where: { $0.isMissing && $0.component != .wordRecognizer }) {
+                Text(gap.summary + " " + (gap.fix ?? "")).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+            }
+            if case .failed(let message) = install.phase {
+                Text(message).font(.caption).foregroundStyle(.red)
+            }
+        }
+        .task(id: path) { await install.refresh() }
+    }
+
+    private var location: String {
+        install.report?.directory?.path ?? "\(AppHome.mingModels.path) (not downloaded)"
+    }
+
+    @ViewBuilder
+    private var status: some View {
+        switch (install.report, install.phase) {
+        case (_, .downloading(let progress)):
+            ProgressView(value: progress.fraction) {
+                Text("Downloading \(ModelSetup.gigabytes(progress.doneBytes)) of \(ModelSetup.gigabytes(progress.totalBytes))")
+            }
+        case (nil, _): Label("Checking\u{2026}", systemImage: "clock").foregroundStyle(.secondary)
+        case _ where install.isReady: Label("Ready", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+        case (let report?, _) where report.directory != nil: Label("Incomplete", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+        default: Label("Not installed", systemImage: "xmark.circle.fill").foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var download: some View {
+        if case .downloading = install.phase {
+            Button("Stop Download") { install.cancelDownload() }
+        } else if !install.isReady, path.isEmpty, install.report != nil, ProcessInfo.processInfo.environment["MING_WEIGHTS"] == nil {
+            Button("Download (\(ModelSetup.gigabytes(SpeechEngineID.ming.install.plan.totalBytes)))") { install.startDownload() }
+        }
+    }
+
+    private func chooseFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.message = "Choose the folder that holds Ming's model.safetensors, config.json, tokenizer.json and campplus.onnx."
+        if panel.runModal() == .OK, let url = panel.url { path = url.path }
     }
 }
 

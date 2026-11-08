@@ -910,13 +910,17 @@ final class SessionModel {
         Task { modelLoaded = await synthesizer.isLoaded }
     }
 
-    /// The engine new takes use, kept in the `speechEngine` default.
+    /// The engine new takes use, kept in the `speechEngine` default. The
+    /// registry holds the choice, so views observe it through this property.
     var engine: SpeechEngineID {
-        get { engines.selected }
+        get {
+            access(keyPath: \.engine)
+            return engines.selected
+        }
         set {
             guard newValue != engines.selected else { return }
             do {
-                try engines.select(newValue)
+                try withMutation(keyPath: \.engine) { try engines.select(newValue) }
                 AppHome.defaults.set(newValue.rawValue, forKey: ModelSetup.engineKey)
                 refreshEngineState()
             } catch {
@@ -926,7 +930,18 @@ final class SessionModel {
     }
 
     /// Engines the session can switch to.
-    var availableEngines: Set<SpeechEngineID> { engines.available }
+    var availableEngines: Set<SpeechEngineID> {
+        access(keyPath: \.availableEngines)
+        return engines.available
+    }
+
+    /// Gives the registry an engine's factory once its files are in place, as setup does.
+    func install(_ engine: SpeechEngineID, _ factory: SpeechEngines.Factory) async {
+        guard engines.description(of: engine) != factory.description else { return }
+        await engines.register(engine, factory)
+        withMutation(keyPath: \.availableEngines) {}
+        refreshEngineState()
+    }
 
     private func settleAfterGeneration(_ next: PlaybackState) {
         state = next
