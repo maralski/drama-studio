@@ -709,10 +709,11 @@ public struct ModelLocation: Sendable, Equatable {
     /// A location at `directory`. Nothing is read until the engine loads.
     public init(directory: URL) { self.directory = directory }
 
-    /// The most recently modified snapshot of `repo` in the
-    /// ``HuggingFaceCache``, where `hf download` puts it; nil when there is none.
+    /// The newest complete snapshot of `repo` in the ``HuggingFaceCache``,
+    /// where `hf download` puts it, or the newest one when none is complete;
+    /// nil when there is none.
     public static func huggingFaceCache(repo: String = SpeechEngineID.drama3.install.repo) -> ModelLocation? {
-        HuggingFaceCache.latestSnapshot(of: repo).map(ModelLocation.init(directory:))
+        HuggingFaceCache.latestSnapshot(of: repo) { ModelLocation(directory: $0).isComplete }.map(ModelLocation.init(directory:))
     }
 
     /// Whether `config.json`, `tokenizer.json`, `model.safetensors.index.json`

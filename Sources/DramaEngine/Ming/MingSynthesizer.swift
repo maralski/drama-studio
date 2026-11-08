@@ -11,13 +11,15 @@ public struct MingLocation: Sendable, Equatable {
     public init(directory: URL) { self.directory = directory }
 
     /// The folder `MING_WEIGHTS` names, complete or not, so setup can say
-    /// what it lacks; else the newest snapshot in the ``HuggingFaceCache``;
-    /// nil when there is neither.
+    /// what it lacks; else the newest complete snapshot in the
+    /// ``HuggingFaceCache``, or the newest one when none is complete; nil
+    /// when there is neither.
     public static func find() -> MingLocation? {
         if let path = ProcessInfo.processInfo.environment["MING_WEIGHTS"], !path.isEmpty {
             return MingLocation(directory: URL(filePath: path, directoryHint: .isDirectory))
         }
-        return HuggingFaceCache.latestSnapshot(of: SpeechEngineID.ming.install.repo).map(MingLocation.init(directory:))
+        return HuggingFaceCache.latestSnapshot(of: SpeechEngineID.ming.install.repo) { MingLocation(directory: $0).isComplete }
+            .map(MingLocation.init(directory:))
     }
 
     public static let requiredFiles = ["model.safetensors", "config.json", "tokenizer.json", "campplus.onnx"]

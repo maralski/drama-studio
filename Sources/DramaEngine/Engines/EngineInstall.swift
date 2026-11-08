@@ -48,11 +48,19 @@ public enum HuggingFaceCache {
         return FileManager.default.homeDirectoryForCurrentUser.appending(path: ".cache/huggingface/hub", directoryHint: .isDirectory)
     }
 
-    /// The most recently modified snapshot of `repo`; nil when there is none.
-    public static func latestSnapshot(of repo: String) -> URL? {
-        let snapshots = directory.appending(path: "models--" + repo.replacingOccurrences(of: "/", with: "--") + "/snapshots")
-        let found = (try? FileManager.default.contentsOfDirectory(at: snapshots, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
-        return found.max { modified($0) < modified($1) }
+    /// The newest snapshot of `repo` that `isComplete` accepts, else the
+    /// newest snapshot, so setup can name what it lacks; nil when there is
+    /// none. The repo folder matches in any case: `hf download` names it
+    /// with the case the repo id was typed in.
+    public static func latestSnapshot(of repo: String, isComplete: (URL) -> Bool = { _ in true }) -> URL? {
+        let fm = FileManager.default
+        let folder = "models--" + repo.replacingOccurrences(of: "/", with: "--").lowercased()
+        let repos = ((try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []).filter { $0.lastPathComponent.lowercased() == folder }
+        let snapshots = repos
+            .flatMap { (try? fm.contentsOfDirectory(at: $0.appending(path: "snapshots"), includingPropertiesForKeys: [.contentModificationDateKey, .isDirectoryKey])) ?? [] }
+            .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
+            .sorted { modified($0) > modified($1) }
+        return snapshots.first(where: isComplete) ?? snapshots.first
     }
 
     private static func modified(_ url: URL) -> Date {

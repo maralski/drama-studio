@@ -51,6 +51,32 @@ final class MingSetupTests: XCTestCase {
         XCTAssertEqual(MingLocation.find()?.isComplete, true)
     }
 
+    func testTheNewestCompleteSnapshotWinsOverNewerPartialOnesAndStrayFiles() throws {
+        unsetenv("MING_WEIGHTS")
+        let hub = root.appending(path: "hub", directoryHint: .isDirectory)
+        let snapshots = hub.appending(path: "models--inclusionAI--Ming-3.0-tts-0.5B/snapshots")
+        let complete = try checkpoint(at: snapshots.appending(path: "older"), files: MingLocation.requiredFiles)
+        let partial = try checkpoint(at: snapshots.appending(path: "newer"), files: ["config.json"])
+        try Data().write(to: snapshots.appending(path: ".DS_Store"))
+        let now = Date()
+        for (url, age) in [(complete, 300.0), (partial, 200), (snapshots.appending(path: ".DS_Store"), 100)] {
+            try FileManager.default.setAttributes([.modificationDate: now.addingTimeInterval(-age)], ofItemAtPath: url.path)
+        }
+        setenv("HF_HUB_CACHE", hub.path, 1)
+        XCTAssertEqual(MingLocation.find()?.directory.lastPathComponent, "older")
+
+        try FileManager.default.removeItem(at: complete.appending(path: "campplus.onnx"))
+        try FileManager.default.setAttributes([.modificationDate: now.addingTimeInterval(-300)], ofItemAtPath: complete.path)
+        XCTAssertEqual(MingLocation.find()?.directory.lastPathComponent, "newer", "with none complete, the newest folder, so setup names its gaps")
+
+        let drama = hub.appending(path: "models--fishaudio--drama-3/snapshots")
+        let whole = try checkpoint(at: drama.appending(path: "older"), files: ["config.json", "tokenizer.json", "model.safetensors.index.json", "codec.pth"])
+        let started = try checkpoint(at: drama.appending(path: "newer"), files: ["config.json"])
+        try FileManager.default.setAttributes([.modificationDate: now.addingTimeInterval(-300)], ofItemAtPath: whole.path)
+        try FileManager.default.setAttributes([.modificationDate: now.addingTimeInterval(-200)], ofItemAtPath: started.path)
+        XCTAssertEqual(ModelLocation.huggingFaceCache()?.directory.lastPathComponent, "older")
+    }
+
     func testMingWeightsWinsOverTheCacheEvenWhenIncomplete() throws {
         let hub = root.appending(path: "hub", directoryHint: .isDirectory)
         _ = try checkpoint(at: hub.appending(path: "models--inclusionAI--Ming-3.0-tts-0.5B/snapshots/7247f4c"), files: MingLocation.requiredFiles)
