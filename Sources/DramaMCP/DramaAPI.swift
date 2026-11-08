@@ -64,8 +64,10 @@ public struct HTTPDramaAPI: DramaAPI {
     public let launchTimeout: Duration
     private let programName: String
 
+    /// In `DRAMA_STUDIO_HOME` when that is set, matching the app it talks to.
     public static var defaultTokenURL: URL {
-        URL.applicationSupportDirectory.appending(path: "DramaStudio/api-token")
+        let home = ProcessInfo.processInfo.environment["DRAMA_STUDIO_HOME"].flatMap { $0.isEmpty ? nil : URL(filePath: $0, directoryHint: .isDirectory) }
+        return (home ?? URL.applicationSupportDirectory.appending(path: "DramaStudio", directoryHint: .isDirectory)).appending(path: "api-token")
     }
 
     public init(environment: [String: String] = ProcessInfo.processInfo.environment, executable: URL = URL(filePath: CommandLine.arguments[0]).resolvingSymlinksInPath()) {

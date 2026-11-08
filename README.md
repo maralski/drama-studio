@@ -250,8 +250,8 @@ the engine; one without its files shows as not installed. A build from `tools/ma
 has no codec download, so its setup window shows the Python conversion command
 above when the codec models are missing; `tools/make_release.sh` builds the
 release DMG and the codec zip and writes the zip's URL and SHA-256 into the
-app. `DRAMA_STUDIO_HOME=<folder>` moves the downloads, the codec, the tuning
-and the settings into one folder and ignores the Hugging Face cache, to try a
+app. `DRAMA_STUDIO_HOME=<folder>` moves the downloads, the codec, the tuning,
+the settings and the API token into one folder and ignores the Hugging Face cache, to try a
 first run without touching your own. `DRAMA_STUDIO_MEMORY_GB=16` shows the
 low-memory warning on a Mac that has enough; it changes only the warning, not
 the memory the engine can use. `tools/pin_model_plan.py --check`

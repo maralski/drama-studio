@@ -107,4 +107,13 @@ final class HTTPParsingTests: XCTestCase {
         let permissions = try FileManager.default.attributesOfItem(atPath: url.path)[.posixPermissions] as? Int
         XCTAssertEqual(permissions, 0o600)
     }
+
+    func testTheTokenLivesInTheStudioHomeWhenOneIsSet() {
+        let previous = ProcessInfo.processInfo.environment["DRAMA_STUDIO_HOME"]
+        defer { if let previous { setenv("DRAMA_STUDIO_HOME", previous, 1) } else { unsetenv("DRAMA_STUDIO_HOME") } }
+        setenv("DRAMA_STUDIO_HOME", "/tmp/trial-home", 1)
+        XCTAssertEqual(APIToken.defaultURL.path, "/tmp/trial-home/api-token")
+        unsetenv("DRAMA_STUDIO_HOME")
+        XCTAssertEqual(APIToken.defaultURL, URL.applicationSupportDirectory.appending(path: "DramaStudio/api-token"))
+    }
 }

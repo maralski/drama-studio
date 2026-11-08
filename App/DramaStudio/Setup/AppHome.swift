@@ -6,7 +6,7 @@ import Foundation
 /// Where Drama Studio keeps its downloads and settings.
 ///
 /// `DRAMA_STUDIO_HOME=<folder>` moves the model download, the codec models,
-/// the kernel tuning and the settings (a `defaults.plist` there) into that
+/// the kernel tuning, the API token and the settings (a `defaults.plist` there) into that
 /// folder and stops the app from using the Hugging Face cache, so a first run
 /// can be tried without touching the real ones.
 enum AppHome {

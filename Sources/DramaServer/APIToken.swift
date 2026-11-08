@@ -5,8 +5,11 @@ import Foundation
 /// The bearer token that guards the API from web pages that can reach
 /// localhost. Health stays open so launchers can poll readiness.
 public enum APIToken {
+    /// In `DRAMA_STUDIO_HOME` when that is set, so a trial copy of the app
+    /// keeps its own token.
     public static var defaultURL: URL {
-        URL.applicationSupportDirectory.appending(path: "DramaStudio/api-token")
+        let home = ProcessInfo.processInfo.environment["DRAMA_STUDIO_HOME"].flatMap { $0.isEmpty ? nil : URL(filePath: $0, directoryHint: .isDirectory) }
+        return (home ?? URL.applicationSupportDirectory.appending(path: "DramaStudio", directoryHint: .isDirectory)).appending(path: "api-token")
     }
 
     public static func loadOrCreate(at url: URL = defaultURL) throws -> String {
