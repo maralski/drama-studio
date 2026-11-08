@@ -241,7 +241,9 @@ public final class APIService: Sendable {
     /// takes it was made after, so naming a line's latest take carries its
     /// first take (the voice) and its recent history. Without input, the
     /// request retakes the line, voice and character of the last named take.
-    private func resolve(_ parameters: SpeechParameters) async throws -> (line: String, casting: VoiceCasting, character: VoiceDesign?, previous: [Take], lineage: [UUID]) {
+    /// `engine` is the engine that made the last named take.
+    private func resolve(_ parameters: SpeechParameters) async throws -> (line: String, casting: VoiceCasting, character: VoiceDesign?, previous: [Take],
+                                                                           lineage: [UUID], engine: SpeechEngineID?) {
         var previous: [Take] = []
         var lineage: [UUID] = []
         var named: TakeCache.Entry?
@@ -265,7 +267,7 @@ public final class APIService: Sendable {
         let casting = inherits ? named?.casting ?? .none : parameters.casting
         let character = inherits ? named?.character : parameters.character
         guard let line = parameters.text ?? named?.line else { throw APIError.bad("input is required: the text to speak.") }
-        return (line, casting, character, previous, lineage)
+        return (line, casting, character, previous, lineage, named?.take.context.engine)
     }
 
     private func isBusy() async -> Bool {
@@ -288,9 +290,11 @@ public final class APIService: Sendable {
                       previousTakes: previousTakes, config: parameters.config)
     }
 
-    /// The engine the request names, else the selected one, fixed for the whole request.
-    private func synthesizer(for parameters: SpeechParameters) throws -> any SpeechSynthesizer {
-        let engine = parameters.engine ?? engines.selected
+    /// The engine the request names; else, for a request that continues a
+    /// cached take, the engine that made it; else the selected one. It stays
+    /// fixed for the whole request.
+    private func synthesizer(for parameters: SpeechParameters, continuing take: SpeechEngineID? = nil) throws -> any SpeechSynthesizer {
+        let engine = parameters.engine ?? take ?? engines.selected
         do {
             return try engines.pinned(to: engine)
         } catch {
@@ -301,8 +305,8 @@ public final class APIService: Sendable {
 
     private func speak(_ parameters: SpeechParameters) async throws -> APIResponse {
         let busy = Self.busy
-        let synthesizer = try synthesizer(for: parameters)
         let resolved = try await resolve(parameters)
+        let synthesizer = try synthesizer(for: parameters, continuing: resolved.engine)
         let rules = rules(for: parameters)
         let fromLibrary = try await libraryReferences(for: resolved.casting)
         guard await !engineBusyElsewhere(), let job = await jobs.claim() else { throw busy }

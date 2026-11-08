@@ -85,4 +85,15 @@ final class APIEngineChoiceTests: XCTestCase {
         let response = await send("POST", "/v1/audio/speech", json: ["input": "Hello."])
         XCTAssertEqual(response.headers["X-Drama-Engine"], "drama3")
     }
+
+    func testARetakeStaysOnTheEngineThatMadeTheTakeAfterTheSelectionChanges() async throws {
+        let first = await send("POST", "/v1/audio/speech", json: ["input": "The light is lit."])
+        XCTAssertEqual(first.headers["X-Drama-Engine"], "ming")
+        try engines.select(.drama3)
+        let retake = await send("POST", "/v1/audio/speech", json: ["note": "softer", "previous_takes": [["take_id": first.headers["X-Drama-Take-Id"] ?? ""]]])
+        XCTAssertEqual(retake.status, .ok, text(retake))
+        XCTAssertEqual(retake.headers["X-Drama-Engine"], "ming")
+        let fresh = await send("POST", "/v1/audio/speech", json: ["input": "A new line."])
+        XCTAssertEqual(fresh.headers["X-Drama-Engine"], "drama3")
+    }
 }

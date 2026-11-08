@@ -63,7 +63,7 @@ extension MCPTool {
 
     static let synthesizeSpeech = MCPTool(
         name: "synthesize_speech",
-        description: "Speak text with Fish Audio Drama 3 running locally in Drama Studio and save it as a 44.1 kHz 16-bit mono WAV file. Pass voice as an id or name from list_voices to clone that voice, or character (a name, a description of the voice, and optionally a scene) to design one, or neither for the model's own voice. The text may carry performance cues such as [laughs], [sighs] or <whisper>quiet words</whisper>, and multi-speaker scripts tag turns with <|speaker:0|>, <|speaker:1|>. Generation takes about as long as the audio on the Metal engine and the studio runs one generation at a time, so a busy studio returns an error: wait a few seconds and call again. Returns the file path, the audio length in seconds, the frame count, the generation time and a take_id that retake_with_note accepts, plus notices naming any cue or note the engine could not perform (its words are still spoken). Set play to true to also play the file through the Mac's speakers.",
+        description: "Speak text with a speech engine running locally in Drama Studio, Fish Audio Drama 3 or Ming, and save it as a 44.1 kHz 16-bit mono WAV file. Pass voice as an id or name from list_voices to clone that voice, or character (a name, a description of the voice, and optionally a scene) to design one, or neither for the model's own voice. The text may carry performance cues such as [laughs], [sighs] or <whisper>quiet words</whisper>, and multi-speaker scripts tag turns with <|speaker:0|>, <|speaker:1|>. engine picks one of the engines studio_status lists; without it the studio's selected engine speaks. Drama 3 takes about as long as the audio, Ming about a fifth of that, and the studio runs one generation at a time, so a busy studio returns an error: wait a few seconds and call again. Returns the file path, the engine that spoke, the audio length in seconds, the frame count (Drama 3 only), the generation time and a take_id that retake_with_note accepts, plus notices naming any cue or note the engine could not perform (its words are still spoken). Set play to true to also play the file through the Mac's speakers.",
         inputSchema: [
             "type": "object",
             "properties": [
@@ -80,6 +80,7 @@ extension MCPTool {
                     "required": ["name", "description"],
                     "additionalProperties": false,
                 ],
+                "engine": ["type": "string", "enum": ["drama3", "ming"], "description": "The engine to speak with, if installed. Defaults to the studio's selected engine."],
                 "output_path": ["type": "string", "description": "Where to write the WAV. Defaults to ~/Library/Application Support/DramaStudio/Output/<timestamp>.wav."],
                 "expressiveness": ["type": "number", "minimum": 0, "maximum": 1, "description": "0 reads flat and steady, 0.5 is the vendor's sampling, 1 is the Fish Audio demo's sampling: lively, keeps every sentence of cue lines, a few more slurred words on prose. Default 0.5."],
                 "play": ["type": "boolean", "description": "Play the result through the speakers."],
@@ -94,13 +95,14 @@ extension MCPTool {
             if arguments["character"] != nil, arguments["voice"] != nil { throw ToolInputError(message: "Pass voice or character, not both.") }
             var body: [String: JSON] = ["input": .string(text), "response_format": "wav"]
             for key in ["voice", "character", "expressiveness"] { body[key] = arguments[key] }
+            body["model"] = arguments["engine"]
             return try await speak(body, arguments, context)
         }
     )
 
     static let retakeWithNote = MCPTool(
         name: "retake_with_note",
-        description: "Generate a line again with a director's note, the way a director asks an actor for another take. Pass the take_id that synthesize_speech or an earlier retake_with_note returned, and a short note such as \"softer and warmer\", \"slower, with more pauses\", \"angrier\", \"whispered\" or \"more amused than before; drop the hurt\". The retake keeps the same line and the same voice: a cloned voice keeps its clip, and a designed or model-default voice keeps the first take of the line as its reference, with the latest earlier takes as context. Drama Studio remembers its last 20 takes, so an older take_id returns an error. Returns the WAV path, its length and frame count, and the new take_id to retake again.",
+        description: "Generate a line again with a director's note, the way a director asks an actor for another take. Pass the take_id that synthesize_speech or an earlier retake_with_note returned, and a short note such as \"softer and warmer\", \"slower, with more pauses\", \"angrier\", \"whispered\" or \"more amused than before; drop the hurt\". The retake keeps the same line, the same engine and the same voice: a cloned voice keeps its clip, and a designed or model-default voice keeps the first take of the line as its reference, with the latest earlier takes as context. Drama Studio remembers its last 20 takes, so an older take_id returns an error. Returns the WAV path, its length and frame count, and the new take_id to retake again.",
         inputSchema: [
             "type": "object",
             "properties": [
@@ -138,6 +140,7 @@ extension MCPTool {
             "played": .bool(play),
         ]
         if let take = reply.header("X-Drama-Take-Id") { result["take_id"] = .string(take) }
+        if let engine = reply.header("X-Drama-Engine") { result["engine"] = .string(engine) }
         if let frames = reply.header("X-Drama-Frames").flatMap(Int.init) { result["frames"] = .int(frames) }
         if let notices = reply.notices { result["notices"] = .array(notices.map(JSON.string)) }
         return .object(result)
@@ -190,13 +193,16 @@ extension MCPTool {
 
     static let studioStatus = MCPTool(
         name: "studio_status",
-        description: "Report whether Drama Studio is ready to speak: whether the model is loaded (the first generation after launch loads 41 GB of weights and takes a while), which engine runs it (metal, or mock for the preview engine that produces placeholder tones), whether a generation is running right now, whether the kernels are tuned for this Mac, and the model snapshot. Call it before a batch of work or after an error to decide whether to wait.",
+        description: "Report whether Drama Studio is ready to speak: which speech engine new requests use (speech_engine: drama3 or ming), whether it is loaded (the first generation after launch or after switching engines loads its weights, 41 GB for Drama 3 and 3 GB for Ming, and takes a while), whether engine is metal or mock (the preview engine that produces placeholder tones), whether a generation is running right now, and whether the kernels are tuned for this Mac. model is the selected engine's entry and models lists every installed engine, with its model id and snapshot; pass an entry's engine to synthesize_speech to use it. Call it before a batch of work or after an error to decide whether to wait.",
         inputSchema: ["type": "object", "properties": [:], "additionalProperties": false],
         run: { _, context in
             let health = try await json(context.api.send(APICall("GET", "/v1/health")))
             let models = try await json(context.api.send(APICall("GET", "/v1/models")))
             var status = health.object ?? [:]
-            if case .array(let data)? = models["data"], let model = data.first { status["model"] = model }
+            if case .array(let data)? = models["data"] {
+                status["models"] = .array(data)
+                status["model"] = data.first { $0["selected"]?.bool == true } ?? data.first
+            }
             status["api_url"] = .string(context.api.baseURL.absoluteString)
             return .object(status)
         }

@@ -154,6 +154,13 @@ final class MCPServerTests: XCTestCase {
         return formatter.string(from: Date(timeIntervalSince1970: 0))
     }
 
+    func testSynthesizeNamesTheEngineAndReportsWhichOneSpoke() async throws {
+        let api = StubAPI(["POST /v1/audio/speech": APIReply(status: 200, headers: ["X-Drama-Engine": "ming", "X-Drama-Take-Id": "T"], body: Data("RIFF".utf8))])
+        let spoken = try await call(server(api), "synthesize_speech", ["text": "Hi.", "engine": "ming", "output_path": .string(output.appending(path: "m.wav").path)])
+        XCTAssertEqual(api.calls.last?.json, ["input": "Hi.", "model": "ming", "response_format": "wav"])
+        XCTAssertEqual(spoken["result"]?["structuredContent"]?["engine"], "ming")
+    }
+
     func testAPIFailuresBecomeToolErrors() async throws {
         let api = StubAPI(["POST /v1/audio/speech": APIReply(status: 429, body: Data("Drama Studio is already generating.\n".utf8))])
         let busy = try await call(server(api), "synthesize_speech", ["text": "Hi."])
@@ -174,8 +181,8 @@ final class MCPServerTests: XCTestCase {
             "GET /v1/voices": APIReply(status: 200, body: Data(#"{"voices":[{"id":"A","name":"Narrator"}]}"#.utf8)),
             "POST /v1/voices": APIReply(status: 201, body: Data(#"{"id":"B","name":"New"}"#.utf8)),
             "DELETE /v1/voices/B": APIReply(status: 200, body: Data(#"{"deleted":"B"}"#.utf8)),
-            "GET /v1/health": APIReply(status: 200, body: Data(#"{"status":"ok","engine":"mock","busy":false}"#.utf8)),
-            "GET /v1/models": APIReply(status: 200, body: Data(#"{"object":"list","data":[{"id":"fishaudio/drama-3","snapshot":"abc"}]}"#.utf8)),
+            "GET /v1/health": APIReply(status: 200, body: Data(#"{"status":"ok","engine":"mock","speech_engine":"ming","busy":false}"#.utf8)),
+            "GET /v1/models": APIReply(status: 200, body: Data(#"{"object":"list","data":[{"id":"fishaudio/drama-3","engine":"drama3","snapshot":"abc","selected":false},{"id":"inclusionAI/Ming-3.0-tts-0.5B","engine":"ming","snapshot":"def","selected":true}]}"#.utf8)),
         ])
         let mcp = server(api)
         let listed = try await call(mcp, "list_voices", [:])
@@ -187,7 +194,10 @@ final class MCPServerTests: XCTestCase {
         XCTAssertEqual(deleted["result"]?["structuredContent"], ["deleted": "B"])
         let status = try await call(mcp, "studio_status", [:])
         XCTAssertEqual(status["result"]?["structuredContent"]?["engine"], "mock")
-        XCTAssertEqual(status["result"]?["structuredContent"]?["model"]?["snapshot"], "abc")
+        XCTAssertEqual(status["result"]?["structuredContent"]?["speech_engine"], "ming")
+        XCTAssertEqual(status["result"]?["structuredContent"]?["model"]?["snapshot"], "def", "model is the selected engine's entry")
+        guard case .array(let models)? = status["result"]?["structuredContent"]?["models"] else { return XCTFail("no models") }
+        XCTAssertEqual(models.map { $0["engine"] }, ["drama3", "ming"])
         XCTAssertEqual(status["result"]?["structuredContent"]?["api_url"], "http://127.0.0.1:9")
         let unreadable = try await call(mcp, "add_voice", ["audio_path": "/nonexistent.wav", "transcript": "x", "name": "y"])
         XCTAssertEqual(unreadable["result"]?["isError"], true)
