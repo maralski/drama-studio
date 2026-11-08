@@ -234,7 +234,7 @@ tests the independent runtime. The full offline check can also be rerun with
 .build/release/drama generate --text "Hello there." --out frames.npy
 .build/release/drama bench                     # add --untuned to compare against the hand-written schedule
 .build/release/drama setup                     # what each engine's install has and lacks, with the fixes
-.build/release/drama serve                     # the HTTP API without the app; --port 8780, --no-token, --engine drama3|ming
+.build/release/drama serve                     # the HTTP API without the app; --port 8780, --no-token, --engine drama3|ming, --voices <dir>
 .build/release/drama-say "Hello there."         # speaks through the running app, like say; see From the terminal
 ```
 

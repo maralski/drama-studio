@@ -548,11 +548,12 @@ func setup(_ args: Args) -> Never {
     exit(reports.contains(where: \.isReady) ? 0 : 1)
 }
 
-/// drama serve [--port 8780] [--no-token] [--engine drama3|ming] [--model <dir>] [--ming-weights <dir>]:
+/// drama serve [--port 8780] [--no-token] [--engine drama3|ming] [--model <dir>] [--ming-weights <dir>] [--voices <dir>]:
 /// the app's HTTP API, headless, on every installed engine. `--engine`, else
 /// DRAMA_ENGINE, picks the one requests use when they name none; it defaults
 /// to Drama 3 when installed. DRAMA_PREVIEW_ENGINE=1 serves mocks of both
 /// engines, as in the app; MING_WEIGHTS or the Hugging Face cache locates Ming.
+/// `--voices` names the voice library, by default the app's.
 func serve(_ args: Args) throws -> Never {
     guard let port = UInt16(exactly: args.int("port", Int(APIService.defaultPort))) else { fail("--port must be between 0 and 65535") }
     let named = args["engine"] ?? ProcessInfo.processInfo.environment["DRAMA_ENGINE"]
@@ -582,10 +583,11 @@ func serve(_ args: Args) throws -> Never {
     }
     guard factories[engine] != nil else { fail(gaps[engine] ?? "\(engine.capabilities.name) isn't installed") }
     for (other, gap) in gaps where other != engine { FileHandle.standardError.write("\(other.capabilities.name) not served: \(gap)\n".data(using: .utf8)!) }
-    let synthesizer = try SpeechEngines(selected: engine, factories: factories, voices: VoiceDirectory())
+    let voices = args["voices"].map { VoiceDirectory(url: URL(fileURLWithPath: $0, isDirectory: true)) } ?? VoiceDirectory()
+    let synthesizer = try SpeechEngines(selected: engine, factories: factories, voices: voices)
     let served = SpeechEngineID.allCases.filter { factories[$0] != nil }.map(\.capabilities.name).joined(separator: " and ")
     let token = args.flags.contains("no-token") ? nil : try APIToken.loadOrCreate()
-    let service = APIService(synthesizer: synthesizer, voices: VoiceDirectory(), token: token, version: "cli")
+    let service = APIService(synthesizer: synthesizer, voices: voices, token: token, version: "cli")
     let server = APIServer(service: service, port: port) { state in
         switch state {
         case .listening(let port):
