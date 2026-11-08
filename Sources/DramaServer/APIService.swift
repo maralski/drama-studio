@@ -116,11 +116,14 @@ public struct EngineInfo: Sendable, Equatable {
     public var snapshot: String
     public var version: String
 
+    public var engine: SpeechEngineID
+
     public init(describing synthesizer: any SpeechSynthesizer, version: String) {
         let description = synthesizer.engineDescription
         kind = description.isMock ? .mock : .metal
         snapshot = description.snapshot
         modelID = description.modelID
+        engine = description.engine
         self.version = version
     }
 }
@@ -131,10 +134,11 @@ public final class APIService: Sendable {
     public static let defaultPort: UInt16 = 8780
     public static let retryAfterSeconds = 5
 
-    public let synthesizer: any SpeechSynthesizer
+    /// Every engine the server can run; requests use the selected one unless they name another.
+    public let engines: SpeechEngines
     public let voices: any VoiceStore
     public let token: String?
-    public let info: EngineInfo
+    public let version: String
     public let jobs: SpeechJobSlot
     public let takes = TakeCache()
     private let engineBusyElsewhere: @Sendable () async -> Bool
@@ -155,15 +159,18 @@ public final class APIService: Sendable {
         refusal: @escaping @Sendable () async -> String? = { nil },
         pronunciation: @escaping @Sendable () -> PronunciationDictionary = { (try? PronunciationDictionary.load()) ?? PronunciationDictionary() }
     ) {
-        self.synthesizer = synthesizer
+        engines = synthesizer as? SpeechEngines ?? SpeechEngines(only: synthesizer)
         self.voices = voices
         self.token = token
-        self.info = EngineInfo(describing: synthesizer, version: version)
+        self.version = version
         self.jobs = jobs
         self.engineBusyElsewhere = engineBusyElsewhere
         self.refusal = refusal
         self.pronunciation = pronunciation
     }
+
+    /// The selected engine, read per call: the app switches engines while the server runs.
+    public var info: EngineInfo { EngineInfo(describing: engines, version: version) }
 
     /// `body` carries the request body as it arrives, for routes where
     /// `APIRequest.streamsBody` holds; other routes read `request.body`.
@@ -195,16 +202,19 @@ public final class APIService: Sendable {
     private func handle(_ request: APIRequest) async throws -> APIResponse {
         switch request {
         case .health:
-            let tuned = synthesizer.isTuned
-            return .json(Health(modelLoaded: await synthesizer.isLoaded, engine: info.kind.rawValue, busy: await isBusy(), tuned: tuned, version: info.version,
-                                estimate: await jobs.progress))
+            let info = info
+            return .json(Health(modelLoaded: await engines.isLoaded, engine: info.kind.rawValue, speechEngine: info.engine.rawValue, busy: await isBusy(),
+                                tuned: engines.isTuned, version: info.version, estimate: await jobs.progress))
         case .models:
-            return .json(ModelList(data: [ModelEntry(id: info.modelID, snapshot: info.snapshot)]))
+            let selected = engines.selected
+            return .json(ModelList(data: SpeechEngineID.allCases.compactMap { engine in
+                engines.description(of: engine).map { ModelEntry($0, selected: engine == selected) }
+            }))
         case .listVoices:
             return .json(VoiceList(voices: await voices.allVoices().map(VoiceSummary.init)))
         case .addVoice(let new):
             var (voice, clip) = try await withAudioFile(new.audio, field: "the clip") { url in
-                try await synthesizer.cloneVoice(audioURL: url, transcript: new.transcript, name: new.name)
+                try await engines.cloneVoice(audioURL: url, transcript: new.transcript, name: new.name)
             }
             voice.sourceFileName = new.fileName
             try await voices.add(voice, clip: clip)
@@ -278,8 +288,20 @@ public final class APIService: Sendable {
                       previousTakes: previousTakes, config: parameters.config)
     }
 
+    /// The engine the request names, else the selected one, fixed for the whole request.
+    private func synthesizer(for parameters: SpeechParameters) throws -> any SpeechSynthesizer {
+        let engine = parameters.engine ?? engines.selected
+        do {
+            return try engines.pinned(to: engine)
+        } catch {
+            let installed = SpeechEngineID.allCases.filter(engines.available.contains).map(\.rawValue).joined(separator: ", ")
+            throw APIError.bad("\(engine.capabilities.name) isn't installed on this server. Installed: \(installed); GET /v1/models lists them.")
+        }
+    }
+
     private func speak(_ parameters: SpeechParameters) async throws -> APIResponse {
         let busy = Self.busy
+        let synthesizer = try synthesizer(for: parameters)
         let resolved = try await resolve(parameters)
         let rules = rules(for: parameters)
         let fromLibrary = try await libraryReferences(for: resolved.casting)
@@ -288,7 +310,7 @@ public final class APIService: Sendable {
         let outline: SpeechOutline
         do {
             var references = fromLibrary ?? []
-            if fromLibrary == nil { references = try await encodedClips(for: resolved.casting) }
+            if fromLibrary == nil { references = try await encodedClips(for: resolved.casting, on: synthesizer) }
             request = Self.speechRequest(speaking: resolved.line, rules: rules, parameters: parameters,
                                          references: references, character: resolved.character, previousTakes: resolved.previous)
             outline = try SpeechOutline(request, engine: synthesizer.engine)
@@ -306,9 +328,10 @@ public final class APIService: Sendable {
         switch parameters.delivery {
         case .pcmStream, .events:
             let framing = StreamFraming(parameters.delivery)!
-            let (body, generation) = stream(request, framing: framing, job: job, takeID: takeID, remember: remember)
+            let (body, generation) = stream(request, on: synthesizer, framing: framing, job: job, takeID: takeID, remember: remember)
             var headers = framing.headers
             headers["X-Drama-Take-Id"] = takeID.uuidString
+            headers.merge(Self.engineHeaders(synthesizer.engineDescription)) { $1 }
             headers["X-Drama-Estimated-Seconds"] = String(format: "%.1f", estimate.remainingSeconds(at: 0) ?? 0)
             headers["X-Drama-Notices"] = Self.header(outline.notices)
             return APIResponse(status: .ok, headers: headers, body: .chunked(body), abandon: { generation.cancel() })
@@ -316,7 +339,7 @@ public final class APIService: Sendable {
             let start = ContinuousClock.now
             let result: SpeechResult?
             do {
-                result = try await run(request, job: job)
+                result = try await run(request, on: synthesizer, job: job)
             } catch {
                 await jobs.release(job)
                 throw error
@@ -327,6 +350,7 @@ public final class APIService: Sendable {
             let elapsed = ContinuousClock.now - start
             var headers = format == .pcm ? Self.pcmHeaders(contentType: format.contentType) : ["Content-Type": format.contentType]
             headers["X-Drama-Take-Id"] = takeID.uuidString
+            headers.merge(Self.engineHeaders(synthesizer.engineDescription)) { $1 }
             if let frames = result.take.apiFrames {
                 headers["X-Drama-Frames"] = String(frames)
                 headers["X-Drama-Generated-Frames"] = String(result.timings.framesGenerated)
@@ -341,11 +365,16 @@ public final class APIService: Sendable {
         }
     }
 
+    /// Which engine and model made the take.
+    private static func engineHeaders(_ description: EngineDescription) -> [String: String] {
+        ["X-Drama-Engine": description.engine.rawValue, "X-Drama-Model": description.modelID]
+    }
+
     private static func pcmHeaders(contentType: String) -> [String: String] {
         ["Content-Type": contentType, "X-Drama-Sample-Rate": String(AudioEncoding.sampleRate), "X-Drama-Format": "pcm_s16le_mono"]
     }
 
-    private func run(_ request: SpeechRequest, job: UUID) async throws -> SpeechResult? {
+    private func run(_ request: SpeechRequest, on synthesizer: any SpeechSynthesizer, job: UUID) async throws -> SpeechResult? {
         var result: SpeechResult?
         for try await event in synthesizer.synthesize(request) {
             await jobs.advance(job, with: event)
@@ -354,15 +383,15 @@ public final class APIService: Sendable {
         return result
     }
 
-    private func stream(_ request: SpeechRequest, framing: StreamFraming, job: UUID, takeID: UUID,
+    private func stream(_ request: SpeechRequest, on synthesizer: any SpeechSynthesizer, framing: StreamFraming, job: UUID, takeID: UUID,
                         remember: @escaping @Sendable (Take) async -> Void) -> (AsyncThrowingStream<Data, Error>, Task<Void, Never>) {
         let (stream, out) = AsyncThrowingStream<Data, Error>.makeStream()
         let task = Task {
             do {
                 var sentences = 0
-                if let result = try await forward(request, framing: framing, job: job, into: out, sentences: &sentences) {
+                if let result = try await forward(request, on: synthesizer, framing: framing, job: job, into: out, sentences: &sentences) {
                     await remember(result.take)
-                    var done: [String: Any] = ["take_id": takeID.uuidString, "samples": result.take.sampleCount,
+                    var done: [String: Any] = ["take_id": takeID.uuidString, "engine": result.take.context.engine.rawValue, "samples": result.take.sampleCount,
                                                "word_coverage": result.wordCoverage.rawValue, "seconds": Self.seconds(result.samples)]
                     if let frames = result.take.apiFrames { done["frames"] = frames }
                     if !result.notices.isEmpty { done["notices"] = result.notices.map(\.message) }
@@ -382,7 +411,8 @@ public final class APIService: Sendable {
 
     /// Streams one request's audio, and a `sentence` event per chunk, into
     /// `out`; `sentences` numbers the chunks across a live session.
-    private func forward(_ request: SpeechRequest, framing: StreamFraming, job: UUID, into out: AsyncThrowingStream<Data, Error>.Continuation,
+    private func forward(_ request: SpeechRequest, on synthesizer: any SpeechSynthesizer, framing: StreamFraming, job: UUID,
+                         into out: AsyncThrowingStream<Data, Error>.Continuation,
                          sentences: inout Int) async throws -> SpeechResult? {
         var audio = StreamedAudio()
         var texts: [Int: String] = [:]
@@ -408,6 +438,7 @@ public final class APIService: Sendable {
     /// Speaks text as it arrives in `body`, one sentence at a time, on one
     /// connection. Each sentence's take is the voice and history of the next.
     private func live(_ parameters: SpeechParameters, body: AsyncThrowingStream<Data, Error>) async throws -> APIResponse {
+        let synthesizer = try synthesizer(for: parameters)
         let references = try await libraryReferences(for: parameters.casting) ?? []
         let rules = rules(for: parameters)
         guard await !engineBusyElsewhere(), let job = await jobs.claim() else { throw Self.busy }
@@ -426,7 +457,7 @@ public final class APIService: Sendable {
                 let request = Self.speechRequest(speaking: sentence, rules: rules, parameters: parameters,
                                                  references: references, character: parameters.character, previousTakes: context)
                 await jobs.begin(job, estimate: GenerationEstimate(outline: try SpeechOutline(request, engine: synthesizer.engine)))
-                guard let result = try await forward(request, framing: framing, job: job, into: out, sentences: &sentences) else { return }
+                guard let result = try await forward(request, on: synthesizer, framing: framing, job: job, into: out, sentences: &sentences) else { return }
                 spoken.append(result.take)
                 notices += result.notices.filter { !notices.contains($0) }
                 seconds += Self.seconds(result.samples)
@@ -442,7 +473,8 @@ public final class APIService: Sendable {
                     }
                 }
                 for sentence in lines.finish().flatMap({ text.append(line: $0) }) + text.flush() { try await say(sentence) }
-                var done: [String: Any] = ["sentences": sentences, "seconds": (seconds * 1000).rounded() / 1000, "take_ids": takeIDs]
+                var done: [String: Any] = ["sentences": sentences, "seconds": (seconds * 1000).rounded() / 1000, "take_ids": takeIDs,
+                                           "engine": synthesizer.engine.rawValue]
                 if !notices.isEmpty { done["notices"] = notices.map(\.message) }
                 Self.send(framing.done(done), to: out)
                 await jobs.release(job)
@@ -455,7 +487,8 @@ public final class APIService: Sendable {
             }
         }
         out.onTermination = { _ in task.cancel() }
-        return APIResponse(status: .ok, headers: framing.headers, body: .chunked(stream), abandon: { task.cancel() })
+        return APIResponse(status: .ok, headers: framing.headers.merging(Self.engineHeaders(synthesizer.engineDescription)) { $1 },
+                           body: .chunked(stream), abandon: { task.cancel() })
     }
 
     private static func send(_ data: Data, to out: AsyncThrowingStream<Data, Error>.Continuation) {
@@ -493,7 +526,7 @@ public final class APIService: Sendable {
     }
 
     /// Encoding runs on the engine, so it happens only once the job slot is held.
-    private func encodedClips(for casting: VoiceCasting) async throws -> [ReferenceVoice] {
+    private func encodedClips(for casting: VoiceCasting, on synthesizer: any SpeechSynthesizer) async throws -> [ReferenceVoice] {
         guard case .clips(let clips) = casting else { return [] }
         var encoded: [ReferenceVoice] = []
         for (index, clip) in clips.enumerated() {
@@ -531,19 +564,23 @@ public final class APIService: Sendable {
 
 struct Health: Encodable {
     var modelLoaded: Bool
+    /// `metal`, or `mock` for the preview engine.
     var engine: String
+    /// The engine new requests use: `drama3` or `ming`.
+    var speechEngine: String
     var busy: Bool
     var tuned: Bool?
     var version: String
     var estimate: EstimateSnapshot?
 
-    enum CodingKeys: String, CodingKey { case status, model_loaded, engine, busy, tuned, version, estimate }
+    enum CodingKeys: String, CodingKey { case status, model_loaded, engine, speech_engine, busy, tuned, version, estimate }
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode("ok", forKey: .status)
         try container.encode(modelLoaded, forKey: .model_loaded)
         try container.encode(engine, forKey: .engine)
+        try container.encode(speechEngine, forKey: .speech_engine)
         try container.encode(busy, forKey: .busy)
         try container.encode(tuned, forKey: .tuned)
         try container.encode(version, forKey: .version)
@@ -551,15 +588,27 @@ struct Health: Encodable {
     }
 }
 
+/// One installed engine. `id` is its Hugging Face model id; a speech
+/// request's `model` takes that, the `engine` id or the `name`.
 struct ModelEntry: Encodable {
     var id: String
     var object = "model"
-    var owned_by = "fishaudio"
+    var owned_by: String
+    var engine: String
+    var name: String
     var snapshot: String
+    var mock: Bool
+    /// The engine requests use when they name none.
+    var selected: Bool
 
-    init(id: String, snapshot: String) {
-        self.id = id
-        self.snapshot = snapshot
+    init(_ description: EngineDescription, selected: Bool) {
+        id = description.modelID
+        owned_by = String(description.modelID.split(separator: "/").first ?? "")
+        engine = description.engine.rawValue
+        name = description.engine.capabilities.name
+        snapshot = description.snapshot
+        mock = description.isMock
+        self.selected = selected
     }
 }
 
@@ -590,6 +639,7 @@ struct VoiceList: Encodable {
 
 struct TakeSummary: Encodable {
     var id: String
+    var engine: String
     var input: String
     var text: String
     var seconds: Double
@@ -601,6 +651,7 @@ struct TakeSummary: Encodable {
 
     init(_ entry: TakeCache.Entry) {
         id = entry.id.uuidString
+        engine = entry.take.context.engine.rawValue
         input = entry.line
         text = entry.take.text
         seconds = (entry.take.durationSeconds * 1000).rounded() / 1000

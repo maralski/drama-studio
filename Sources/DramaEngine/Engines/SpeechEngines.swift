@@ -129,7 +129,11 @@ public actor SpeechEngines: SpeechSynthesizer {
     }
 
     public func encodeVoice(samples: [Float], transcript: String) async throws -> VoiceEncoding {
-        try await serial { try await self.resident(self.selected).encodeVoice(samples: samples, transcript: transcript) }
+        try await encodeVoice(samples: samples, transcript: transcript, on: nil)
+    }
+
+    private func encodeVoice(samples: [Float], transcript: String, on engine: SpeechEngineID?) async throws -> VoiceEncoding {
+        try await serial { try await self.resident(engine ?? self.selected).encodeVoice(samples: samples, transcript: transcript) }
     }
 
     /// Runs the request on the selected engine. First, every reference voice
@@ -138,11 +142,44 @@ public actor SpeechEngines: SpeechSynthesizer {
     /// with no clip fails with ``EngineError/noClip(voiceName:)`` before
     /// anything loads.
     public nonisolated func synthesize(_ request: SpeechRequest) -> AsyncThrowingStream<SpeechEvent, Error> {
+        synthesize(request, on: nil)
+    }
+
+    /// The registry with every call going to `engine`, whatever is selected,
+    /// so one request runs on one engine from its outline to its last chunk.
+    /// It holds the registry, not the engine: running it still drops any
+    /// other resident engine first.
+    /// - Throws: ``EngineError/engineUnavailable(_:)`` when `engine` has no factory.
+    public nonisolated func pinned(to engine: SpeechEngineID) throws -> any SpeechSynthesizer {
+        guard let description = description(of: engine) else { throw EngineError.engineUnavailable(engine) }
+        return Pinned(engines: self, engine: engine, engineDescription: description)
+    }
+
+    private struct Pinned: SpeechSynthesizer {
+        let engines: SpeechEngines
+        let engine: SpeechEngineID
+        let engineDescription: EngineDescription
+
+        var isTuned: Bool? { engines.state.withLock { $0.resident?.engine == engine ? $0.resident?.synthesizer.isTuned : nil } }
+        var isLoaded: Bool {
+            get async {
+                guard let resident = engines.state.withLock({ $0.resident }), resident.engine == engine else { return false }
+                return await resident.synthesizer.isLoaded
+            }
+        }
+        func load(onPhase: @escaping @Sendable (String) -> Void) async throws { try await engines.load(engine, onPhase: onPhase) }
+        func encodeVoice(samples: [Float], transcript: String) async throws -> VoiceEncoding {
+            try await engines.encodeVoice(samples: samples, transcript: transcript, on: engine)
+        }
+        func synthesize(_ request: SpeechRequest) -> AsyncThrowingStream<SpeechEvent, Error> { engines.synthesize(request, on: engine) }
+    }
+
+    private nonisolated func synthesize(_ request: SpeechRequest, on pinned: SpeechEngineID?) -> AsyncThrowingStream<SpeechEvent, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
                     try await self.serial {
-                        let engine = self.selected
+                        let engine = pinned ?? self.selected
                         var request = request
                         try await self.encodeMissingReferences(in: &request, for: engine)
                         for try await event in try self.resident(engine).synthesize(request) {

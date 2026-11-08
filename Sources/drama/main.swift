@@ -548,37 +548,48 @@ func setup(_ args: Args) -> Never {
     exit(reports.contains(where: \.isReady) ? 0 : 1)
 }
 
-/// drama serve [--port 8780] [--no-token] [--engine drama3|ming] [--ming-weights <dir>]:
-/// the app's HTTP API, headless, on one engine. DRAMA_PREVIEW_ENGINE=1 serves
-/// the mock engine, as in the app; MING_WEIGHTS names the Ming checkpoint.
+/// drama serve [--port 8780] [--no-token] [--engine drama3|ming] [--model <dir>] [--ming-weights <dir>]:
+/// the app's HTTP API, headless, on every installed engine. `--engine`, else
+/// DRAMA_ENGINE, picks the one requests use when they name none; it defaults
+/// to Drama 3 when installed. DRAMA_PREVIEW_ENGINE=1 serves mocks of both
+/// engines, as in the app; MING_WEIGHTS or the Hugging Face cache locates Ming.
 func serve(_ args: Args) throws -> Never {
     guard let port = UInt16(exactly: args.int("port", Int(APIService.defaultPort))) else { fail("--port must be between 0 and 65535") }
-    guard let engine = SpeechEngineID(rawValue: args["engine"] ?? "drama3") else { fail("--engine must be drama3 or ming") }
-    let factory: SpeechEngines.Factory
+    let named = args["engine"] ?? ProcessInfo.processInfo.environment["DRAMA_ENGINE"]
+    let chosen = named.map { name -> SpeechEngineID in
+        guard let engine = SpeechEngineID(rawValue: name) else { fail("--engine must be drama3 or ming") }
+        return engine
+    }
+    var factories: [SpeechEngineID: SpeechEngines.Factory] = [:]
+    var gaps: [SpeechEngineID: String] = [:]
     if ProcessInfo.processInfo.environment["DRAMA_PREVIEW_ENGINE"] == "1" {
-        factory = .mock(engine)
+        for engine in SpeechEngineID.allCases { factories[engine] = .mock(engine) }
     } else {
-        switch engine {
-        case .drama3:
-            guard let location = args["model"].map({ ModelLocation(directory: URL(fileURLWithPath: $0)) }) ?? ModelLocation.huggingFaceCache(), location.isComplete else {
-                fail("no complete model found; pass --model <dir> or run: hf download fishaudio/drama-3")
-            }
-            guard DramaCodec.modelsExist() else { fail("the Core ML codec models are missing; run Sources/DramaEngine/CodecConversion/convert_codec.py") }
-            factory = .drama3(location: location, codecDirectory: DramaCodec.defaultDirectory)
-        case .ming:
-            guard let location = args["ming-weights"].map({ MingLocation(directory: URL(fileURLWithPath: $0)) }) ?? MingLocation.find(), location.isComplete else {
-                fail("no complete Ming checkpoint found; pass --ming-weights <dir> or set MING_WEIGHTS")
-            }
-            factory = .ming(location: location)
+        let drama = args["model"].map { ModelLocation(directory: URL(fileURLWithPath: $0)) } ?? ModelLocation.huggingFaceCache()
+        if let drama, drama.isComplete, DramaCodec.modelsExist() {
+            factories[.drama3] = .drama3(location: drama, codecDirectory: DramaCodec.defaultDirectory)
+        } else {
+            gaps[.drama3] = "no complete Drama 3 install; pass --model <dir> or run `drama setup` for what is missing"
+        }
+        if let ming = args["ming-weights"].map({ MingLocation(directory: URL(fileURLWithPath: $0)) }) ?? MingLocation.find(), ming.isComplete {
+            factories[.ming] = .ming(location: ming)
+        } else {
+            gaps[.ming] = "no complete Ming checkpoint; pass --ming-weights <dir>, set MING_WEIGHTS, or run `drama setup` for what is missing"
         }
     }
-    let synthesizer = try SpeechEngines(selected: engine, factories: [engine: factory], voices: VoiceDirectory())
+    guard let engine = chosen ?? SpeechEngineID.allCases.first(where: { factories[$0] != nil }) else {
+        fail(SpeechEngineID.allCases.compactMap { gaps[$0] }.joined(separator: "\n"))
+    }
+    guard factories[engine] != nil else { fail(gaps[engine] ?? "\(engine.capabilities.name) isn't installed") }
+    for (other, gap) in gaps where other != engine { FileHandle.standardError.write("\(other.capabilities.name) not served: \(gap)\n".data(using: .utf8)!) }
+    let synthesizer = try SpeechEngines(selected: engine, factories: factories, voices: VoiceDirectory())
+    let served = SpeechEngineID.allCases.filter { factories[$0] != nil }.map(\.capabilities.name).joined(separator: " and ")
     let token = args.flags.contains("no-token") ? nil : try APIToken.loadOrCreate()
     let service = APIService(synthesizer: synthesizer, voices: VoiceDirectory(), token: token, version: "cli")
     let server = APIServer(service: service, port: port) { state in
         switch state {
         case .listening(let port):
-            print("Drama API on http://127.0.0.1:\(port) (\(service.info.kind.rawValue) \(engine.capabilities.name) engine)")
+            print("Drama API on http://127.0.0.1:\(port) (\(service.info.kind.rawValue): \(served); \(engine.capabilities.name) by default)")
             print(token == nil ? "no bearer token (--no-token)" : "bearer token in \(APIToken.defaultURL.path)")
             fflush(stdout)
         case .failed(let message):

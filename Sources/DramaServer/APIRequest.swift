@@ -60,6 +60,9 @@ public struct SpeechParameters: Sendable, Equatable {
     public var expressiveness: Double
     public var seed: UInt64?
     public var applyPronunciation: Bool
+    /// The engine `model` names; nil runs the selected engine, as does a
+    /// model this server doesn't know, such as OpenAI's `tts-1`.
+    public var engine: SpeechEngineID?
 
     public var config: GenerationConfig {
         var config = GenerationConfig.make(expressiveness: expressiveness)
@@ -248,6 +251,7 @@ extension APIRequest {
         var note: String?
         var previous_takes: [TakeBody]?
         var apply_pronunciation: Bool?
+        var model: String?
     }
 
     private struct CharacterBody: Decodable {
@@ -289,6 +293,7 @@ extension APIRequest {
         var body = SpeechBody()
         body.input = query["input"]
         body.voice = query["voice"]
+        body.model = query["model"]
         body.expressiveness = try number("expressiveness")
         body.seed = try number("seed")
         if let value = query["apply_pronunciation"]?.lowercased() {
@@ -342,7 +347,8 @@ extension APIRequest {
             delivery: delivery,
             expressiveness: expressiveness,
             seed: decoded.seed.map(UInt64.init),
-            applyPronunciation: decoded.apply_pronunciation ?? true
+            applyPronunciation: decoded.apply_pronunciation ?? true,
+            engine: decoded.model.flatMap(SpeechEngineID.named)
         )
     }
 
