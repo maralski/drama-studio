@@ -44,7 +44,7 @@ private struct GeneralSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Model") {
+            Section(SpeechEngineID.drama3.capabilities.name) {
                 LabeledContent {
                     Text(location).textSelection(.enabled).lineLimit(2).truncationMode(.middle)
                 } label: {
