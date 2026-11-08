@@ -68,6 +68,19 @@ final class AppMixedEngineTests: XCTestCase {
         AppHome.defaults.removeObject(forKey: ModelSetup.engineKey)
     }
 
+    func testARetakeStaysOnTheEngineThatMadeTheTakesAfterTheEngineChanges() async throws {
+        let session = try makeSession()
+        await generate(session, "A line that Drama reads first.")
+        session.engine = .ming
+        XCTAssertTrue(session.canRetake, session.retakeBlocker ?? "")
+        session.retake(note: "softer")
+        await waitUntil { !session.state.isGenerating }
+        XCTAssertNil(session.notice)
+        XCTAssertEqual(session.takes.map { $0.take?.context.engine }, [.drama3, .drama3])
+        XCTAssertEqual(session.engine, .ming, "the retake leaves the choice for new takes alone")
+        AppHome.defaults.removeObject(forKey: ModelSetup.engineKey)
+    }
+
     func testAnOldVoiceGainsAMingEncodingInTheLibraryWhenMingSpeaksIt() async throws {
         let library = VoiceLibrary(directory: directory.appending(path: "Voices"))
         let clip = (0..<22_050).map { Float(sin(Double($0) * 0.02)) }

@@ -530,15 +530,17 @@ final class SessionModel {
         start(request, as: .sections(run))
     }
 
-    /// Reads the line again with a director's note, after every take so far.
+    /// Reads the line again with a director's note, after every take so far,
+    /// on the engine that made the selected take, whatever is selected now.
     func retake(note: String) {
         guard canRetake, let note = DirectorsNote.clean(note), case .success(let script) = prepared else { return }
+        let engine = takes.first { $0.id == selectedTakeID }?.take?.context.engine
         let casting = casting
         let matching = takes.filter { $0.hasCurrentWordCheck && !$0.isIncomplete && $0.basis == currentPlainBasis }
         let voice = casting.voiceTake.flatMap { $0 == matching.first?.take ? nil : $0 }
         start(SpeechRequest(text: script.text, references: casting.references, character: casting.character, note: note,
                             previousTakes: (voice.map { [$0] } ?? []) + matching.compactMap(\.take), config: config),
-              as: .take(note: note, recordsVoice: casting.recordsVoice))
+              as: .take(note: note, recordsVoice: casting.recordsVoice), on: engine)
     }
 
     /// Speaks a line in a designed voice through the preview player, leaving
@@ -582,11 +584,18 @@ final class SessionModel {
     }
 
     /// Every request leaves through here, so the pronunciation dictionary
-    /// rewrites every text.
-    private func start(_ request: SpeechRequest, as job: Job) {
+    /// rewrites every text. The run stays on `engine`, else on the engine
+    /// selected now, from its outline to its last chunk.
+    private func start(_ request: SpeechRequest, as job: Job, on engine: SpeechEngineID? = nil) {
         stopPreview()
         if let refusal = generationRefusal() {
             settleAfterGeneration(.failed(refusal))
+            return
+        }
+        let engine = engine ?? self.engine
+        let synthesizer: any SpeechSynthesizer
+        do { synthesizer = try engines.pinned(to: engine) } catch {
+            settleAfterGeneration(.failed(Self.describe(error)))
             return
         }
         var request = request
