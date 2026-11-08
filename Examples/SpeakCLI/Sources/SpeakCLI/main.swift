@@ -25,7 +25,7 @@ let engine: any SpeechSynthesizer
 if mock {
     engine = MockSynthesizer(pace: .instant)
 } else {
-    guard let location = report.location, report.isReady else {
+    guard let location = report.directory.map(ModelLocation.init(directory:)), report.isReady else {
         report.fixes.forEach { print($0) }
         exit(1)
     }

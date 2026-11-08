@@ -633,7 +633,7 @@ other packages cannot.
 import DramaEngine
 
 let report = DramaSetup.check(location: .huggingFaceCache())
-guard let location = report.location, report.isReady else { fatalError(report.fixes.joined(separator: "\n")) }
+guard let location = report.directory.map(ModelLocation.init(directory:)), report.isReady else { fatalError(report.fixes.joined(separator: "\n")) }
 let engine = DramaSynthesizer(location: location, codecDirectory: DramaCodec.defaultDirectory)
 let (voice, _) = try await engine.cloneVoice(audioURL: clip, transcript: "What the clip says.", name: "Narrator")
 var request = SpeechRequest(text: "Hello there.", references: [voice])
