@@ -70,10 +70,11 @@ on an M3 Max with a warm build. The other times below come from the same machine
 | cues | 76/96 | 0/36 |
 | final | 69/82 | 0/44 |
 
-The replay cannot confirm the end of the audio, so it accepts fewer clips than
-the full check. In `final`, two `rent` clips end with "month." at confidence
-0.33. The replay rejects them, and the full check accepts them after it
-confirms the last word.
+The replay hears each clip as recorded, without the silence the full check
+appends after a clip that ends quietly, so it accepts fewer clips than the
+full check. In `final`, two `rent` clips end with "month." at confidence
+0.33. The replay rejects them, and the full check accepts them once the
+recognizer hears an endpoint after the last word.
 
 To add a set, record its fixture with `record.py` and add a row to
 `word-check-sets.json`. The test needs no change.
@@ -83,9 +84,10 @@ To add a set, record its fixture with `record.py` and add a row to
 ## Audio
 
 **What it measures.** The production `LocalWordVerifier.check` on each set's
-recorded clips. This includes the end-of-audio confirmation the replay cannot
-do. The run fails when a set accepts any wrong clip, falls below its
-`audioFloor`, or has a clip with no decision.
+recorded clips. This includes the silence the check appends after a clip
+that ends quietly, which the replay cannot do. The run fails when a set
+accepts any wrong clip, falls below its `audioFloor`, or has a clip with no
+decision.
 
 **What it needs.** macOS 26 with the Apple Speech en_AU assets installed. The
 pinned Whisper recognizer, which `tools/bootstrap_word_recognition.py`

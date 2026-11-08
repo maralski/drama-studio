@@ -225,12 +225,6 @@ old = 'spans[$0].confidence < ($0 == last ? max(confidenceFloor, Self.endOfAudio
 new = 'spans[$0].confidence < confidenceFloor'
 
 [[mutation]]
-name = 'end-of-audio interior at 0.5'
-file = 'Sources/DramaEngine/Verification/LocalWordVerifier.swift'
-old = 'return lexical.dropLast().allSatisfy { $0.confidence >= Self.confidenceFloor }'
-new = 'return lexical.dropLast().allSatisfy { $0.confidence >= Self.endOfAudioFloor }'
-
-[[mutation]]
 name = 'number may qualify as boundary word'
 file = 'Sources/DramaEngine/Verification/LocalWordVerifier.swift'
 old = '!WordCoverage.isNumber(spanWords[index][0]),'

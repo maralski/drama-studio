@@ -96,17 +96,16 @@ package struct LocalWordVerifier: Sendable {
         let deadline = ContinuousClock.now + .seconds(30)
         let locale = locale
         let recognition: Recognition
-        var confirmation: Recognition?
         do {
+            // A take whose last frame is silent has finished speaking and gets
+            // an acoustic endpoint: 0.75 s of silence after it, for the
+            // recognizer only, never in the generated samples. A take still
+            // sounding at its end is cut mid-word and is judged as it is.
+            let frame = ModelConstants.samplesPerFrame
+            let endsSilent = samples.count >= frame && DramaSynthesizer.isSilent(samples[(samples.count - frame)...])
+            let endpoint = endsSilent ? Array(repeating: Float(0), count: ModelConstants.sampleRate * 3 / 4) : []
             recognition = try Self.blocking(timeout: ContinuousClock.now.duration(to: deadline), shouldContinue: shouldContinue) {
-                try await Self.transcribe(samples, locale: locale)
-            }
-            if !recognition.matches(line: line, locale: locale), recognition.canConfirmEndOfAudio(line: line, locale: locale) {
-                confirmation = try Self.blocking(timeout: ContinuousClock.now.duration(to: deadline), shouldContinue: shouldContinue) {
-                    // Give the recognizer an acoustic endpoint without changing
-                    // any generated samples or supplying the requested words.
-                    try await Self.transcribe(samples + Array(repeating: 0, count: ModelConstants.sampleRate * 3 / 4), locale: locale)
-                }
+                try await Self.transcribe(samples + endpoint, locale: locale)
             }
         } catch {
             independent.cancel()
@@ -118,9 +117,7 @@ package struct LocalWordVerifier: Sendable {
         let boundarySpan = boundary.flatMap {
             recognition.boundaryWordSpan(previousLine: $0.previousLine, currentLine: $0.currentLine, locale: locale)
         }
-        let nativeMatches = recognition.matches(line: line, locale: locale)
-            || (confirmation?.matches(line: line, locale: locale, confidenceFloor: 0.9) ?? false)
-            || boundarySpan != nil
+        let nativeMatches = recognition.matches(line: line, locale: locale) || boundarySpan != nil
         var independentTranscript = ""
         if nativeMatches {
             do {
@@ -132,8 +129,7 @@ package struct LocalWordVerifier: Sendable {
             }
         }
         let matches = nativeMatches && Self.independentMatches(line: line, transcript: independentTranscript, locale: locale)
-        if !matches || confirmation != nil || boundarySpan != nil {
-            let matchedReason = boundarySpan != nil ? "verified_boundary_word_matched" : "endpoint_confirmation_matched"
+        if !matches || boundarySpan != nil {
             let witness = boundary.map {
                 SpeechAttemptAudit.BoundaryWitness(
                     session: owner, previousIndex: $0.previous.index, currentIndex: $0.current.index,
@@ -145,14 +141,11 @@ package struct LocalWordVerifier: Sendable {
                         }
                     }, nativeSpanOrdinal: boundarySpan)
             }
-            SpeechAttemptAudit.record(samples: samples, line: line, reason: matches ? matchedReason : (nativeMatches ? "independent_word_check_rejected" : "word_check_rejected"), locale: locale.identifier,
+            SpeechAttemptAudit.record(samples: samples, line: line, reason: matches ? "verified_boundary_word_matched" : (nativeMatches ? "independent_word_check_rejected" : "word_check_rejected"), locale: locale.identifier,
                                       transcript: recognition.text, uncertainSpans: recognition.uncertainSpans(),
-                                      confirmationTranscript: confirmation?.text ?? "",
-                                      confirmationUncertainSpans: confirmation?.uncertainSpans(confidenceFloor: 0.9) ?? [],
                                       independentTranscript: independentTranscript,
                                       independentIdentity: independent.identity,
-                                      confidenceSpans: recognition.spans, confirmationConfidenceSpans: confirmation?.spans ?? [],
-                                      boundary: witness)
+                                      confidenceSpans: recognition.spans, boundary: witness)
         }
         guard shouldContinue() else { independent.cancel(); throw CancellationError() }
         guard ContinuousClock.now < deadline else { independent.cancel(); throw SpeechVerificationError.timedOut }
@@ -209,8 +202,9 @@ package struct LocalWordVerifier: Sendable {
         /// Apple reports correct words at 0.35-0.49 often enough that 0.5 rejected
         /// half of all correct generated clips; the independent check still applies.
         static let confidenceFloor = 0.3
-        /// A clipped final word also scores below this, so the last word keeps it
-        /// and goes through end-of-audio confirmation instead.
+        /// A clipped final word also scores below this, so the last word keeps
+        /// it. A complete last word on a take that ends in silence clears it
+        /// because the recognizer hears the take with an endpoint appended.
         static let endOfAudioFloor = 0.5
 
         func uncertainSpans(confidenceFloor: Double = Self.confidenceFloor) -> [String] {
@@ -227,14 +221,6 @@ package struct LocalWordVerifier: Sendable {
         func matches(line: String, locale: Locale, confidenceFloor: Double = Self.confidenceFloor) -> Bool {
             WordCoverage.matches(line: line, transcript: text, locale: locale, profile: Self.profile,
                                  uncertainSpans: uncertainSpans(confidenceFloor: confidenceFloor))
-        }
-
-        func canConfirmEndOfAudio(line: String, locale: Locale) -> Bool {
-            guard WordCoverage.matches(line: line, transcript: text, locale: locale, profile: Self.profile) else { return false }
-            let lexical = spans.filter { !WordCoverage.tokens($0.text, locale: locale, profile: Self.profile).isEmpty }
-            guard let last = lexical.last, last.confidence < Self.endOfAudioFloor,
-                  WordCoverage.tokens(last.text, locale: locale, profile: Self.profile).count == 1 else { return false }
-            return lexical.dropLast().allSatisfy { $0.confidence >= Self.confidenceFloor }
         }
 
         func boundaryWordSpan(previousLine: String, currentLine: String, locale: Locale) -> Int? {

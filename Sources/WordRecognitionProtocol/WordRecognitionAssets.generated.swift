@@ -2,9 +2,9 @@
 // Copyright 2026 Peter Marelas
 // SPDX-License-Identifier: Apache-2.0
 package enum WordRecognitionAssets {
-    package static let policyRevision = 7
+    package static let policyRevision = 8
     package static let protocolVersion = 1
-    package static let policyDefinition = "strict-raw-units-exact-adjacent-pairs-positional-boundary-confidence-0.3-final-0.5-english-number-readings-spelling-compounds-v3"
+    package static let policyDefinition = "strict-raw-units-exact-adjacent-pairs-positional-boundary-confidence-0.3-final-0.5-silent-tail-endpoint-english-number-readings-spelling-compounds-v4"
     package static let configurationID = "whisper-b5454-metal-greedy-v1"
     package static let helperName = "drama-word-recognizer"
     package static let modelDirectory = "WordVerification"

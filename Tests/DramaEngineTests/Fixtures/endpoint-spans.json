@@ -59,7 +59,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "Ye want to know what's out past the reef? Pray ye never find out.",
       "spans": [
         {
@@ -121,8 +121,7 @@
       ]
     },
     "expectedPrimary": true,
-    "expectedEligible": false,
-    "expectedCandidate": true
+    "expectedEndpoint": true
   },
   {
     "key": "preset-captain--s1--before-last-word",
@@ -184,7 +183,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "Ye want to know what's out past the reef? Pray ye never find.",
       "spans": [
         {
@@ -242,8 +241,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "preset-captain--s1--quarter-last-word",
@@ -305,7 +303,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "Ye want to know what's out past the reef? Pray ye never find.",
       "spans": [
         {
@@ -363,8 +361,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "preset-captain--s1--half-last-word",
@@ -426,7 +423,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "Ye want to know what's out past the reef? Pray ye never find out.",
       "spans": [
         {
@@ -488,8 +485,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": true
   },
   {
     "key": "preset-captain--s1--three-quarter-last-word",
@@ -555,7 +551,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "Ye want to know what's out past the reef? Pray ye never find out.",
       "spans": [
         {
@@ -617,8 +613,7 @@
       ]
     },
     "expectedPrimary": true,
-    "expectedEligible": false,
-    "expectedCandidate": true
+    "expectedEndpoint": true
   },
   {
     "key": "preset-night-owl--s1--complete",
@@ -708,7 +703,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "It's 2 in the morning, and if you're still awake, you're in good company. This next one goes out to the night drivers.",
       "spans": [
         {
@@ -794,8 +789,7 @@
       ]
     },
     "expectedPrimary": true,
-    "expectedEligible": false,
-    "expectedCandidate": true
+    "expectedEndpoint": true
   },
   {
     "key": "preset-night-owl--s1--before-last-word",
@@ -881,7 +875,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "It's 2 in the morning, and if you're still awake, you're in good company. This next one goes out to the night.",
       "spans": [
         {
@@ -963,8 +957,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "preset-night-owl--s1--quarter-last-word",
@@ -1046,7 +1039,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "It's 2 in the morning, and if you're still awake, you're in good company. This next one goes out to the nitro.",
       "spans": [
         {
@@ -1132,8 +1125,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "preset-night-owl--s1--half-last-word",
@@ -1219,7 +1211,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "It's 2 in the morning, and if you're still awake, you're in good company. This next one goes out to the night drive.",
       "spans": [
         {
@@ -1301,8 +1293,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "preset-night-owl--s1--three-quarter-last-word",
@@ -1392,7 +1383,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "It's 2 in the morning, and if you're still awake, you're in good company. This next one goes out to the night driver.",
       "spans": [
         {
@@ -1478,8 +1469,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "preset-mia--s1--complete",
@@ -1553,7 +1543,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "Guess what? Guess what? I found a frog in the garden, and his name is Mr. Hops.",
       "spans": [
         {
@@ -1623,8 +1613,7 @@
       ]
     },
     "expectedPrimary": true,
-    "expectedEligible": false,
-    "expectedCandidate": true
+    "expectedEndpoint": true
   },
   {
     "key": "preset-mia--s1--before-last-word",
@@ -1698,7 +1687,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "Guess what? Guess what? I found a frog in the garden, and his name is Mr. Ho...",
       "spans": [
         {
@@ -1768,8 +1757,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "preset-mia--s1--quarter-last-word",
@@ -1843,7 +1831,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "Guess what? Guess what? I found a frog in the garden, and his name is Mr. Hop.",
       "spans": [
         {
@@ -1913,8 +1901,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "preset-mia--s1--half-last-word",
@@ -1988,7 +1975,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "Guess what? Guess what? I found a frog in the garden, and his name is Mr. Hop.",
       "spans": [
         {
@@ -2058,8 +2045,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "preset-mia--s1--three-quarter-last-word",
@@ -2133,7 +2119,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "Guess what? Guess what? I found a frog in the garden, and his name is Mr. Hop.",
       "spans": [
         {
@@ -2203,8 +2189,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "preset-detective--s1--complete",
@@ -2258,7 +2243,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "The rain hadn't stopped in 3 days. Neither had the phone.",
       "spans": [
         {
@@ -2308,8 +2293,7 @@
       ]
     },
     "expectedPrimary": true,
-    "expectedEligible": false,
-    "expectedCandidate": true
+    "expectedEndpoint": true
   },
   {
     "key": "preset-detective--s1--before-last-word",
@@ -2359,7 +2343,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "The rain hadn't stopped in 3 days. Neither had the.",
       "spans": [
         {
@@ -2405,8 +2389,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "preset-detective--s1--quarter-last-word",
@@ -2456,7 +2439,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "The rain hadn't stopped in 3 days. Neither had the...",
       "spans": [
         {
@@ -2502,8 +2485,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "preset-detective--s1--half-last-word",
@@ -2553,7 +2535,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "The rain hadn't stopped in 3 days. Neither had the phone.",
       "spans": [
         {
@@ -2603,8 +2585,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": true
   },
   {
     "key": "preset-detective--s1--three-quarter-last-word",
@@ -2658,7 +2639,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "The rain hadn't stopped in 3 days. Neither had the phone.",
       "spans": [
         {
@@ -2708,8 +2689,7 @@
       ]
     },
     "expectedPrimary": true,
-    "expectedEligible": false,
-    "expectedCandidate": true
+    "expectedEndpoint": true
   },
   {
     "key": "preset-herald--s1--complete",
@@ -2779,7 +2759,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "Hear ye, hear ye, by order of the crown, all shall gather in the square at noon.",
       "spans": [
         {
@@ -2845,8 +2825,7 @@
       ]
     },
     "expectedPrimary": true,
-    "expectedEligible": false,
-    "expectedCandidate": true
+    "expectedEndpoint": true
   },
   {
     "key": "preset-herald--s1--before-last-word",
@@ -2908,7 +2887,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "Hear ye, hear ye, by order of the crown, all shall gather in the square at...",
       "spans": [
         {
@@ -2970,8 +2949,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "preset-herald--s1--quarter-last-word",
@@ -3037,7 +3015,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "Hear ye, hear ye, by order of the crown, all shall gather in the square at...",
       "spans": [
         {
@@ -3099,8 +3077,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "preset-herald--s1--half-last-word",
@@ -3170,7 +3147,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "Hear ye, hear ye, by order of the crown, all shall gather in the square at noon.",
       "spans": [
         {
@@ -3236,8 +3213,7 @@
       ]
     },
     "expectedPrimary": true,
-    "expectedEligible": false,
-    "expectedCandidate": true
+    "expectedEndpoint": true
   },
   {
     "key": "preset-herald--s1--three-quarter-last-word",
@@ -3307,7 +3283,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "Hear ye, hear ye, by order of the crown, all shall gather in the square at noon.",
       "spans": [
         {
@@ -3373,8 +3349,7 @@
       ]
     },
     "expectedPrimary": true,
-    "expectedEligible": false,
-    "expectedCandidate": true
+    "expectedEndpoint": true
   },
   {
     "key": "preset-emma--s1--complete",
@@ -3424,7 +3399,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "Okay, coffee first. Then I'll pretend I read the agenda.",
       "spans": [
         {
@@ -3470,8 +3445,7 @@
       ]
     },
     "expectedPrimary": true,
-    "expectedEligible": false,
-    "expectedCandidate": true
+    "expectedEndpoint": true
   },
   {
     "key": "preset-emma--s1--before-last-word",
@@ -3517,7 +3491,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "Okay, coffee first. Then I'll pretend I read the...",
       "spans": [
         {
@@ -3559,8 +3533,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "preset-emma--s1--quarter-last-word",
@@ -3606,7 +3579,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "Okay, coffee first. Then I'll pretend I read the...",
       "spans": [
         {
@@ -3648,8 +3621,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "preset-emma--s1--half-last-word",
@@ -3699,7 +3671,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "Okay, coffee first. Then I'll pretend I read the agenda.",
       "spans": [
         {
@@ -3741,8 +3713,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": true,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "preset-emma--s1--three-quarter-last-word",
@@ -3792,7 +3763,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "Okay, coffee first. Then I'll pretend I read the agenda.",
       "spans": [
         {
@@ -3838,8 +3809,7 @@
       ]
     },
     "expectedPrimary": true,
-    "expectedEligible": false,
-    "expectedCandidate": true
+    "expectedEndpoint": true
   },
   {
     "key": "preset-the-duke--s1--complete",
@@ -3897,7 +3867,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "Oh, you came all this way to stop me? How delightfully brave of you.",
       "spans": [
         {
@@ -3951,8 +3921,7 @@
       ]
     },
     "expectedPrimary": true,
-    "expectedEligible": false,
-    "expectedCandidate": true
+    "expectedEndpoint": true
   },
   {
     "key": "preset-the-duke--s1--before-last-word",
@@ -4010,7 +3979,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "Oh, you came all this way to stop me? How delightfully brave of.",
       "spans": [
         {
@@ -4060,8 +4029,7 @@
       ]
     },
     "expectedPrimary": true,
-    "expectedEligible": false,
-    "expectedCandidate": true
+    "expectedEndpoint": false
   },
   {
     "key": "preset-the-duke--s1--quarter-last-word",
@@ -4119,7 +4087,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "Oh, you came all this way to stop me? How delightfully brave of you.",
       "spans": [
         {
@@ -4173,8 +4141,7 @@
       ]
     },
     "expectedPrimary": true,
-    "expectedEligible": false,
-    "expectedCandidate": true
+    "expectedEndpoint": true
   },
   {
     "key": "preset-the-duke--s1--half-last-word",
@@ -4232,7 +4199,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "Oh, you came all this way to stop me? How delightfully brave of you.",
       "spans": [
         {
@@ -4286,8 +4253,7 @@
       ]
     },
     "expectedPrimary": true,
-    "expectedEligible": false,
-    "expectedCandidate": true
+    "expectedEndpoint": true
   },
   {
     "key": "preset-the-duke--s1--three-quarter-last-word",
@@ -4345,7 +4311,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "Oh, you came all this way to stop me? How delightfully brave of you.",
       "spans": [
         {
@@ -4399,8 +4365,7 @@
       ]
     },
     "expectedPrimary": true,
-    "expectedEligible": false,
-    "expectedCandidate": true
+    "expectedEndpoint": true
   },
   {
     "key": "preset-nana--s1--complete",
@@ -4478,7 +4443,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "Once, there was a lighthouse keeper, who talked to the moon, and one night, the moon talked back.",
       "spans": [
         {
@@ -4552,8 +4517,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": true,
-    "expectedCandidate": false
+    "expectedEndpoint": true
   },
   {
     "key": "preset-nana--s1--before-last-word",
@@ -4627,7 +4591,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "Once, there was a lighthouse keeper, who talked to the moon, and one night, the moon talked.",
       "spans": [
         {
@@ -4697,8 +4661,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "preset-nana--s1--quarter-last-word",
@@ -4772,7 +4735,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "Once, there was a lighthouse keeper, who talked to the moon, and one night, the moon talked.",
       "spans": [
         {
@@ -4842,8 +4805,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "preset-nana--s1--half-last-word",
@@ -4921,7 +4883,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "Once, there was a lighthouse keeper, who talked to the moon, and one night, the moon talked back.",
       "spans": [
         {
@@ -4995,8 +4957,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": true,
-    "expectedCandidate": false
+    "expectedEndpoint": true
   },
   {
     "key": "preset-nana--s1--three-quarter-last-word",
@@ -5070,7 +5031,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "Once, there was a lighthouse keeper, who talked to the moon, and one night, the moon talked back.",
       "spans": [
         {
@@ -5144,8 +5105,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": true,
-    "expectedCandidate": false
+    "expectedEndpoint": true
   },
   {
     "key": "numeric-model-default--s2--complete",
@@ -5187,7 +5147,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "The value is - 12.5 units. Revenue rose 12.5%.",
       "spans": [
         {
@@ -5225,8 +5185,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "numeric-model-default--s2--before-last-word",
@@ -5268,7 +5227,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "The value is - 12.5 units. Revenue rose 12.5.",
       "spans": [
         {
@@ -5306,8 +5265,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "numeric-model-default--s2--quarter-last-word",
@@ -5349,7 +5307,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "The value is - 12.5 units. Revenue rose 12.5%...",
       "spans": [
         {
@@ -5387,8 +5345,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "numeric-model-default--s2--half-last-word",
@@ -5430,7 +5387,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "The value is - 12.5 units. Revenue rose 12.5%.",
       "spans": [
         {
@@ -5468,8 +5425,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "numeric-model-default--s2--three-quarter-last-word",
@@ -5511,7 +5467,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "The value is - 12.5 units. Revenue rose 12.5%.",
       "spans": [
         {
@@ -5549,8 +5505,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "numeric-mia--s2--complete",
@@ -5596,7 +5551,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "The value is minus 12.5 units. Revenue rose 12.5%.",
       "spans": [
         {
@@ -5638,8 +5593,7 @@
       ]
     },
     "expectedPrimary": true,
-    "expectedEligible": false,
-    "expectedCandidate": true
+    "expectedEndpoint": true
   },
   {
     "key": "numeric-mia--s2--before-last-word",
@@ -5685,7 +5639,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "The value is minus 12.5 units. Revenue rose 12...",
       "spans": [
         {
@@ -5727,8 +5681,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "numeric-mia--s2--quarter-last-word",
@@ -5774,7 +5727,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "The value is minus 12.5 units. Revenue rose 12...",
       "spans": [
         {
@@ -5816,8 +5769,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "numeric-mia--s2--half-last-word",
@@ -5863,7 +5815,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "The value is minus 12.5 units. Revenue rose 12.5...",
       "spans": [
         {
@@ -5905,8 +5857,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "numeric-mia--s2--three-quarter-last-word",
@@ -5952,7 +5903,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "The value is minus 12.5 units. Revenue rose 12.5%...",
       "spans": [
         {
@@ -5994,8 +5945,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "numeric-the-duke--s2--complete",
@@ -6033,7 +5983,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "The value is -12.5 units. Revenue rows, 12.5%.",
       "spans": [
         {
@@ -6067,8 +6017,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "numeric-the-duke--s2--before-last-word",
@@ -6106,7 +6055,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "The value is -12.5 units. Revenue, rows, 12.",
       "spans": [
         {
@@ -6140,8 +6089,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "numeric-the-duke--s2--quarter-last-word",
@@ -6179,7 +6127,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "The value is -12.5 units. Revenue rows, 12....",
       "spans": [
         {
@@ -6213,8 +6161,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "numeric-the-duke--s2--half-last-word",
@@ -6252,7 +6199,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "The value is -12.5 units. Revenue rows, 12.5.",
       "spans": [
         {
@@ -6286,8 +6233,7 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   },
   {
     "key": "numeric-the-duke--s2--three-quarter-last-word",
@@ -6329,7 +6275,7 @@
         }
       ]
     },
-    "confirmation": {
+    "endpoint": {
       "transcript": "The value is -12.5 units. Revenue rows, 12.5%...",
       "spans": [
         {
@@ -6363,7 +6309,6 @@
       ]
     },
     "expectedPrimary": false,
-    "expectedEligible": false,
-    "expectedCandidate": false
+    "expectedEndpoint": false
   }
 ]

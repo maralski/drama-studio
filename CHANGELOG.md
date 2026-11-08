@@ -27,6 +27,12 @@ second engine can share them.
   `DramaCodec.recreateClip(of:directory:)` decodes a voice's Drama 3 codes.
 - The app's project format is 5. It still opens formats 1 to 4. The voice
   library keeps each voice's clip beside its JSON file.
+- The word check hears a take that ends in silence with 0.75 s of silence
+  appended, so a complete final word on a take with little trailing silence
+  clears the 0.5 floor on the first pass. A take still sounding at its last
+  sample is heard as it is. The separate end-of-audio confirmation pass and its
+  0.9 floor are gone. The acceptance policy is revision 8, so takes checked
+  under an earlier revision show "earlier word check".
 
 ## 2.1.3
 

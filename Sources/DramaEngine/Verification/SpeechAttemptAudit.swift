@@ -19,11 +19,9 @@ package enum SpeechAttemptAudit {
 
     package static func record(samples: [Float], line: String, reason: String, frames: [Frame] = [],
                                locale: String = "", transcript: String = "", uncertainSpans: [String] = [], error: String = "",
-                               confirmationTranscript: String = "", confirmationUncertainSpans: [String] = [],
                                independentTranscript: String = "",
                                independentIdentity: RecognitionReady? = nil,
                                confidenceSpans: [LocalWordVerifier.Recognition.Span] = [],
-                               confirmationConfidenceSpans: [LocalWordVerifier.Recognition.Span] = [],
                                boundary: BoundaryWitness? = nil) {
         let path = (Bundle.main.object(forInfoDictionaryKey: "DSWordCheckAuditDirectory") as? String)
             ?? (Bundle.main.bundleURL.pathExtension != "app" ? ProcessInfo.processInfo.environment["DS_WORD_CHECK_AUDIT_DIR"] : nil)
@@ -50,7 +48,6 @@ package enum SpeechAttemptAudit {
             let id = UUID().uuidString
             let details: [String: Any] = ["time": ISO8601DateFormatter().string(from: Date()), "line": line, "reason": reason,
                                           "locale": locale, "transcript": transcript, "uncertain_spans": uncertainSpans,
-                                          "confirmation_transcript": confirmationTranscript, "confirmation_uncertain_spans": confirmationUncertainSpans,
                                           "independent_transcript": independentTranscript,
                                           "policy_revision": WordRecognitionAssets.policyRevision,
                                           "policy_definition": WordRecognitionAssets.policyDefinition,
@@ -60,7 +57,6 @@ package enum SpeechAttemptAudit {
                                             "model_id": $0.modelID, "model_sha256": $0.modelSHA256
                                           ] as [String: Any] } ?? [:],
                                           "confidence_spans": confidenceSpans.map { ["text": $0.text, "confidence": $0.confidence, "has_reported_confidence": $0.hasReportedConfidence] as [String: Any] },
-                                          "confirmation_confidence_spans": confirmationConfidenceSpans.map { ["text": $0.text, "confidence": $0.confidence, "has_reported_confidence": $0.hasReportedConfidence] as [String: Any] },
                                           "frames": frames, "error": error]
             let data = try JSONSerialization.data(withJSONObject: details, options: [.prettyPrinted, .sortedKeys])
             _ = FileManager.default.createFile(atPath: directory.appendingPathComponent(id + ".json").path, contents: data, attributes: [.posixPermissions: 0o600])
