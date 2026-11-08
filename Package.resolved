@@ -1,0 +1,15 @@
+{
+  "originHash" : "24cd7e4d59d7afd6e8020af66254fcc0af5c232d32830e84c31d8da798aadd86",
+  "pins" : [
+    {
+      "identity" : "ming-tts",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/maralski/ming-tts.git",
+      "state" : {
+        "revision" : "05dfc33031bb5d556ac51d92d592dfbf0ce19f05",
+        "version" : "0.1.0"
+      }
+    }
+  ],
+  "version" : 3
+}

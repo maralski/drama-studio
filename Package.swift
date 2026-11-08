@@ -1,12 +1,17 @@
 // swift-tools-version:6.0
 // Copyright 2026 Peter Marelas
 // SPDX-License-Identifier: Apache-2.0
+import Foundation
 import PackageDescription
 
 // tools/make_xcframework.sh sets this to archive DramaEngine as a framework.
 let engineLibraryType: Product.Library.LibraryType? = Context.environment["DRAMA_ENGINE_DYNAMIC"] == "1" ? .dynamic : nil
 
-let mingPackagePath = Context.environment["MING_PACKAGE_PATH"] ?? "../ming"
+// MING_PACKAGE_PATH builds against a local MingTTS checkout instead of the release.
+let mingPackagePath = Context.environment["MING_PACKAGE_PATH"]
+let mingPackage: Package.Dependency = mingPackagePath.map { .package(path: $0) }
+    ?? .package(url: "https://github.com/maralski/ming-tts.git", exact: "0.1.0")
+let mingPackageName = mingPackagePath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "ming-tts"
 
 let package = Package(
     name: "DramaStudio",
@@ -21,7 +26,7 @@ let package = Package(
         .executable(name: "drama-word-recognizer", targets: ["drama-word-recognizer"]),
     ],
     dependencies: [
-        .package(path: mingPackagePath),
+        mingPackage,
     ],
     targets: [
         // Run tools/bootstrap_word_recognition.py before a clean build.
@@ -30,7 +35,7 @@ let package = Package(
         .executableTarget(name: "drama-word-recognizer", dependencies: ["WordRecognitionProtocol", "whisper"]),
         .target(
             name: "DramaEngine",
-            dependencies: ["WordRecognitionProtocol", .product(name: "MingTTS", package: "ming")],
+            dependencies: ["WordRecognitionProtocol", .product(name: "MingTTS", package: mingPackageName)],
             path: "Sources/DramaEngine",
             resources: [.copy("Kernels"), .copy("CodecConversion"), .copy("Verification/EnglishSpokenForms.json")]
         ),

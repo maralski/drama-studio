@@ -189,9 +189,9 @@ cd tools && uv venv --python 3.12 .venv && uv pip install --python .venv/bin/pyt
   809 MB in fp32, decoder 353 MB and the 64-frame silence-probe decoder
   352 MB in fp16).
 
-- The Ming-3.0-tts Swift port (the `MingTTS` package) checked out beside
-  this repository as `../ming`, or named by `MING_PACKAGE_PATH`. The Ming
-  engine is optional. Its checkpoint is `inclusionAI/Ming-3.0-tts-0.5B`,
+- The Ming-3.0-tts Swift port, [MingTTS](https://github.com/maralski/ming-tts),
+  which SwiftPM fetches at `0.1.0`. `MING_PACKAGE_PATH` builds against a
+  local checkout instead. The Ming engine is optional. Its checkpoint is `inclusionAI/Ming-3.0-tts-0.5B`,
   3.0 GB: `uvx --from huggingface_hub hf download inclusionAI/Ming-3.0-tts-0.5B`
   puts it in the Hugging Face cache, or Settings downloads the pinned
   revision. `MING_WEIGHTS` names another folder. `drama setup` reports what
