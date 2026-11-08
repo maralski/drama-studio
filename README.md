@@ -191,8 +191,11 @@ cd tools && uv venv --python 3.12 .venv && uv pip install --python .venv/bin/pyt
 
 - The Ming-3.0-tts Swift port (the `MingTTS` package) checked out beside
   this repository as `../ming`, or named by `MING_PACKAGE_PATH`. The Ming
-  engine itself loads its checkpoint from `MING_WEIGHTS` and is off until
-  that variable, or the `mingDirectory` default, names a complete one.
+  engine is optional. Its checkpoint is `inclusionAI/Ming-3.0-tts-0.5B`,
+  3.0 GB: `uvx --from huggingface_hub hf download inclusionAI/Ming-3.0-tts-0.5B`
+  puts it in the Hugging Face cache, or Settings downloads the pinned
+  revision. `MING_WEIGHTS` names another folder. `drama setup` reports what
+  each engine has and lacks.
 
 ## Build and run
 
@@ -230,7 +233,8 @@ tests the independent runtime. The full offline check can also be rerun with
 .build/release/drama tune                      # once per Mac, about 30 s; the app does it on first load
 .build/release/drama generate --text "Hello there." --out frames.npy
 .build/release/drama bench                     # add --untuned to compare against the hand-written schedule
-.build/release/drama serve                     # the HTTP API without the app; --port 8780, --no-token
+.build/release/drama setup                     # what each engine's install has and lacks, with the fixes
+.build/release/drama serve                     # the HTTP API without the app; --port 8780, --no-token, --engine drama3|ming
 .build/release/drama-say "Hello there."         # speaks through the running app, like say; see From the terminal
 ```
 
@@ -239,7 +243,10 @@ produces placeholder tones, for working on everything but the model.
 
 The app looks for the weights in this order: the folder chosen in Settings,
 its own download in `~/Library/Application Support/DramaStudio/Models/drama-3-e0a9218/`,
-then the newest Hugging Face cache snapshot. A build from `tools/make_app.sh`
+then the newest Hugging Face cache snapshot (`HF_HUB_CACHE` or `HF_HOME` move
+it). Ming is found the same way, after `MING_WEIGHTS`, with its download in
+`Models/Ming-3.0-tts-0.5B-7247f4c/`. The Inspector and the Speech menu pick
+the engine; one without its files shows as not installed. A build from `tools/make_app.sh`
 has no codec download, so its setup window shows the Python conversion command
 above when the codec models are missing; `tools/make_release.sh` builds the
 release DMG and the codec zip and writes the zip's URL and SHA-256 into the
@@ -376,8 +383,8 @@ The speech request follows the
 
 | Route | Does |
 | --- | --- |
-| `GET /v1/health` | `{status, model_loaded, engine: "metal" or "mock", busy, tuned, version}`. `tuned` is `null` until the Metal engine loads its model; the mock engine reports `false`. While a generation runs it adds `estimate: {elapsed_seconds, remaining_seconds, frames_done, frames_expected}`; `remaining_seconds` is `null` once the last sentence is in its silence tail or a retry runs. |
-| `GET /v1/models` | The one model, `fishaudio/drama-3`, with its snapshot id. |
+| `GET /v1/health` | `{status, model_loaded, engine: "metal" or "mock", speech_engine: "drama3" or "ming", busy, tuned, version}`. `speech_engine` is the engine requests use when they name none. `tuned` is `null` until the Metal engine loads its model; the mock engine reports `false`. While a generation runs it adds `estimate: {elapsed_seconds, remaining_seconds, frames_done, frames_expected}`; `remaining_seconds` is `null` once the last sentence is in its silence tail or a retry runs. |
+| `GET /v1/models` | One entry per installed engine: `{id, engine, name, snapshot, mock, selected}`, with `id` the Hugging Face model id, such as `fishaudio/drama-3` or `inclusionAI/Ming-3.0-tts-0.5B`. |
 | `POST /v1/audio/speech` | Speaks `input`. Returns the audio file, or a PCM stream. |
 | `POST /v1/tts` | The same, with the text in `text`. |
 | `GET /v1/audio/speech/stream` | Speaks the `input` query parameter as Server-Sent Events. See [Streaming](#streaming-framing). |
@@ -385,7 +392,7 @@ The speech request follows the
 | `GET /v1/voices` | The voice library: id, name, transcript, seconds, source file. |
 | `POST /v1/voices` | Clones a voice: JSON `{name, transcript, audio_base64 or audio_path}`, or multipart with a `file` part plus `name` and `transcript` fields. |
 | `DELETE /v1/voices/{id}` | Deletes a voice. |
-| `GET /v1/takes/{id}` | One of the last 20 takes: `{id, input, text, seconds, frames, codes_base64, previous_take_ids}`. |
+| `GET /v1/takes/{id}` | One of the last 20 takes: `{id, engine, input, text, seconds, frames, codes_base64, previous_take_ids}`. |
 
 The speech body takes these fields:
 
@@ -402,6 +409,7 @@ The speech body takes these fields:
 | `character` | A voice designed from a description instead of a clip: `{name, description, scene?}`. |
 | `note` | A director's note, such as `"softer and warmer"`. The line is generated again, sentence by sentence, with the note as a direction and as a cue before every sentence. |
 | `previous_takes` | Earlier takes of the line, oldest first: `[{take_id}]` or `[{text, codes_base64}]`. The last two are context. With no `voice` or `references`, the first one is the voice. |
+| `model` | The engine to speak with: its id (`drama3`, `ming`), model id or name. Without it, a request that continues a cached take runs on that take's engine, and any other runs on the selected one. A model the server doesn't know, such as `tts-1`, also runs on the selected engine, so OpenAI clients work unchanged. Naming an engine that isn't installed gets `400`. Only one engine is loaded at a time, so a request for the other engine unloads the current one first. |
 | `apply_pronunciation` | `true` (default) rewrites `input` with the pronunciation rules in `~/Library/Application Support/DramaStudio/pronunciation.json`, the same rules the app uses, before it is spoken; `false` speaks it as sent. |
 
 A request takes at most one of `voice`, `references`, `speaker_voices`, and
@@ -413,7 +421,8 @@ retake the line of the last named take, with its voice and character.
 `codes_base64` is the take's codes as 16-bit little-endian integers, codebook
 by codebook, as `GET /v1/takes/{id}` returns them.
 
-A file response carries `X-Drama-Frames`, `X-Drama-Seconds`,
+Every speech response names the engine that made it in `X-Drama-Engine` and
+`X-Drama-Model`, and the `done` event carries `engine`. A file response carries `X-Drama-Frames`, `X-Drama-Seconds`,
 `X-Drama-Generation-Seconds`, `X-Drama-Word-Coverage` (`recognized` or
 `unchecked`), `X-Drama-Generated-Frames` (including rejected attempts) and
 `X-Drama-Verification-Seconds`. When the engine cannot perform part of the
@@ -550,12 +559,12 @@ repository's `dist/DramaStudio.app`. `DRAMA_API_URL` overrides
 
 | Tool | Does |
 | --- | --- |
-| `synthesize_speech` | `text`, with optional `voice` or `character` (`{name, description, scene?}`), `output_path`, `expressiveness`, and `play`. Writes a WAV, by default to `~/Library/Application Support/DramaStudio/Output/<timestamp>.wav`. Returns the path, seconds, frames, generation seconds, and `take_id`. `play` plays it with `afplay`. |
+| `synthesize_speech` | `text`, with optional `voice` or `character` (`{name, description, scene?}`), `engine` (`drama3` or `ming`), `output_path`, `expressiveness`, and `play`. Writes a WAV, by default to `~/Library/Application Support/DramaStudio/Output/<timestamp>.wav`. Returns the path, the engine, seconds, frames, generation seconds, and `take_id`. `play` plays it with `afplay`. |
 | `retake_with_note` | `take_id` and `note`, with optional `output_path` and `play`. Generates that take's line again in the same voice with the note. Returns what `synthesize_speech` returns, with the new `take_id`. |
 | `list_voices` | The voice library. |
 | `add_voice` | Clones `audio_path` with its `transcript` under `name`. |
 | `delete_voice` | Deletes a voice by `id`. |
-| `studio_status` | Health, the model snapshot, and the API address. |
+| `studio_status` | Health, the selected engine's model entry, every installed engine in `models`, and the API address. |
 
 There is no MCP tool for streaming or live text input. An MCP tool call is one
 request and one result, so it cannot carry audio while text is still being
