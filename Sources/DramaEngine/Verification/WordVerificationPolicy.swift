@@ -1,6 +1,6 @@
 // Copyright 2026 Peter Marelas
 // SPDX-License-Identifier: Apache-2.0
-import WordRecognitionProtocol
+package import WordRecognitionProtocol
 
 /// Revision of the acceptance policy used for automatic audio references.
 public enum WordVerificationPolicy {

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import Foundation
 import CryptoKit
-import WordRecognitionProtocol
+package import WordRecognitionProtocol
 
 /// Opt-in local diagnostics. Shipping builds omit the bundle key.
 package enum SpeechAttemptAudit {

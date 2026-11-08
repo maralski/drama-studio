@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import Darwin
 import Foundation
-import WordRecognitionProtocol
+package import WordRecognitionProtocol
 
 /// Each session owns one child, one model and one serial request stream. C
 /// recognition never runs inside the app, so cancellation can reclaim it.

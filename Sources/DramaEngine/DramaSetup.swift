@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import Foundation
 import Metal
-import WordRecognitionProtocol
+package import WordRecognitionProtocol
 
 /// One part of an install the engine needs, and whether it is in place.
 public struct SetupItem: Sendable, Equatable {
