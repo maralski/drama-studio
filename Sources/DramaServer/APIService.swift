@@ -294,11 +294,18 @@ public final class APIService: Sendable {
     /// cached take, the engine that made it; else the selected one. It stays
     /// fixed for the whole request.
     private func synthesizer(for parameters: SpeechParameters, continuing take: SpeechEngineID? = nil) throws -> any SpeechSynthesizer {
-        let engine = parameters.engine ?? take ?? engines.selected
+        let installed = SpeechEngineID.allCases.filter(engines.available.contains).map(\.rawValue).joined(separator: ", ")
+        let engine: SpeechEngineID
+        switch parameters.model {
+        case .unspecified: engine = take ?? engines.selected
+        case .engine(let named): engine = named
+        case .unknown(let name):
+            throw APIError.bad("No engine is called \(name). Installed: \(installed); GET /v1/models lists them. "
+                + "OpenAI's \(ModelChoice.openAIModels.joined(separator: ", ")) run on the selected engine.")
+        }
         do {
             return try engines.pinned(to: engine)
         } catch {
-            let installed = SpeechEngineID.allCases.filter(engines.available.contains).map(\.rawValue).joined(separator: ", ")
             throw APIError.bad("\(engine.capabilities.name) isn't installed on this server. Installed: \(installed); GET /v1/models lists them.")
         }
     }

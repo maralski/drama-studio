@@ -60,15 +60,38 @@ public struct SpeechParameters: Sendable, Equatable {
     public var expressiveness: Double
     public var seed: UInt64?
     public var applyPronunciation: Bool
-    /// The engine `model` names; nil runs the selected engine, as does a
-    /// model this server doesn't know, such as OpenAI's `tts-1`.
-    public var engine: SpeechEngineID?
+    /// The engine `model` asks for.
+    public var model: ModelChoice
 
     public var config: GenerationConfig {
         var config = GenerationConfig.make(expressiveness: expressiveness)
         config.seed = seed
         if delivery.streams { config.streaming = .defaultLowLatency }
         return config
+    }
+}
+
+/// The engine a request's `model` asks for.
+public enum ModelChoice: Sendable, Equatable {
+    /// No model, or an OpenAI model name: the engine of the take the request
+    /// continues, else the selected one, so OpenAI clients work unchanged.
+    case unspecified
+    /// An engine by its id, model id or name.
+    case engine(SpeechEngineID)
+    /// Neither an engine nor an OpenAI model, such as a mistyped engine name.
+    case unknown(String)
+
+    static let openAIModels = ["tts-1", "tts-1-hd", "gpt-4o-mini-tts"]
+
+    init(_ name: String?) {
+        guard let name else { self = .unspecified; return }
+        if let engine = SpeechEngineID.named(name) {
+            self = .engine(engine)
+        } else if Self.openAIModels.contains(name.trimmingCharacters(in: .whitespaces).lowercased()) {
+            self = .unspecified
+        } else {
+            self = .unknown(name)
+        }
     }
 }
 
@@ -348,7 +371,7 @@ extension APIRequest {
             expressiveness: expressiveness,
             seed: decoded.seed.map(UInt64.init),
             applyPronunciation: decoded.apply_pronunciation ?? true,
-            engine: decoded.model.flatMap(SpeechEngineID.named)
+            model: ModelChoice(decoded.model)
         )
     }
 

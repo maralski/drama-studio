@@ -45,7 +45,7 @@ final class APIEngineChoiceTests: XCTestCase {
     }
 
     func testARequestRunsOnTheEngineItsModelNamesAndLeavesTheSelectionAlone() async throws {
-        for (model, engine) in [("drama3", "drama3"), ("fishaudio/drama-3", "drama3"), ("Ming", "ming"), ("tts-1", "ming")] {
+        for (model, engine) in [("drama3", "drama3"), ("fishaudio/drama-3", "drama3"), ("Ming", "ming"), ("tts-1", "ming"), ("TTS-1-HD", "ming"), ("gpt-4o-mini-tts", "ming")] {
             let response = await send("POST", "/v1/audio/speech", json: ["input": "The light is lit.", "model": model])
             XCTAssertEqual(response.status, .ok, text(response))
             XCTAssertEqual(response.headers["X-Drama-Engine"], engine, model)
@@ -67,6 +67,16 @@ final class APIEngineChoiceTests: XCTestCase {
         let done = try XCTUnwrap(String(decoding: data, as: UTF8.self).components(separatedBy: "event: done\ndata: ").last?.components(separatedBy: "\n").first)
         let event = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(done.utf8)) as? [String: Any])
         XCTAssertEqual(event["engine"] as? String, "drama3")
+    }
+
+    func testAModelThatIsNeitherAnEngineNorAnOpenAIModelIsRefusedWithTheInstalledEngines() async throws {
+        for model in ["ming-3.0", "drama-3", ""] {
+            let response = await send("POST", "/v1/audio/speech", json: ["input": "Hello.", "model": model])
+            XCTAssertEqual(response.status, .badRequest, model)
+            XCTAssertTrue(text(response).contains("Installed: drama3, ming"), text(response))
+            let stream = await service.respond(to: HTTPRequest(method: "GET", path: "/v1/audio/speech/stream", query: ["input": "Hi.", "model": model]))
+            XCTAssertEqual(stream.status, .badRequest, model)
+        }
     }
 
     func testNamingAnEngineThatIsNotInstalledIsRefusedWithTheInstalledOnes() async throws {
