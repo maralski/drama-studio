@@ -87,6 +87,25 @@ final class MingSetupTests: XCTestCase {
         XCTAssertEqual(report.directory?.standardizedFileURL, named.standardizedFileURL)
         XCTAssertTrue(report[.weights].summary.contains("model.safetensors"), report[.weights].summary)
         XCTAssertFalse(report.isReady)
+        let fix = try XCTUnwrap(report[.weights].fix)
+        XCTAssertFalse(fix.contains("hf download"), "downloading into the cache doesn't fill the folder MING_WEIGHTS names: \(fix)")
+        XCTAssertTrue(fix.contains("model.safetensors") && fix.contains(named.path), fix)
+        XCTAssertTrue(report[.speakerEncoder].fix?.contains("campplus.onnx") == true, report[.speakerEncoder].fix ?? "")
+    }
+
+    func testEachSourceOfAnIncompleteCheckpointGetsItsOwnFix() throws {
+        unsetenv("MING_WEIGHTS")
+        let hub = root.appending(path: "hub", directoryHint: .isDirectory)
+        _ = try checkpoint(at: hub.appending(path: "models--inclusionAI--Ming-3.0-tts-0.5B/snapshots/7247f4c"), files: ["config.json"])
+        setenv("HF_HUB_CACHE", hub.path, 1)
+        let cached = DramaSetup.check(ming: MingLocation.find())
+        XCTAssertTrue(cached[.weights].fix?.contains("hf download inclusionAI/Ming-3.0-tts-0.5B") == true, cached[.weights].fix ?? "")
+
+        let downloading = try checkpoint(at: root.appending(path: "Models/Ming-3.0-tts-0.5B-7247f4c"), files: ["config.json"])
+        let app = DramaSetup.check(ming: MingLocation(directory: downloading, source: .appDownload))
+        for component in [SetupItem.Component.weights, .tokenizer, .speakerEncoder] {
+            XCTAssertEqual(app[component].fix, "Resume the Ming download in Settings.")
+        }
     }
 
     func testHFHomeHoldsTheHubWhenHFHubCacheIsUnset() throws {

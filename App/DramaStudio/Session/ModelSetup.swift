@@ -33,7 +33,7 @@ enum ModelSetup {
     static func mingCandidate(customPath: String) -> MingLocation? {
         if ProcessInfo.processInfo.environment["MING_WEIGHTS"] != nil { return MingLocation.find() }
         if !customPath.isEmpty { return MingLocation(directory: URL(filePath: customPath, directoryHint: .isDirectory)) }
-        let downloaded = MingLocation(directory: AppHome.mingModels)
+        let downloaded = MingLocation(directory: AppHome.mingModels, source: .appDownload)
         if downloaded.isComplete { return downloaded }
         if AppHome.usesHuggingFaceCache, let cached = MingLocation.find() { return cached }
         return FileManager.default.fileExists(atPath: downloaded.directory.path) ? downloaded : nil

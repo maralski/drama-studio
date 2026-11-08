@@ -7,8 +7,23 @@ internal import MingTTS
 /// Where the Ming-3.0-tts-0.5B checkpoint lives: `model.safetensors`,
 /// `config.json`, `tokenizer.json` and, for cloning, `campplus.onnx`.
 public struct MingLocation: Sendable, Equatable {
+    /// Where a checkpoint folder came from, which decides how setup says to
+    /// complete it.
+    public enum Source: Sendable, Equatable {
+        /// A snapshot `hf download` put in the ``HuggingFaceCache``.
+        case huggingFaceCache
+        /// The folder an app downloads the pinned revision into and resumes from its settings.
+        case appDownload
+        /// A folder someone named: `MING_WEIGHTS`, a command-line option or a setting.
+        case named
+    }
+
     public var directory: URL
-    public init(directory: URL) { self.directory = directory }
+    public var source: Source
+    public init(directory: URL, source: Source = .named) {
+        self.directory = directory
+        self.source = source
+    }
 
     /// The folder `MING_WEIGHTS` names, complete or not, so setup can say
     /// what it lacks; else the newest complete snapshot in the
@@ -19,7 +34,7 @@ public struct MingLocation: Sendable, Equatable {
             return MingLocation(directory: URL(filePath: path, directoryHint: .isDirectory))
         }
         return HuggingFaceCache.latestSnapshot(of: SpeechEngineID.ming.install.repo) { MingLocation(directory: $0).isComplete }
-            .map(MingLocation.init(directory:))
+            .map { MingLocation(directory: $0, source: .huggingFaceCache) }
     }
 
     public static let requiredFiles = ["model.safetensors", "config.json", "tokenizer.json", "campplus.onnx"]

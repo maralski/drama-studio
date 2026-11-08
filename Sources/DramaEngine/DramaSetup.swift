@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import Foundation
 import Metal
-package import WordRecognitionProtocol
+internal import WordRecognitionProtocol
 
 /// One part of an install the engine needs, and whether it is in place.
 public struct SetupItem: Sendable, Equatable {
@@ -249,18 +249,25 @@ public enum DramaSetup: Sendable {
     }
 
     /// Reports each component of a Ming checkpoint, reading files only.
-    /// Nil `location` reports the checkpoint as not downloaded.
+    /// Nil `location` reports the checkpoint as not downloaded. A missing
+    /// file's fix depends on the location's ``MingLocation/Source``.
     public static func check(ming location: MingLocation?) -> SetupReport {
         let download = SpeechEngineID.ming.install.downloadCommand
         let notFound = "Run \(download), or set MING_WEIGHTS to the folder that holds model.safetensors."
-        let finish = "Run \(download) to finish the download."
+        func finish(_ absent: [String], in dir: URL) -> String {
+            switch location?.source {
+            case .huggingFaceCache, nil: "Run \(download) to finish the download."
+            case .appDownload: "Resume the Ming download in Settings."
+            case .named: "Put \(absent.joined(separator: ", ")) in \(dir.path), or name a folder that holds the whole checkpoint."
+            }
+        }
         func file(_ component: SetupItem.Component, _ names: [String], _ what: String) -> SetupItem {
             guard let dir = location?.directory else {
                 return SetupItem(component: component, state: .missing(fix: notFound), url: nil, summary: "No Ming checkpoint found.")
             }
             let absent = names.filter { !FileManager.default.fileExists(atPath: dir.appending(path: $0).path) }
             guard absent.isEmpty else {
-                return SetupItem(component: component, state: .missing(fix: finish), url: dir,
+                return SetupItem(component: component, state: .missing(fix: finish(absent, in: dir)), url: dir,
                                  summary: "Missing from \(dir.path): \(absent.joined(separator: ", ")).")
             }
             let bytes = names.reduce(UInt64(0)) { $0 + fileSize(dir.appending(path: $1)) }
