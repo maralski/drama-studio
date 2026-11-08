@@ -709,19 +709,10 @@ public struct ModelLocation: Sendable, Equatable {
     /// A location at `directory`. Nothing is read until the engine loads.
     public init(directory: URL) { self.directory = directory }
 
-    /// The most recently modified snapshot of `repo` under
-    /// `~/.cache/huggingface/hub`, where `hf download` puts it; nil when
-    /// there is none.
-    public static func huggingFaceCache(repo: String = "fishaudio/drama-3") -> ModelLocation? {
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        let repoDir = home.appendingPathComponent(".cache/huggingface/hub/models--" + repo.replacingOccurrences(of: "/", with: "--") + "/snapshots")
-        guard let snapshots = try? FileManager.default.contentsOfDirectory(at: repoDir, includingPropertiesForKeys: [.contentModificationDateKey]),
-              let latest = snapshots.max(by: { a, b in
-                  let da = (try? a.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-                  let db = (try? b.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-                  return da < db
-              }) else { return nil }
-        return ModelLocation(directory: latest)
+    /// The most recently modified snapshot of `repo` in the
+    /// ``HuggingFaceCache``, where `hf download` puts it; nil when there is none.
+    public static func huggingFaceCache(repo: String = SpeechEngineID.drama3.install.repo) -> ModelLocation? {
+        HuggingFaceCache.latestSnapshot(of: repo).map(ModelLocation.init(directory:))
     }
 
     /// Whether `config.json`, `tokenizer.json`, `model.safetensors.index.json`

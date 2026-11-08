@@ -6,14 +6,17 @@ import WordRecognitionProtocol
 
 /// One part of an install the engine needs, and whether it is in place.
 public struct SetupItem: Sendable, Equatable {
-    /// The parts of a working install, in the order the engine uses them.
+    /// The parts of a working install. ``EngineInstall/components`` names
+    /// each engine's, in the order the engine uses them.
     public enum Component: String, Sendable, CaseIterable {
-        /// `config.json`, `model.safetensors.index.json` and every shard the
-        /// index names. The released snapshot has eight shards, 39.6 GB, in a
-        /// 41.5 GB download.
+        /// Drama 3: `config.json`, `model.safetensors.index.json` and every
+        /// shard the index names, eight shards, 39.6 GB, in a 41.5 GB download.
+        /// Ming: `config.json` and `model.safetensors`, 3.0 GB in all.
         case weights
         /// `tokenizer.json` in the snapshot.
         case tokenizer
+        /// Ming's `campplus.onnx`, the speaker encoder that clones a voice.
+        case speakerEncoder
         /// `codec.pth` in the snapshot, the source of the Core ML codec models.
         /// Needed only until the codec models are built.
         case codecCheckpoint
@@ -75,18 +78,18 @@ public struct SetupItem: Sendable, Equatable {
     }
 }
 
-/// What ``DramaSetup/check(location:codecDirectory:tuningDirectory:)`` found:
-/// one ``SetupItem`` per ``SetupItem/Component``, in the order of
-/// `SetupItem.Component.allCases`.
+/// What ``DramaSetup`` found for one engine: one ``SetupItem`` per
+/// component in its ``EngineInstall/components``, in that order.
 public struct SetupReport: Sendable, Equatable {
-    /// The snapshot that was checked; nil when none was found.
-    public var location: ModelLocation?
-    /// One item per component.
+    public var engine: SpeechEngineID
+    /// The snapshot folder that was checked; nil when none was found.
+    public var directory: URL?
     public var items: [SetupItem]
 
-    /// Creates a report. `items` must hold one item per component.
-    public init(location: ModelLocation?, items: [SetupItem]) {
-        self.location = location
+    /// Creates a report. `items` must hold one item per component of `engine`.
+    public init(engine: SpeechEngineID, directory: URL?, items: [SetupItem]) {
+        self.engine = engine
+        self.directory = directory
         self.items = items
     }
 
@@ -125,7 +128,7 @@ public enum DramaSetupError: Error, CustomStringConvertible {
     public var description: String {
         switch self {
         case .notReady(let report):
-            return "The Drama 3 install is incomplete:\n" + report.items.filter(\.isMissing).map { "- \($0.summary) \($0.fix ?? "")" }.joined(separator: "\n")
+            return "The \(report.engine.capabilities.name) install is incomplete:\n" + report.items.filter(\.isMissing).map { "- \($0.summary) \($0.fix ?? "")" }.joined(separator: "\n")
         case .pythonRequired(let command):
             return "The Core ML codec models are missing. Build them once with a Python that has torch 2.7.1 and coremltools:\n\(command)"
         case .conversionFailed(let command, let status, let output):
@@ -134,16 +137,16 @@ public enum DramaSetupError: Error, CustomStringConvertible {
     }
 }
 
-/// Checks and completes an install without the app: the weights, the
-/// tokenizer, the Core ML codec models, and the kernel tuning.
+/// Checks and completes an install without the app. For Drama 3: the
+/// weights, the tokenizer, the Core ML codec models, and the kernel tuning.
+/// For Ming: the weights, the tokenizer and the speaker encoder.
 ///
 /// ``check(location:codecDirectory:tuningDirectory:)`` reads files only and
 /// never loads the model. ``prepare(location:codecDirectory:python:tuningDirectory:progress:)``
 /// builds what is missing and can be built: the codec models, through a
 /// Python you name, and the kernel tuning, through one model load.
 public enum DramaSetup: Sendable {
-    /// The shell command that downloads the model into the Hugging Face cache.
-    public static let downloadCommand = "uvx --from huggingface_hub hf download fishaudio/drama-3"
+    private static let downloadCommand = SpeechEngineID.drama3.install.downloadCommand
 
     /// Where the suggested Python environment for the codec conversion lives:
     /// `~/.cache/drama-codec-venv`.
@@ -187,7 +190,7 @@ public enum DramaSetup: Sendable {
     public static func check(location: ModelLocation?, codecDirectory: URL = DramaCodec.defaultDirectory,
                              tuningDirectory: URL = DramaSynthesizer.defaultTuningDirectory) -> SetupReport {
         let codecModels = codecModelsItem(location: location, codecDirectory: codecDirectory)
-        return SetupReport(location: location, items: [
+        return SetupReport(engine: .drama3, directory: location?.directory, items: [
             weightsItem(location),
             tokenizerItem(location),
             codecCheckpointItem(location, codecModelsReady: codecModels.state == .ready),
@@ -243,6 +246,32 @@ public enum DramaSetup: Sendable {
         if report.isPrepared { return }
         progress("Loading Drama 3 to tune the kernels for this Mac")
         try await DramaSynthesizer(location: location, codecDirectory: codecDirectory, tuningDirectory: tuningDirectory).load(onPhase: progress)
+    }
+
+    /// Reports each component of a Ming checkpoint, reading files only.
+    /// Nil `location` reports the checkpoint as not downloaded.
+    public static func check(ming location: MingLocation?) -> SetupReport {
+        let download = SpeechEngineID.ming.install.downloadCommand
+        let notFound = "Run \(download), or set MING_WEIGHTS to the folder that holds model.safetensors."
+        let finish = "Run \(download) to finish the download."
+        func file(_ component: SetupItem.Component, _ names: [String], _ what: String) -> SetupItem {
+            guard let dir = location?.directory else {
+                return SetupItem(component: component, state: .missing(fix: notFound), url: nil, summary: "No Ming checkpoint found.")
+            }
+            let absent = names.filter { !FileManager.default.fileExists(atPath: dir.appending(path: $0).path) }
+            guard absent.isEmpty else {
+                return SetupItem(component: component, state: .missing(fix: finish), url: dir,
+                                 summary: "Missing from \(dir.path): \(absent.joined(separator: ", ")).")
+            }
+            let bytes = names.reduce(UInt64(0)) { $0 + fileSize(dir.appending(path: $1)) }
+            return SetupItem(component: component, state: .ready, url: dir.appending(path: names.last!), summary: "\(what), \(megabytes(bytes)) at \(dir.path).")
+        }
+        return SetupReport(engine: .ming, directory: location?.directory, items: [
+            file(.weights, ["config.json", "model.safetensors"], "Weights"),
+            file(.tokenizer, ["tokenizer.json"], "Tokenizer"),
+            file(.speakerEncoder, ["campplus.onnx"], "Speaker encoder"),
+            wordRecognizerItem(),
+        ])
     }
 
     static func codecCheckpoint(_ location: ModelLocation) -> URL { location.directory.appending(path: "codec.pth") }
@@ -361,6 +390,8 @@ public enum DramaSetup: Sendable {
     }
 
     static func gigabytes(_ bytes: UInt64) -> String { String(format: "%.1f GB", Double(bytes) / 1e9) }
+
+    static func megabytes(_ bytes: UInt64) -> String { bytes >= 1_000_000_000 ? gigabytes(bytes) : String(format: "%.1f MB", Double(bytes) / 1e6) }
 
     static func shellQuoted(_ text: String) -> String {
         text.allSatisfy { $0.isLetter || $0.isNumber || "/._-=".contains($0) } ? text : "'" + text.replacingOccurrences(of: "'", with: #"'\''"#) + "'"

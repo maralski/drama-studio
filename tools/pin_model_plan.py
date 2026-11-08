@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 # Copyright 2026 Peter Marelas
 # SPDX-License-Identifier: Apache-2.0
-"""Writes the pinned Drama 3 download plan the app verifies every byte against.
+"""Writes a pinned download plan the app verifies every byte against.
 
-    python3 -I tools/pin_model_plan.py            write Sources/DramaEngine/Install/Drama3Plan.swift
-    python3 -I tools/pin_model_plan.py --check    HEAD every file URL and compare with the committed plan
+    python3 -I tools/pin_model_plan.py [drama3|ming]            write Sources/DramaEngine/Install/Drama3Plan.swift or MingDownloadPlan.swift
+    python3 -I tools/pin_model_plan.py [drama3|ming] --check    HEAD every file URL and compare with the committed plan
+
+The engine defaults to drama3.
 
 The Hugging Face tree API gives the sha256 of each LFS file (lfs.oid). Small
 files live in git, where the API gives only the git blob sha1, so this
@@ -16,10 +18,22 @@ import hashlib, json, re, sys, urllib.error, urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "Sources/DramaEngine/Install/Drama3Plan.swift"
-REPO = "fishaudio/drama-3"
-REVISION = "e0a9218aa48888270f06ef1ed9ea67622c0e17d2"
-SKIP = {".gitattributes"}
+PLANS = {
+    "drama3": dict(out="Drama3Plan.swift", repo="fishaudio/drama-3", revision="e0a9218aa48888270f06ef1ed9ea67622c0e17d2",
+                   skip=lambda path: path == ".gitattributes", big=lambda path: path.startswith("model-") or path == "codec.pth",
+                   doc="the engine, its tuning and its packed-weight\n    /// cache were verified on"),
+    "ming": dict(out="MingDownloadPlan.swift", repo="inclusionAI/Ming-3.0-tts-0.5B", revision="7247f4c94a5b2e987404ed28a5cfec41b1a4ca61",
+                 skip=lambda path: path == ".gitattributes" or path.endswith(".pdf") or path.startswith("figures/"),
+                 big=lambda path: path in ("model.safetensors", "campplus.onnx"),
+                 doc="the Ming engine was verified on, without\n    /// the report and figures"),
+}
+ENGINE = next((a for a in sys.argv[1:] if not a.startswith("--")), "drama3")
+if ENGINE not in PLANS:
+    sys.exit(f"unknown engine {ENGINE}; pick one of {', '.join(PLANS)}")
+PLAN = PLANS[ENGINE]
+OUT = ROOT / "Sources/DramaEngine/Install" / PLAN["out"]
+REPO = PLAN["repo"]
+REVISION = PLAN["revision"]
 AGENT = {"User-Agent": "drama-studio-pin"}
 
 
@@ -34,7 +48,7 @@ def resolve_url(path):
 def tree():
     with fetch(f"https://huggingface.co/api/models/{REPO}/tree/{REVISION}?recursive=true") as response:
         entries = json.load(response)
-    return [e for e in entries if e["type"] == "file" and e["path"] not in SKIP]
+    return [e for e in entries if e["type"] == "file" and not PLAN["skip"](e["path"])]
 
 
 def pinned(entry):
@@ -49,17 +63,15 @@ def pinned(entry):
 
 
 def write():
-    big = lambda row: row[0].startswith("model-") or row[0] == "codec.pth"
-    rows = sorted((pinned(e) for e in tree()), key=lambda row: (big(row), row[0]))
+    rows = sorted((pinned(e) for e in tree()), key=lambda row: (PLAN["big"](row[0]), row[0]))
     lines = "\n".join(f'        .init(path: "{p}", size: {s}, sha256: "{h}"),' for p, s, h in rows)
     OUT.write_text(f"""// Copyright 2026 Peter Marelas
 // SPDX-License-Identifier: Apache-2.0
 // Written by tools/pin_model_plan.py; do not edit.
 
 extension ModelDownloadPlan {{
-    /// `{REPO}` at the commit the engine, its tuning and its packed-weight
-    /// cache were verified on. Small files come first.
-    package static let drama3 = ModelDownloadPlan(repo: "{REPO}", revision: "{REVISION}", files: [
+    /// `{REPO}` at the commit {PLAN["doc"]}. Small files come first.
+    package static let {ENGINE} = ModelDownloadPlan(repo: "{REPO}", revision: "{REVISION}", files: [
 {lines}
     ])
 }}

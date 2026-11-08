@@ -25,7 +25,7 @@ enum ModelSetup {
     /// `MING_WEIGHTS`, else the `mingDirectory` default; nil unless complete.
     static let mingDirectoryKey = "mingDirectory"
     static func mingLocation() -> MingLocation? {
-        if let location = MingLocation.fromEnvironment() { return location }
+        if ProcessInfo.processInfo.environment["MING_WEIGHTS"] != nil { return MingLocation.find().flatMap { $0.isComplete ? $0 : nil } }
         guard let path = AppHome.defaults.string(forKey: mingDirectoryKey), !path.isEmpty else { return nil }
         let location = MingLocation(directory: URL(filePath: path, directoryHint: .isDirectory))
         return location.isComplete ? location : nil

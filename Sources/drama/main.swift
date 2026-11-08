@@ -525,6 +525,29 @@ func fbench(_ args: Args) throws {
                  t[t.count / 2], t.first!, t.last!, c[c.count / 2], t.count, steps))
 }
 
+/// drama setup [--model <dir>] [--ming-weights <dir>]: what each engine's
+/// install has and what it lacks, with the fix for each gap. Reads files only.
+/// Exits 1 when no engine is ready.
+func setup(_ args: Args) -> Never {
+    let reports = [
+        DramaSetup.check(location: args["model"].map { ModelLocation(directory: URL(fileURLWithPath: $0)) } ?? .huggingFaceCache()),
+        DramaSetup.check(ming: args["ming-weights"].map { MingLocation(directory: URL(fileURLWithPath: $0)) } ?? MingLocation.find()),
+    ]
+    for report in reports {
+        print("\(report.engine.capabilities.name), \(report.engine.install.repo): \(report.isReady ? "ready" : "not ready")")
+        for item in report.items {
+            let mark = switch item.state {
+            case .ready: "ok     "
+            case .missing: "missing"
+            case .builtOnFirstLoad: "later  "
+            }
+            print("  \(mark) \(item.component.rawValue): \(item.summary)")
+            if let fix = item.fix { print("          \(fix)") }
+        }
+    }
+    exit(reports.contains(where: \.isReady) ? 0 : 1)
+}
+
 /// drama serve [--port 8780] [--no-token] [--engine drama3|ming] [--ming-weights <dir>]:
 /// the app's HTTP API, headless, on one engine. DRAMA_PREVIEW_ENGINE=1 serves
 /// the mock engine, as in the app; MING_WEIGHTS names the Ming checkpoint.
@@ -543,7 +566,7 @@ func serve(_ args: Args) throws -> Never {
             guard DramaCodec.modelsExist() else { fail("the Core ML codec models are missing; run Sources/DramaEngine/CodecConversion/convert_codec.py") }
             factory = .drama3(location: location, codecDirectory: DramaCodec.defaultDirectory)
         case .ming:
-            guard let location = args["ming-weights"].map({ MingLocation(directory: URL(fileURLWithPath: $0)) }) ?? MingLocation.fromEnvironment(), location.isComplete else {
+            guard let location = args["ming-weights"].map({ MingLocation(directory: URL(fileURLWithPath: $0)) }) ?? MingLocation.find(), location.isComplete else {
                 fail("no complete Ming checkpoint found; pass --ming-weights <dir> or set MING_WEIGHTS")
             }
             factory = .ming(location: location)
@@ -592,6 +615,7 @@ case "generate": try generate(args)
 case "decode": try decodeCommand(args)
 case "codec-bench": try codecBench(args)
 case "serve": try serve(args)
+case "setup": setup(args)
 case "check-words": exit(WordCheckDiagnostic.run(Array(args.positional.dropFirst())))
-default: fail("usage: drama <dump|bench|kbench|dbench|fbench|profile|trace|tune|pack|schedule-ab|generate|decode|codec-bench|serve> [options]")
+default: fail("usage: drama <dump|bench|kbench|dbench|fbench|profile|trace|tune|pack|schedule-ab|generate|decode|codec-bench|serve|setup> [options]")
 }

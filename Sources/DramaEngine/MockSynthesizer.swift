@@ -54,8 +54,8 @@ public actor MockSynthesizer: SpeechSynthesizer {
     /// Stands in for the engine without its weights.
     public nonisolated var engineDescription: EngineDescription {
         switch engine {
-        case .drama3: EngineDescription(engine: .drama3, modelID: "fishaudio/drama-3", snapshot: "mock", isMock: true)
-        case .ming: EngineDescription(engine: .ming, modelID: MingSynthesizer.modelID, snapshot: "mock", isMock: true)
+        case .drama3: EngineDescription(engine: .drama3, modelID: SpeechEngineID.drama3.install.repo, snapshot: "mock", isMock: true)
+        case .ming: EngineDescription(engine: .ming, modelID: SpeechEngineID.ming.install.repo, snapshot: "mock", isMock: true)
         }
     }
 

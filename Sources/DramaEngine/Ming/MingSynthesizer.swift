@@ -10,11 +10,14 @@ public struct MingLocation: Sendable, Equatable {
     public var directory: URL
     public init(directory: URL) { self.directory = directory }
 
-    /// `MING_WEIGHTS`, when it names a complete checkpoint.
-    public static func fromEnvironment() -> MingLocation? {
-        guard let path = ProcessInfo.processInfo.environment["MING_WEIGHTS"], !path.isEmpty else { return nil }
-        let location = MingLocation(directory: URL(filePath: path, directoryHint: .isDirectory))
-        return location.isComplete ? location : nil
+    /// The folder `MING_WEIGHTS` names, complete or not, so setup can say
+    /// what it lacks; else the newest snapshot in the ``HuggingFaceCache``;
+    /// nil when there is neither.
+    public static func find() -> MingLocation? {
+        if let path = ProcessInfo.processInfo.environment["MING_WEIGHTS"], !path.isEmpty {
+            return MingLocation(directory: URL(filePath: path, directoryHint: .isDirectory))
+        }
+        return HuggingFaceCache.latestSnapshot(of: SpeechEngineID.ming.install.repo).map(MingLocation.init(directory:))
     }
 
     public static let requiredFiles = ["model.safetensors", "config.json", "tokenizer.json", "campplus.onnx"]
@@ -34,7 +37,6 @@ public struct MingLocation: Sendable, Equatable {
 /// for the rest, as Ming's own style tasks do. The finished take's opening
 /// sentences are encoded the same way so a later take can continue the voice.
 public actor MingSynthesizer: SpeechSynthesizer {
-    public static let modelID = "inclusionAI/Ming-3.0-tts-0.5b"
     /// The longest take excerpt a later take clones. Longer references leave
     /// Ming's 512-position cache too little room to generate.
     package static let excerptSeconds = 10.0
@@ -46,7 +48,7 @@ public actor MingSynthesizer: SpeechSynthesizer {
     public init(location: MingLocation) { self.location = location }
 
     public nonisolated var engineDescription: EngineDescription {
-        EngineDescription(engine: .ming, modelID: Self.modelID, snapshot: location.directory.lastPathComponent, isMock: false)
+        EngineDescription(engine: .ming, modelID: SpeechEngineID.ming.install.repo, snapshot: location.directory.lastPathComponent, isMock: false)
     }
 
     /// Ming has no kernel tuning: false once loaded.

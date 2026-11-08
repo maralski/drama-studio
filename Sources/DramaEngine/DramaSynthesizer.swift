@@ -98,7 +98,7 @@ public actor DramaSynthesizer: SpeechSynthesizer {
     }
 
     public nonisolated var engineDescription: EngineDescription {
-        EngineDescription(engine: .drama3, modelID: "fishaudio/drama-3", snapshot: location.directory.lastPathComponent, isMock: false)
+        EngineDescription(engine: .drama3, modelID: SpeechEngineID.drama3.install.repo, snapshot: location.directory.lastPathComponent, isMock: false)
     }
 
     /// Encodes a clip to Drama 3 codec codes, loading the engine if needed.

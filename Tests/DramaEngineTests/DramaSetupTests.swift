@@ -29,9 +29,9 @@ final class DramaSetupTests: XCTestCase {
 
     func testNoSnapshotReportsTheDownloadCommand() {
         let report = DramaSetup.check(location: nil, codecDirectory: codecDirectory, tuningDirectory: tuningDirectory)
-        XCTAssertEqual(report.items.map(\.component), SetupItem.Component.allCases)
+        XCTAssertEqual(report.items.map(\.component), SpeechEngineID.drama3.install.components)
         XCTAssertFalse(report.isReady)
-        XCTAssertTrue(report[.weights].fix?.contains(DramaSetup.downloadCommand) == true)
+        XCTAssertTrue(report[.weights].fix?.contains("uvx --from huggingface_hub hf download fishaudio/drama-3") == true)
     }
 
     func testMissingShardIsNamed() throws {

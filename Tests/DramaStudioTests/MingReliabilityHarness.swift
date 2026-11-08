@@ -75,7 +75,9 @@ final class MingReliabilityHarness: XCTestCase {
     func testCorpus() async throws {
         let environment = ProcessInfo.processInfo.environment
         guard let path = environment["DRAMA_APP_CHECK_HOME"] else { throw XCTSkip("set DRAMA_APP_CHECK_HOME") }
-        guard let ming = MingLocation.fromEnvironment() else { throw XCTSkip("set MING_WEIGHTS to a complete Ming checkpoint") }
+        guard let mingPath = environment["MING_WEIGHTS"], case let ming = MingLocation(directory: URL(filePath: mingPath)), ming.isComplete else {
+            throw XCTSkip("set MING_WEIGHTS to a complete Ming checkpoint")
+        }
         guard let outPath = environment["MING_HILL_OUT"] else { throw XCTSkip("set MING_HILL_OUT") }
         let home = URL(filePath: path, directoryHint: .isDirectory)
         let out = URL(filePath: outPath, directoryHint: .isDirectory)
