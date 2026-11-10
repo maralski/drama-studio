@@ -51,6 +51,8 @@ final class SayTests: XCTestCase {
             (["--retake", "T1", "--note", "softer"], command { $0.retakeOf = "T1"; $0.note = "softer"; $0.source = nil }),
             (["--retake", "T1", "A new line."], command { $0.retakeOf = "T1"; $0.source = .text("A new line.") }),
             (["--verbose", "Hi"], command { $0.verbose = true; $0.source = .text("Hi") }),
+            (["-e", "ming", "Hi"], command { $0.engine = "ming"; $0.source = .text("Hi") }),
+            (["--engine=drama3", "--retake", "T1"], command { $0.engine = "drama3"; $0.retakeOf = "T1"; $0.source = nil }),
             (["--", "-5", "degrees"], command { $0.source = .text("-5 degrees") }),
         ]
         for (arguments, expected) in cases {
@@ -120,6 +122,7 @@ final class SayTests: XCTestCase {
             (command { $0.note = "softer"; $0.retakeOf = "T1"; $0.output = .standardOutput }, nil,
              ["note": "softer", "previous_takes": [["take_id": "T1"]], "response_format": "pcm"]),
             (command { $0.note = "angrier" }, "Hi", ["input": "Hi", "note": "angrier", "stream": true, "response_format": "pcm"]),
+            (command { $0.engine = "ming"; $0.output = .file(file) }, "Hi", ["input": "Hi", "model": "ming", "response_format": "m4a"]),
         ]
         for (command, text, body) in cases {
             let call = command.request(text: text)

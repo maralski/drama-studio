@@ -21,6 +21,8 @@ public struct SayCommand: Sendable, Equatable {
     public var source: Source? = .standardInput
     public var voice: Voice = .studio
     public var output: Output = .play
+    /// The engine to speak with, by id, model id or name, as the API's `model` takes it.
+    public var engine: String?
     public var expressiveness: Double?
     public var seed: UInt64?
     public var note: String?
@@ -50,6 +52,7 @@ public struct SayCommand: Sendable, Equatable {
         case .file(let url): body["response_format"] = .string(url.pathExtension.lowercased())
         case .standardOutput: body["response_format"] = "pcm"
         }
+        if let engine { body["model"] = .string(engine) }
         if let expressiveness { body["expressiveness"] = .double(expressiveness) }
         if let seed { body["seed"] = .int(Int(seed)) }
         if let note { body["note"] = .string(note) }
@@ -76,6 +79,9 @@ public struct SayUsageError: Error, Equatable {
       --scene TEXT            where the character speaks (with --character)
       --speaker N=VOICE       library voice for speaker N of a multi-speaker
                               script; repeat for each speaker
+      -e, --engine ENGINE     the engine to speak with: drama3 or ming; by
+                              default the studio's selected engine, or for
+                              --retake the engine that made the take
       -o FILE                 write FILE instead of playing (.wav, .m4a, .pcm)
       -o -                    write raw 16-bit mono 44.1 kHz PCM to standard output
       --expressiveness 0..1   0 flat, 0.5 default, 1 lively
@@ -160,10 +166,12 @@ extension SayCommand {
             draft.command.output = .file(url)
         }
         let help = Flag.toggle { _ in throw SayUsageError(message: nil) }
+        let engine = Flag.value { draft, name in draft.command.engine = name }
         return [
             "-f": input, "--input-file": input,
             "-v": voice, "--voice": voice,
             "-o": output, "--output-file": output,
+            "-e": engine, "--engine": engine,
             "-h": help, "--help": help,
             "--list-voices": .toggle { $0.command.listVoices = true },
             "--character": .value { draft, value in
@@ -360,7 +368,7 @@ private final class Trace: @unchecked Sendable {
     }
 
     func take(_ reply: APIReply) {
-        var text = "take \(reply.header("X-Drama-Take-Id") ?? "?") after \(Self.seconds(start.duration(to: clock.now)))"
+        var text = "take \(reply.header("X-Drama-Take-Id") ?? "?") on \(reply.header("X-Drama-Engine") ?? "?") after \(Self.seconds(start.duration(to: clock.now)))"
         if let estimate = reply.header("X-Drama-Estimated-Seconds") { text += ", estimated \(estimate) s to generate" }
         line(text)
     }
