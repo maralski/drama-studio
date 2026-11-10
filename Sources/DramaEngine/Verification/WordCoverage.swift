@@ -29,6 +29,9 @@ package enum WordCoverage {
         /// The first word of a parenthesized stage direction: "(laughing)".
         var direction_words: [String] = []
         var spellings: [String: String] = [:]
+        /// A word a recognizer writes for another that sounds the same in the
+        /// engines' voices, as that other word: "fairy" is "ferry".
+        var homophones: [String: String] = [:]
         /// What a hyphen between two numbers may be read as.
         var range_words: [String] = []
         /// A unit right after a number, abbreviated or spelled out, singular or

@@ -500,6 +500,18 @@ final class WordCoverageTests: XCTestCase {
                      ("Take 10 steps.", "Take 10s steps.")], false)
     }
 
+    /// Catches "The ferry docked at dawn." refused on every attempt: whisper
+    /// wrote "fairy" for the same audio Apple wrote "ferry" for.
+    func testAWordHeardAsItsHomophoneMatchesButNoOtherWord() {
+        assertMatch([("The ferry docked at dawn.", "The fairy docked at dawn."),
+                     ("Two ferries crossed.", "Two fairies crossed.")], true)
+        assertMatch([("The ferry docked at dawn.", "The furry docked at dawn."),
+                     ("The ferry docked at dawn.", "The very docked at dawn."),
+                     ("The ferry docked at dawn.", "The fair docked at dawn."),
+                     ("The ferry docked at dawn.", "The docked at dawn."),
+                     ("The ferry docked at dawn.", "The ferries docked at dawn.")], false)
+    }
+
     func testAnUncertainMatchingWordCannotCertifySpeech() {
         let line = "[clears throat] The garden gate is closed."
         XCTAssertFalse(WordCoverage.matches(line: line, transcript: "The garden gate is closed.", locale: english, profile: .exact, uncertainSpans: ["garden"]))

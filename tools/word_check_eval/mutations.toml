@@ -165,8 +165,14 @@ new = 'if let tensWord = Optional<String>.none {'
 [[mutation]]
 name = 'no spellings'
 file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
-old = 'let spelled = forms.spellings[word] ?? word'
-new = 'let spelled = word'
+old = 'let spelled = forms.spellings[word] ?? forms.homophones[word] ?? word'
+new = 'let spelled = forms.homophones[word] ?? word'
+
+[[mutation]]
+name = 'no homophones'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'let spelled = forms.spellings[word] ?? forms.homophones[word] ?? word'
+new = 'let spelled = forms.spellings[word] ?? word'
 
 [[mutation]]
 name = 'no shared s'
