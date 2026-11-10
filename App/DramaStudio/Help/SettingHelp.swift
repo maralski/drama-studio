@@ -92,7 +92,7 @@ enum SettingHelp: String, CaseIterable, Identifiable {
     var text: String {
         switch self {
         case .requirements:
-            "Requires an Apple silicon Mac and macOS 15 or later. Allow about 49 GB of free disk for initial setup, plus space for audio and projects. A network connection is needed for downloads and update checks; generation runs locally. Use 64 GB or more of unified memory. This is a recommendation, not a tested minimum: the engine maps about 41.5 GB of weights, and generation has been verified on an M3 Max with 128 GB. Lower-memory Macs may swap heavily or fail to load. The studio window needs at least 900 by 640 points."
+            "Requires an Apple silicon Mac and macOS 26 or later. Ming is a 3.0 GB download and is the engine to use on a Mac with less than 64 GB of unified memory. Drama 3 needs about 49 GB of free disk for setup and 64 GB or more of memory: it maps about 41.5 GB of weights, and a smaller Mac may swap heavily or fail to load. Both engines have been verified only on an M3 Max with 128 GB, so neither figure is a tested minimum. A network connection is needed for downloads and update checks; generation runs locally. The studio window needs at least 900 by 640 points."
         case .gettingStarted:
             "Type or paste a script in the editor, or click Import Script to open a text, Word, or subtitle file. Add a voice from the sidebar by choosing a clip or recording one, then pick it for a speaker under Cast. Click Generate to hear the take while it is made. When you like it, click Export to save it as WAV or M4A."
         case .screenplayMode:

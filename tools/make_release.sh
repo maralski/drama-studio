@@ -144,13 +144,14 @@ fi
 
 zip_gb=$(printf '%.1f' $(( zip_bytes / 1e9 )))
 {
-    print "Drama Studio is a Mac app that runs Fish Audio Drama 3 text-to-speech locally on Apple silicon. It has a script editor, voice cloning, voice design, and an HTTP API and MCP server on 127.0.0.1.
+    print "Drama Studio is a Mac app that runs text-to-speech locally on Apple silicon with one of two engines: Fish Audio Drama 3, or inclusionAI Ming for Macs with less memory. It has a script editor, voice cloning, voice design, and an HTTP API and MCP server on 127.0.0.1.
 
 ## Requirements
 
 - macOS 26 or later on Apple silicon for checked generation, with an installed on-device speech model. Verified only on an M3 Max with 128 GB.
-- 64 GB of unified memory or more recommended: the engine maps about 41 GB of weights.
-- About 49 GB of free disk: 41.5 GB of weights, the codec zip and models, and the packed-weight cache. The setup window checks before it downloads.
+- Drama 3: 64 GB of unified memory or more recommended, since it maps about 41 GB of weights, and about 49 GB of free disk: 41.5 GB of weights, the codec zip and models, and the packed-weight cache.
+- Ming: a 3.0 GB download, recommended below 64 GB of memory. It has not been tested on a smaller Mac.
+- The setup window checks free disk before it downloads.
 
 ## Install
 
@@ -170,15 +171,16 @@ From Terminal you can instead run \`xattr -dr com.apple.quarantine /Applications
     print "
 ## First run
 
-1. The setup window asks you to agree to the Fish Audio Community License terms.
-2. It downloads the Drama 3 weights from Hugging Face (41.5 GB, pinned to revision e0a9218) and the Core ML codec models from this release ($zip_gb GB).
-3. It tunes the kernels for this Mac, 30 seconds to a minute.
-4. You speak your first line.
+1. The setup window asks which engine to install. On a Mac with less than 64 GB of memory it recommends Ming.
+2. With Ming, it downloads the Ming weights from Hugging Face (3.0 GB, pinned to revision 7247f4c).
+3. With Drama 3, it asks you to agree to the Fish Audio Community License terms, downloads the Drama 3 weights from Hugging Face (41.5 GB, pinned to revision e0a9218) and the Core ML codec models from this release ($zip_gb GB), then tunes the kernels for this Mac, 30 seconds to a minute.
+4. You speak your first line. You can add the other engine later in Settings.
 
 ## License
 
 - Drama Studio's code: Apache License 2.0.
 - The Drama 3 weights and the codec models: Fish Audio Community License v1.0. Commercial use is allowed only under USD 500,000 annual revenue. A hosted TTS or voice-cloning service needs a separate license from Fish Audio. Do not imitate identifiable people without their consent.
+- The Ming weights: MIT License, from inclusionAI.
 
 Built with Fish Audio.
 

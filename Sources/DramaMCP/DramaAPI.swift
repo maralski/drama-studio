@@ -108,8 +108,9 @@ public struct HTTPDramaAPI: DramaAPI {
             for try await byte in bytes { reply.body.append(byte) }
             return (reply, AsyncThrowingStream { $0.finish() })
         }
-        // The server sends whole 2048-sample frames, so a 4096-byte chunk never
-        // waits on audio that is still generating.
+        // Drama 3 sends whole 2048-sample frames, so a 4096-byte chunk never
+        // waits on audio that is still generating. Ming sends whole samples, so
+        // up to 46 ms of a sentence's tail can wait for the next sentence.
         let chunks = AsyncThrowingStream<Data, any Error> { continuation in
             let task = Task {
                 do {
