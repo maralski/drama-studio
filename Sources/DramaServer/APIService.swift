@@ -176,7 +176,7 @@ public final class APIService: Sendable {
     /// `APIRequest.streamsBody` holds; other routes read `request.body`.
     public func respond(to request: HTTPRequest, body: AsyncThrowingStream<Data, Error>? = nil) async -> APIResponse {
         guard APIToken.authorizes(request, token: token) else {
-            return .error(APIError(.unauthorized, "Missing or wrong bearer token. Send Authorization: Bearer <token>, with the token from ~/Library/Application Support/DramaStudio/api-token.", headers: ["WWW-Authenticate": "Bearer"]))
+            return .error(APIError(.unauthorized, "Missing or wrong bearer token. Send Authorization: Bearer <token>, with the token from \((APIToken.defaultURL.path as NSString).abbreviatingWithTildeInPath).", headers: ["WWW-Authenticate": "Bearer"]))
         }
         switch APIRequest.parse(request) {
         case .failure(let error):
