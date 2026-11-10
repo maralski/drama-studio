@@ -267,7 +267,8 @@ package enum WordCoverage {
 
     /// Returns, for each expected token, the ordinal of the heard token that
     /// matched it. Spacing may differ inside a compound: "web site" == "website",
-    /// and punctuation inside a run of digits: "three two one" == "3, 2, 1".
+    /// punctuation inside a run of digits: "three two one" == "3, 2, 1", and
+    /// a final s before a word that starts with s: "beams sweep" == "beam sweep".
     /// A currency only a symbol implies may be absent from the other side, but
     /// never replaced by a different currency.
     private static func match(expected: [String], heard: [String], reactions: Bool) -> [Int]? {
@@ -277,11 +278,22 @@ package enum WordCoverage {
         func optional(_ tokens: [String], _ index: Int, against other: String?) -> Bool {
             index < tokens.count && EnglishNumbers.isImpliedCurrency(tokens[index]) && !(other.map(EnglishNumbers.isCurrency) ?? false)
         }
+        /// A final s runs into a word that starts with s as one long s, so
+        /// "beam sweep" and "beams sweep" sound alike and a recognizer writes
+        /// either. Words of three letters or more: "a" is not "as".
+        func sharesS(_ word: String, _ other: String, before following: String?, _ otherFollowing: String?) -> Bool {
+            guard let following, following == otherFollowing, following.hasPrefix("s"), !isNumber(following) else { return false }
+            let (short, long) = word.count < other.count ? (word, other) : (other, word)
+            return short.count >= 3 && long == short + "s" && !isNumber(short)
+        }
         var next = 0, ordinal = 0
         var ordinals: [Int] = []
         while ordinal < heard.count {
             let word = heard[ordinal]
             if next < expected.count, EnglishNumbers.same(word, expected[next]) {
+                ordinals.append(ordinal); next += 1; ordinal += 1
+            } else if next < expected.count, sharesS(word, expected[next], before: ordinal + 1 < heard.count ? heard[ordinal + 1] : nil,
+                                                      next + 1 < expected.count ? expected[next + 1] : nil) {
                 ordinals.append(ordinal); next += 1; ordinal += 1
             } else if next < expected.count, joinable(expected, next), word == expected[next] + expected[next + 1] {
                 ordinals += [ordinal, ordinal]; next += 2; ordinal += 1

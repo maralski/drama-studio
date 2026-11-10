@@ -169,6 +169,24 @@ old = 'let spelled = forms.spellings[word] ?? word'
 new = 'let spelled = word'
 
 [[mutation]]
+name = 'no shared s'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = 'return short.count >= 3 && long == short + "s" && !isNumber(short)'
+new = 'return false'
+
+[[mutation]]
+name = 'shared s before any word'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = 'following == otherFollowing, following.hasPrefix("s"), !isNumber(following)'
+new = 'following == otherFollowing, !isNumber(following)'
+
+[[mutation]]
+name = 'shared s on short words'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = 'return short.count >= 3 && long == short + "s" && !isNumber(short)'
+new = 'return short.count >= 1 && long == short + "s" && !isNumber(short)'
+
+[[mutation]]
 name = 'non-homophone spelling'
 file = 'Sources/DramaEngine/Verification/EnglishSpokenForms.json'
 old = '"alright": "all right",'
