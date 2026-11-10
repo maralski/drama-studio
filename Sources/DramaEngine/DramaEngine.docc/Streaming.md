@@ -71,8 +71,10 @@ for try await event in engine.synthesize(request) {
 }
 ```
 
-All audio is mono `Float` at 44.1 kHz. Every frame is 2048 samples, and every
-audio event holds a whole number of frames.
+All audio is mono `Float` at 44.1 kHz. On Drama 3 every frame is 2048
+samples, and every audio event holds a whole number of frames. Ming sends no
+partials: it sends one ``SpeechEvent/audio(samples:chunkIndex:)`` per
+sentence in either mode.
 
 ### Show progress and the time left
 

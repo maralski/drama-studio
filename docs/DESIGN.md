@@ -211,12 +211,20 @@ API, the MCP tools and `drama-say` keep one code path, and that a voice
 library or a project works on either engine.
 
 - One table per fact. `SpeechEngineID.capabilities` (`EngineCapabilities`)
-  says what each engine can do: cue vocabulary, passage tags, history, clone
-  length, languages, and the step rate the time estimate uses.
-  `SpeechEngineID.install` (`EngineInstall`) says where each checkpoint comes
-  from and what setup checks. Adding an engine fails to compile until both
-  rows exist. The Inspector's limits line, the API's model list and
-  `drama setup` all read these tables.
+  says what each engine can do: cue vocabulary, passage tags, history,
+  Expressiveness, note emotions, clone length, languages, and the step rate
+  the time estimate uses. `SpeechEngineID.install` (`EngineInstall`) says
+  where each checkpoint comes from, who publishes it under which license,
+  the memory it is recommended for, and what setup checks. Adding an engine
+  fails to compile until both rows exist. The Inspector's limits line, the
+  Insert Cue menu, the note suggestions, the setup window, the API's model
+  list and `drama setup` all read these tables.
+- Setup follows the install row. The setup window adds a terms step for an
+  engine only when its license sets `requiresAgreement`, and codec and tuning
+  steps only when the row lists those components. So the Ming path asks for
+  no agreement and downloads nothing of Drama 3's. The engine step recommends
+  the first engine, Drama 3 then Ming, whose `recommendedMemory` the Mac
+  meets. Ming has no `recommendedMemory`, so a Mac below 64 GB gets Ming.
 - One engine in memory. `SpeechEngines` is itself a `SpeechSynthesizer`. It
   builds an engine from its factory when a request needs it and drops the
   other one first, and no call returns an engine, so nothing can keep dropped
@@ -231,7 +239,9 @@ library or a project works on either engine.
 - The words always survive. When an engine cannot perform a cue or a note,
   it removes the markup, speaks the words, and reports a `SpeechNotice`.
   `SpeechOutline` computes the notices before generation, so the API can send
-  them in headers before the first audio.
+  them in headers before the first audio. `SpeechNotice.message(on:)` writes
+  the one sentence that the app, the API, the MCP tools and `drama-say` all
+  show, and it names the engine that ran the request.
 - Ming's cue table is data. Ming reads 14 fixed tags and one emotion per
   request, so `MingCues.table` maps typed cues to tags or emotions, matches a
   longer cue by its leading words, and reports the rest.

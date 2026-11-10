@@ -12,18 +12,45 @@ through MingTTS 0.1.0, a Swift and Metal port. Its checkpoint is 3.0 GB
 against Drama 3's 41.5 GB, so on a Mac with less than 64 GB of memory, use
 Ming instead of Drama 3.
 
-- The first-run setup window lets you choose the engine. On a Mac with less
-  than 64 GB of memory, Ming is recommended and selected. A Ming-only install
-  skips the 41.5 GB Drama 3 download. Settings adds either engine later.
-  <!-- VERIFY-SETUP: the setup window's engine choice, Ming preselection below 64 GB, the Ming-only install, and adding Drama 3 from Settings. -->
+- The setup window starts with **Choose a speech engine**. It recommends and
+  selects Ming on a Mac with less than 64 GB of memory, and Drama 3
+  otherwise. Choosing Drama 3 below 64 GB shows a warning first. The Ming
+  path has no terms, codec or tuning step and never downloads Drama 3.
+  **Choose Another Engine** goes back from the warning, the terms, a
+  download or a failure, and keeps partial downloads. An install that already
+  agreed to the Fish Audio terms counts as a Drama 3 install.
+- **Settings > General** adds Ming with **Download (3.0 GB)** or
+  **Choose Folder…**, and adds Drama 3 with **Set Up Drama 3…**, which runs
+  the Drama 3 setup steps, terms included, in the main window.
+- The Fish Audio terms gate Drama 3 only. Ming's MIT License asks for no
+  agreement. **Settings > General > About** names both licenses.
 - The Inspector's **Engine** picker and the Speech menu switch engines. Only
   one engine is in memory at a time. A retake runs on the engine that made
-  its take.
+  its take. A take's tile names the engine that made it when both engines are
+  installed or the take is from the engine that is not selected.
 - Ming performs 14 fixed cue tags and five emotions. Drama Studio maps common
-  cues such as `[laughs]` and `[sighs]` to them, removes the rest with their
-  words kept, and reports each change as a notice in the app, the HTTP API
+  cues such as `[laughs]` and `[sighs]` to them and leaves out the rest. A
+  passage tag's words are spoken plainly. Each change is a notice that names
+  the engine, such as "Ming can't perform [shouting], so it was left out.",
+  in the app's notice banner and take tile, the HTTP API
   (`X-Drama-Notices`, and `notices` in the `done` event), `drama-say` and the
   MCP tools.
+- On Ming, **Insert Cue** disables the cues Ming can't perform and marks them
+  "(not on Ming)", the Expressiveness slider is disabled, and the note
+  suggestions are Ming's five emotions. A request that sets Expressiveness
+  away from the default gets the notice "Ming ignores the Expressiveness
+  setting."
+- **Add Voice** advises 5 to 15 seconds of speech for Ming and 5 to 20 for
+  Drama 3. Ming encodes the whole clip, and a clip over 15 seconds gets a
+  warning, not a refusal.
+- Ming takes Chinese (`zh-Hans` and `zh-Hant`), and a script in a language
+  Ming does not speak fails before generation with "Ming can't speak
+  Italian; it speaks Chinese, English, Japanese, Korean, German, French, and
+  Spanish". The API returns it with `400`.
+- A voice saved before voices kept their recording can't speak on Ming until
+  Drama 3 is set up, because only Drama 3's codec can recreate its clip.
+- The status line reads "4.2 s of audio · 1.8x real time · generated in
+  2.3 s" for the selected take.
 - The HTTP API lists every installed engine in `GET /v1/models`, takes the
   engine in the speech body's `model` field or the `model` query parameter,
   and names the engine in `X-Drama-Engine` and `X-Drama-Model`. A file
@@ -33,12 +60,23 @@ Ming instead of Drama 3.
 - `drama setup` reports both engines and takes `--ming-weights`. `drama serve`
   serves every installed engine and takes `--engine drama3|ming` (or
   `DRAMA_ENGINE`), `--ming-weights` and `--voices`.
+- `drama-say` takes `-e` or `--engine`, and `--verbose` names the engine that
+  made the take.
+- The API's `401` message names the token file the server reads, which is in
+  `DRAMA_STUDIO_HOME` when that is set.
 - The MCP `synthesize_speech` tool takes an `engine`, and `studio_status`
   lists every installed engine.
 - New public API: `MingSynthesizer`, `MingLocation`, `MingVoiceEncoding`,
   `SpeechEngines`, `EngineCapabilities`, `CueSupport`, `EngineInstall`,
   `HuggingFaceCache`, `SpeechNotice`, `SpeechOutline`, `EngineDescription`,
   `VoiceEncodingStore`, `DramaSetup.check(ming:)` and `SpeechResult.notices`.
+  `EngineInstall` names each engine's `publisher`, `license` (an
+  `EngineInstall.License` with `requiresAgreement`), `recommendedMemory`
+  and `downloadBytes`. `EngineCapabilities` has `expressiveness` and
+  `noteEmotions`. `SpeechNotice.message(on:)` names the engine that ran the
+  request, and `SpeechNotice.ignoredExpressiveness` reports an Expressiveness
+  setting the engine ignores. `SpeechEngines.Factory.placeholder(_:)` holds
+  the selection before any engine is installed.
 - DramaEngine depends on the MingTTS package. `MING_PACKAGE_PATH` builds
   against a local checkout.
 

@@ -44,9 +44,10 @@ codes. ``ReferenceAudio/write(_:to:)`` stores it as a WAV that
 clips were kept, ``DramaCodec/recreateClip(of:directory:)`` decodes its Drama 3
 codes. ``ReferenceVoice/durationSeconds`` gives the clip's length.
 Every frame of a reference is one prompt row, and a prompt holds at most
-``Drama3Prompt/maxRows`` (8192) rows, so keep clips short. For Ming, keep a
-clip to 15 seconds or less, the
-``EngineCapabilities/maxCloneSeconds`` of ``SpeechEngineID/ming``.
+``Drama3Prompt/maxRows`` (8192) rows, so keep clips short. Ming clones best
+from a clip of up to 15 seconds, the ``EngineCapabilities/maxCloneSeconds``
+of ``SpeechEngineID/ming``. Ming encodes the whole clip, so a longer clip
+leaves less room to speak each line.
 
 ### Record a clip
 
@@ -118,7 +119,9 @@ let retake = SpeechRequest(text: line, note: "softer and warmer", previousTakes:
 Write performance cues into the text: `[laughs]`, `[sighs]`,
 `<whisper>…</whisper>`. Drama 3 performs any cue as written. Ming performs
 14 fixed tags and five emotions; ``SpeechEngineID/cueSupport(_:)`` says how
-it performs a cue, and ``SpeechResult/notices`` lists the cues it removed. In the reliability study the cue lines were the one
+it performs a cue, and ``SpeechResult/notices`` lists the cues it removed.
+``SpeechNotice/message(on:)`` turns a notice into one sentence that names
+the engine, such as "Ming can't perform [shouting], so it was left out." In the reliability study the cue lines were the one
 area where the model dropped content a few times in twenty, and `[laughs]`
 can turn into a laughter loop that the frame cap ends. 
 On Drama 3, ``GenerationConfig/make(expressiveness:)`` maps one 0-to-1
@@ -126,4 +129,5 @@ control onto temperature, top-p and top-k, with the vendor's sampling at 0.5
 and the Hugging Face Space's (temperature 1.0, top-p 0.9, no top-k) at 1.
 The Space's sampling kept every sentence of the cue lines in the reliability
 study and needed fewer retries, at a cost of 0.007 of word error rate on
-prose.
+prose. Ming ignores the sampling settings. A request whose sampling differs from
+the default expressiveness gets ``SpeechNotice/ignoredExpressiveness``.
