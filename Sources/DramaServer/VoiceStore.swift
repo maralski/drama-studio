@@ -62,6 +62,11 @@ public struct VoiceDirectory: VoiceStore {
         if FileManager.default.fileExists(atPath: clipFile(for: id).path) { try FileManager.default.removeItem(at: clipFile(for: id)) }
     }
 
+    /// Whether the voice's clip is on disk, so reading it needs no codec.
+    public func hasClip(for id: ReferenceVoice.ID) -> Bool {
+        FileManager.default.fileExists(atPath: clipFile(for: id).path)
+    }
+
     /// The voice's clip. A voice saved before the library kept clips gets
     /// one decoded from its Drama 3 codes, kept as its wav so that happens
     /// once. Nil when the voice has neither.
