@@ -8,6 +8,10 @@ DAC audio codec runs through Core ML, the only route to the Neural Engine; in
 practice it runs on the CPU there (see the README). No MLX, no PyTorch at
 runtime.
 
+The app also runs a second engine, inclusionAI's Ming-3.0-tts-0.5B, through
+the MingTTS package. Most of this document is about Drama 3. "Two engines"
+below covers how Ming fits in.
+
 ## Model facts (from `config.json` and fish-speech v3.0.0-beta)
 
 Backbone `FishOmniTextModel`, hidden 2048, vocab 252288, 40 layers.
@@ -75,6 +79,8 @@ bytes and previous chunks are fed back as history turns.
 
 ```
 Sources/DramaEngine        Swift library: loader, tokenizer, Metal graph, sampler
+Sources/DramaEngine/Engines   engine registry, capability and install tables, request outline
+Sources/DramaEngine/Ming      Ming adapter over MingTTS: cue table, voice encoding, synthesizer
 Sources/DramaEngine/Kernels/*.metal
 Sources/drama              CLI: generate, dump (for the eval suite), bench, tune, profile, kbench, decode, serve
 Sources/DramaServer        Loopback HTTP API and voice/take storage
@@ -196,6 +202,48 @@ CPU (oracle). Levels:
 5. Hill-climb: iterate on the precision knobs and kernel numerics until the
    parity metrics stop moving and the end-to-end scores match the oracle's own
    samples.
+
+## Two engines
+
+Ming is the engine for a Mac that cannot hold Drama 3. Its checkpoint is
+3.0 GB against Drama 3's 41.5 GB. The design goal was that the app, the HTTP
+API, the MCP tools and `drama-say` keep one code path, and that a voice
+library or a project works on either engine.
+
+- One table per fact. `SpeechEngineID.capabilities` (`EngineCapabilities`)
+  says what each engine can do: cue vocabulary, passage tags, history, clone
+  length, languages, and the step rate the time estimate uses.
+  `SpeechEngineID.install` (`EngineInstall`) says where each checkpoint comes
+  from and what setup checks. Adding an engine fails to compile until both
+  rows exist. The Inspector's limits line, the API's model list and
+  `drama setup` all read these tables.
+- One engine in memory. `SpeechEngines` is itself a `SpeechSynthesizer`. It
+  builds an engine from its factory when a request needs it and drops the
+  other one first, and no call returns an engine, so nothing can keep dropped
+  weights alive. Calls run one at a time, so a run on one engine finishes
+  before the other loads.
+- Engine-neutral voices and takes. A `ReferenceVoice` holds one
+  `VoiceEncoding` per engine and keeps its clip. When an engine meets a voice
+  without its encoding, `SpeechEngines` encodes the clip and writes the
+  encoding back. A `Take` holds a `TakeContext`: Drama 3 codes, or a Ming
+  reference made from the take's opening sentences. A retake runs on the
+  engine that made its take.
+- The words always survive. When an engine cannot perform a cue or a note,
+  it removes the markup, speaks the words, and reports a `SpeechNotice`.
+  `SpeechOutline` computes the notices before generation, so the API can send
+  them in headers before the first audio.
+- Ming's cue table is data. Ming reads 14 fixed tags and one emotion per
+  request, so `MingCues.table` maps typed cues to tags or emotions, matches a
+  longer cue by its leading words, and reports the rest.
+- Ming has no history. Earlier takes give it the voice only, cloned from up to
+  10 seconds of a take's opening sentences, because a longer reference leaves
+  Ming's 512-position cache too little room to generate.
+- Ming runs one request per sentence, with the same word check and retry loop
+  as Drama 3. Its retries cycle the guidance scale through 1.5, 1.0 and 2.0.
+  On the Ming reliability harness's cue lines, 1.5 gave the most first passes.
+  The scale at which a voice derails is the voice's own, and a new seed alone
+  rarely rescues it, so a retry changes the scale
+  (`MingSynthesizer.guidanceLadder`).
 
 ## Decisions
 

@@ -1,11 +1,13 @@
 # Getting the model
 
 Download the weights, build the Core ML codec models once, and tune the
-kernels for the Mac.
+kernels for the Mac. For Ming, download one checkpoint.
 
 ## Overview
 
-The engine reads three things from disk: the Drama 3 snapshot from Hugging
+Ming needs only its checkpoint, as "Get the Ming checkpoint" below describes.
+
+Drama 3 reads three things from disk: the Drama 3 snapshot from Hugging
 Face, three Core ML codec models built from that snapshot's `codec.pth`, and a
 kernel schedule tuned for the Mac on the first load. ``DramaSetup`` reports
 each one and builds the last two.
@@ -91,6 +93,37 @@ for item in report.items {
     print(item.summary, item.fix ?? "")
 }
 ```
+
+### Get the Ming checkpoint
+
+``MingSynthesizer`` reads one folder: the
+[inclusionAI/Ming-3.0-tts-0.5B](https://huggingface.co/inclusionAI/Ming-3.0-tts-0.5B)
+checkpoint, 3.0 GB, with `model.safetensors`, `config.json`, `tokenizer.json`
+and the `campplus.onnx` speaker encoder that cloning uses. It has no codec
+models and no kernel tuning, so it needs no `prepare` step. Download it into
+the Hugging Face cache:
+
+```bash
+uvx --from huggingface_hub hf download inclusionAI/Ming-3.0-tts-0.5B
+```
+
+``MingLocation/find()`` returns the folder `MING_WEIGHTS` names, else the
+newest complete snapshot in the Hugging Face cache. To keep the checkpoint
+elsewhere, pass its folder to ``MingLocation/init(directory:source:)``.
+``DramaSetup/check(ming:)`` reads files only and names each missing file with
+a fix:
+
+```swift
+let report = DramaSetup.check(ming: MingLocation.find())
+guard let directory = report.directory, report.isReady else {
+    report.fixes.forEach { print($0) }
+    exit(1)
+}
+let engine = MingSynthesizer(location: MingLocation(directory: directory))
+```
+
+The checkpoint's weights, tokenizer and speaker encoder are under inclusionAI's
+MIT License.
 
 ### App Sandbox
 

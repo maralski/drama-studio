@@ -5,6 +5,11 @@ The oracle is the fish-speech v3.0.0-beta PyTorch implementation, vendored under
 through the `drama` CLI. Both write the same dump schema; `eval/compare.py`
 scores one against the other.
 
+This suite covers Drama 3 only. MingTTS tests its port against outputs of
+inclusionAI's upstream frontend and tokenizer in its own repository. In this
+repository, `Tests/DramaStudioTests/MingReliabilityHarness.swift` measures how
+often Ming's takes pass the word check.
+
 ## Prompt spec (JSON)
 
 ```json

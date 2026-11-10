@@ -1,6 +1,6 @@
 # ``DramaEngine``
 
-Run Fish Audio's Drama 3 text-to-speech model on Apple silicon from your own macOS app.
+Run Fish Audio's Drama 3 or inclusionAI's Ming-3.0-tts text-to-speech model on Apple silicon from your own macOS app.
 
 ## Overview
 
@@ -14,14 +14,26 @@ The model weights are under the
 [Fish Audio Community License](https://huggingface.co/fishaudio/drama-3/blob/main/LICENSE).
 Cloning a real person's voice without their consent is not permitted.
 
+DramaEngine also runs a second, smaller engine. ``MingSynthesizer`` runs
+inclusionAI's [Ming-3.0-tts-0.5B](https://huggingface.co/inclusionAI/Ming-3.0-tts-0.5B)
+through [MingTTS](https://github.com/maralski/ming-tts), a Swift and Metal port
+that the package depends on. Its checkpoint is 3.0 GB, and its weights are under
+the MIT License. On a Mac with less than 64 GB of memory, use Ming instead of
+Drama 3. Ming takes the same ``SpeechRequest`` behind the same
+``SpeechSynthesizer`` protocol. ``SpeechEngineID/capabilities`` lists what each
+engine can do, such as the cues it performs and the languages it speaks.
+
 ### Requirements
 
-- An Apple silicon Mac. Use 64 GB or more of unified memory; this is a
-  recommendation, not a tested minimum. Only a 128 GB M3 Max has been tested.
-  Allow about 49 GB of free disk for model files and setup caches.
+- An Apple silicon Mac. For Drama 3, use 64 GB or more of unified memory; this
+  is a recommendation, not a tested minimum. Only a 128 GB M3 Max has been
+  tested. Allow about 49 GB of free disk for model files and setup caches. For
+  Ming, allow about 3 GB of free disk. Ming has also run only on the 128 GB
+  M3 Max. It is expected to fit on an 8 GB or 16 GB Mac, but that is not yet
+  tested.
 - Xcode 26 or its command line tools. Checked generation requires macOS 26 and an installed on-device speech model for one identifiable script language; unchecked preview targets macOS 15.
-- The model in the Hugging Face cache and the Core ML codec models built once from
-  it. See <doc:GettingTheModel>.
+- For Drama 3, the model in the Hugging Face cache and the Core ML codec models
+  built once from it. For Ming, its checkpoint. See <doc:GettingTheModel>.
 
 ### Generate speech
 
@@ -85,16 +97,16 @@ The table lists the main public types and their uses.
 
 | Area | Types |
 | --- | --- |
-| Setup | ``ModelLocation``, ``DramaSetup``, ``SetupReport``, ``SetupItem`` |
-| Engines | ``SpeechSynthesizer``, ``SpeechEngineID``, ``EngineDescription``, ``DramaSynthesizer``, ``MockSynthesizer`` |
+| Setup | ``ModelLocation``, ``MingLocation``, ``DramaSetup``, ``SetupReport``, ``SetupItem``, ``EngineInstall``, ``HuggingFaceCache`` |
+| Engines | ``SpeechSynthesizer``, ``SpeechEngineID``, ``EngineDescription``, ``EngineCapabilities``, ``DramaSynthesizer``, ``MingSynthesizer``, ``SpeechEngines``, ``MockSynthesizer`` |
 | Requests | ``SpeechRequest``, ``ReferenceVoice``, ``VoiceEncoding``, ``ReferenceAudio``, ``VoiceDesign``, ``Take``, ``TakeContext``, ``GenerationConfig``, ``StreamingMode``, ``FrameCap`` |
-| Results | ``SpeechEvent``, ``SpeechResult``, ``SpokenSentence``, ``SpeechTimings``, ``StreamedAudio``, ``GenerationEstimate`` |
+| Results | ``SpeechEvent``, ``SpeechResult``, ``SpeechNotice``, ``SpokenSentence``, ``SpeechTimings``, ``StreamedAudio``, ``GenerationEstimate`` |
 | Text | ``Drama3Chunking``, ``Drama3Prompt``, ``PronunciationDictionary``, ``PronunciationRule`` |
 | Codec | ``DramaCodec`` |
 | Constants and errors | ``Frame``, ``ModelConstants``, `DramaEngineVersion`, ``PromptError``, ``CodecError``, ``EngineError``, ``TokenizerError``, ``DramaSetupError`` |
 
-Every value type is `Sendable`. ``DramaSynthesizer``, ``MockSynthesizer`` and
-``DramaCodec`` are actors, so you can share one instance across tasks.
+Every value type is `Sendable`. ``DramaSynthesizer``, ``MingSynthesizer``,
+``SpeechEngines``, ``MockSynthesizer`` and ``DramaCodec`` are actors, so you can share one instance across tasks.
 ``DramaSynthesizer`` runs one request at a time. A second request waits for the
 first to finish.
 
@@ -108,6 +120,7 @@ release changed.
 
 - <doc:GettingTheModel>
 - ``ModelLocation``
+- ``MingLocation``
 - ``DramaSetup``
 - ``SetupReport``
 - ``SetupItem``
@@ -117,9 +130,13 @@ release changed.
 
 - ``SpeechSynthesizer``
 - ``DramaSynthesizer``
+- ``MingSynthesizer``
+- ``SpeechEngines``
 - ``MockSynthesizer``
 - ``SpeechEngineID``
 - ``EngineDescription``
+- ``EngineCapabilities``
+- ``EngineInstall``
 - ``SpeechRequest``
 - ``GenerationConfig``
 - ``FrameCap``
@@ -140,6 +157,7 @@ release changed.
 - ``StreamingMode``
 - ``SpeechEvent``
 - ``SpeechResult``
+- ``SpeechNotice``
 - ``SpokenSentence``
 - ``SpeechTimings``
 - ``StreamedAudio``
