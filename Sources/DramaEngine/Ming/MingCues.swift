@@ -15,6 +15,23 @@ package enum MingCues {
     static let builtInVoices = MingVoice.catalog.map(\.ip)
     static let languages = ["zh", "en", "ja", "ko", "de", "fr", "es"]
 
+    /// The code in ``languages`` for a language ``ScriptLanguage`` identified,
+    /// without its script or region: `zh` for `zh-Hant`. Nil for a language
+    /// Ming does not speak.
+    package static func languageCode(_ identified: String) -> String? {
+        let code = Locale.Language(identifier: identified).languageCode?.identifier ?? identified
+        return languages.contains(code) ? code : nil
+    }
+
+    /// Throws for a script in a language Ming does not speak, naming the ones it does.
+    /// A script whose language is uncertain passes; Ming reads it as English.
+    static func checkLanguage(of text: String) throws {
+        guard let identified = try? ScriptLanguage.identify(text), languageCode(identified) == nil else { return }
+        let english = Locale(identifier: "en")
+        let name = { (code: String) in english.localizedString(forLanguageCode: code) ?? code }
+        throw PromptError.engineUnsupported(.ming, "speak \(name(identified)); it speaks \(languages.map(name).formatted(.list(type: .and)))")
+    }
+
     /// Ming's emotion control, named for people and for ``CueSupport/style(_:)``.
     package enum Emotion: String, Sendable, Equatable, CaseIterable {
         case happy, sad, angry, fearful, surprised

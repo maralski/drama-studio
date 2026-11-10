@@ -135,7 +135,7 @@ final class SpeechEnginesTests: XCTestCase {
                                    encodings: [try await MockSynthesizer(engine: .drama3, pace: .instant).encodeVoice(samples: clip, transcript: "Hello there.")])
         let ming = ReferenceVoice(name: "Keeper", transcript: "Hello there.",
                                   encodings: [try await MockSynthesizer(engine: .ming, pace: .instant).encodeVoice(samples: clip, transcript: "Hello there.")])
-        XCTAssertThrowsError(try MingPlan(SpeechRequest(text: "Hi.", references: [drama]))) {
+        XCTAssertThrowsError(try MingPlan(SpeechRequest(text: "Hello there, how are you today?", references: [drama]))) {
             XCTAssertEqual(($0 as? PromptError)?.description, "the voice Keeper has not been encoded for Ming")
         }
         XCTAssertThrowsError(try GenerationPlan(SpeechRequest(text: "Hi.", references: [ming]))) {

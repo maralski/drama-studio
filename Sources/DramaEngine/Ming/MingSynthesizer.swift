@@ -129,7 +129,7 @@ public actor MingSynthesizer: SpeechSynthesizer {
         let plan = try MingPlan(request)
         let config = request.config
         let verifier = try LocalWordVerifier.prepare(lines: plan.chunks.map(\.spoken.text), config: config, shouldContinue: { !Task.isCancelled })
-        let language = try Self.language(plan.language)
+        let language = plan.language.flatMap(MingCues.languageCode).flatMap(MingLanguage.init(id:)) ?? .english
         continuation.yield(.loadingModel(progress: 0, detail: "Loading Ming"))
         let model = try await loadedModel { detail in continuation.yield(.loadingModel(progress: 0, detail: detail)) }
         continuation.yield(.loadingModel(progress: 1, detail: "Ready"))
@@ -268,12 +268,6 @@ public actor MingSynthesizer: SpeechSynthesizer {
     static func trimmed(_ samples: [Float]) -> [Float] {
         let silence = Int(DramaSynthesizer.trailingSilenceSeconds(samples) * Double(ModelConstants.sampleRate))
         return silence > 0 ? Array(samples.dropLast(silence)) : samples
-    }
-
-    static func language(_ identified: String?) throws -> MingLanguage {
-        guard let identified else { return .english }
-        guard let language = MingLanguage(id: identified) else { throw PromptError.engineUnsupported(.ming, "speak \(identified) text") }
-        return language
     }
 }
 

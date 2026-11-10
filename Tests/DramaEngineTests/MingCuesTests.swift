@@ -94,6 +94,7 @@ final class MingCuesTests: XCTestCase {
                      "Buenos días. ¿Cómo estás hoy? Hace un tiempo precioso.", "こんにちは。今日はいい天気ですね。"] {
             XCTAssertNoThrow(try SpeechOutline(SpeechRequest(text: text), engine: .ming), text)
         }
+        XCTAssertEqual(MingCues.languageCode("zh-Hant"), "zh")
         let italian = SpeechRequest(text: "Buongiorno, come stai oggi? Spero che tu stia molto bene.")
         XCTAssertThrowsError(try SpeechOutline(italian, engine: .ming)) { error in
             guard case .engineUnsupported(.ming, let what)? = error as? PromptError else { return XCTFail("\(error)") }
