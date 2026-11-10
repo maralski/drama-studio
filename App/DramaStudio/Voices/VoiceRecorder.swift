@@ -1,6 +1,7 @@
 // Copyright 2026 Peter Marelas
 // SPDX-License-Identifier: Apache-2.0
 import AVFoundation
+import DramaEngine
 import Foundation
 
 /// The audio half of the recorder, so the state machine can be tested without a microphone.
@@ -102,17 +103,30 @@ final class VoiceRecorder {
     }
 }
 
+/// How long a reference clip should be, from each engine's ``EngineCapabilities/maxCloneSeconds``.
 enum RecordingLength {
-    static let suggestion = "Read 5 to 20 seconds of clean speech in a quiet room, then type exactly what you said."
+    /// The range that clones well on `engine`, such as "5 to 15 seconds".
+    static func best(for engine: SpeechEngineID) -> String {
+        "5 to \(Int(engine.capabilities.maxCloneSeconds ?? 20)) seconds"
+    }
 
-    static func warning(for seconds: TimeInterval) -> String? {
+    static func suggestion(for engine: SpeechEngineID) -> String {
+        "Read \(best(for: engine)) of clean speech in a quiet room, then type exactly what you said."
+    }
+
+    /// Never blocks: an engine with a limit still uses the whole clip.
+    static func warning(for seconds: TimeInterval, on engine: SpeechEngineID) -> String? {
+        let best = best(for: engine)
         if seconds < 3 {
-            "This clip is under 3 seconds, which may be too little for the voice to carry over. 5 to 20 seconds works best."
-        } else if seconds > 30 {
-            "This clip is over 30 seconds. Encoding takes longer and the extra length rarely helps. 5 to 20 seconds works best."
-        } else {
-            nil
+            return "This clip is under 3 seconds, which may be too little for the voice to carry over. \(best) works best."
         }
+        if let limit = engine.capabilities.maxCloneSeconds, seconds > limit {
+            return "This clip is over \(Int(limit)) seconds. \(engine.capabilities.name) uses all of it, which leaves less room to speak each line, so trim it to \(Int(limit)) seconds or less."
+        }
+        if seconds > 30 {
+            return "This clip is over 30 seconds. Encoding takes longer and the extra length rarely helps. \(best) works best."
+        }
+        return nil
     }
 }
 

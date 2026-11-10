@@ -1,5 +1,6 @@
 // Copyright 2026 Peter Marelas
 // SPDX-License-Identifier: Apache-2.0
+import DramaEngine
 import Foundation
 
 /// The help text for every control. The popovers beside each control and the
@@ -111,7 +112,11 @@ enum SettingHelp: String, CaseIterable, Identifiable {
         case .voiceDesign:
             "Casts a voice from a description instead of a recording: a name, how the voice sounds, and an optional scene. Try a Line speaks a sample in that voice, and if you then click Use Voice without changing the design, the voice you heard is the voice you get. Try a Line checks the spoken words before playback. Designed voices cast scripts with one speaker, so click Save Voice to Library to save one to the library for a screenplay."
         case .referenceClip:
-            "A short recording of the voice you want, from a file or recorded here. Use 5 to 20 seconds of clean speech with no music or background noise. In testing, cloned voices scored 0.87 speaker similarity to their clip, against about 0.55 for the model's own voices."
+            "A short recording of the voice you want, from a file or recorded here. Use 5 to 20 seconds of clean speech with no music or background noise. "
+                + SpeechEngineID.allCases.compactMap { engine in
+                    engine.capabilities.maxCloneSeconds.map { "\(engine.capabilities.name) uses the whole clip, and one over \(Int($0)) seconds leaves it less room to speak each line. " }
+                }.joined()
+                + "In testing with Drama 3, cloned voices scored 0.87 speaker similarity to their clip, against about 0.55 for the model's own voices."
         case .voiceTranscript:
             "The exact words spoken in the reference clip. The model pairs the clip with this text to learn the voice, so a wrong or missing word weakens the match. Include filler words and repeats if the speaker said them."
         case .voiceConsent:

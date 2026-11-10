@@ -2,10 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 import AppKit
 import AVFoundation
+import DramaEngine
 import SwiftUI
 
 struct RecorderPanel: View {
     let recorder: VoiceRecorder
+    /// The engine new takes use, whose clip length the panel suggests.
+    let engine: SpeechEngineID
     let use: (URL) -> Void
     @State private var preview = ClipPreview()
 
@@ -15,7 +18,7 @@ struct RecorderPanel: View {
         VStack(alignment: .leading, spacing: 10) {
             switch recorder.state {
             case .idle, .requestingPermission:
-                Text(RecordingLength.suggestion).font(.caption).foregroundStyle(.secondary)
+                Text(RecordingLength.suggestion(for: engine)).font(.caption).foregroundStyle(.secondary)
                 recordButton
             case .denied:
                 Label("Drama Studio can't use the microphone. Allow it under Privacy & Security > Microphone, then try again.", systemImage: "mic.slash.fill")
@@ -57,7 +60,7 @@ struct RecorderPanel: View {
                     }
                     .buttonStyle(.borderedProminent)
                 }
-                if let warning = RecordingLength.warning(for: duration) {
+                if let warning = RecordingLength.warning(for: duration, on: engine) {
                     Label(warning, systemImage: "exclamationmark.triangle.fill").font(.caption).foregroundStyle(.orange)
                 }
             }
