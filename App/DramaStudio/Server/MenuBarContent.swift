@@ -50,11 +50,16 @@ enum MenuBarStatus {
 struct APIChip: View {
     let server: APIServerController
 
+    /// A plain string, so the port is not formatted as a localized number.
+    static func tooltip(port: UInt16, job: SpeechJob?) -> String {
+        job.map { "API request: \($0.summary)" } ?? "API server listening on http://127.0.0.1:\(port)"
+    }
+
     var body: some View {
         if let port = server.state.port {
             Label("API", systemImage: server.job == nil ? "circle.fill" : "waveform")
                 .labelStyle(APIChipLabelStyle())
-                .help(server.job.map { "API request: \($0.summary)" } ?? "API server listening on http://127.0.0.1:\(port)")
+                .help(Self.tooltip(port: port, job: server.job))
         }
     }
 }

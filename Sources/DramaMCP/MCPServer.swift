@@ -43,7 +43,7 @@ public struct MCPServer: Sendable {
                 "protocolVersion": .string(Self.protocolVersion),
                 "capabilities": ["tools": ["listChanged": false]],
                 "serverInfo": ["name": "drama-studio", "title": "Drama Studio", "version": .string(Self.version)],
-                "instructions": "Drama Studio speaks text aloud with Fish Audio Drama 3 on this Mac. Call studio_status to see whether the model is loaded, list_voices to pick a voice, then synthesize_speech. One generation runs at a time.",
+                "instructions": "Drama Studio speaks text aloud on this Mac with a local speech engine, Fish Audio Drama 3 or inclusionAI Ming. Call studio_status to see whether the model is loaded, list_voices to pick a voice, then synthesize_speech. One generation runs at a time.",
             ])
         case "ping":
             return Self.result(id: id, [:])

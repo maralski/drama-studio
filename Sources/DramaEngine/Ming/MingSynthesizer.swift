@@ -79,7 +79,7 @@ public actor MingSynthesizer: SpeechSynthesizer {
     private func loadedModel(onPhase: @escaping @Sendable (String) -> Void = { _ in }) async throws -> MingTTSModel {
         if let model { return model }
         if let loading { return try await loading.value }
-        onPhase("Loading Ming")
+        onPhase("Mapping weights")
         let task = Task.detached(priority: .userInitiated) { [location] in try MingTTSModel(directory: location.directory) }
         loading = task
         defer { loading = nil }
@@ -130,7 +130,7 @@ public actor MingSynthesizer: SpeechSynthesizer {
         let config = request.config
         let verifier = try LocalWordVerifier.prepare(lines: plan.chunks.map(\.spoken.text), config: config, shouldContinue: { !Task.isCancelled })
         let language = try Self.language(plan.language)
-        continuation.yield(.loadingModel(progress: 0, detail: "Loading Ming"))
+        continuation.yield(.loadingModel(progress: 0, detail: "Mapping weights"))
         let model = try await loadedModel { detail in continuation.yield(.loadingModel(progress: 0, detail: detail)) }
         continuation.yield(.loadingModel(progress: 1, detail: "Ready"))
         let shouldContinue = { !Task.isCancelled }
