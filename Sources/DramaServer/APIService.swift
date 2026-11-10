@@ -415,7 +415,7 @@ public final class APIService: Sendable {
             } catch {
                 Self.send(framing.error(Self.describe(error)), to: out)
                 await jobs.release(job)
-                out.finish(throwing: error)
+                framing.finish(out, after: error)
             }
         }
         out.onTermination = { _ in task.cancel() }
@@ -502,7 +502,7 @@ public final class APIService: Sendable {
                 let message = (error as? PromptError)?.description ?? (error as? APIError)?.message ?? Self.describe(error)
                 Self.send(framing.error(message), to: out)
                 await jobs.release(job)
-                out.finish(throwing: error)
+                framing.finish(out, after: error)
             }
         }
         out.onTermination = { _ in task.cancel() }
