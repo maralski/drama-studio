@@ -17,14 +17,9 @@ enum AppHome {
         override ?? URL.applicationSupportDirectory.appending(path: "DramaStudio", directoryHint: .isDirectory)
     }
 
-    /// The folder the setup window downloads the pinned Drama 3 revision into.
-    static var models: URL {
-        support.appending(path: "Models/\(ModelDownloadPlan.drama3.folderName)", directoryHint: .isDirectory)
-    }
-
-    /// The folder Settings downloads the pinned Ming revision into.
-    static var mingModels: URL {
-        support.appending(path: "Models/\(SpeechEngineID.ming.install.plan.folderName)", directoryHint: .isDirectory)
+    /// The folder the pinned revision of `engine` downloads into.
+    static func models(for engine: SpeechEngineID) -> URL {
+        support.appending(path: "Models/\(engine.install.plan.folderName)", directoryHint: .isDirectory)
     }
 
     /// The voice library: one JSON file per voice, with its clip beside it.

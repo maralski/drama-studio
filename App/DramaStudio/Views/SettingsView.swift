@@ -41,6 +41,10 @@ private struct GeneralSettingsView: View {
     @AppStorage(SessionModel.streamsAudioKey) private var streamsAudio = true
     @Binding var status: ModelSetup.Status?
     @State private var codecReady = true
+    @Environment(\.openWindow) private var openWindow
+
+    /// Setup is installing or has installed this engine, so its download belongs to the setup window.
+    private func setupOwns(_ engine: SpeechEngineID) -> Bool { setup.facts.engine == engine }
 
     var body: some View {
         Form {
@@ -56,10 +60,22 @@ private struct GeneralSettingsView: View {
                     Button("Use Default Location") { modelPath = "" }
                         .disabled(modelPath.isEmpty)
                 }
-                if let problem = status?.problem {
+                if !setupOwns(.drama3) {
+                    HStack {
+                        Text("Drama 3 isn't set up. Setting it up asks you to agree to the Fish Audio Community License, then downloads what this Mac lacks of its \(ModelSetup.gigabytes(SpeechEngineID.drama3.install.downloadBytes)).")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Set Up Drama 3\u{2026}") {
+                            setup.chooseEngine(.drama3)
+                            openWindow(id: DramaStudioApp.mainWindowID)
+                        }
+                        .help("Set up Drama 3 in the main window")
+                        .disabled(server.session.state.isGenerating)
+                    }
+                } else if let problem = status?.problem {
                     Text(problem).font(.caption).foregroundStyle(.secondary)
                 }
-                if !codecReady, let command = codecCommand {
+                if setupOwns(.drama3), !codecReady, let command = codecCommand {
                     Text("The Core ML codec models are missing, and this build has no codec download. Build them once in Terminal:")
                         .font(.caption).foregroundStyle(.secondary)
                     HStack(alignment: .top) {
@@ -74,7 +90,7 @@ private struct GeneralSettingsView: View {
                     .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
                 }
             }
-            MingSection(install: ming)
+            MingSection(install: ming, setupDownloads: setupOwns(.ming) && setup.stage != .ready)
             Section("Playback") {
                 Toggle(isOn: $streamsAudio) { HelpLabel("Stream audio while generating", help: .streaming) }
             }
@@ -88,11 +104,13 @@ private struct GeneralSettingsView: View {
             }
             Section("About") {
                 Text("Drama Studio by Peter Marelas").font(.headline)
-                Text("Built with Fish Audio. Drama Studio runs Fish Audio Drama 3 locally on Apple silicon.").foregroundStyle(.secondary)
+                Text("Built with Fish Audio. Drama Studio runs Fish Audio Drama 3 and inclusionAI Ming locally on Apple silicon.").foregroundStyle(.secondary)
                 Link("Fish Audio Community License", destination: TermsAgreement.licenseURL)
                 if let date = TermsAgreement(defaults: AppHome.defaults).acceptedDate {
                     Text("You agreed to its terms on \(date.formatted(date: .long, time: .shortened)).").foregroundStyle(.secondary)
                 }
+                let ming = SpeechEngineID.ming.install
+                Link("Ming is published by \(ming.publisher) under the \(ming.license.name)", destination: ming.license.url)
             }
         }
         .formStyle(.grouped)
@@ -115,8 +133,8 @@ private struct GeneralSettingsView: View {
     private var location: String {
         switch status {
         case .ready(let url), .incomplete(let url): url.path
-        case nil: modelPath.isEmpty ? AppHome.models.path : modelPath
-        case .missing: modelPath.isEmpty ? "\(AppHome.models.path) (not downloaded)" : modelPath
+        case nil: modelPath.isEmpty ? AppHome.models(for: .drama3).path : modelPath
+        case .missing: modelPath.isEmpty ? "\(AppHome.models(for: .drama3).path) (not downloaded)" : modelPath
         }
     }
 
@@ -126,6 +144,7 @@ private struct GeneralSettingsView: View {
         case nil: Label("Checking…", systemImage: "clock").foregroundStyle(.secondary)
         case .ready: Label("Ready", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
         case .incomplete: Label("Incomplete", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+        case .missing where !setupOwns(.drama3): Label("Not installed", systemImage: "xmark.circle.fill").foregroundStyle(.secondary)
         case .missing: Label("Not found", systemImage: "xmark.circle.fill").foregroundStyle(.red)
         }
     }
@@ -139,10 +158,12 @@ private struct GeneralSettingsView: View {
     }
 }
 
-/// Ming is optional, so it lives here rather than in the setup window: where
-/// it was found, what it lacks, and a download of the pinned revision.
+/// Where Ming was found, what it lacks, and a download of the pinned
+/// revision, for adding Ming beside the engine the setup window installed.
 private struct MingSection: View {
     let install: MingInstall
+    /// The setup window is downloading Ming, so this section must not start a second download.
+    let setupDownloads: Bool
     @AppStorage(ModelSetup.mingDirectoryKey) private var path = ""
 
     var body: some View {
@@ -169,7 +190,7 @@ private struct MingSection: View {
     }
 
     private var location: String {
-        install.report?.directory?.path ?? "\(AppHome.mingModels.path) (not downloaded)"
+        install.report?.directory?.path ?? "\(AppHome.models(for: .ming).path) (not downloaded)"
     }
 
     @ViewBuilder
@@ -190,7 +211,7 @@ private struct MingSection: View {
     private var download: some View {
         if case .downloading = install.phase {
             Button("Stop Download") { install.cancelDownload() }
-        } else if !install.isReady, path.isEmpty, install.report != nil, ProcessInfo.processInfo.environment["MING_WEIGHTS"] == nil {
+        } else if !install.isReady, !setupDownloads, path.isEmpty, install.report != nil, ProcessInfo.processInfo.environment["MING_WEIGHTS"] == nil {
             Button("Download (\(ModelSetup.gigabytes(SpeechEngineID.ming.install.plan.totalBytes)))") { install.startDownload() }
         }
     }

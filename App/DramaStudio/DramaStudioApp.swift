@@ -28,7 +28,7 @@ struct DramaStudioApp: App {
         if CommandLine.arguments.dropFirst().first == "--check-words" {
             exit(WordCheckDiagnostic.run(Array(CommandLine.arguments.dropFirst(2))))
         }
-        let model = { let library = VoiceLibrary(directory: AppHome.voices); return SessionModel(synthesizer: ModelSetup.makeEngines(library: library), library: library) }()
+        let model = { let library = VoiceLibrary(directory: AppHome.voices) { TermsAgreement(defaults: AppHome.defaults).isAccepted }; return SessionModel(synthesizer: ModelSetup.makeEngines(library: library), library: library) }()
         let server = APIServerController(session: model)
         let presence = AppPresence()
         let updater = AppUpdater()
@@ -227,8 +227,11 @@ enum AboutPanel {
             attributes: [.font: NSFont.boldSystemFont(ofSize: NSFont.smallSystemFontSize), .paragraphStyle: centered, .foregroundColor: NSColor.labelColor]
         )
         credits.append(NSAttributedString(string: "Built with Fish Audio\n", attributes: [.font: font, .paragraphStyle: centered, .foregroundColor: NSColor.labelColor]))
-        credits.append(NSAttributedString(string: "Runs Fish Audio Drama 3 locally under the ", attributes: [.font: font, .paragraphStyle: centered, .foregroundColor: NSColor.secondaryLabelColor]))
-        credits.append(NSAttributedString(string: "Fish Audio Community License", attributes: [.font: font, .paragraphStyle: centered, .link: ModelSetup.licenseURL]))
+        for engine in SpeechEngineID.allCases {
+            let install = engine.install
+            credits.append(NSAttributedString(string: "Runs \(install.publisher) \(engine.capabilities.name) locally under the ", attributes: [.font: font, .paragraphStyle: centered, .foregroundColor: NSColor.secondaryLabelColor]))
+            credits.append(NSAttributedString(string: install.license.name + "\n", attributes: [.font: font, .paragraphStyle: centered, .link: install.license.url]))
+        }
         NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
         NSApp.activate()
     }

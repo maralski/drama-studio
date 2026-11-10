@@ -4,9 +4,9 @@ import DramaEngine
 import Foundation
 import Observation
 
-/// Ming's install for Settings: what setup finds, and the optional download
-/// of the pinned revision into ``AppHome/mingModels``. Drama 3 is the engine
-/// the setup window requires; Ming is added here when the user wants it.
+/// Ming's install for Settings: what setup finds, and the download of the
+/// pinned revision into ``AppHome/models(for:)``, for adding Ming beside an
+/// engine the setup window installed.
 @MainActor @Observable
 final class MingInstall {
     enum Phase: Equatable {
@@ -33,14 +33,14 @@ final class MingInstall {
     func refresh() async {
         let path = ModelSetup.mingCustomPath
         report = await Task.detached { DramaSetup.check(ming: ModelSetup.mingCandidate(customPath: path)) }.value
-        guard !ModelSetup.isPreviewEngine, let location = ModelSetup.mingLocation() else { return }
-        await session.install(.ming, .ming(location: location))
+        guard let factory = ModelSetup.factory(for: .ming) else { return }
+        await session.install(.ming, factory)
     }
 
     /// Why the download can't start now: too little disk.
     var blocker: String? {
         let plan = SpeechEngineID.ming.install.plan
-        let needed = plan.totalBytes - plan.bytesOnDisk(in: AppHome.mingModels)
+        let needed = plan.totalBytes - plan.bytesOnDisk(in: AppHome.models(for: .ming))
         guard let free = ModelSetup.freeBytes(near: AppHome.support), free < needed else { return nil }
         return "Ming needs \(ModelSetup.gigabytes(needed)) free and this disk has \(ModelSetup.gigabytes(free)) free."
     }
@@ -50,7 +50,7 @@ final class MingInstall {
     func startDownload() {
         guard download == nil else { return }
         if let blocker { return phase = .failed(blocker) }
-        let run = PlanDownload(plan: SpeechEngineID.ming.install.plan, directory: AppHome.mingModels, downloader: FileDownloader())
+        let run = PlanDownload(plan: SpeechEngineID.ming.install.plan, directory: AppHome.models(for: .ming), downloader: FileDownloader())
         phase = .downloading(run.progress)
         download = Task {
             do {

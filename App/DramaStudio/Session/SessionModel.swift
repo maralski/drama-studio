@@ -945,9 +945,11 @@ final class SessionModel {
     }
 
     /// Gives the registry an engine's factory once its files are in place, as setup does.
+    /// The first engine installed becomes the one new takes use.
     func install(_ engine: SpeechEngineID, _ factory: SpeechEngines.Factory) async {
         guard engines.description(of: engine) != factory.description else { return }
         await engines.register(engine, factory)
+        withMutation(keyPath: \.engine) {}
         withMutation(keyPath: \.availableEngines) {}
         refreshEngineState()
     }

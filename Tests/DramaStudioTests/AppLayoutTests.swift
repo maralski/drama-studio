@@ -203,9 +203,20 @@ final class AppLayoutTests: XCTestCase {
         let freshMac = FakeMac()
         try await render(SetupView(setup: SetupCoordinator(services: freshMac.services), model: model),
                          name: "setup-terms", size: nil, in: directory)
-        freshMac.facts.requirementGaps = ["This Mac has 16 GB of memory. Drama Studio requires at least 64 GB."]
+        freshMac.facts.offer.gaps[.drama3] = ["This Mac has 16 GB of memory. Drama Studio requires at least 64 GB."]
         try await render(SetupView(setup: SetupCoordinator(services: freshMac.services), model: model),
                          name: "setup-requirements", size: nil, in: directory)
+        for (name, memory) in [("setup-engine-low-memory", UInt64(16)), ("setup-engine-capable", 128)] {
+            let choosingMac = FakeMac()
+            choosingMac.engine = nil
+            choosingMac.facts.offer = MacRequirements(appleSilicon: true, memoryBytes: memory << 30).offer(downloaded: [])
+            try await render(SetupView(setup: SetupCoordinator(services: choosingMac.services), model: model), name: name, size: nil, in: directory)
+        }
+        let mingMac = FakeMac()
+        mingMac.engine = .ming
+        mingMac.holdWeights = true
+        try await render(SetupView(setup: SetupCoordinator(services: mingMac.services), model: model), name: "setup-ming-download", size: nil, in: directory)
+        mingMac.holdWeights = false
         let failureMac = FakeMac()
         failureMac.facts.termsAccepted = true
         failureMac.blocker = String(repeating: "The model folder could not be read. Choose another location or try again. ", count: 15)

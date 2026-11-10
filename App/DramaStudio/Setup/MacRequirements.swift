@@ -1,17 +1,21 @@
 // Copyright 2026 Peter Marelas
 // SPDX-License-Identifier: Apache-2.0
+import DramaEngine
 import Foundation
 
-/// What this Mac has against what the engine was verified on.
+/// What this Mac has against what each engine needs.
 struct MacRequirements: Equatable {
-    static let recommendedMemory: UInt64 = 64 << 30
-    static let acknowledgedKey = "requirementsAcknowledged"
+    /// The setting that records "Continue Anyway" for `engine`. Drama 3 keeps
+    /// the key from when it was the only engine.
+    static func acknowledgedKey(for engine: SpeechEngineID) -> String {
+        engine == .drama3 ? "requirementsAcknowledged" : "requirementsAcknowledged.\(engine.rawValue)"
+    }
 
     var appleSilicon: Bool
     var memoryBytes: UInt64
 
     /// This Mac. `DRAMA_STUDIO_MEMORY_GB` stands in for the memory size, to
-    /// see the warning on a Mac that has enough.
+    /// see what a Mac with less memory is offered.
     static var current: MacRequirements {
         var arm64: Int32 = 0
         var size = MemoryLayout<Int32>.size
@@ -20,15 +24,33 @@ struct MacRequirements: Equatable {
         return MacRequirements(appleSilicon: isArm, memoryBytes: simulated ?? ProcessInfo.processInfo.physicalMemory)
     }
 
-    /// One sentence per shortfall; empty when the Mac meets both.
-    var gaps: [String] {
+    private func hasMemory(for engine: SpeechEngineID) -> Bool {
+        engine.install.recommendedMemory.map { memoryBytes >= $0 } ?? true
+    }
+
+    /// One sentence per shortfall against `engine`; empty when the Mac meets its needs.
+    func gaps(for engine: SpeechEngineID) -> [String] {
         var gaps: [String] = []
+        let name = engine.capabilities.name
         if !appleSilicon {
-            gaps.append("This Mac does not have Apple silicon. Drama Studio's engine runs on the GPU of Apple silicon Macs and is not expected to load here.")
+            gaps.append("This Mac does not have Apple silicon. \(name) runs on the GPU of Apple silicon Macs and is not expected to load here.")
         }
-        if memoryBytes < Self.recommendedMemory {
-            gaps.append("This Mac has \(memoryBytes >> 30) GB of memory. The engine maps about 41 GB of model weights and has been verified only on an M3 Max with 128 GB. Below 64 GB, expect very slow speech, heavy swapping, or a load that fails.")
+        if !hasMemory(for: engine), let recommended = engine.install.recommendedMemory {
+            gaps.append("This Mac has \(memoryBytes >> 30) GB of memory. \(name) maps about \(engine.install.downloadBytes / 1_000_000_000) GB of model weights and has been verified only on an M3 Max with 128 GB. Below \(recommended >> 30) GB, expect very slow speech, heavy swapping, or a load that fails.")
         }
         return gaps
+    }
+
+    /// The first engine, in the app's order of preference, whose memory need
+    /// this Mac meets; the last engine when it meets none.
+    var recommendedEngine: SpeechEngineID {
+        SpeechEngineID.allCases.first(where: hasMemory) ?? SpeechEngineID.allCases.last!
+    }
+
+    /// What the setup window's engine step offers on this Mac.
+    func offer(downloaded: Set<SpeechEngineID>) -> EngineOffer {
+        EngineOffer(recommended: recommendedEngine,
+                    gaps: Dictionary(uniqueKeysWithValues: SpeechEngineID.allCases.map { ($0, gaps(for: $0)) }).filter { !$0.value.isEmpty },
+                    downloaded: downloaded)
     }
 }

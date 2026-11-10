@@ -27,7 +27,7 @@ struct ScriptEditorView: View {
             if model.canExport, let warning = model.exportWarning {
                 InlineBanner(message: warning, systemImage: "clock.badge.exclamationmark", tint: .orange, onDismiss: nil)
             }
-            if !ModelSetup.isPreviewEngine, let problem = modelStatus?.problem {
+            if !ModelSetup.isPreviewEngine, model.engine == .drama3, let problem = modelStatus?.problem {
                 InlineBanner(message: problem, systemImage: "arrow.down.circle", tint: .accentColor, onDismiss: nil)
             }
             TimelineView(.animation(minimumInterval: 0.1, paused: !model.state.isPlaying)) { _ in

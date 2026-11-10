@@ -9,6 +9,16 @@ struct SetupView: View {
     let setup: SetupCoordinator
     let model: SessionModel
     @State private var contentHeight: CGFloat = 360
+    /// The engine picked on the engine step; nil for the recommended one.
+    @State private var pickedEngine: SpeechEngineID?
+
+    /// The engine the window is about: the one being set up, else the one picked so far.
+    private var engine: SpeechEngineID { setup.facts.engine ?? pickedEngine ?? setup.facts.offer.recommended }
+
+    private var subtitle: String {
+        guard let engine = setup.facts.engine else { return "Expressive speech, generated on this Mac." }
+        return "Expressive speech from \(engine.install.publisher)'s \(engine.capabilities.name), running on this Mac."
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -17,10 +27,10 @@ struct SetupView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Label { Text("Drama Studio") } icon: { Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 32, height: 32) }
                             .font(.largeTitle.weight(.semibold))
-                        Text("Expressive speech from Fish Audio's Drama 3, running on this Mac.")
+                        Text(subtitle)
                             .foregroundStyle(.secondary)
                     }
-                    StepStrip(stage: setup.stage)
+                    StepStrip(stage: setup.stage, steps: setup.steps)
                     Divider()
                     card
                 }
@@ -47,13 +57,21 @@ struct SetupView: View {
         default:
             HStack {
                 switch setup.stage {
+                case .engine:
+                    Button("Quit") { NSApp.terminate(nil) }
+                    Spacer()
+                    Button("Continue") { setup.chooseEngine(engine) }
+                        .keyboardShortcut(.defaultAction)
+                        .help("Set up the selected engine")
                 case .requirements:
                     Button("Quit") { NSApp.terminate(nil) }
+                    anotherEngine
                     Spacer()
                     Button("Continue Anyway") { setup.acknowledgeRequirements() }
                         .keyboardShortcut(.defaultAction)
                 case .terms:
                     Button("Quit") { NSApp.terminate(nil) }
+                    anotherEngine
                     Spacer()
                     Button("I Agree") { setup.acceptTerms() }
                         .keyboardShortcut(.defaultAction)
@@ -63,6 +81,7 @@ struct SetupView: View {
                     Spacer()
                     Button("Share Usage Information") { setup.chooseUsage(enabled: true) }
                 case .weights(let transfer), .codec(.downloading(let transfer)):
+                    anotherEngine
                     Spacer()
                     if transfer.paused {
                         Button("Resume") { setup.resume() }.keyboardShortcut(.defaultAction)
@@ -74,6 +93,7 @@ struct SetupView: View {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(command, forType: .string)
                     }
+                    anotherEngine
                     Spacer()
                     Button("Check Again") { setup.resume() }.keyboardShortcut(.defaultAction)
                 case .firstLine:
@@ -85,6 +105,7 @@ struct SetupView: View {
                     }
                     .keyboardShortcut(.defaultAction)
                 case .failed:
+                    anotherEngine
                     Spacer()
                     Button("Try Again") { setup.resume() }.keyboardShortcut(.defaultAction)
                 case .ready, .tuning, .codec(.unpacking):
@@ -97,15 +118,27 @@ struct SetupView: View {
         }
     }
 
+    /// Back to the engine step. A download under way stops and keeps its files.
+    private var anotherEngine: some View {
+        Button("Choose Another Engine") {
+            pickedEngine = nil
+            setup.chooseAnotherEngine()
+        }
+        .help("Go back and choose another speech engine")
+    }
+
     @ViewBuilder
     private var card: some View {
         switch setup.stage {
-        case .requirements(let gaps): RequirementsCard(gaps: gaps)
+        case .engine(let offer):
+            EngineCard(offer: offer, selection: Binding(get: { engine }, set: { pickedEngine = $0 }))
+        case .requirements(let gaps): RequirementsCard(engine: engine, gaps: gaps)
         case .terms: TermsCard()
         case .usage: UsageCard()
         case .weights(let transfer):
-            TransferCard(title: "Downloading Drama 3",
-                         detail: "\(ModelSetup.gigabytes(ModelDownloadPlan.drama3.totalBytes)) of model files from Hugging Face (fishaudio/drama-3 at revision e0a9218), into \(AppHome.models.path). Each file is checked against its SHA-256 before it is kept.",
+            let install = engine.install
+            TransferCard(title: "Downloading \(engine.capabilities.name)",
+                         detail: "\(ModelSetup.gigabytes(install.downloadBytes)) of model files from Hugging Face (\(install.repo) at revision \(install.plan.revision.prefix(7))), into \(AppHome.models(for: engine).path). Each file is checked against its SHA-256 before it is kept. \(install.publisher) publishes them under the \(install.license.name).",
                          transfer: transfer)
         case .codec(.downloading(let transfer)):
             TransferCard(title: "Downloading the voice codec",
@@ -115,28 +148,27 @@ struct SetupView: View {
             WorkingCard(title: "Unpacking the voice codec", detail: "Checking the three Core ML models and moving them into place.", line: nil)
         case .codec(.needsConversion(let command)): ConversionCard(command: command)
         case .tuning(let detail):
-            WorkingCard(title: "Getting Drama 3 ready for this Mac",
+            WorkingCard(title: "Getting \(engine.capabilities.name) ready for this Mac",
                         detail: "Preparing speech generation for this Mac usually takes 30 seconds to a minute. Later launches skip this preparation.",
                         line: detail)
         case .firstLine: FirstLineCard(model: model)
         case .ready: EmptyView()
-        case .failed(let step, let reason): FailedCard(step: step, reason: reason)
+        case .failed(let step, let reason): FailedCard(title: step.title(for: engine), step: step, reason: reason)
         }
     }
 }
 
 private struct StepStrip: View {
     let stage: SetupStage
+    /// The steps of the engine being set up.
+    let steps: [SetupStep]
 
-    private var steps: [SetupStep] {
-        if case .requirements = stage { return SetupStep.allCases }
-        if stage.step == .requirements { return SetupStep.allCases }
-        return Array(SetupStep.allCases.dropFirst())
-    }
+    /// The requirements step shows only while it is the one being asked.
+    private var shown: [SetupStep] { steps.filter { $0 != .requirements || stage.step == .requirements } }
 
     var body: some View {
         HStack(spacing: 14) {
-            ForEach(steps, id: \.self) { step in
+            ForEach(shown, id: \.self) { step in
                 let state = state(of: step)
                 Label(step.label, systemImage: state == .done ? "checkmark.circle.fill" : state == .current ? "circle.inset.filled" : "circle")
                     .foregroundStyle(state == .upcoming ? .secondary : state == .done ? Color.green : Color.accentColor)
@@ -152,7 +184,7 @@ private struct StepStrip: View {
     private func state(of step: SetupStep) -> StepState {
         guard let current = stage.step else { return .done }
         let all = SetupStep.allCases
-        let mine = all.firstIndex(of: step)!, now = all.firstIndex(of: current)!
+        guard let mine = all.firstIndex(of: step), let now = all.firstIndex(of: current) else { return .upcoming }
         return mine < now ? .done : mine == now ? .current : .upcoming
     }
 }
@@ -177,16 +209,97 @@ private struct CardTitle: View {
     var body: some View { Text(text).font(.title2.weight(.semibold)) }
 }
 
+/// The engine step: one row per engine, the recommended one preselected,
+/// with what this Mac lacks for an engine under its row.
+private struct EngineCard: View {
+    let offer: EngineOffer
+    @Binding var selection: SpeechEngineID
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            CardTitle(text: "Choose a speech engine")
+            Text("Drama Studio speaks with one of these engines. It downloads the one you choose now, and you can add the other later in Settings.")
+                .fixedSize(horizontal: false, vertical: true)
+            VStack(spacing: 8) {
+                ForEach(SpeechEngineID.allCases, id: \.self) { engine in
+                    EngineRow(engine: engine, recommended: engine == offer.recommended, downloaded: offer.downloaded.contains(engine),
+                              gaps: offer.gaps[engine] ?? [], selected: engine == selection) { selection = engine }
+                }
+            }
+        }
+    }
+}
+
+private struct EngineRow: View {
+    let engine: SpeechEngineID
+    let recommended: Bool
+    let downloaded: Bool
+    let gaps: [String]
+    let selected: Bool
+    let select: () -> Void
+
+    private var install: EngineInstall { engine.install }
+
+    private var facts: String {
+        let size = downloaded ? "already on this Mac" : "\(ModelSetup.gigabytes(install.downloadBytes)) download"
+        let terms = install.license.requiresAgreement ? ", which asks you to agree to its terms" : ""
+        return "By \(install.publisher), \(size). \(install.license.name)\(terms)."
+    }
+
+    var body: some View {
+        Button(action: select) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Image(systemName: selected ? "largecircle.fill.circle" : "circle")
+                    .foregroundStyle(selected ? Color.accentColor : .secondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text(engine.capabilities.name).font(.headline)
+                        if recommended {
+                            Text("Recommended for this Mac")
+                                .font(.caption.weight(.semibold))
+                                .padding(.horizontal, 7).padding(.vertical, 2)
+                                .background(Color.accentColor.opacity(0.18), in: Capsule())
+                        }
+                    }
+                    Text(facts).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    if let limits = engine.limits {
+                        Text(limits).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                    ForEach(gaps, id: \.self) { gap in
+                        Label(gap, systemImage: "exclamationmark.triangle.fill")
+                            .font(.callout)
+                            .symbolRenderingMode(.multicolor)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.quaternary.opacity(selected ? 0.6 : 0.25), in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(selected ? Color.accentColor : .clear, lineWidth: 1.5))
+            .contentShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+        .help("Choose \(engine.capabilities.name)")
+        .accessibilityLabel(engine.capabilities.name)
+        .accessibilityValue(selected ? "Selected" : "Not selected")
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
 private struct RequirementsCard: View {
+    let engine: SpeechEngineID
     let gaps: [String]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Label { CardTitle(text: "This Mac is below what Drama Studio was tested on") } icon: {
+            Label { CardTitle(text: "This Mac is below what \(engine.capabilities.name) was tested on") } icon: {
                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
             }
             Bullets(items: gaps)
-            Text("Nothing has been downloaded yet. You can continue at your own risk; the download is 41.5 GB.")
+            Text("Continuing downloads \(engine.capabilities.name), \(ModelSetup.gigabytes(engine.install.downloadBytes)), unless it is already on this Mac. You can continue at your own risk, or choose another engine.")
+                .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(.secondary)
         }
     }
@@ -203,7 +316,7 @@ private struct TermsCard: View {
             Text("You also accept its limits:")
             Bullets(items: TermsAgreement.limits)
             Link("Read the full Fish Audio Community License", destination: TermsAgreement.licenseURL)
-            Text("Nothing downloads and nothing is spoken until you agree. Next, Drama Studio downloads \(ModelSetup.gigabytes(ModelDownloadPlan.drama3.totalBytes)) of model files from Hugging Face.")
+            Text("Drama 3 does not download and does not speak until you agree. Next, Drama Studio downloads any of its \(ModelSetup.gigabytes(ModelDownloadPlan.drama3.totalBytes)) of model files that this Mac lacks from Hugging Face.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
@@ -316,12 +429,13 @@ private struct FirstLineCard: View {
 }
 
 private struct FailedCard: View {
+    let title: String
     let step: SetupStep
     let reason: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Label { CardTitle(text: "\(step.title) didn't finish") } icon: {
+            Label { CardTitle(text: "\(title) didn't finish") } icon: {
                 Image(systemName: "xmark.octagon.fill").foregroundStyle(.red)
             }
             Text(reason).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)

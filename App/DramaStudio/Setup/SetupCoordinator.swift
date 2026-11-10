@@ -7,22 +7,24 @@ import Foundation
 /// wires the real downloads; tests pass closures.
 struct SetupServices {
     var facts: @MainActor () -> SetupFacts
-    var acknowledgeRequirements: @MainActor () -> Void
+    /// Records which engine setup installs; nil when the user goes back to choose again.
+    var chooseEngine: @MainActor (SpeechEngineID?) -> Void
+    var acknowledgeRequirements: @MainActor (SpeechEngineID) -> Void
     var acceptTerms: @MainActor () -> Void
-    /// Why the weights can't download now, such as too little free disk.
-    var weightsBlocker: @MainActor () -> String?
+    /// Why the engine's weights can't download now, such as too little free disk.
+    var weightsBlocker: @MainActor (SpeechEngineID) -> String?
     /// Where the weights download stands before it starts, counting partial files.
-    var weightsProgress: @MainActor () -> DownloadProgress
-    var downloadWeights: @Sendable (@escaping @Sendable (DownloadProgress) -> Void) async throws -> Void
+    var weightsProgress: @MainActor (SpeechEngineID) -> DownloadProgress
+    var downloadWeights: @Sendable (SpeechEngineID, @escaping @Sendable (DownloadProgress) -> Void) async throws -> Void
     /// The Python command that builds the codec models, when this build has no codec bundle to download.
     var codecConversionCommand: @MainActor () -> String?
     /// Downloads and verifies the codec zip, and returns where it is.
     var downloadCodec: @Sendable (@escaping @Sendable (DownloadProgress) -> Void) async throws -> URL
     var installCodec: @Sendable (URL) async throws -> Void
     /// Loads the model once, which tunes the kernels and builds the packed-weight cache.
-    var tune: @MainActor (@escaping @Sendable (String) -> Void) async throws -> Void
-    /// Puts the real engine in the session once the weights and codec are in place.
-    var attachEngine: @MainActor () -> Void
+    var tune: @MainActor (SpeechEngineID, @escaping @Sendable (String) -> Void) async throws -> Void
+    /// Puts the real engine in the session once its files are in place.
+    var attachEngine: @MainActor (SpeechEngineID) -> Void
     var prepareFirstLine: @MainActor () -> Void
     var chooseUsage: @MainActor (Bool) -> Void = { _ in }
     var recordUsage: @MainActor (UsageMetric) -> Void = { _ in }
@@ -35,6 +37,8 @@ struct SetupServices {
 @MainActor @Observable
 final class SetupCoordinator {
     private(set) var stage: SetupStage = .terms
+    /// What the last ``reconcile()`` read. Its engine is the one being set up.
+    private(set) var facts = SetupFacts()
     @ObservationIgnored private let services: SetupServices
     /// Steps done this launch that the facts may not show, such as a tuning that kept the default schedule.
     @ObservationIgnored private var finished: Set<SetupStep> = []
@@ -52,17 +56,30 @@ final class SetupCoordinator {
     var generationRefusal: String? {
         switch stage {
         case .firstLine, .ready: nil
-        case .requirements, .terms: TermsAgreement.refusal
-        case .failed(let step, _) where step == .requirements || step == .terms: TermsAgreement.refusal
+        case .terms, .failed(.terms, _): TermsAgreement.refusal
+        case .requirements where termsPending: TermsAgreement.refusal
         default: "Drama Studio is still setting up. Generation starts when its setup window finishes."
         }
     }
 
+    /// The engine being set up still needs the terms agreed to.
+    private var termsPending: Bool {
+        facts.engine?.setupSteps.contains(.terms) == true && !facts.termsAccepted
+    }
+
+    /// The steps the step strip shows: those of the engine being set up, or
+    /// of the recommended one while the user is still choosing.
+    var steps: [SetupStep] { (facts.engine ?? facts.offer.recommended).setupSteps }
+
     func reconcile() {
         stop()
-        let facts = services.facts()
+        facts = services.facts()
+        guard let engine = facts.engine else {
+            stage = .engine(facts.offer)
+            return
+        }
         guard let step = facts.firstNeeded(finished: finished) else {
-            services.attachEngine()
+            services.attachEngine(engine)
             if finished.isDisjoint(with: [.weights, .codec, .tuning]) {
                 stage = .ready
             } else {
@@ -72,17 +89,34 @@ final class SetupCoordinator {
             return
         }
         switch step {
+        case .engine: stage = .engine(facts.offer)
         case .requirements: stage = .requirements(gaps: facts.requirementGaps)
         case .terms: stage = .terms
         case .usage: stage = .usage
-        case .weights: startWeights()
+        case .weights: startWeights(engine)
         case .codec: startCodec()
-        case .tuning: startTuning()
+        case .tuning: startTuning(engine)
         }
     }
 
+    /// Sets up `engine`. Choosing one that is already in place returns to the studio.
+    func chooseEngine(_ engine: SpeechEngineID) {
+        guard engine != facts.engine else { return reconcile() }
+        finished = []
+        services.chooseEngine(engine)
+        reconcile()
+    }
+
+    /// Stops the step under way and goes back to the engine step. Partial
+    /// downloads stay on disk for when that engine is chosen again.
+    func chooseAnotherEngine() {
+        finished = []
+        services.chooseEngine(nil)
+        reconcile()
+    }
+
     func acknowledgeRequirements() {
-        services.acknowledgeRequirements()
+        if let engine = facts.engine { services.acknowledgeRequirements(engine) }
         reconcile()
     }
 
@@ -157,15 +191,15 @@ final class SetupCoordinator {
         return Transfer(progress: progress, secondsLeft: rate.secondsLeft(remaining: progress.totalBytes - progress.doneBytes))
     }
 
-    private func startWeights() {
-        if let blocker = services.weightsBlocker() {
+    private func startWeights(_ engine: SpeechEngineID) {
+        if let blocker = services.weightsBlocker(engine) {
             stage = .failed(.weights, reason: blocker)
             return
         }
-        stage = .weights(Transfer(progress: services.weightsProgress()))
+        stage = .weights(Transfer(progress: services.weightsProgress(engine)))
         let download = services.downloadWeights
         perform(.weights) { [weak self] current in
-            try await download { progress in
+            try await download(engine) { progress in
                 Task { @MainActor in
                     guard let self, current() else { return }
                     self.stage = .weights(self.transferUpdate(progress))
@@ -194,11 +228,11 @@ final class SetupCoordinator {
         }
     }
 
-    private func startTuning() {
-        stage = .tuning(detail: "Loading Drama 3")
+    private func startTuning(_ engine: SpeechEngineID) {
+        stage = .tuning(detail: "Loading \(engine.capabilities.name)")
         let tune = services.tune
         perform(.tuning) { [weak self] current in
-            try await tune { detail in
+            try await tune(engine) { detail in
                 Task { @MainActor in
                     guard let self, current() else { return }
                     self.stage = .tuning(detail: detail)

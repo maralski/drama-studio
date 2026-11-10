@@ -3,17 +3,19 @@
 import DramaEngine
 import Foundation
 
-/// The steps of a first run, in order. A step is skipped when the Mac
-/// already has what it produces.
+/// The steps of a first run, in order. Which of them a run takes depends on
+/// the engine being set up; a step is skipped when the Mac already has what
+/// it produces.
 enum SetupStep: String, CaseIterable, Sendable {
-    case requirements, terms, usage, weights, codec, tuning
+    case engine, requirements, terms, usage, weights, codec, tuning
 
-    var title: String {
+    func title(for engine: SpeechEngineID) -> String {
         switch self {
+        case .engine: "Choose a speech engine"
         case .requirements: "Check this Mac"
         case .terms: "Agree to the terms"
         case .usage: "Help improve Drama Studio"
-        case .weights: "Download Drama 3"
+        case .weights: "Download \(engine.capabilities.name)"
         case .codec: "Download the voice codec"
         case .tuning: "Tune for this Mac"
         }
@@ -22,6 +24,7 @@ enum SetupStep: String, CaseIterable, Sendable {
     /// The step's name in the window's step strip.
     var label: String {
         switch self {
+        case .engine: "Engine"
         case .requirements: "This Mac"
         case .terms: "Terms"
         case .usage: "Usage"
@@ -32,9 +35,39 @@ enum SetupStep: String, CaseIterable, Sendable {
     }
 }
 
-/// What is already on this Mac, read from disk and settings.
+extension SpeechEngineID {
+    /// The steps that set this engine up, read from its ``install`` row: the
+    /// terms when its license asks for agreement, and the codec and tuning
+    /// when it has those components.
+    var setupSteps: [SetupStep] {
+        let install = install
+        return SetupStep.allCases.filter { step in
+            switch step {
+            case .engine, .requirements, .usage, .weights: true
+            case .terms: install.license.requiresAgreement
+            case .codec: install.components.contains(.codecModels)
+            case .tuning: install.components.contains(.tuning)
+            }
+        }
+    }
+}
+
+/// What the engine step offers.
+struct EngineOffer: Equatable {
+    /// The engine preselected for this Mac.
+    var recommended: SpeechEngineID
+    /// Why this Mac falls short of an engine, one sentence per shortfall.
+    var gaps: [SpeechEngineID: [String]] = [:]
+    /// Engines whose files are already on this Mac.
+    var downloaded: Set<SpeechEngineID> = []
+}
+
+/// What is already on this Mac, read from disk and settings. The download,
+/// codec, tuning and acknowledgement facts are those of ``engine``.
 struct SetupFacts: Equatable {
-    var requirementGaps: [String] = []
+    /// The engine this run sets up; nil until the user chooses one.
+    var engine: SpeechEngineID?
+    var offer = EngineOffer(recommended: .drama3)
     var requirementsAcknowledged = false
     var termsAccepted = false
     var weightsReady = false
@@ -42,8 +75,11 @@ struct SetupFacts: Equatable {
     var tuned = false
     var usageChoiceMade = false
 
+    var requirementGaps: [String] { engine.flatMap { offer.gaps[$0] } ?? [] }
+
     func satisfies(_ step: SetupStep) -> Bool {
         switch step {
+        case .engine: engine != nil
         case .requirements: requirementGaps.isEmpty || requirementsAcknowledged
         case .terms: termsAccepted
         case .usage: usageChoiceMade
@@ -54,9 +90,11 @@ struct SetupFacts: Equatable {
     }
 
     /// The first step still to do; `finished` holds steps done this launch,
-    /// such as a tuning that kept the default schedule.
+    /// such as a tuning that kept the default schedule. Before an engine is
+    /// chosen, that is choosing one.
     func firstNeeded(finished: Set<SetupStep>) -> SetupStep? {
-        SetupStep.allCases.first { !finished.contains($0) && !satisfies($0) }
+        guard let engine else { return .engine }
+        return engine.setupSteps.first { !finished.contains($0) && !satisfies($0) }
     }
 }
 
@@ -77,6 +115,7 @@ enum CodecStage: Equatable {
 /// Where the first run stands. The coordinator moves through it; the setup
 /// window draws it; generation is refused in every case but the last two.
 enum SetupStage: Equatable {
+    case engine(EngineOffer)
     case requirements(gaps: [String])
     case terms
     case usage
@@ -90,6 +129,7 @@ enum SetupStage: Equatable {
 
     var step: SetupStep? {
         switch self {
+        case .engine: .engine
         case .requirements: .requirements
         case .terms: .terms
         case .usage: .usage
