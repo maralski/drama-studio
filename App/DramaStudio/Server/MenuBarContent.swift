@@ -11,7 +11,7 @@ struct MenuBarContent: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Text(MenuBarStatus.model(model.engines.engineDescription, loaded: model.modelLoaded, session: model.state, job: server.job))
+        Text(MenuBarStatus.model(model.engineDescription, loaded: model.modelLoaded, session: model.state, job: server.job))
         Divider()
         Text(server.statusLine)
         Button("Copy API URL") { server.copyURL() }

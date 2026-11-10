@@ -155,8 +155,12 @@ final class AppMixedEngineTests: XCTestCase {
         let session = try makeSession()
         session.engine = .ming
         await generate(session, "<whisper>Quietly now.</whisper> [icy calm] Then louder.")
-        XCTAssertEqual(session.notices, [.unsupportedCue("<whisper>"), .unsupportedCue("[icy calm]")])
-        XCTAssertEqual(session.result?.notices, session.notices)
+        XCTAssertEqual(session.result?.notices, [.unsupportedCue("<whisper>"), .unsupportedCue("[icy calm]")])
+        XCTAssertEqual(session.notices, ["Ming can't perform <whisper>, so the words inside it are spoken plainly.",
+                                         "Ming can't perform [icy calm], so it was left out."])
+        XCTAssertEqual(session.takes.last?.notices, session.notices, "the take keeps what the run reported")
+        session.dismissNotices()
+        XCTAssertEqual(session.notices, [])
         AppHome.defaults.removeObject(forKey: ModelSetup.engineKey)
     }
 

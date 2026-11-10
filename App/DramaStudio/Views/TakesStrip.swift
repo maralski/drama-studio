@@ -24,7 +24,7 @@ struct TakesStrip: View {
                 ScrollView(.vertical) {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), alignment: .top)], spacing: 8) {
                         ForEach(model.visibleTakes) { take in
-                            TakeCard(take: take, isSelected: take.id == model.visibleSelectedTakeID, isKept: take.id == model.visibleExportTakeID, isOutdated: model.isOutdated(take, in: model.selectedSegment), delete: {
+                            TakeCard(take: take, engine: model.engineLabel(for: take), isSelected: take.id == model.visibleSelectedTakeID, isKept: take.id == model.visibleExportTakeID, isOutdated: model.isOutdated(take, in: model.selectedSegment), delete: {
                                 takeToDelete = take
                             }) {
                                 model.selectTake(take.id)
@@ -76,7 +76,7 @@ struct TakesStrip: View {
                 Spacer()
             }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), alignment: .leading)], alignment: .leading, spacing: 6) {
-                    ForEach(Examples.notes, id: \.self) { suggestion in
+                    ForEach(Examples.notes(for: model.retakeEngine), id: \.self) { suggestion in
                         Button(suggestion) { note = suggestion }
                             .buttonStyle(.bordered)
                             .buttonBorderShape(.capsule)
@@ -85,6 +85,10 @@ struct TakesStrip: View {
                     }
             }
             .fixedSize(horizontal: false, vertical: true)
+            if let emotions = model.retakeEngine.capabilities.noteEmotions {
+                Text("\(model.retakeEngine.capabilities.name) takes one emotion from a note: \(ListFormatter.localizedString(byJoining: emotions)).")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             if let blocker = model.retakeBlocker {
                 Text(blocker).font(.caption).foregroundStyle(.secondary)
             }
@@ -159,6 +163,8 @@ private struct SaveTakeVoiceSheet: View {
 
 private struct TakeCard: View {
     let take: SessionTake
+    /// The engine that made the take, when naming it tells takes apart.
+    let engine: String?
     let isSelected: Bool
     let isKept: Bool
     let isOutdated: Bool
@@ -172,14 +178,19 @@ private struct TakeCard: View {
                     Label("Take \(take.number)", systemImage: "play.fill")
                         .font(.callout.weight(.medium))
                     Spacer(minLength: 8)
+                    if let engine { Text(engine).font(.caption).foregroundStyle(.secondary) }
                     Text(TransportBar.seconds(take.duration))
                         .font(.callout.monospacedDigit()).foregroundStyle(.secondary)
                 }
                 .padding(.trailing, 26)
-                if isKept || isOutdated || !take.hasCurrentWordCheck {
+                if isKept || isOutdated || !take.hasCurrentWordCheck || !take.notices.isEmpty {
                     HStack(spacing: 8) {
                         if isKept { Label("Export", systemImage: "checkmark.circle.fill") }
                         if isOutdated { Label("Outdated", systemImage: "clock.badge.exclamationmark") }
+                        if !take.notices.isEmpty {
+                            Label("\(take.notices.count) \(take.notices.count == 1 ? "notice" : "notices")", systemImage: "exclamationmark.triangle")
+                                .help(take.notices.joined(separator: "\n"))
+                        }
                         if !take.hasCurrentWordCheck {
                             Text(take.isIncomplete ? "Incomplete" : (take.wordsChecked ? "Earlier word check" : "Unchecked"))
                                 .help(take.isIncomplete ? "Generation ended before the whole script was completed." : "This take has not passed the current spoken-word checks. Generate a new take for checked audio.")
@@ -199,7 +210,7 @@ private struct TakeCard: View {
         }
         .buttonStyle(.plain)
         .overlay { RoundedRectangle(cornerRadius: 8).strokeBorder(Color.accentColor, lineWidth: isSelected ? 2 : 0) }
-        .accessibilityLabel("\(take.label)\(isKept ? ", used for export" : "")\(isOutdated ? ", outdated" : "")\(take.isIncomplete ? ", incomplete" : (take.hasCurrentWordCheck ? "" : (take.wordsChecked ? ", earlier word check" : ", unchecked")))")
+        .accessibilityLabel("\(take.label)\(engine.map { ", \($0)" } ?? "")\(isKept ? ", used for export" : "")\(isOutdated ? ", outdated" : "")\(take.isIncomplete ? ", incomplete" : (take.hasCurrentWordCheck ? "" : (take.wordsChecked ? ", earlier word check" : ", unchecked")))\(take.notices.map { ". \($0)" }.joined())")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .help("Click to audition. Use for Export changes the exported take.")
         .overlay(alignment: .topTrailing) {

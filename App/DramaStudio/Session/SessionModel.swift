@@ -103,7 +103,7 @@ final class SessionModel {
     let engines: SpeechEngines
     var synthesizer: any SpeechSynthesizer { engines }
     /// What the engine cannot perform in the request under way or last run, for the user to see.
-    private(set) var notices: [SpeechNotice] = []
+    private(set) var notices: [String] = []
     /// Why generation is refused right now; the app asks its setup coordinator.
     @ObservationIgnored var generationRefusal: @MainActor () -> String? = { nil }
     @ObservationIgnored private let pronunciationURL: URL
@@ -530,11 +530,16 @@ final class SessionModel {
         start(request, as: .sections(run))
     }
 
+    /// The engine a retake runs on: the one that made the selected take, else the selected one.
+    var retakeEngine: SpeechEngineID {
+        takes.first { $0.id == selectedTakeID }?.take?.context.engine ?? engine
+    }
+
     /// Reads the line again with a director's note, after every take so far,
     /// on the engine that made the selected take, whatever is selected now.
     func retake(note: String) {
         guard canRetake, let note = DirectorsNote.clean(note), case .success(let script) = prepared else { return }
-        let engine = takes.first { $0.id == selectedTakeID }?.take?.context.engine
+        let engine = retakeEngine
         let casting = casting
         let matching = takes.filter { $0.hasCurrentWordCheck && !$0.isIncomplete && $0.basis == currentPlainBasis }
         let voice = casting.voiceTake.flatMap { $0 == matching.first?.take ? nil : $0 }
@@ -616,7 +621,9 @@ final class SessionModel {
         pronunciation = (try? PronunciationDictionary.load(from: pronunciationURL)) ?? PronunciationDictionary()
         let outline = try? SpeechOutline(request, engine: engine)
         scriptLines = outline?.lines ?? []
-        notices = outline?.notices ?? []
+        let continuesSections = if case .sections = self.job, state.isGenerating { true } else { false }
+        notices = continuesSections ? notices : []
+        report(outline?.notices ?? [], on: engine)
         request.text = pronunciation.apply(to: request.text)
         telemetry = GenerationTelemetry()
         streamed = StreamedAudio()
@@ -671,7 +678,8 @@ final class SessionModel {
         guard start < audio.count else { return }
         let number = section.flatMap { sectionTakes[$0]?.nextNumber } ?? ((takes.last?.number ?? 0) + 1)
         let partial = SessionTake(number: number, note: "Stopped early", take: nil,
-                                  samples: Array(audio[start...]), basis: generationBasis, isIncomplete: true)
+                                  samples: Array(audio[start...]), basis: generationBasis, isIncomplete: true,
+                                  generationSeconds: generationClock?.elapsed(at: .now))
         if let section {
             if sectionTakes[section] == nil { sectionTakes[section] = SectionTakes(first: partial) }
             else { sectionTakes[section]?.add(partial) }
@@ -712,6 +720,7 @@ final class SessionModel {
             telemetry.frame = 0
         case .finished(let result):
             recordUsage(.generationSucceeded)
+            report(result.notices, on: result.take.context.engine)
             if result.timings.framesPerSecond > 0 { telemetry.framesPerSecond = result.timings.framesPerSecond }
             switch job {
             case .take(let note, let voice)?:
@@ -743,6 +752,12 @@ final class SessionModel {
             }
         }
     }
+
+    private func report(_ new: [SpeechNotice], on engine: SpeechEngineID) {
+        for message in new.map({ $0.message(on: engine) }) where !notices.contains(message) { notices.append(message) }
+    }
+
+    func dismissNotices() { notices = [] }
 
     private var currentSection: NarrationDocument.Segment.ID? {
         if case .sections(let run)? = job { run.current } else { nil }
@@ -797,7 +812,9 @@ final class SessionModel {
         if result.wordCoverage == .recognized, let recordsVoice, sessionVoices[recordsVoice] == nil {
             recordedVoices[recordsVoice] = RecordedVoice(take: result.take, wordsChecked: true)
         }
-        let take = SessionTake(number: (takes.last?.number ?? 0) + 1, note: note, take: result.take, samples: result.samples, sentences: sentences(of: result), basis: recordedBasis(for: recordsVoice), wordsChecked: result.wordCoverage == .recognized)
+        let take = SessionTake(number: (takes.last?.number ?? 0) + 1, note: note, take: result.take, samples: result.samples, sentences: sentences(of: result), basis: recordedBasis(for: recordsVoice), wordsChecked: result.wordCoverage == .recognized,
+                               notices: result.notices.map { $0.message(on: result.take.context.engine) },
+                               generationSeconds: generationClock?.elapsed(at: .now))
         takes.append(take)
         selectedTakeID = take.id
         if keptTakeID == nil { keptTakeID = take.id }
@@ -938,10 +955,23 @@ final class SessionModel {
         }
     }
 
+    /// What the selected engine reports, observed with ``engine``.
+    var engineDescription: EngineDescription {
+        access(keyPath: \.engine)
+        return engines.engineDescription
+    }
+
     /// Engines the session can switch to.
     var availableEngines: Set<SpeechEngineID> {
         access(keyPath: \.availableEngines)
         return engines.available
+    }
+
+    /// The name of the engine that made `take`, when more than one engine is
+    /// installed or it is not the selected one; nil when naming it adds nothing.
+    func engineLabel(for take: SessionTake) -> String? {
+        guard let made = take.take?.context.engine, availableEngines.count > 1 || made != engine else { return nil }
+        return made.capabilities.name
     }
 
     /// Gives the registry an engine's factory once its files are in place, as setup does.
@@ -1388,6 +1418,10 @@ struct SessionTake: Identifiable, Equatable {
     var isIncomplete = false
     var wordsChecked = false
     var wordCheckRevision: Int? = WordVerificationPolicy.currentRevision
+    /// What the engine could not perform in this take, for this session only.
+    var notices: [String] = []
+    /// Wall time from Generate to this take, for this session only.
+    var generationSeconds: TimeInterval?
     var hasCurrentWordCheck: Bool { wordsChecked && wordCheckRevision == WordVerificationPolicy.currentRevision }
     var duration: TimeInterval { Double(samples.count) / Double(ModelConstants.sampleRate) }
 }
