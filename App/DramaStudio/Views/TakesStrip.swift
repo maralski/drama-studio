@@ -86,7 +86,7 @@ struct TakesStrip: View {
             }
             .fixedSize(horizontal: false, vertical: true)
             if let emotions = model.retakeEngine.capabilities.noteEmotions {
-                Text("\(model.retakeEngine.capabilities.name) takes one emotion from a note: \(ListFormatter.localizedString(byJoining: emotions)).")
+                Text("\(model.retakeEngine.capabilities.name) takes one emotion from a note: \(emotions.dropLast().joined(separator: ", ")) or \(emotions.last ?? "").")
                     .font(.caption).foregroundStyle(.secondary)
             }
             if let blocker = model.retakeBlocker {
@@ -210,7 +210,7 @@ private struct TakeCard: View {
         }
         .buttonStyle(.plain)
         .overlay { RoundedRectangle(cornerRadius: 8).strokeBorder(Color.accentColor, lineWidth: isSelected ? 2 : 0) }
-        .accessibilityLabel("\(take.label)\(engine.map { ", \($0)" } ?? "")\(isKept ? ", used for export" : "")\(isOutdated ? ", outdated" : "")\(take.isIncomplete ? ", incomplete" : (take.hasCurrentWordCheck ? "" : (take.wordsChecked ? ", earlier word check" : ", unchecked")))\(take.notices.map { ". \($0)" }.joined())")
+        .accessibilityLabel("\(take.label)\(engine.map { ", \($0)" } ?? "")\(isKept ? ", used for export" : "")\(isOutdated ? ", outdated" : "")\(take.isIncomplete ? ", incomplete" : (take.hasCurrentWordCheck ? "" : (take.wordsChecked ? ", earlier word check" : ", unchecked")))\(take.notices.isEmpty ? "" : ". " + take.notices.joined(separator: " "))")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .help("Click to audition. Use for Export changes the exported take.")
         .overlay(alignment: .topTrailing) {
