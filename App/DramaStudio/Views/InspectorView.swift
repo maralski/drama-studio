@@ -47,6 +47,18 @@ private struct EngineSection: View {
             if let limits = model.engine.limits {
                 Text(limits).font(.caption).foregroundStyle(.secondary)
             }
+            let missing = SpeechEngineID.allCases.filter { !model.availableEngines.contains($0) }
+            if !missing.isEmpty {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("\(ListFormatter.localizedString(byJoining: missing.map(\.capabilities.name))) isn't installed. Add it in Settings.")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 4)
+                    SettingsLink { Text("Settings\u{2026}") }
+                        .controlSize(.small)
+                        .help("Open Settings to download or locate another engine")
+                }
+            }
         }
     }
 }
@@ -67,15 +79,19 @@ struct EngineChoices: View {
 }
 
 extension SpeechEngineID {
-    /// What the engine does differently from Drama 3, from its capabilities; nil for none.
+    /// What the engine does differently from one with every capability, from its capabilities table; nil for none.
     var limits: String? {
         let capabilities = capabilities
-        var limits: [String] = []
-        if case .fixed(let tags) = capabilities.cues { limits.append("performs \(tags.count) cues and drops the rest, with a notice") }
-        if !capabilities.history { limits.append("clones the line's first take instead of continuing earlier ones") }
-        if case .only(let languages) = capabilities.languages { limits.append("speaks \(languages.count) languages") }
-        guard !limits.isEmpty else { return nil }
-        return "\(capabilities.name) " + ListFormatter.localizedString(byJoining: limits) + "."
+        var lacks: [String] = []
+        if !capabilities.passageTags { lacks.append("has no passage cues such as <whisper>") }
+        if let seconds = capabilities.maxCloneSeconds { lacks.append("clones best from clips of up to \(Int(seconds)) seconds") }
+        if case .only(let languages) = capabilities.languages { lacks.append("speaks \(languages.count) languages") }
+        if !capabilities.history { lacks.append("doesn't build on earlier takes") }
+        if !capabilities.expressiveness { lacks.append("ignores Expressiveness") }
+        var sentences: [String] = []
+        if case .fixed = capabilities.cues { sentences.append("\(capabilities.name) performs fewer cues and leaves out the rest with a notice.") }
+        if !lacks.isEmpty { sentences.append((sentences.isEmpty ? capabilities.name : "It") + " " + ListFormatter.localizedString(byJoining: lacks) + ".") }
+        return sentences.isEmpty ? nil : sentences.joined(separator: " ")
     }
 }
 
@@ -151,6 +167,7 @@ private struct AdvancedSection: View {
     var body: some View {
         Section {
             DisclosureGroup(isExpanded: $isExpanded) {
+                let capabilities = model.engine.capabilities
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         HelpLabel("Expressiveness", help: .expressiveness)
@@ -169,7 +186,13 @@ private struct AdvancedSection: View {
                     .labelsHidden()
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    if !capabilities.expressiveness {
+                        Text("\(capabilities.name) ignores Expressiveness. Switch to an engine that uses it to change it.")
+                            .font(.caption).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
+                .disabled(!capabilities.expressiveness)
             } label: {
                 Button { withAnimation { isExpanded.toggle() } } label: {
                     Text("Advanced")

@@ -188,10 +188,13 @@ struct CueMenuItems: View {
     let model: SessionModel
 
     var body: some View {
+        let engine = model.engine
         ForEach(PerformanceCue.Kind.allCases, id: \.self) { kind in
             Section(kind.title) {
                 ForEach(PerformanceCue.cues(of: kind)) { cue in
-                    Button("\(cue.title)  \(cue.opening)") { model.insert(cue) }
+                    let performed = engine.cueSupport(cue.opening) != .unsupported
+                    Button("\(cue.title)  \(cue.opening)" + (performed ? "" : "  (not on \(engine.capabilities.name))")) { model.insert(cue) }
+                        .disabled(!performed)
                 }
             }
         }
