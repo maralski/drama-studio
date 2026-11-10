@@ -7,6 +7,41 @@ adds one, and a patch release changes neither.
 
 ## Unreleased
 
+Drama Studio adds a second engine, Ming: inclusionAI's Ming-3.0-tts-0.5B
+through MingTTS 0.1.0, a Swift and Metal port. Its checkpoint is 3.0 GB
+against Drama 3's 41.5 GB, so on a Mac with less than 64 GB of memory, use
+Ming instead of Drama 3.
+
+- The first-run setup window lets you choose the engine. On a Mac with less
+  than 64 GB of memory, Ming is recommended and selected. A Ming-only install
+  skips the 41.5 GB Drama 3 download. Settings adds either engine later.
+  <!-- VERIFY-SETUP: the setup window's engine choice, Ming preselection below 64 GB, the Ming-only install, and adding Drama 3 from Settings. -->
+- The Inspector's **Engine** picker and the Speech menu switch engines. Only
+  one engine is in memory at a time. A retake runs on the engine that made
+  its take.
+- Ming performs 14 fixed cue tags and five emotions. Drama Studio maps common
+  cues such as `[laughs]` and `[sighs]` to them, removes the rest with their
+  words kept, and reports each change as a notice in the app, the HTTP API
+  (`X-Drama-Notices`, and `notices` in the `done` event), `drama-say` and the
+  MCP tools.
+- The HTTP API lists every installed engine in `GET /v1/models`, takes the
+  engine in the speech body's `model` field or the `model` query parameter,
+  and names the engine in `X-Drama-Engine` and `X-Drama-Model`. A file
+  response carries `X-Drama-Samples`; `X-Drama-Frames` and
+  `X-Drama-Generated-Frames` are Drama 3 only. `GET /v1/takes/{id}` returns
+  `samples`, with `frames` and `codes_base64` for a Drama 3 take.
+- `drama setup` reports both engines and takes `--ming-weights`. `drama serve`
+  serves every installed engine and takes `--engine drama3|ming` (or
+  `DRAMA_ENGINE`), `--ming-weights` and `--voices`.
+- The MCP `synthesize_speech` tool takes an `engine`, and `studio_status`
+  lists every installed engine.
+- New public API: `MingSynthesizer`, `MingLocation`, `MingVoiceEncoding`,
+  `SpeechEngines`, `EngineCapabilities`, `CueSupport`, `EngineInstall`,
+  `HuggingFaceCache`, `SpeechNotice`, `SpeechOutline`, `EngineDescription`,
+  `VoiceEncodingStore`, `DramaSetup.check(ming:)` and `SpeechResult.notices`.
+- DramaEngine depends on the MingTTS package. `MING_PACKAGE_PATH` builds
+  against a local checkout.
+
 Breaking: voices, takes and sentence timing no longer assume Drama 3, so a
 second engine can share them.
 
@@ -22,6 +57,9 @@ second engine can share them.
   with `encodeVoice(samples:transcript:)` and the `cloneVoice` extension, drops
   `decode(frames:)`, and adds `engineDescription` and `isTuned`.
 - `SpeechResult.frames` is gone. `Drama3Prompt.HistoryTurn` is its own type.
+- `SetupReport.location` is now `directory: URL?`, and the report names its
+  `engine`. `DramaSetup.downloadCommand` is now
+  `SpeechEngineID.install.downloadCommand`.
 - `DramaCodec.loadAudio` is now `ReferenceAudio.load(url:)`, which reads the
   whole file in blocks. `ReferenceAudio.write(_:to:)` stores a clip.
   `DramaCodec.recreateClip(of:directory:)` decodes a voice's Drama 3 codes.

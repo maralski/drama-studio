@@ -13,8 +13,11 @@ swift build
 .build/debug/SpeakCLI clip.wav "What the clip says." "The text to speak." out.wav
 ```
 
-`--check` prints `DramaSetup.check` for the Hugging Face cache and exits with
-status 1 when something the engine needs is missing. `--mock` runs the same
+`SpeakCLI` runs Drama 3. `--check` prints `DramaSetup.check` for the Drama 3
+snapshot in the Hugging Face cache and exits with status 1 when something the
+engine needs is missing. To run Ming instead, create a `MingSynthesizer` from
+`DramaSetup.check(ming: MingLocation.find())`, as "Using the engine in your
+own app" in the repository README shows. `--mock` runs the same
 code on `MockSynthesizer`, which needs no model files, and writes a sine
 sweep instead of speech.
 
@@ -24,9 +27,11 @@ sweep instead of speech.
 2. Enter the repository URL and choose a version rule from 1.0.0.
 3. Add the **DramaEngine** library to the app target. Leave **DramaServer**
    out unless the app serves the HTTP API.
-4. Get the model and the codec models as "Getting the model" in the
-   DramaEngine documentation describes.
-5. `import DramaEngine` and create one `DramaSynthesizer` for the app.
+4. Get an engine's files as "Getting the model" in the DramaEngine
+   documentation describes: the Drama 3 model and codec models, or the Ming
+   checkpoint.
+5. `import DramaEngine` and create one `DramaSynthesizer` or
+   `MingSynthesizer` for the app.
 
 In a `Package.swift`, depend on the package and the product:
 
@@ -41,8 +46,10 @@ SwiftPM names a URL dependency after the last path component of its URL, so
 `package:` is that name. `SpeakCLI` depends by path and names the package
 `DramaStudio` with `.package(name:path:)`.
 
-The package's minimum platform is macOS 15. DramaEngine has no dependencies
-beyond the system frameworks: Metal, Core ML, AVFoundation, Foundation and
+The package's minimum platform is macOS 15. DramaEngine depends on one other
+package, [MingTTS](https://github.com/maralski/ming-tts), which SwiftPM
+fetches with it. Beyond that, the two use only system frameworks: Metal,
+Core ML, Accelerate, AVFoundation, Speech, NaturalLanguage, Foundation and
 CryptoKit.
 
 ## Entitlements
@@ -54,7 +61,8 @@ enough to load the model, synthesize, and decode.
   `NSMicrophoneUsageDescription` string in `Info.plist` and, under the App
   Sandbox or the Hardened Runtime, `com.apple.security.device.audio-input`.
 - Under the App Sandbox the app cannot read `~/.cache/huggingface` or start
-  Python. Ask the person for the snapshot folder with an open panel, which
+  Python. Ask the person for the snapshot or checkpoint folder with an open
+  panel, which
   needs `com.apple.security.files.user-selected.read-only`, and keep a
   security-scoped bookmark. Build the codec models outside the app.
 

@@ -44,7 +44,9 @@ codes. ``ReferenceAudio/write(_:to:)`` stores it as a WAV that
 clips were kept, ``DramaCodec/recreateClip(of:directory:)`` decodes its Drama 3
 codes. ``ReferenceVoice/durationSeconds`` gives the clip's length.
 Every frame of a reference is one prompt row, and a prompt holds at most
-``Drama3Prompt/maxRows`` (8192) rows, so keep clips short.
+``Drama3Prompt/maxRows`` (8192) rows, so keep clips short. For Ming, keep a
+clip to 15 seconds or less, the
+``EngineCapabilities/maxCloneSeconds`` of ``SpeechEngineID/ming``.
 
 ### Record a clip
 
@@ -81,8 +83,9 @@ A request cannot have both a character and references: the stream throws
 ### Keep the voice across takes
 
 Every request returns its take in ``SpeechResult/take``. Pass earlier takes,
-oldest first, as ``SpeechRequest/previousTakes``. The last two become
-history. With no references, the first take is also the voice reference, so
+oldest first, as ``SpeechRequest/previousTakes``. On Drama 3, the last two
+become history. Ming has no history, so it uses earlier takes only as the
+voice. With no references, the first take is also the voice reference, so
 a designed or model-chosen voice stays the same from take to take:
 
 ```swift
@@ -101,7 +104,8 @@ same voice.
 ### Direct a retake with a note
 
 Set ``SpeechRequest/note`` to a director's note, such as "softer and
-warmer", and pass the line's takes. The line is generated again as one turn,
+warmer", and pass the line's takes. Ming performs a note only when it names an
+emotion, such as "angrier"; otherwise ``SpeechResult/notices`` reports it. The line is generated again as one turn,
 with the note as a direction and as a cue before every sentence. The engine
 cuts the note to 120 characters and drops `[ ] < > |` from it.
 
@@ -112,10 +116,12 @@ let retake = SpeechRequest(text: line, note: "softer and warmer", previousTakes:
 ### Shape the delivery
 
 Write performance cues into the text: `[laughs]`, `[sighs]`,
-`<whisper>…</whisper>`. In the reliability study the cue lines were the one
+`<whisper>…</whisper>`. Drama 3 performs any cue as written. Ming performs
+14 fixed tags and five emotions; ``SpeechEngineID/cueSupport(_:)`` says how
+it performs a cue, and ``SpeechResult/notices`` lists the cues it removed. In the reliability study the cue lines were the one
 area where the model dropped content a few times in twenty, and `[laughs]`
 can turn into a laughter loop that the frame cap ends. 
-``GenerationConfig/make(expressiveness:)`` maps one 0-to-1
+On Drama 3, ``GenerationConfig/make(expressiveness:)`` maps one 0-to-1
 control onto temperature, top-p and top-k, with the vendor's sampling at 0.5
 and the Hugging Face Space's (temperature 1.0, top-p 0.9, no top-k) at 1.
 The Space's sampling kept every sentence of the cue lines in the reliability

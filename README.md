@@ -2,30 +2,96 @@
 
 [![M8ven Score](https://m8ven.ai/badge/mcp/maralski-drama-studio-v1yf5v?v=dd3db85408ed7f788d9da639b5dcb5ba)](https://m8ven.ai/mcp/maralski-drama-studio-v1yf5v?s=readme)
 
-By Peter Marelas. A native macOS app that runs Fish Audio's [Drama 3](https://huggingface.co/fishaudio/drama-3)
-text-to-speech model locally on Apple silicon. The 35B mixture-of-experts
-backbone and the codebook tower run on hand-written Metal compute kernels that
-read the released safetensors weights in place. The DAC audio codec runs
-through Core ML. No MLX, no PyTorch at runtime.
+By Peter Marelas. A native macOS app that turns scripts into speech locally on
+Apple silicon. It runs one of two text-to-speech engines:
 
-Built with Fish Audio. The model weights are under the
-[Fish Audio Community License](https://huggingface.co/fishaudio/drama-3/blob/main/LICENSE);
-cloning a real person's voice without their consent is not permitted.
+- **Ming**: inclusionAI's [Ming-3.0-tts-0.5B](https://huggingface.co/inclusionAI/Ming-3.0-tts-0.5B),
+  a 3.0 GB model, through [MingTTS](https://github.com/maralski/ming-tts), a
+  Swift and Metal port. The weights are under the MIT License.
+- **Drama 3**: Fish Audio's [Drama 3](https://huggingface.co/fishaudio/drama-3),
+  a 41.5 GB model with a 35B mixture-of-experts backbone. Its backbone and
+  codebook tower run on hand-written Metal compute kernels that read the
+  released safetensors weights in place, and its DAC audio codec runs through
+  Core ML. The weights are under the
+  [Fish Audio Community License](https://huggingface.co/fishaudio/drama-3/blob/main/LICENSE).
+
+Neither engine uses MLX or PyTorch at run time. Clone a voice only with its
+owner's consent. The Fish Audio Community License forbids cloning a real
+person's voice without it.
 
 https://github.com/user-attachments/assets/273c2a56-71da-4f1f-95a5-c74141b42930
+
+## Which engine to use
+
+**On a low-powered Mac, use Ming instead of Drama 3.** A Mac with less than
+64 GB of memory, or less than about 50 GB of free disk, is low-powered for
+Drama 3. Ming downloads 3.0 GB, and Drama 3 downloads 43 GB and maps about
+41 GB of weights into memory.
+
+- Use Ming if your Mac has less than 64 GB of memory or little free disk, or
+  if you want a short download and no kernel tuning on the first load.
+- Use Drama 3 if your Mac has 64 GB of memory or more and you want the most
+  expressive speech: any free-form cue such as `[low and menacing]`,
+  `<whisper>` passages, director's notes in your own words, take history, and
+  the Expressiveness control.
+
+You can install both engines and switch between them. Only one engine is in
+memory at a time.
+
+Drama 3 has been verified only on an M3 Max with 128 GB of memory. Ming has
+also run only on that Mac so far. Its 3.0 GB checkpoint is expected to fit on
+an 8 GB or 16 GB Mac, but that is not yet tested.
+<!-- VERIFY-NUMBERS: Ming peak memory on the M3 Max; and any result from a Mac with less than 64 GB, if one exists by merge. -->
+
+| | Ming | Drama 3 |
+| --- | --- | --- |
+| Model | inclusionAI Ming-3.0-tts-0.5B | Fish Audio Drama 3, 35B mixture of experts |
+| Download | 3.0 GB | 41.5 GB of weights and a 1.5 GB codec |
+| Memory | Not tested below 128 GB; expected to fit in 8 GB to 16 GB | 64 GB or more recommended; verified only at 128 GB |
+| Peak memory on the M3 Max | <!-- VERIFY-NUMBERS: Ming peak memory --> | <!-- VERIFY-NUMBERS: Drama 3 peak memory --> |
+| Load time on the M3 Max | <!-- VERIFY-NUMBERS: Ming load time --> | <!-- VERIFY-NUMBERS: Drama 3 load time --> |
+| Speed on the M3 Max | <!-- VERIFY-NUMBERS: Ming seconds of audio per second --> | <!-- VERIFY-NUMBERS: Drama 3 seconds of audio per second --> |
+| First load | No tuning | Tunes the GPU kernels once, 30 seconds to a minute |
+| Performance cues | 14 fixed tags. Common cues map to them; other cues are removed with a notice | Any `[cue]`, as written |
+| `<whisper>` and other passage tags | Removed with a notice; the words are spoken | Performed |
+| Voice cloning | Yes, from a clip of 15 seconds or less | Yes |
+| Voice design from a description | Yes; uses the description only | Yes; uses the name, description and scene |
+| Director's notes | Become one of five emotions, or a notice | Any note, as written |
+| Earlier takes | Give the voice only | Give the voice, and the last two are context |
+| Expressiveness control | Ignored | 0 to 1 |
+| Multi-speaker scripts | Yes | Yes |
+| Languages | Chinese, English, Japanese, Korean, German, French, Spanish | Not limited by the engine |
+| Weights license | MIT | Fish Audio Community License 1.0 |
+
+When an engine cannot perform part of a script, it still speaks every word.
+The app, the API, `drama-say` and the MCP server report what was lost as a
+notice, such as "[shouting] isn't performed by this engine; its words are
+kept." [Cues on each engine](#cues-on-each-engine) lists what Ming performs.
 
 ## Install
 
 ### System requirements
 
-- Apple silicon Mac. Speech generation requires macOS 26 or later and an
-  installed on-device speech model for the script language. Intel Macs are not
-  supported by the engine.
-- About 49 GB of free disk for the model, codec and setup caches. Allow more
-  space for generated audio, saved projects and app updates.
-- 64 GB or more of unified memory is recommended. This is not a verified
+Both engines need:
+
+- An Apple silicon Mac. Intel Macs are not supported.
+- macOS 26 or later and an installed on-device speech model for the script
+  language. Drama Studio checks every generated sentence with on-device speech
+  recognition.
+
+Ming needs about 3 GB of free disk for its checkpoint.
+<!-- VERIFY-SETUP: confirm a Ming-only install downloads only the 3.0 GB checkpoint, with no codec download, and give the real free-disk figure if setup checks one. -->
+
+Drama 3 needs:
+
+- About 49 GB of free disk for the model, codec and setup caches.
+- 64 GB or more of unified memory. This is a recommendation, not a verified
   minimum. Generation has been tested on an M3 Max with 128 GB. The engine maps
   about 41 GB of model weights.
+
+Allow more space for generated audio, saved projects and app updates.
+
+### Install the app
 
 1. Download `DramaStudio-<version>.dmg` from the
    [latest release](https://github.com/maralski/drama-studio/releases/latest).
@@ -38,26 +104,47 @@ https://github.com/user-attachments/assets/273c2a56-71da-4f1f-95a5-c74141b42930
    password. If you use Terminal, you can run
    `xattr -dr com.apple.quarantine /Applications/DramaStudio.app` instead.
 
-4. Read the license terms in the setup window and click **I Agree**. Fish
+4. In the setup window, choose the engine to install. On a Mac with less than
+   64 GB of memory, Ming is recommended and already selected.
+   <!-- VERIFY-SETUP: the setup window's engine choice, its labels, and that Ming is preselected below 64 GB. -->
+5. If you chose Drama 3, read the license terms and click **I Agree**. Fish
    Audio licenses the model under the Fish Audio Community License, and
-   Drama Studio generates nothing until you agree.
-5. Wait for the downloads. The window shows the progress of each file, the
+   Drama 3 generates nothing until you agree.
+   <!-- VERIFY-SETUP: whether a Ming-only setup shows the Fish Audio terms, and the agree button's label. -->
+6. Wait for the downloads. The window shows the progress of each file, the
    total, and the time left:
-   - the Drama 3 weights from Hugging Face, 41.5 GB;
-   - the Core ML voice codec from the release, 1.5 GB.
+   - for Ming, the Ming-3.0-tts-0.5B checkpoint from Hugging Face, 3.0 GB;
+   - for Drama 3, the Drama 3 weights from Hugging Face, 41.5 GB, and the
+     Core ML voice codec from the release, 1.5 GB.
 
    You can pause, or quit and open the app again. The download continues
    where it stopped. Each file is checked against a SHA-256 value that ships
    with the app before it is kept.
-6. Wait 30 seconds to a minute while the first load tunes the GPU kernels
-   for your Mac.
-7. Click **Generate** to speak your first line.
+   <!-- VERIFY-SETUP: that the Ming download in the setup window shows the same progress, pause and resume as the Drama 3 download. -->
+7. For Drama 3, wait 30 seconds to a minute while the first load tunes the GPU
+   kernels for your Mac. Ming has no tuning step.
+8. Click **Generate** to speak your first line.
 
-If you already downloaded the model with `hf download fishaudio/drama-3`,
-Drama Studio uses that copy and skips the 41.5 GB download. If you are below
-64 GB of memory, the setup window says so before anything downloads. You can
-continue at your own risk.
+If you already downloaded a model with `hf download fishaudio/drama-3` or
+`hf download inclusionAI/Ming-3.0-tts-0.5B`, Drama Studio uses that copy and
+skips its download. If you choose Drama 3 on a Mac with less than 64 GB of
+memory, the setup window says so before anything downloads. You can continue
+at your own risk.
+<!-- VERIFY-SETUP: the low-memory warning's wording and whether it still appears when Drama 3 is chosen below 64 GB. -->
 
+### Add or switch engines
+
+To add Ming later, open **Settings**, go to the **Ming** section, and click
+**Download (3.0 GB)**. **Choose Folder…** uses a checkpoint you already have.
+
+To add Drama 3 later, open **Settings** and go to the **Drama 3** section.
+Agree to the Fish Audio Community License, then start the download.
+<!-- VERIFY-SETUP: the Settings steps and button labels that add Drama 3 after a Ming-only install. -->
+
+To switch engines, use the **Engine** picker in the Inspector or the Speech
+menu. An engine that is not installed shows as "(not installed)". The first
+generation after a switch loads the new engine and unloads the other one.
+A retake of an earlier take always runs on the engine that made that take.
 
 ## Editing scripts
 
@@ -77,6 +164,113 @@ A line without a name continues the previous speaker. Text before the first
 named speaker belongs to Narrator. Up to 16 speakers are supported. If the
 script has no named dialogue, turn Screenplay Mode off for plain narration,
 or use the help button beside the error for the format and examples.
+
+## Cues on each engine
+
+Drama 3 performs any `[bracket cue]` and any `<tag>…</tag>` passage as
+written, such as `[low and menacing]` or `<whisper>Quiet now.</whisper>`.
+
+Ming reads 14 fixed tags and one emotion per sentence. Before Ming speaks a
+script, Drama Studio rewrites each cue as one of those tags or emotions, or
+removes it. `MingCues` in `Sources/DramaEngine/Ming/MingCues.swift` holds the
+table. Cues match in any letter case.
+
+| Typed cue | Ming performs |
+| --- | --- |
+| `[laughs]`, `[laughing]`, `[laughter]`, `[laugh]`, `[chuckles]`, `[chuckle]`, `[giggles]` | `[Laughter]` |
+| `[sighs]`, `[sigh]` | `[Sigh]` |
+| `[coughs]`, `[cough]`, `[clears throat]` | `[Cough]` |
+| `[breathes]`, `[breathing]`, `[breath]`, `[breathes heavily]`, `[panting]`, `[pants]` | `[Breathing]` |
+| `[gasps]`, `[gasp]` | `[Surprise-ah]` |
+| `[hesitates]`, `[um]`, `[uhm]` | `[Uhm]` |
+| `[hmm]` | `[Dissatisfaction-hnn]` |
+| `[with bright eager excitement]` | the happy emotion |
+| `[heavy, deflated sadness]` | the sad emotion |
+| `[furious, barely holding it together]` | the angry emotion |
+| `[breathless and terrified]` | the fearful emotion |
+
+The rest of the rules:
+
+- A cue that starts with a known cue, such as `[laughs nervously]`, is
+  performed as the known cue's tag. The notice says so: "[laughs nervously] is
+  performed as [Laughter]."
+- Ming's own tags pass through when you type them exactly: `[Breathing]`,
+  `[Cough]`, `[Sigh]`, `[Laughter]`, `[Surprise-ah]`, `[Surprise-oh]`,
+  `[Dissatisfaction-hnn]`, `[Uhm]`, `[Confirmation-en]`, `[Question-ei]`,
+  `[Question-ah]`, `[Question-en]`, `[Question-oh]` and `[Question-huh]`.
+- An emotion cue applies to its sentence and to the sentences after it, until
+  the next emotion cue. A sentence takes one emotion. A second emotion cue in
+  the same sentence is removed with a notice.
+- With a designed voice or the model default voice, Ming speaks the first
+  sentence from the voice description or the built-in voice, and that
+  sentence cannot take an emotion. An emotion cue in the first sentence gets a
+  notice and applies from the second sentence on.
+- Any other cue, such as `[shouting]`, and every passage tag, such as
+  `<whisper>`, is removed. Its words are spoken without the direction, and a
+  notice names the cue.
+- When a request clones voices, a `<|speaker:N|>` tag with no voice for
+  speaker N uses the last voice given and gets a notice.
+
+A director's note on Ming becomes an emotion when it contains one of these
+words. Otherwise the note gets the notice "The note "…" names no emotion this
+engine performs." A note's emotion overrides emotion cues in the script.
+
+| Emotion | Words in a note |
+| --- | --- |
+| happy | happy, happier, cheerful, excited, joyful |
+| sad | sad, sadder, sorrowful, mournful |
+| angry | angry, angrier, furious, enraged |
+| fearful | scared, afraid, terrified, fearful, frightened |
+| surprised | surprised, astonished, shocked |
+
+## Voices, takes and languages on each engine
+
+Both engines clone a voice from a clip and its transcript, design a voice from
+a description, and voice up to 16 speakers. A library voice works on both
+engines. The first time an engine uses a voice, Drama Studio encodes the
+voice's clip for that engine and saves the encoding with the voice.
+
+On Ming:
+
+- Clone from a clip of 15 seconds or less. That is the longest clip
+  `EngineCapabilities` records as cloning well on Ming.
+- A designed voice uses the description only. The character's name and scene
+  are not used.
+- The model default voice is Ming's built-in `US_Emma` voice.
+- Earlier takes of a line give the voice only. Ming clones the opening
+  sentences, up to 10 seconds, of the line's first take. It does not continue
+  the last two takes as context, the way Drama 3 does.
+- Expressiveness has no effect. Drama Studio passes no sampling settings to
+  Ming.
+- Ming speaks Chinese, English, Japanese, Korean, German, French and Spanish.
+  A script in another language fails with an error such as "Ming can't
+  speak it text", where `it` is the language code.
+  MingTTS spells out numbers, dates, currencies and units in English text
+  only. It does not normalize Chinese text.
+
+Drama 3 has no language list of its own. On either engine, the word check
+needs an installed Apple speech model for the script's language.
+
+## Troubleshooting
+
+- **An engine shows as "(not installed)".** Open **Settings** and read the
+  engine's status, or run `drama setup` from a source build. Each missing file
+  is listed with its fix.
+- **Drama 3 is slow, swaps, or fails to load on a Mac with less than 64 GB.**
+  Switch to Ming in the Inspector. If Ming is not installed, add it from
+  **Settings > Ming**.
+- **A cue or note had no effect.** The engine could not perform it. The app
+  and `drama-say` show a notice, and the API returns it in `X-Drama-Notices`.
+  [Cues on each engine](#cues-on-each-engine) lists what Ming performs.
+- **"Ming can't speak … text".** The script is in a language Ming does not
+  speak. Switch to Drama 3, or use Chinese, English, Japanese, Korean,
+  German, French or Spanish.
+- **The API answers `400` and lists the installed engines.** The request's
+  `model` names an engine that does not exist ("No engine is called …") or
+  is not installed ("… isn't installed on this server"). `GET /v1/models`
+  lists the installed engines.
+- **The first request after a switch takes longer.** The new engine loads,
+  and the other engine unloads, before it speaks.
 
 ## App updates
 
@@ -111,14 +305,16 @@ a verified download and installation.
 
 - **Script editor** with import of `.txt`, `.md`, `.rtf`, `.rtfd`, `.html`,
   `.docx`, `.srt` and `.vtt`, drag and drop, and a screenplay mode that turns
-  `Name: line` dialogue into Drama 3 speaker tags (up to 16 speakers).
+  `Name: line` dialogue into speaker tags (up to 16 speakers).
+- **Two engines**, Ming and Drama 3, picked in the Inspector or the Speech
+  menu (see [Which engine to use](#which-engine-to-use)).
 - **Takes**: Generate or Generate All produces a fresh take each time. A
   scrolling grid shows take durations, notes, export choices and outdated audio.
-  Other controls include an Expressiveness slider under Advanced (one control
-  over temperature, top-p and top-k, with the vendor's defaults in the middle
-  and the Hugging Face Space's sampling at the top), and an
-  insert menu for performance cues such as `[laughs]`, `[sighs]` and
-  `<whisper>…</whisper>`. Each chunk's frame cap follows the length of its text.
+  Other controls include an Expressiveness slider under Advanced (on Drama 3,
+  one control over temperature, top-p and top-k, with the vendor's defaults in
+  the middle and the Hugging Face Space's sampling at the top; Ming ignores
+  it), and an insert menu for performance cues such as `[laughs]`, `[sighs]`
+  and `<whisper>…</whisper>` (see [Cues on each engine](#cues-on-each-engine)). Each chunk's frame cap follows the length of its text.
   Normal generation checks each decoded sentence with local, audio-only speech
   recognition before playback or reuse as history. It also checks each complete
   adjacent pair before releasing the next sentence, so a bad join retries only
@@ -149,7 +345,8 @@ a verified download and installation.
 - **Pronunciation rules** in Settings rewrite words before the model hears
   them, in the app and through the API.
 - **Voice cloning** from one or more reference clips (any format AVFoundation
-  reads) plus their transcripts, kept in a local voice library.
+  reads) plus their transcripts, kept in a local voice library that both
+  engines share. On Ming, use clips of 15 seconds or less.
   To reuse a generated voice, select a take and click **Save Voice to Library**
   beside **Use for Export**. Name the voice and save it. The app selects it for
   future generations, including after you edit the script. This works with
@@ -170,8 +367,26 @@ a verified download and installation.
 ## Build requirements
 
 The [system requirements](#system-requirements) also apply to source builds.
-Install the following tools and model files:
+Install the following tools, then the files of at least one engine:
+
 - macOS 15 or newer, Xcode 26 command line tools.
+- [MingTTS](https://github.com/maralski/ming-tts), the Swift and Metal port
+  of Ming-3.0-tts. SwiftPM fetches it at `0.1.0`. To build against a local
+  checkout instead, set `MING_PACKAGE_PATH` to its folder.
+
+For Ming, put the 3.0 GB checkpoint in the Hugging Face cache:
+
+```bash
+uvx --from huggingface_hub hf download inclusionAI/Ming-3.0-tts-0.5B
+```
+
+To use a checkpoint in another folder, set `MING_WEIGHTS` to the folder that
+holds `model.safetensors`, `config.json`, `tokenizer.json` and
+`campplus.onnx`. The app's **Settings > Ming** can also download the pinned
+revision.
+
+For Drama 3, install these files:
+
 - The model in the Hugging Face cache:
 
 ```bash
@@ -189,13 +404,8 @@ cd tools && uv venv --python 3.12 .venv && uv pip install --python .venv/bin/pyt
   809 MB in fp32, decoder 353 MB and the 64-frame silence-probe decoder
   352 MB in fp16).
 
-- The Ming-3.0-tts Swift port, [MingTTS](https://github.com/maralski/ming-tts),
-  which SwiftPM fetches at `0.1.0`. `MING_PACKAGE_PATH` builds against a
-  local checkout instead. The Ming engine is optional. Its checkpoint is `inclusionAI/Ming-3.0-tts-0.5B`,
-  3.0 GB: `uvx --from huggingface_hub hf download inclusionAI/Ming-3.0-tts-0.5B`
-  puts it in the Hugging Face cache, or Settings downloads the pinned
-  revision. `MING_WEIGHTS` names another folder. `drama setup` reports what
-  each engine has and lacks.
+`drama setup` reports what each engine has and lacks, with a fix for each
+gap.
 
 ## Build and run
 
@@ -233,13 +443,25 @@ tests the independent runtime. The full offline check can also be rerun with
 .build/release/drama tune                      # once per Mac, about 30 s; the app does it on first load
 .build/release/drama generate --text "Hello there." --out frames.npy
 .build/release/drama bench                     # add --untuned to compare against the hand-written schedule
-.build/release/drama setup                     # what each engine's install has and lacks, with the fixes
-.build/release/drama serve                     # the HTTP API without the app; --port 8780, --no-token, --engine drama3|ming, --voices <dir>
+.build/release/drama setup                     # what each engine's install has and lacks, with the fixes; --model <dir>, --ming-weights <dir>
+.build/release/drama serve                     # the HTTP API without the app; --port 8780, --no-token, --engine drama3|ming, --model <dir>, --ming-weights <dir>, --voices <dir>
 .build/release/drama-say "Hello there."         # speaks through the running app, like say; see From the terminal
 ```
 
-`DRAMA_PREVIEW_ENGINE=1` runs the app or `drama serve` on a mock engine that
-produces placeholder tones, for working on everything but the model.
+`drama setup` exits with 1 when no engine is ready. It finds Ming in
+`MING_WEIGHTS`, then in the Hugging Face cache, and Drama 3 in the Hugging
+Face cache. `--ming-weights` and `--model` name other folders. Neither command
+looks in the app's own download folder.
+
+`drama serve` serves every installed engine. `--engine`, else the
+`DRAMA_ENGINE` environment variable, picks the engine that requests use when
+they name none. Without either, Drama 3 is the default when it is installed.
+It prints which engines it serves, and names on standard error an engine it
+cannot serve and why.
+
+`DRAMA_PREVIEW_ENGINE=1` runs the app or `drama serve` on mock engines that
+produce placeholder tones, one for each engine, for working on everything but
+the models. `DRAMA_ENGINE=ming` also makes the app start on Ming.
 
 The app looks for the weights in this order: the folder chosen in Settings,
 its own download in `~/Library/Application Support/DramaStudio/Models/drama-3-e0a9218/`,
@@ -252,9 +474,11 @@ above when the codec models are missing; `tools/make_release.sh` builds the
 release DMG and the codec zip and writes the zip's URL and SHA-256 into the
 app. `DRAMA_STUDIO_HOME=<folder>` moves the downloads, the codec, the tuning,
 the settings and the API token into one folder and ignores the Hugging Face cache, to try a
-first run without touching your own. `DRAMA_STUDIO_MEMORY_GB=16` shows the
-low-memory warning on a Mac that has enough; it changes only the warning, not
-the memory the engine can use. `tools/pin_model_plan.py --check`
+first run without touching your own. `DRAMA_STUDIO_MEMORY_GB=16` makes setup
+treat the Mac as a 16 GB Mac, so it recommends Ming and shows the low-memory
+warning for Drama 3. It changes only what setup shows, not the memory an
+engine can use.
+<!-- VERIFY-SETUP: that DRAMA_STUDIO_MEMORY_GB also drives the Ming recommendation and preselection, not only the warning. --> `tools/pin_model_plan.py --check`
 compares the pinned download plan with Hugging Face.
 
 ## Documents
@@ -308,8 +532,8 @@ done.
 
 ## Reliability
 
-`eval/reliability/REPORT.md` is a 330-run study of whether every sentence
-comes out as speech: 33 conditions (short and long lines, numbers,
+`eval/reliability/REPORT.md` is a 330-run study of whether Drama 3 speaks
+every sentence: 33 conditions (short and long lines, numbers,
 abbreviations, all caps, performance cues, multi-speaker tags, Spanish,
 French and German, a cloned voice, both expressiveness extremes, and two
 control conditions), five seeds each, in `full` and `balanced`. It was run on
@@ -357,6 +581,11 @@ word check before release, so a dropped clause is retried or fails the
 request instead of reaching a finished take. The Insert Cue menu still says to
 listen before export to judge the performance.
 
+For Ming, `Tests/DramaStudioTests/MingReliabilityHarness.swift` runs a fixed
+corpus of six voices, eight lines and three seeds through the engine registry
+the app uses. It prints the first-attempt word-check pass rate, hard
+failures, mean attempts and the real-time factor. Its header has the command.
+
 ## Agents and programs
 
 While Drama Studio is open, including when only its menu bar icon is left, it
@@ -383,7 +612,7 @@ The speech request follows the
 
 | Route | Does |
 | --- | --- |
-| `GET /v1/health` | `{status, model_loaded, engine: "metal" or "mock", speech_engine: "drama3" or "ming", busy, tuned, version}`. `speech_engine` is the engine requests use when they name none. `tuned` is `null` until the Metal engine loads its model; the mock engine reports `false`. While a generation runs it adds `estimate: {elapsed_seconds, remaining_seconds, frames_done, frames_expected}`; `remaining_seconds` is `null` once the last sentence is in its silence tail or a retry runs. |
+| `GET /v1/health` | `{status, model_loaded, engine: "metal" or "mock", speech_engine: "drama3" or "ming", busy, tuned, version}`. `speech_engine` is the engine requests use when they name none. `tuned` is `null` until the selected engine loads its model, then whether Drama 3's kernels are tuned; Ming and the mock engines report `false`. While a generation runs it adds `estimate: {elapsed_seconds, remaining_seconds, frames_done, frames_expected}`; `remaining_seconds` is `null` once the last sentence is in its silence tail or a retry runs. |
 | `GET /v1/models` | One entry per installed engine: `{id, engine, name, snapshot, mock, selected}`, with `id` the Hugging Face model id, such as `fishaudio/drama-3` or `inclusionAI/Ming-3.0-tts-0.5B`. |
 | `POST /v1/audio/speech` | Speaks `input`. Returns the audio file, or a PCM stream. |
 | `POST /v1/tts` | The same, with the text in `text`. |
@@ -392,23 +621,23 @@ The speech request follows the
 | `GET /v1/voices` | The voice library: id, name, transcript, seconds, source file. |
 | `POST /v1/voices` | Clones a voice: JSON `{name, transcript, audio_base64 or audio_path}`, or multipart with a `file` part plus `name` and `transcript` fields. |
 | `DELETE /v1/voices/{id}` | Deletes a voice. |
-| `GET /v1/takes/{id}` | One of the last 20 takes: `{id, engine, input, text, seconds, frames, codes_base64, previous_take_ids}`. |
+| `GET /v1/takes/{id}` | One of the last 20 takes: `{id, engine, input, text, seconds, samples, previous_take_ids}`, plus `frames` and `codes_base64` for a Drama 3 take. |
 
 The speech body takes these fields:
 
 | Field | Meaning |
 | --- | --- |
-| `input` | The text. Performance cues such as `[laughs]` and `<\|speaker:1\|>` tags work as in the app. |
+| `input` | The text. Performance cues such as `[laughs]` and `<\|speaker:1\|>` tags work as in the app, and Ming rewrites or removes cues as [Cues on each engine](#cues-on-each-engine) describes. |
 | `voice` | A library voice, by id or name. |
 | `references` | Clips to clone on the fly: `[{audio_path or audio_base64, text}]`. |
 | `speaker_voices` | Library voices per speaker for a multi-speaker script: `{"0": "Narrator", "1": "<id>"}`, with no gaps from speaker 0. |
 | `response_format` | `wav` (default, 16-bit), `pcm` (raw 16-bit little-endian), or `m4a`. |
 | `stream` | `true` streams completed, checked chunks. |
-| `expressiveness` | 0 to 1, default 0.5: the app's Expressiveness slider. 0.5 is the vendor's sampling, 1 the Hugging Face Space's. |
+| `expressiveness` | 0 to 1, default 0.5: the app's Expressiveness slider. 0.5 is the vendor's sampling, 1 the Hugging Face Space's. Drama 3 only; Ming ignores it. |
 | `seed` | A fixed sampler seed, for repeatable takes. |
-| `character` | A voice designed from a description instead of a clip: `{name, description, scene?}`. |
-| `note` | A director's note, such as `"softer and warmer"`. The line is generated again, sentence by sentence, with the note as a direction and as a cue before every sentence. |
-| `previous_takes` | Earlier takes of the line, oldest first: `[{take_id}]` or `[{text, codes_base64}]`. The last two are context. With no `voice` or `references`, the first one is the voice. |
+| `character` | A voice designed from a description instead of a clip: `{name, description, scene?}`. Ming uses only `description`. |
+| `note` | A director's note, such as `"softer and warmer"`. On Drama 3, the line is generated again, sentence by sentence, with the note as a direction and as a cue before every sentence. On Ming, a note that names an emotion sets that emotion, and any other note gets a notice. |
+| `previous_takes` | Earlier takes of the line, oldest first: `[{take_id}]`, or `[{text, codes_base64}]` for a Drama 3 take. With no `voice` or `references`, the first one is the voice. On Drama 3, the last two are also context. A take from the other engine gets a notice and is not used. |
 | `model` | The engine to speak with: its id (`drama3`, `ming`), model id or name. Without it, a request that continues a cached take runs on that take's engine, and any other runs on the selected one. OpenAI's model names, `tts-1`, `tts-1-hd` and `gpt-4o-mini-tts`, are treated as no model, so OpenAI clients work unchanged. Any other name, and an engine that isn't installed, gets `400` listing the installed engine ids. Only one engine is loaded at a time, so a request for the other engine unloads the current one first. |
 | `apply_pronunciation` | `true` (default) rewrites `input` with the pronunciation rules in `~/Library/Application Support/DramaStudio/pronunciation.json`, the same rules the app uses, before it is spoken; `false` speaks it as sent. |
 
@@ -422,12 +651,14 @@ retake the line of the last named take, with its voice and character.
 by codebook, as `GET /v1/takes/{id}` returns them.
 
 Every speech response names the engine that made it in `X-Drama-Engine` and
-`X-Drama-Model`, and the `done` event carries `engine`. A file response carries `X-Drama-Frames`, `X-Drama-Seconds`,
-`X-Drama-Generation-Seconds`, `X-Drama-Word-Coverage` (`recognized` or
-`unchecked`), `X-Drama-Generated-Frames` (including rejected attempts) and
-`X-Drama-Verification-Seconds`. When the engine cannot perform part of the
-request as written, such as a cue Ming has no tag for, `X-Drama-Notices` holds
-a JSON array of one-sentence messages; the words are still spoken. A sentence that still fails the word check
+`X-Drama-Model`, and the `done` event carries `engine`. A file response
+carries `X-Drama-Samples`, `X-Drama-Seconds`, `X-Drama-Generation-Seconds`,
+`X-Drama-Word-Coverage` (`recognized` or `unchecked`) and
+`X-Drama-Verification-Seconds`. A Drama 3 response also carries
+`X-Drama-Frames` and `X-Drama-Generated-Frames` (including rejected
+attempts). When the engine cannot perform part of the request as written,
+such as a cue Ming has no tag for, `X-Drama-Notices` holds a JSON array of
+one-sentence messages; the words are still spoken. A sentence that still fails the word check
 after its retries, or a missing word checker, fails the request with `500`
 and a plain-text message. The engine runs one generation at a time. A
 request that arrives while another runs, through the API or in the window, gets
@@ -446,7 +677,15 @@ curl -sS -H "$AUTH" -D headers.txt localhost:8780/v1/audio/speech \
 TAKE=$(awk 'tolower($1) == "x-drama-take-id:" {print $2}' headers.txt | tr -d '\r')
 curl -sS -H "$AUTH" localhost:8780/v1/audio/speech \
   -d "{\"note\": \"softer and warmer\", \"previous_takes\": [{\"take_id\": \"$TAKE\"}]}" -o captain-retake.wav
+curl -sS -H "$AUTH" localhost:8780/v1/models
+curl -sS -H "$AUTH" -D ming-headers.txt localhost:8780/v1/audio/speech \
+  -d '{"input": "Hello there. [laughs] <whisper>Quiet now.</whisper>", "model": "ming"}' -o ming.wav
+grep -i '^x-drama-notices' ming-headers.txt
 ```
+
+The last request speaks on Ming. Ming performs `[laughs]` as `[Laughter]` and
+cannot whisper, so `X-Drama-Notices` holds
+`["<whisper> isn't performed by this engine; its words are kept."]`.
 
 ### Streaming framing
 
@@ -471,7 +710,7 @@ curl -sSN -H "$AUTH" localhost:8780/v1/audio/speech \
 ```
 
 **Server-Sent Events.** `GET /v1/audio/speech/stream` takes its fields as query
-parameters: `input` (required), `voice`, `expressiveness`,
+parameters: `input` (required), `voice`, `model`, `expressiveness`,
 `seed`, and `character_name`, `character_description` and `character_scene`
 for a designed voice. `apply_pronunciation=false` turns off the pronunciation
 rules, as in the speech body. It answers with `Content-Type: text/event-stream`
@@ -481,7 +720,7 @@ and these events:
 | --- | --- |
 | `audio` | Base64 of the next PCM bytes, a whole number of frames. |
 | `sentence` | `{"index", "text", "seconds"}` after the last audio of each sentence. |
-| `done` | `{"take_id", "frames", "word_coverage", "seconds"}` once the take is complete, with `notices`, an array of messages, when the engine could not perform part of the request. |
+| `done` | `{"take_id", "engine", "samples", "word_coverage", "seconds"}` once the take is complete, plus `frames` for a Drama 3 take, with `notices`, an array of messages, when the engine could not perform part of the request. |
 | `error` | `{"message"}`, after which the stream ends. |
 
 The route still needs the bearer token, and the server sends no CORS headers,
@@ -494,7 +733,7 @@ curl -sSN -H "$AUTH" "localhost:8780/v1/audio/speech/stream?input=Hello%20there.
 ```
 
 **Live text input.** `POST /v1/audio/speech/live` is for an agent that writes
-text a piece at a time. It takes `voice`, `expressiveness`,
+text a piece at a time. It takes `voice`, `model`, `expressiveness`,
 `seed` and the `character_*` fields as query parameters, and the text as the
 request body:
 
@@ -516,7 +755,7 @@ request body:
   `voice` is given, and the last two are context.
 - The response is chunked PCM as for `stream: true`. Send
   `Accept: text/event-stream` to get the events above instead, with `done`
-  carrying `{"sentences", "seconds", "take_ids"}` and any `notices` of the
+  carrying `{"engine", "sentences", "seconds", "take_ids"}` and any `notices` of the
   session. The response ends once the
   body has ended and its last sentence is spoken.
 - The session holds the engine from the request to the end of the response,
@@ -559,8 +798,8 @@ repository's `dist/DramaStudio.app`. `DRAMA_API_URL` overrides
 
 | Tool | Does |
 | --- | --- |
-| `synthesize_speech` | `text`, with optional `voice` or `character` (`{name, description, scene?}`), `engine` (`drama3` or `ming`), `output_path`, `expressiveness`, and `play`. Writes a WAV, by default to `~/Library/Application Support/DramaStudio/Output/<timestamp>.wav`. Returns the path, the engine, seconds, frames, generation seconds, and `take_id`. `play` plays it with `afplay`. |
-| `retake_with_note` | `take_id` and `note`, with optional `output_path` and `play`. Generates that take's line again in the same voice with the note. Returns what `synthesize_speech` returns, with the new `take_id`. |
+| `synthesize_speech` | `text`, with optional `voice` or `character` (`{name, description, scene?}`), `engine` (`drama3` or `ming`), `output_path`, `expressiveness`, and `play`. Writes a WAV, by default to `~/Library/Application Support/DramaStudio/Output/<timestamp>.wav`. Returns the path, the engine, seconds, frames (Drama 3 only), generation seconds, `take_id`, and any notices about cues or notes the engine could not perform. `play` plays it with `afplay`. |
+| `retake_with_note` | `take_id` and `note`, with optional `output_path` and `play`. Generates that take's line again in the same voice with the note, on the engine that made the take. On Ming, the note must name an emotion to change the delivery. Returns what `synthesize_speech` returns, with the new `take_id`. |
 | `list_voices` | The voice library. |
 | `add_voice` | Clones `audio_path` with its `transcript` under `name`. |
 | `delete_voice` | Deletes a voice by `id`. |
@@ -610,7 +849,9 @@ no `-f`, it reads the text from standard input. `-v '?'` lists the voice
 library. `--verbose` prints the take id that `--retake` takes. `drama-say
 --help` lists every option.
 
-It prints nothing on success. It exits with 64 on a bad command line, 75 when
+It prints nothing on success, except a `drama-say:` line on standard error for
+each notice about a cue or note the engine could not perform. It speaks on
+the engine selected in the app and has no option to pick one. It exits with 64 on a bad command line, 75 when
 the studio is busy with another generation, after printing the `Retry-After`
 wait, and 1 on any other error, after printing the server's message.
 
@@ -619,9 +860,12 @@ wait, and 1 on any other error, after printing the server's message.
 `DramaEngine` is a Swift library, version 2.1.3 (`DramaEngineVersion.string`,
 `CHANGELOG.md`). Add this repository as a package dependency and the
 `DramaEngine` product to a target; the app, the server and the CLI are not
-needed. The public API includes `ModelLocation` and `DramaSetup` for the
-install, `DramaSynthesizer` (an actor) behind the `SpeechSynthesizer`
-protocol, `SpeechRequest` with `ReferenceVoice`, `VoiceDesign`, `Take` and
+needed. The public API includes `ModelLocation`, `MingLocation` and
+`DramaSetup` for the install, `DramaSynthesizer` and `MingSynthesizer` (both
+actors) behind the `SpeechSynthesizer` protocol, `SpeechEngines` to hold both
+with one in memory at a time, `EngineCapabilities` and `EngineInstall` for
+what each engine does and needs, `SpeechNotice` for what an engine could not
+perform, `SpeechRequest` with `ReferenceVoice`, `VoiceDesign`, `Take` and
 `GenerationConfig`, the streamed `SpeechEvent`s with `StreamedAudio` and
 `GenerationEstimate`, the word check's `WordVerificationPolicy` and
 `SpeechVerificationError`, `PronunciationDictionary`, `DramaCodec` for
@@ -646,13 +890,37 @@ for try await event in engine.synthesize(request) {
 }
 ```
 
-- `DramaSetup.check` reads files only and names what is missing: a weight
-  shard, the tokenizer, `codec.pth`, the Core ML codec models, the word
+Ming takes the same requests through `MingSynthesizer`. `DramaSetup.check(ming:)`
+reports its checkpoint, and `MingLocation.find()` looks in `MING_WEIGHTS`,
+then in the Hugging Face cache. `SpeechResult.notices` lists the cues and
+notes Ming could not perform:
+
+```swift
+let report = DramaSetup.check(ming: MingLocation.find())
+guard let directory = report.directory, report.isReady else { fatalError(report.fixes.joined(separator: "\n")) }
+let engine = MingSynthesizer(location: MingLocation(directory: directory))
+let (voice, _) = try await engine.cloneVoice(audioURL: clip, transcript: "What the clip says.", name: "Narrator")
+let request = SpeechRequest(text: "Hello there. [laughs] Good to see you.", references: [voice])
+var audio = StreamedAudio()
+for try await event in engine.synthesize(request) {
+    play(audio.newSamples(from: event))
+    if case .finished(let result) = event { result.notices.forEach { print($0.message) } }
+}
+```
+
+The package depends on MingTTS, which SwiftPM fetches with it. The Ming
+checkpoint itself is not in any package; download it as
+[Build requirements](#build-requirements) describes.
+
+- `DramaSetup.check` reads files only and names what is missing for Drama 3:
+  a weight shard, the tokenizer, `codec.pth`, the Core ML codec models, the word
   checker, or a tuned kernel schedule for this Mac, each with a fix. `DramaSetup.prepare` builds
   the codec models with the `convert_codec.py` that ships in the engine's
   resource bundle, through a Python you name (it throws the exact commands
   when you name none and never downloads Python), and loads the model once to
-  tune the kernels.
+  tune the kernels. `DramaSetup.check(ming:)` names a missing Ming weight
+  file, tokenizer, speaker encoder (`campplus.onnx`) or word checker. Ming has
+  no codec models and no tuning, so it needs no `prepare` step.
 - Normal generation checks each sentence's words with the
   `drama-word-recognizer` helper and a Whisper model, which must sit next to
   the executable or the engine bundle (`tools/make_app.sh` stages them;
@@ -679,6 +947,18 @@ for try await event in engine.synthesize(request) {
 
 ## How it is built
 
+Most of the engine code is Drama 3's. Ming's model code is in MingTTS, and
+Drama Studio adds the layer that makes both engines take the same requests.
+
+- `Sources/DramaEngine/Engines`: what both engines share. `EngineCapabilities`
+  records what each engine can do, and `EngineInstall` records each engine's
+  checkpoint and setup checks. `SpeechEngines` holds every installed engine,
+  keeps at most one in memory, and encodes a library voice for an engine the
+  first time that engine uses it.
+- `Sources/DramaEngine/Ming`: `MingSynthesizer` runs one Ming request per
+  sentence through MingTTS, with the same word check and retries as Drama 3.
+  `MingCues` rewrites cues and notes as Ming's tags and emotions.
+  `MingVoiceEncoding` stores a voice's Ming latents and speaker embedding.
 - `Sources/DramaEngine/Weights`: the eight safetensors shards are memory-mapped
   (`MAP_SHARED`) and wrapped as Metal buffers without copying. Experts stay in
   FP8 E4M3 with their 128x128 block scales and are decoded inside the kernel
@@ -726,8 +1006,10 @@ for try await event in engine.synthesize(request) {
   extra in `App/DramaStudio/Server`.
 - `eval/`: the faithfulness suite (see `docs/EVAL.md`).
 
-Historical engine experiments below record their original configurations;
-they are not current latency guarantees.
+The sections from [Faithfulness](#faithfulness) to
+[Kernel autotune](#kernel-autotune) are about Drama 3. Historical engine
+experiments below record their original configurations; they are not current
+latency guarantees.
 
 Design notes and decisions are in `docs/DESIGN.md`; the decision trail of the
 build is `.audit/drama-studio.tsv`.
@@ -821,6 +1103,10 @@ fp16 decoder instead (`eval/coreml_vs_pytorch_wer.py`) gives the same mean
 word error rate, 0.063 against 0.063, with no run scoring worse.
 
 ## Performance (M3 Max, 128 GB)
+
+<!-- VERIFY-NUMBERS: a short Ming against Drama 3 table here, with load time, peak memory and seconds of audio per second of generation on the M3 Max, and the command that reproduces it. -->
+
+The rest of this section measures Drama 3.
 
 First pass, 2026-10-16. The decode rows are superseded by the
 [second pass](#decode-second-pass-2026-10-22): a decode frame is now 18.1 ms
@@ -1189,7 +1475,25 @@ To redo the end-to-end table on an idle machine, with a reference dump at
 ## License
 
 Copyright 2026 Peter Marelas. Drama Studio's own code is under the Apache
-License 2.0; see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+License 2.0; see [LICENSE](LICENSE) and [NOTICE](NOTICE). Each engine's model
+weights have their own license, and that license, not the Apache License,
+governs the weights.
+
+### Ming
+
+Drama Studio links [MingTTS](https://github.com/maralski/ming-tts), Peter
+Marelas's Swift and Metal port of the inference path of inclusionAI's
+[Ming-3.0-tts](https://github.com/inclusionAI/Ming-3.0-tts). MingTTS is under
+the Apache License 2.0. Parts of it follow inclusionAI's upstream code, which
+is under the MIT License. The Ming weights, tokenizer files and the CAM++
+speaker encoder (`campplus.onnx`) are not included: the app downloads them
+from [inclusionAI/Ming-3.0-tts-0.5B](https://huggingface.co/inclusionAI/Ming-3.0-tts-0.5B),
+where inclusionAI publishes them under the MIT License.
+[THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES) carries the MingTTS and inclusionAI
+notices. Ming is a name of inclusionAI. This project is not affiliated with
+or endorsed by inclusionAI.
+
+### Drama 3
 
 Built with Fish Audio. Drama Studio runs Fish Audio Drama 3, and the model
 weights and codec checkpoint are not included: the app downloads them from
@@ -1203,10 +1507,11 @@ lists, and it needs a separate Fish Audio license to offer speech generation to
 others as a hosted service.
 
 Section IV(b) of that license asks anyone who makes speech generation available
-to others to bind them to its use restrictions, so the app's setup window shows
-them and asks you to agree before it downloads or generates anything. Until you
-agree, the window, the HTTP API (403) and through it the MCP server and
-`drama-say` refuse to speak. The command-line `drama` tool, including
+to others to bind them to its use restrictions, so the app shows them and asks
+you to agree before it downloads Drama 3 or generates anything with it. Until
+you agree, the window, the HTTP API (403) and through it the MCP server and
+`drama-say` refuse to speak with Drama 3.
+<!-- VERIFY-SETUP: whether the terms gate only Drama 3 after a Ming-only install, or every engine; and where the agreement appears when Drama 3 is added from Settings. --> The command-line `drama` tool, including
 `drama serve`, is for developers building from source and does not ask.
 
 The fish-speech reference code copied under `eval/oracle/` and
