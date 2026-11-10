@@ -39,6 +39,7 @@ public struct SpeechOutline: Sendable, Equatable {
         let foreign = request.previousTakes.filter { $0.context.engine != engine }
         if let other = foreign.first { notices.append(.otherEngineTakes(other.context.engine, count: foreign.count)) }
         if engine == .ming { notices += MingCues.translate(lines: lines, note: request.note).notices }
+        if !engine.capabilities.expressiveness, !request.config.hasDefaultSampling { notices.append(.ignoredExpressiveness) }
         self.notices = notices
     }
 }
@@ -54,5 +55,13 @@ package enum SpokenPace {
             return max(pace, voice.seconds / Double(count))
         }
         return Double(characters) * secondsPerCharacter
+    }
+}
+
+extension GenerationConfig {
+    /// Sampling as ``make(expressiveness:)`` sets it at the default expressiveness.
+    var hasDefaultSampling: Bool {
+        let standard = GenerationConfig.make(expressiveness: GenerationConfig.defaultExpressiveness)
+        return temperature == standard.temperature && topP == standard.topP && topK == standard.topK
     }
 }

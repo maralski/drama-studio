@@ -1,6 +1,7 @@
 // Copyright 2026 Peter Marelas
 // SPDX-License-Identifier: Apache-2.0
 import AVFoundation
+import DramaEngine
 import SwiftUI
 
 struct AddVoiceSheet: View {
@@ -30,11 +31,11 @@ struct AddVoiceSheet: View {
             Form {
                 Section {
                     clipRow
-                    if let clipSeconds, let warning = RecordingLength.warning(for: clipSeconds) {
+                    if let clipSeconds, let warning = RecordingLength.warning(for: clipSeconds, on: model.engine) {
                         Label(warning, systemImage: "exclamationmark.triangle.fill").font(.caption).foregroundStyle(.orange)
                     }
                     if isShowingRecorder {
-                        RecorderPanel(recorder: recorder) { url in
+                        RecorderPanel(recorder: recorder, engine: model.engine) { url in
                             clip = url
                             isShowingRecorder = false
                         }
@@ -48,7 +49,7 @@ struct AddVoiceSheet: View {
                             .accessibilityLabel("Transcript")
                     }
                 } footer: {
-                    Text("Type exactly what is said in the clip. 5 to 20 seconds of clean speech works best.")
+                    Text("Type exactly what is said in the clip. For \(model.engine.capabilities.name), \(RecordingLength.best(for: model.engine)) of clean speech works best.")
                 }
                 if case .success(let speakers) = model.castSpeakers {
                     Section {

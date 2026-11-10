@@ -99,13 +99,22 @@ final class AppSettingHelpTests: XCTestCase {
 
 final class AppRecordingLengthTests: XCTestCase {
     func testWarnsOnlyOutsideThreeToThirtySeconds() {
-        XCTAssertNotNil(RecordingLength.warning(for: 0.5))
-        XCTAssertNotNil(RecordingLength.warning(for: 2.99))
-        XCTAssertNil(RecordingLength.warning(for: 3))
-        XCTAssertNil(RecordingLength.warning(for: 12))
-        XCTAssertNil(RecordingLength.warning(for: 30))
-        XCTAssertNotNil(RecordingLength.warning(for: 30.01))
-        XCTAssertNotEqual(RecordingLength.warning(for: 1), RecordingLength.warning(for: 40))
+        XCTAssertNotNil(RecordingLength.warning(for: 0.5, on: .drama3))
+        XCTAssertNotNil(RecordingLength.warning(for: 2.99, on: .drama3))
+        XCTAssertNil(RecordingLength.warning(for: 3, on: .drama3))
+        XCTAssertNil(RecordingLength.warning(for: 12, on: .drama3))
+        XCTAssertNil(RecordingLength.warning(for: 30, on: .drama3))
+        XCTAssertNotNil(RecordingLength.warning(for: 30.01, on: .drama3))
+        XCTAssertNotEqual(RecordingLength.warning(for: 1, on: .drama3), RecordingLength.warning(for: 40, on: .drama3))
+    }
+
+    func testTheClipAdviceFollowsTheEnginesCloneLimit() {
+        XCTAssertEqual(RecordingLength.best(for: .drama3), "5 to 20 seconds")
+        XCTAssertEqual(RecordingLength.best(for: .ming), "5 to 15 seconds")
+        XCTAssertNil(RecordingLength.warning(for: 15, on: .ming))
+        XCTAssertEqual(RecordingLength.warning(for: 22.8, on: .ming),
+                       "This clip is over 15 seconds. Ming uses all of it, which leaves less room to speak each line, so trim it to 15 seconds or less.")
+        XCTAssertNil(RecordingLength.warning(for: 22.8, on: .drama3))
     }
 }
 
@@ -254,18 +263,18 @@ private final class StubCapture: AudioCapturing {
 final class AppGenerationClockTests: XCTestCase {
     func testRestoredAudioWithoutGenerationTelemetryIsNotStoppedEarly() {
         XCTAssertEqual(
-            TransportBar.summary(audioSeconds: 6.5, speed: nil, generationSeconds: nil),
+            TransportBar.summary(audioSeconds: 6.5, generationSeconds: nil, stoppedEarly: false),
             "6.5 s of audio"
         )
     }
 
     func testSummaryShowsAudioSpeedAndGenerationTime() {
         XCTAssertEqual(
-            TransportBar.summary(audioSeconds: 23.6, speed: 1.55, generationSeconds: 15.2),
-            "23.6 s of audio \u{00B7} 1.6x real time \u{00B7} generated in 15.2 s"
+            TransportBar.summary(audioSeconds: 23.6, generationSeconds: 15.2, stoppedEarly: false),
+            "23.6 s of audio \u{00B7} 1.6x real time \u{00B7} generated in 15.2 s", "the speed is the audio over the time shown"
         )
         XCTAssertEqual(
-            TransportBar.summary(audioSeconds: 4, speed: nil, generationSeconds: 2.04),
+            TransportBar.summary(audioSeconds: 4, generationSeconds: 2.04, stoppedEarly: true),
             "4.0 s of audio (stopped early) \u{00B7} generated in 2.0 s"
         )
         XCTAssertEqual(TransportBar.seconds(12.44), "12.4 s")

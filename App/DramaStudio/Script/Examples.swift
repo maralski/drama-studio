@@ -82,8 +82,13 @@ enum Examples {
         ),
     ]
 
-    /// Director's notes offered as one-click fills for a retake.
-    static let notes = [
+    /// Director's notes offered as one-click fills for a retake on `engine`:
+    /// its emotions when it takes only those from a note.
+    static func notes(for engine: SpeechEngineID) -> [String] {
+        engine.capabilities.noteEmotions ?? notes
+    }
+
+    private static let notes = [
         "softer and warmer", "more excited", "more amused than before", "drop the hurt",
         "slower, with more pauses", "angrier", "whispered", "faster", "more sarcastic",
     ]

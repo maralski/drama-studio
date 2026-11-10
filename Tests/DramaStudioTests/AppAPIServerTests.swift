@@ -44,6 +44,10 @@ final class AppAPIServerTests: XCTestCase {
         session.stopGeneration()
     }
 
+    func testTheAPIChipTooltipShowsThePortUngrouped() {
+        XCTAssertEqual(APIChip.tooltip(port: 8841, job: nil), "API server listening on http://127.0.0.1:8841")
+    }
+
     func testMenuBarStatusLines() {
         let job = SpeechJob(id: UUID(), progress: .generating(chunk: 2, of: 5))
         XCTAssertEqual(MenuBarStatus.job(session: .idle, job: job), "API request: Generating chunk 2 of 5")

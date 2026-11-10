@@ -181,10 +181,10 @@ final class AppLayoutTests: XCTestCase {
         let recorder = VoiceRecorder(capture: LayoutCapture(), directory: scratch, requestAccess: { true })
         await recorder.record()
         recorder.stop()
-        try await render(RecorderPanel(recorder: recorder, use: { _ in }).padding(10), name: "recorded", size: CGSize(width: 420, height: 140), in: directory)
+        try await render(RecorderPanel(recorder: recorder, engine: .drama3, use: { _ in }).padding(10), name: "recorded", size: CGSize(width: 420, height: 140), in: directory)
         let denied = VoiceRecorder(capture: LayoutCapture(), directory: scratch, requestAccess: { false })
         await denied.record()
-        try await render(RecorderPanel(recorder: denied, use: { _ in }).padding(10), name: "recorder-denied", size: CGSize(width: 420, height: 160), in: directory)
+        try await render(RecorderPanel(recorder: denied, engine: .drama3, use: { _ in }).padding(10), name: "recorder-denied", size: CGSize(width: 420, height: 160), in: directory)
         let downloadingMac = FakeMac()
         downloadingMac.facts.termsAccepted = true
         downloadingMac.holdWeights = true

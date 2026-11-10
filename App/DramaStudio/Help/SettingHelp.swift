@@ -1,5 +1,6 @@
 // Copyright 2026 Peter Marelas
 // SPDX-License-Identifier: Apache-2.0
+import DramaEngine
 import Foundation
 
 /// The help text for every control. The popovers beside each control and the
@@ -26,6 +27,7 @@ enum SettingHelp: String, CaseIterable, Identifiable {
     case playbackSpeed
     case streaming
     case modelLocation
+    case mingLocation
     case license
 
     enum Group: String, CaseIterable {
@@ -45,7 +47,7 @@ enum SettingHelp: String, CaseIterable, Identifiable {
         case .screenplayMode, .speakerVoice, .performanceCues, .examples, .sections, .pronunciation, .projects: .script
         case .surpriseMe, .voiceDesign, .referenceClip, .voiceTranscript, .voiceConsent: .voices
         case .newTake, .directorsNote, .keepTake, .expressiveness, .playbackSpeed: .takes
-        case .modelLocation, .streaming: .model
+        case .modelLocation, .mingLocation, .streaming: .model
         case .license: .about
         }
     }
@@ -82,6 +84,7 @@ enum SettingHelp: String, CaseIterable, Identifiable {
         case .playbackSpeed: "Playback Speed"
         case .streaming: "Streaming"
         case .modelLocation: "Model Location"
+        case .mingLocation: "Ming Location"
         case .license: "License and Consent"
         }
     }
@@ -111,7 +114,11 @@ enum SettingHelp: String, CaseIterable, Identifiable {
         case .voiceDesign:
             "Casts a voice from a description instead of a recording: a name, how the voice sounds, and an optional scene. Try a Line speaks a sample in that voice, and if you then click Use Voice without changing the design, the voice you heard is the voice you get. Try a Line checks the spoken words before playback. Designed voices cast scripts with one speaker, so click Save Voice to Library to save one to the library for a screenplay."
         case .referenceClip:
-            "A short recording of the voice you want, from a file or recorded here. Use 5 to 20 seconds of clean speech with no music or background noise. In testing, cloned voices scored 0.87 speaker similarity to their clip, against about 0.55 for the model's own voices."
+            "A short recording of the voice you want, from a file or recorded here. Use 5 to 20 seconds of clean speech with no music or background noise. "
+                + SpeechEngineID.allCases.compactMap { engine in
+                    engine.capabilities.maxCloneSeconds.map { "\(engine.capabilities.name) uses the whole clip, and one over \(Int($0)) seconds leaves it less room to speak each line. " }
+                }.joined()
+                + "In testing with Drama 3, cloned voices scored 0.87 speaker similarity to their clip, against about 0.55 for the model's own voices."
         case .voiceTranscript:
             "The exact words spoken in the reference clip. The model pairs the clip with this text to learn the voice, so a wrong or missing word weakens the match. Include filler words and repeats if the speaker said them."
         case .voiceConsent:
@@ -130,6 +137,8 @@ enum SettingHelp: String, CaseIterable, Identifiable {
             "Plays completed chunks while the rest of the script generates. Generation checks each chunk and can retry an incomplete attempt before you hear it. Each chunk finishes generation and word checks before playback."
         case .modelLocation:
             "Where Drama Studio looks for the Drama 3 weights, about 41.5 GB. It checks your chosen folder first, then its own download, then the newest Hugging Face cache snapshot. Choose Folder selects an existing model; Use Default Location returns to automatic discovery and download. Setup checks the new location and attaches the engine without requiring a restart."
+        case .mingLocation:
+            "Where Drama Studio looks for Ming, a \(ModelSetup.gigabytes(SpeechEngineID.ming.install.plan.totalBytes)) engine for Macs with less memory than Drama 3 needs. The MING_WEIGHTS environment variable comes first when it is set; then your chosen folder, Drama Studio's own download, and the newest Hugging Face cache snapshot. Choose Folder selects an existing checkpoint; Use Default Location returns to automatic discovery. Download fetches Ming into Drama Studio's own folder, and Ming is ready without a restart."
         case .license:
             "Drama Studio is written by Peter Marelas and its code is under the Apache License 2.0. It runs Fish Audio's Drama 3 model, whose weights are under the Fish Audio Community License, as are the parts of Drama Studio derived from Fish Audio's code, and inclusionAI's Ming model, whose weights are under the MIT License. Everything runs on this Mac, and scripts and voices are not uploaded. Clone a real person's voice only with their consent, and read the license for what else it allows."
         }

@@ -175,7 +175,7 @@ public actor DramaSynthesizer: SpeechSynthesizer {
         let plan = try GenerationPlan(request)
         let outline = try SpeechOutline(request, engine: .drama3)
         let verifier = try LocalWordVerifier.prepare(lines: plan.chunks.map(\.line), config: request.config, shouldContinue: { !Task.isCancelled })
-        continuation.yield(.loadingModel(progress: 0, detail: "Loading Drama 3"))
+        continuation.yield(.loadingModel(progress: 0, detail: "Mapping weights"))
         try await load { detail in continuation.yield(.loadingModel(progress: 0, detail: detail)) }
         continuation.yield(.loadingModel(progress: 1, detail: "Ready"))
         let generator = FrameGenerator(model: model!, tokenizer: tokenizer!)

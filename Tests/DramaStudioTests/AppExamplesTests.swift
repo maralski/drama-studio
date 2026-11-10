@@ -25,7 +25,16 @@ final class AppExamplesTests: XCTestCase {
         let captain = Examples.cast.first { $0.id == "Captain" }
         XCTAssertEqual(captain?.design.scene, "a storm-battered tavern at the edge of the harbor")
         XCTAssertEqual(captain?.line, "[low and menacing] Ye want to know what's out past the reef? [pause] Pray ye never find out.")
-        XCTAssertEqual(Examples.notes.count, 9)
+        XCTAssertEqual(Examples.notes(for: .drama3).count, 9)
+    }
+
+    func testEveryNoteChipDirectsTheEngineItIsOfferedFor() throws {
+        for engine in SpeechEngineID.allCases {
+            for note in Examples.notes(for: engine) {
+                let outline = try SpeechOutline(SpeechRequest(text: "Keep the light lit.", note: note), engine: engine)
+                XCTAssertEqual(outline.notices, [], "\(engine): the chip \(note) does nothing")
+            }
+        }
     }
 
     func testExampleLineGoesOnItsOwnLineAtTheCursor() {

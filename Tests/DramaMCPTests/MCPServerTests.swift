@@ -115,13 +115,13 @@ final class MCPServerTests: XCTestCase {
     }
 
     func testSynthesizeReportsWhatTheEngineCouldNotPerform() async throws {
-        let notice = "<whisper> isn't performed by this engine; its words are kept."
-        let header = #"["<whisper> isn't performed by this engine; its words are kept."]"#
+        let notice = "Ming can't perform <whisper>, so the words inside it are spoken plainly."
+        let header = #"["Ming can't perform <whisper>, so the words inside it are spoken plainly."]"#
         let api = StubAPI(["POST /v1/audio/speech": APIReply(status: 200, headers: ["X-Drama-Notices": header], body: Data("RIFF".utf8))])
         let reply = try await call(server(api), "synthesize_speech", ["text": "<whisper>Hi.</whisper>"])
         XCTAssertEqual(reply["result"]?["structuredContent"]?["notices"], [.string(notice)])
         guard case .array(let content)? = reply["result"]?["content"] else { return XCTFail("\(reply)") }
-        XCTAssertTrue(content.first?["text"]?.string?.contains("isn't performed") == true, "\(content)")
+        XCTAssertTrue(content.first?["text"]?.string?.contains("can't perform") == true, "\(content)")
 
         let plain = try await call(server(StubAPI(["POST /v1/audio/speech": APIReply(status: 200, body: Data("RIFF".utf8))])), "synthesize_speech", ["text": "Hi."])
         XCTAssertNil(plain["result"]?["structuredContent"]?["notices"])

@@ -143,7 +143,7 @@ final class SpeechEnginesTests: XCTestCase {
         let drama = Take(text: "Earlier.", context: .drama3(codes: MockSynthesizer.codes(frameCount: 8)))
         let result = try await result(of: engines, SpeechRequest(text: "Now this.", previousTakes: [drama], config: .unchecked))
         XCTAssertEqual(result.notices, [.otherEngineTakes(.drama3, count: 1)])
-        XCTAssertEqual(result.notices.map(\.message), ["1 earlier take from Drama 3 can't carry the voice into this one."])
+        XCTAssertEqual(result.notices.map { $0.message(on: .ming) }, ["1 earlier take from Drama 3 can't carry the voice into this Ming take."])
     }
 
     func testTheOutlineAndEstimateCountTheEnginesOwnSteps() throws {

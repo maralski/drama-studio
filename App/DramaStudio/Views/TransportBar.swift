@@ -33,6 +33,7 @@ struct TransportBar: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+            if !model.notices.isEmpty { NoticeBanner(model: model) }
             HStack(spacing: 8) {
                 StatusLine(model: model)
                 if let server { APIChip(server: server) }
@@ -114,21 +115,49 @@ struct TransportBar: View {
         "\(value.formatted(.number.precision(.fractionLength(1)))) s"
     }
 
-    /// A restored project has audio but no generation telemetry or clock.
-    static func summary(audioSeconds: TimeInterval, speed: Double?, generationSeconds: TimeInterval?) -> String {
-        var parts = ["\(seconds(audioSeconds)) of audio"]
-        if let speed, speed > 0 {
-            parts.append("\(speed.formatted(.number.precision(.fractionLength(1))))x real time")
-        } else if generationSeconds != nil {
-            parts[0] += " (stopped early)"
+    /// A take's numbers; a restored take has no generation time. The speed
+    /// is this audio over this wall time, model loading and word checks included.
+    static func summary(audioSeconds: TimeInterval, generationSeconds: TimeInterval?, stoppedEarly: Bool) -> String {
+        var parts = ["\(seconds(audioSeconds)) of audio" + (stoppedEarly ? " (stopped early)" : "")]
+        if let generationSeconds, generationSeconds > 0 {
+            if !stoppedEarly { parts.append("\((audioSeconds / generationSeconds).formatted(.number.precision(.fractionLength(1))))x real time") }
+            parts.append("generated in \(seconds(generationSeconds))")
         }
-        if let generationSeconds { parts.append("generated in \(seconds(generationSeconds))") }
         return parts.joined(separator: " \u{00B7} ")
     }
 
     static func clock(_ samples: Int) -> String {
         let seconds = Int(Double(samples) / Double(ModelConstants.sampleRate))
         return String(format: "%d:%02d", seconds / 60, seconds % 60)
+    }
+}
+
+/// What the engine could not perform as written in the run under way or the last one.
+private struct NoticeBanner: View {
+    let model: SessionModel
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(model.notices, id: \.self) { Text($0) }
+            }
+            .textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Button("Dismiss", systemImage: "xmark") { model.dismissNotices() }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+                .help("Dismiss these notices")
+                .accessibilityLabel("Dismiss engine notices")
+        }
+        .font(.caption)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 6))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Engine notices")
     }
 }
 
@@ -175,11 +204,10 @@ private struct StatusLine: View {
             return TransportBar.sectionSummary(sections: model.narrationTakes.count, audioSeconds: model.duration,
                                                stoppedEarly: model.result == nil && model.generationClock != nil, generationSeconds: model.generationClock?.duration)
         }
-        return TransportBar.summary(
-            audioSeconds: model.duration,
-            speed: model.result?.speed,
-            generationSeconds: model.generationClock?.duration
-        )
+        guard let take = model.takes.first(where: { $0.id == model.selectedTakeID }) else {
+            return TransportBar.summary(audioSeconds: model.duration, generationSeconds: nil, stoppedEarly: false)
+        }
+        return TransportBar.summary(audioSeconds: take.duration, generationSeconds: take.generationSeconds, stoppedEarly: take.isIncomplete)
     }
 }
 

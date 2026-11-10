@@ -37,6 +37,11 @@ public struct EngineCapabilities: Sendable, Equatable {
     public let speakerTurns: Bool
     /// Earlier takes feed back as history, not only as the voice.
     public let history: Bool
+    /// Follows ``GenerationConfig/make(expressiveness:)``'s sampling.
+    public let expressiveness: Bool
+    /// The emotions a director's note can name, the one thing the engine
+    /// takes from it; nil for an engine that reads the whole note.
+    public let noteEmotions: [String]?
     public let languages: Languages
     /// Samples one ``SpeechEvent/frame(index:maxFrames:)`` step stands for.
     public let samplesPerStep: Int
@@ -64,11 +69,12 @@ public extension SpeechEngineID {
         switch self {
         case .drama3:
             EngineCapabilities(name: "Drama 3", cloning: true, maxCloneSeconds: nil, builtInVoices: [], voiceDesign: true,
-                               cues: .freeForm, passageTags: true, speakerTurns: true, history: true, languages: .unrestricted,
+                               cues: .freeForm, passageTags: true, speakerTurns: true, history: true, expressiveness: true, noteEmotions: nil, languages: .unrestricted,
                                samplesPerStep: ModelConstants.samplesPerFrame, typicalStepsPerSecond: GenerationEstimate.typicalFramesPerSecond)
         case .ming:
             EngineCapabilities(name: "Ming", cloning: true, maxCloneSeconds: 15, builtInVoices: MingCues.builtInVoices, voiceDesign: true,
-                               cues: .fixed(MingCues.tags), passageTags: false, speakerTurns: true, history: false,
+                               cues: .fixed(MingCues.tags), passageTags: false, speakerTurns: true, history: false, expressiveness: false,
+                               noteEmotions: MingCues.Emotion.allCases.map(\.rawValue),
                                languages: .only(MingCues.languages), samplesPerStep: MingVoiceEncoding.samplesPerLatent, typicalStepsPerSecond: 60)
         }
     }

@@ -166,10 +166,15 @@ private struct MingSection: View {
     let setupDownloads: Bool
     @AppStorage(ModelSetup.mingDirectoryKey) private var path = ""
 
+    /// `MING_WEIGHTS` names Ming's folder, so the folder controls here have no effect.
+    private let environmentFolder = ProcessInfo.processInfo.environment["MING_WEIGHTS"]
+
     var body: some View {
         Section("Ming") {
-            LabeledContent("Location") {
+            LabeledContent {
                 Text(location).textSelection(.enabled).lineLimit(2).truncationMode(.middle)
+            } label: {
+                HelpLabel("Location", help: .mingLocation)
             }
             LabeledContent("Status") { status }
             HStack {
@@ -179,14 +184,36 @@ private struct MingSection: View {
                 Spacer()
                 download
             }
-            if let gap = install.report?.items.first(where: { $0.isMissing && $0.component != .wordRecognizer }) {
-                Text(gap.summary + " " + (gap.fix ?? "")).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+            .disabled(environmentFolder != nil)
+            if environmentFolder != nil {
+                Text("The MING_WEIGHTS environment variable names this folder, so it overrides any folder chosen here.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            if let guidance {
+                Text(guidance).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
             }
             if case .failed(let message) = install.phase {
                 Text(message).font(.caption).foregroundStyle(.red)
             }
         }
         .task(id: path) { await install.refresh() }
+    }
+
+    /// What Ming is for while it is missing, or every file an incomplete folder lacks and how to finish it.
+    private var guidance: String? {
+        guard install.report != nil, !install.isReady, !install.isDownloading else { return nil }
+        guard let candidate = install.candidate, !install.missingFiles.isEmpty else {
+            let size = ModelSetup.gigabytes(SpeechEngineID.ming.install.plan.totalBytes)
+            return "Ming is a smaller engine, a \(size) download, for Macs with less memory than Drama 3 needs. "
+                + (setupDownloads ? "The setup window is downloading it." : "Click Download to add it.")
+        }
+        let fix = switch candidate.source {
+        case .named where environmentFolder != nil: "Put them there, or unset MING_WEIGHTS and open Drama Studio again."
+        case .named: "Put them there, or choose another folder."
+        case .appDownload: setupDownloads ? "The setup window is downloading them." : "Click Download to resume."
+        case .huggingFaceCache: "Click Download for a complete copy."
+        }
+        return "Missing from \(candidate.directory.path): \(ListFormatter.localizedString(byJoining: install.missingFiles)). \(fix)"
     }
 
     private var location: String {
