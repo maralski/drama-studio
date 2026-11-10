@@ -25,7 +25,10 @@ public struct SpeechOutline: Sendable, Equatable {
         guard !UnicodeWhitespace.strip(text).isEmpty else { throw PromptError.emptyText("text") }
         if request.note.flatMap(DirectorsNote.clean) != nil, DirectorsNote.sentences(text).isEmpty { throw PromptError.emptyText("line") }
         var config = request.config
-        if engine == .ming { config.chunking = .sentences }
+        if engine == .ming {
+            try MingCues.checkLanguage(of: text)
+            config.chunking = .sentences
+        }
         lines = GenerationPlan.lines(text: text, config: config)
         var voices = request.references.map { (DirectorsNote.spokenWords($0.transcript), $0.durationSeconds) }
         if voices.isEmpty, engine == .drama3, let take = request.previousTakes.first(where: { $0.context.engine == .drama3 }) {
