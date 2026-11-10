@@ -622,7 +622,8 @@ public struct SpeechResult: Sendable {
 /// Something an engine changed about a request because it cannot perform it
 /// as written. The words are always kept; only the direction is lost.
 public enum SpeechNotice: Sendable, Hashable, Codable {
-    /// A cue the engine has no equivalent for. Its markup was removed.
+    /// A cue the engine has no equivalent for. Its markup was removed: a
+    /// `[bracket cue]` is left out, a `<tag>` passage's words are spoken plainly.
     case unsupportedCue(String)
     /// A cue performed as the nearest thing the engine has.
     case approximatedCue(String, as: String)
@@ -630,14 +631,27 @@ public enum SpeechNotice: Sendable, Hashable, Codable {
     case unsupportedNote(String)
     /// Earlier takes from another engine could not carry the voice or history into this request.
     case otherEngineTakes(SpeechEngineID, count: Int)
+    /// Expressiveness other than the default, on an engine that ignores it.
+    case ignoredExpressiveness
 
-    /// One sentence for a person.
-    public var message: String {
+    /// One sentence for a person, naming `engine`, the engine that ran the request.
+    public func message(on engine: SpeechEngineID) -> String {
+        let name = engine.capabilities.name
         switch self {
-        case .unsupportedCue(let cue): "\(cue) isn't performed by this engine; its words are kept."
-        case .approximatedCue(let cue, let tag): "\(cue) is performed as \(tag)."
-        case .unsupportedNote(let note): "The note \"\(note)\" names no emotion this engine performs."
-        case .otherEngineTakes(let engine, let count): "\(count) earlier \(count == 1 ? "take" : "takes") from \(engine.capabilities.name) can't carry the voice into this one."
+        case .unsupportedCue(let cue) where cue.hasPrefix("<|"):
+            return "\(name) has no voice for \(cue), so those lines use the last voice."
+        case .unsupportedCue(let cue) where cue.hasPrefix("<"):
+            return "\(name) can't perform \(cue), so the words inside it are spoken plainly."
+        case .unsupportedCue(let cue):
+            return "\(name) can't perform \(cue), so it was left out."
+        case .approximatedCue(let cue, let tag):
+            return "\(name) performs \(cue) as \(tag)."
+        case .unsupportedNote(let note):
+            return "The note \"\(note)\" names no emotion \(name) performs, so it was not used."
+        case .otherEngineTakes(let other, let count):
+            return "\(count) earlier \(count == 1 ? "take" : "takes") from \(other.capabilities.name) can't carry the voice into this \(name) take."
+        case .ignoredExpressiveness:
+            return "\(name) ignores the Expressiveness setting."
         }
     }
 }

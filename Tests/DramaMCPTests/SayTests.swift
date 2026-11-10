@@ -191,12 +191,12 @@ final class SayTests: XCTestCase {
     }
 
     func testWhatTheEngineCouldNotPerformIsPrintedOnStandardError() async throws {
-        let header = #"["<whisper> isn't performed by this engine; its words are kept."]"#
+        let header = #"["Ming can't perform <whisper>, so the words inside it are spoken plainly."]"#
         let ok = APIReply(status: 200, headers: ["X-Drama-Notices": header], body: Data([1, 0]))
         for arguments in [["Hi"], ["-o", "-", "Hi"]] {
             let result = await run(arguments, replies: ["POST /v1/audio/speech": ok])
             XCTAssertEqual(result.status, 0)
-            XCTAssertEqual(result.captured.standardError, "drama-say: <whisper> isn't performed by this engine; its words are kept.\n", "\(arguments)")
+            XCTAssertEqual(result.captured.standardError, "drama-say: Ming can't perform <whisper>, so the words inside it are spoken plainly.\n", "\(arguments)")
         }
     }
 

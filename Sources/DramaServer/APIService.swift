@@ -344,7 +344,7 @@ public final class APIService: Sendable {
             headers["X-Drama-Take-Id"] = takeID.uuidString
             headers.merge(Self.engineHeaders(synthesizer.engineDescription)) { $1 }
             headers["X-Drama-Estimated-Seconds"] = String(format: "%.1f", estimate.remainingSeconds(at: 0) ?? 0)
-            headers["X-Drama-Notices"] = Self.header(outline.notices)
+            headers["X-Drama-Notices"] = Self.header(outline.notices, on: outline.engine)
             return APIResponse(status: .ok, headers: headers, body: .chunked(body), abandon: { generation.cancel() })
         case .file(let format):
             let start = ContinuousClock.now
@@ -368,7 +368,7 @@ public final class APIService: Sendable {
             }
             headers["X-Drama-Samples"] = String(result.take.sampleCount)
             headers["X-Drama-Word-Coverage"] = result.wordCoverage.rawValue
-            headers["X-Drama-Notices"] = Self.header(result.notices)
+            headers["X-Drama-Notices"] = Self.header(result.notices, on: synthesizer.engine)
             headers["X-Drama-Verification-Seconds"] = String(format: "%.3f", result.timings.verificationSeconds)
             headers["X-Drama-Seconds"] = String(format: "%.3f", Double(result.samples.count) / Double(AudioEncoding.sampleRate))
             headers["X-Drama-Generation-Seconds"] = String(format: "%.3f", Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18)
@@ -405,7 +405,7 @@ public final class APIService: Sendable {
                     var done: [String: Any] = ["take_id": takeID.uuidString, "engine": result.take.context.engine.rawValue, "samples": result.take.sampleCount,
                                                "word_coverage": result.wordCoverage.rawValue, "seconds": Self.seconds(result.samples)]
                     if let frames = result.take.apiFrames { done["frames"] = frames }
-                    if !result.notices.isEmpty { done["notices"] = result.notices.map(\.message) }
+                    if !result.notices.isEmpty { done["notices"] = result.notices.map { $0.message(on: result.take.context.engine) } }
                     Self.send(framing.done(done), to: out)
                 }
                 await jobs.release(job)
@@ -486,7 +486,7 @@ public final class APIService: Sendable {
                 for sentence in lines.finish().flatMap({ text.append(line: $0) }) + text.flush() { try await say(sentence) }
                 var done: [String: Any] = ["sentences": sentences, "seconds": (seconds * 1000).rounded() / 1000, "take_ids": takeIDs,
                                            "engine": synthesizer.engine.rawValue]
-                if !notices.isEmpty { done["notices"] = notices.map(\.message) }
+                if !notices.isEmpty { done["notices"] = notices.map { $0.message(on: synthesizer.engine) } }
                 Self.send(framing.done(done), to: out)
                 await jobs.release(job)
                 out.finish()
@@ -508,9 +508,9 @@ public final class APIService: Sendable {
 
     /// What the engine could not perform, as a JSON array of messages in
     /// ASCII so it fits a header; nil when there is nothing to say.
-    private static func header(_ notices: [SpeechNotice]) -> String? {
+    private static func header(_ notices: [SpeechNotice], on engine: SpeechEngineID) -> String? {
         guard !notices.isEmpty,
-              let json = try? JSONSerialization.data(withJSONObject: notices.map(\.message), options: .withoutEscapingSlashes) else { return nil }
+              let json = try? JSONSerialization.data(withJSONObject: notices.map { $0.message(on: engine) }, options: .withoutEscapingSlashes) else { return nil }
         return String(decoding: json, as: UTF8.self).unicodeScalars.map { scalar in
             scalar.isASCII ? String(scalar) : String(scalar).utf16.map { String(format: "\\u%04x", $0) }.joined()
         }.joined()

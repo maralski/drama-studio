@@ -122,7 +122,7 @@ final class APIEngineNeutralTests: XCTestCase {
         }
     }
 
-    private static let whisperNotice = "<whisper> isn't performed by this engine; its words are kept."
+    private static let whisperNotice = "Ming can't perform <whisper>, so the words inside it are spoken plainly."
 
     private func notices(_ header: String?) throws -> [String] {
         try JSONSerialization.jsonObject(with: Data(XCTUnwrap(header, "no X-Drama-Notices header").utf8)) as? [String] ?? []
@@ -154,7 +154,7 @@ final class APIEngineNeutralTests: XCTestCase {
         XCTAssertEqual(liveNotices, [Self.whisperNotice], "once per session, not once per sentence")
 
         let note = await send("POST", "/v1/audio/speech", json: ["input": "Keep the light lit.", "note": "with a café shrug"])
-        XCTAssertEqual(try notices(note.headers["X-Drama-Notices"]), ["The note \"with a café shrug\" names no emotion this engine performs."])
+        XCTAssertEqual(try notices(note.headers["X-Drama-Notices"]), ["The note \"with a café shrug\" names no emotion Ming performs, so it was not used."])
         XCTAssertTrue(note.headers["X-Drama-Notices"]?.allSatisfy(\.isASCII) == true, "a header value stays ASCII")
     }
 
