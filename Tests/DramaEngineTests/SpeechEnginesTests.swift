@@ -71,6 +71,37 @@ final class SpeechEnginesTests: XCTestCase {
         XCTAssertEqual(engines.selected, .drama3)
     }
 
+    func testAPlaceholderHoldsTheSelectionButNeverRunsUntilARealEngineTakesIt() async throws {
+        let watched = Watched()
+        let engines = try SpeechEngines(selected: .drama3, factories: [.drama3: .placeholder(.drama3)])
+        XCTAssertEqual(engines.available, [], "a placeholder is not an installed engine")
+        XCTAssertNil(engines.description(of: .drama3))
+        XCTAssertEqual(engines.engineDescription.engine, .drama3)
+        XCTAssertThrowsError(try engines.pinned(to: .drama3))
+        do {
+            _ = try await result(of: engines, SpeechRequest(text: "One line.", config: .unchecked))
+            XCTFail("a placeholder must not speak")
+        } catch let error as EngineError {
+            XCTAssertEqual(error.description, "Drama 3 isn't installed")
+        }
+
+        await engines.register(.ming, watched.factory(.ming))
+        XCTAssertEqual(engines.available, [.ming])
+        XCTAssertEqual(engines.selected, .ming, "the first engine that can run takes the selection from the placeholder")
+        XCTAssertThrowsError(try engines.select(.drama3), "the placeholder left behind can't be selected")
+        let spoken = try await result(of: engines, SpeechRequest(text: "One line.", config: .unchecked))
+        XCTAssertEqual(spoken.take.context.engine, .ming)
+
+        await engines.register(.drama3, watched.factory(.drama3))
+        XCTAssertEqual(engines.available, [.drama3, .ming])
+        XCTAssertEqual(engines.selected, .ming, "adding a second engine leaves the selection alone")
+    }
+
+    func testOnlyAnEngineWhoseLicenseAsksForItNeedsAnAgreement() {
+        XCTAssertTrue(SpeechEngineID.drama3.install.license.requiresAgreement)
+        XCTAssertFalse(SpeechEngineID.ming.install.license.requiresAgreement)
+    }
+
     func testAnOldVoiceIsEncodedForTheNewEngineFromItsClipOnceAndStoredBack() async throws {
         let watched = Watched()
         let voice = ReferenceVoice(name: "Old", transcript: "The clip says this.", encodings: [.drama3(codes: MockSynthesizer.codes(frameCount: 20))], clipSampleCount: 44_100)

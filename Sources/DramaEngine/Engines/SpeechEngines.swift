@@ -25,6 +25,9 @@ public actor SpeechEngines: SpeechSynthesizer {
     public struct Factory: Sendable {
         public var description: EngineDescription
         public var make: @Sendable () -> any SpeechSynthesizer
+        /// True for a stand-in that holds the selection before any engine is
+        /// installed. It is not ``SpeechEngines/available`` and never runs.
+        public var isPlaceholder = false
         public init(description: EngineDescription, make: @escaping @Sendable () -> any SpeechSynthesizer) {
             self.description = description
             self.make = make
@@ -42,6 +45,14 @@ public actor SpeechEngines: SpeechSynthesizer {
             return Factory(description: engine().engineDescription, make: engine)
         }
 
+        /// Holds the selection for `engine` until its files are installed and
+        /// its real factory is registered.
+        public static func placeholder(_ engine: SpeechEngineID) -> Factory {
+            var factory = mock(engine)
+            factory.isPlaceholder = true
+            return factory
+        }
+
         /// A mock standing in for `engine`.
         public static func mock(_ engine: SpeechEngineID, pace: MockSynthesizer.Pace = .realistic) -> Factory {
             let make = { MockSynthesizer(engine: engine, pace: pace) }
@@ -53,6 +64,10 @@ public actor SpeechEngines: SpeechSynthesizer {
         var factories: [SpeechEngineID: Factory]
         var selected: SpeechEngineID
         var resident: (engine: SpeechEngineID, synthesizer: any SpeechSynthesizer)?
+
+        func runnable(_ engine: SpeechEngineID) -> Factory? {
+            factories[engine].flatMap { $0.isPlaceholder ? nil : $0 }
+        }
     }
 
     private let state: Mutex<State>
@@ -61,7 +76,7 @@ public actor SpeechEngines: SpeechSynthesizer {
 
     /// - Parameters:
     ///   - selected: The engine new requests use. It needs a factory.
-    ///   - factories: One per installed engine.
+    ///   - factories: One per installed engine, or one placeholder when none is installed yet.
     ///   - voices: Where clips live, so a voice cloned by one engine can be encoded for another and the encoding kept.
     public init(selected: SpeechEngineID, factories: [SpeechEngineID: Factory], voices: (any VoiceEncodingStore)? = nil) throws {
         guard factories[selected] != nil else { throw EngineError.engineUnavailable(selected) }
@@ -77,29 +92,32 @@ public actor SpeechEngines: SpeechSynthesizer {
         voices = nil
     }
 
-    /// Engines with a factory.
-    public nonisolated var available: Set<SpeechEngineID> { state.withLock { Set($0.factories.keys) } }
-    /// What `engine` reports, without building it; nil without a factory.
-    public nonisolated func description(of engine: SpeechEngineID) -> EngineDescription? { state.withLock { $0.factories[engine]?.description } }
+    /// Engines that can run: those with a factory that is not a placeholder.
+    public nonisolated var available: Set<SpeechEngineID> { state.withLock { Set($0.factories.filter { !$0.value.isPlaceholder }.keys) } }
+    /// What `engine` reports, without building it; nil when it cannot run.
+    public nonisolated func description(of engine: SpeechEngineID) -> EngineDescription? { state.withLock { $0.runnable(engine)?.description } }
     /// The engine new requests use.
     public nonisolated var selected: SpeechEngineID { state.withLock { $0.selected } }
 
     /// Changes the engine new requests use. Nothing loads or unloads until a request needs it.
-    /// - Throws: ``EngineError/engineUnavailable(_:)`` when `engine` has no factory.
+    /// - Throws: ``EngineError/engineUnavailable(_:)`` when `engine` cannot run.
     public nonisolated func select(_ engine: SpeechEngineID) throws {
         try state.withLock {
-            guard $0.factories[engine] != nil else { throw EngineError.engineUnavailable(engine) }
+            guard $0.runnable(engine) != nil else { throw EngineError.engineUnavailable(engine) }
             $0.selected = engine
         }
     }
 
     /// Adds or replaces an engine's factory, as setup does once its files are in place.
     /// A resident engine of that kind is dropped once its current run ends.
+    /// While the selection rests on a placeholder, the first engine that can
+    /// run takes it.
     public func register(_ engine: SpeechEngineID, _ factory: Factory) async {
         await serial {
             self.state.withLock {
                 $0.factories[engine] = factory
                 if $0.resident?.engine == engine { $0.resident = nil }
+                if $0.runnable($0.selected) == nil, !factory.isPlaceholder { $0.selected = engine }
             }
         }
     }
@@ -210,7 +228,7 @@ public actor SpeechEngines: SpeechSynthesizer {
     private nonisolated func resident(_ engine: SpeechEngineID) throws -> any SpeechSynthesizer {
         try state.withLock { state in
             if let resident = state.resident, resident.engine == engine { return resident.synthesizer }
-            guard let factory = state.factories[engine] else { throw EngineError.engineUnavailable(engine) }
+            guard let factory = state.runnable(engine) else { throw EngineError.engineUnavailable(engine) }
             state.resident = nil
             let synthesizer = factory.make()
             state.resident = (engine, synthesizer)

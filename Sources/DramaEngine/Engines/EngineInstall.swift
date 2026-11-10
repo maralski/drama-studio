@@ -6,13 +6,30 @@ import Foundation
 /// ``SpeechEngineID/install`` is the one table: setup, the download, the
 /// Hugging Face cache lookup and the API's model ids all read it.
 public struct EngineInstall: Sendable {
+    /// The license the engine's publisher puts on its checkpoint.
+    public struct License: Sendable, Equatable {
+        public let name: String
+        public let url: URL
+        /// The license binds whoever runs the model to use restrictions, so
+        /// a person must agree to them before the checkpoint downloads or speaks.
+        public let requiresAgreement: Bool
+    }
+
+    /// Who publishes the checkpoint.
+    public let publisher: String
+    public let license: License
     /// The Hugging Face repository that holds the checkpoint, which the API
     /// also reports as the engine's model id.
     public let repo: String
+    /// The least memory the engine is expected to run well in; nil when no floor is known.
+    public let recommendedMemory: UInt64?
     /// What ``DramaSetup`` checks for the engine, in the order the engine uses them.
     public let components: [SetupItem.Component]
     /// The pinned revision the app downloads and verifies.
     package let plan: ModelDownloadPlan
+
+    /// The size of the pinned checkpoint download.
+    public var downloadBytes: Int64 { plan.totalBytes }
 
     /// The shell command that downloads the checkpoint into the Hugging Face cache.
     public var downloadCommand: String { "uvx --from huggingface_hub hf download \(repo)" }
@@ -22,10 +39,18 @@ public extension SpeechEngineID {
     var install: EngineInstall {
         switch self {
         case .drama3:
-            EngineInstall(repo: "fishaudio/drama-3", components: [.weights, .tokenizer, .codecCheckpoint, .codecModels, .tuning, .wordRecognizer],
-                          plan: .drama3)
+            EngineInstall(publisher: "Fish Audio",
+                          license: .init(name: "Fish Audio Community License",
+                                         url: URL(string: "https://huggingface.co/fishaudio/drama-3/blob/\(ModelDownloadPlan.drama3.revision)/LICENSE")!,
+                                         requiresAgreement: true),
+                          repo: "fishaudio/drama-3", recommendedMemory: 64 << 30,
+                          components: [.weights, .tokenizer, .codecCheckpoint, .codecModels, .tuning, .wordRecognizer], plan: .drama3)
         case .ming:
-            EngineInstall(repo: "inclusionAI/Ming-3.0-tts-0.5B", components: [.weights, .tokenizer, .speakerEncoder, .wordRecognizer], plan: .ming)
+            EngineInstall(publisher: "inclusionAI",
+                          license: .init(name: "MIT License", url: URL(string: "https://huggingface.co/inclusionAI/Ming-3.0-tts-0.5B")!,
+                                         requiresAgreement: false),
+                          repo: "inclusionAI/Ming-3.0-tts-0.5B", recommendedMemory: nil,
+                          components: [.weights, .tokenizer, .speakerEncoder, .wordRecognizer], plan: .ming)
         }
     }
 
