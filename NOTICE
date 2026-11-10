@@ -4,6 +4,18 @@ Copyright 2026 Peter Marelas
 Drama Studio's own code is licensed under the Apache License, Version 2.0
 (see LICENSE).
 
+Drama Studio links MingTTS (https://github.com/maralski/ming-tts), a Swift
+and Metal port of the inference path of Ming-3.0-tts-0.5B by inclusionAI.
+MingTTS is licensed under the Apache License, Version 2.0, and parts of it
+follow inclusionAI's upstream code, which is under the MIT License.
+THIRD_PARTY_NOTICES reproduces the MingTTS notice, including inclusionAI's
+MIT notice. Drama Studio does not include the Ming model weights, the
+tokenizer files or the CAM++ speaker encoder; the app downloads them from
+inclusionAI's Hugging Face repository (inclusionAI/Ming-3.0-tts-0.5B), where
+inclusionAI publishes them under the MIT License. That license, not the
+Apache License, governs them. Ming is a name of inclusionAI. This project is
+not affiliated with or endorsed by inclusionAI.
+
 Built with Fish Audio.
 
 Drama Studio runs Fish Audio Drama 3. It does not include the Drama 3 model
