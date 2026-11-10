@@ -128,7 +128,7 @@ public actor MingSynthesizer: SpeechSynthesizer {
     private func run(_ request: SpeechRequest, continuation: AsyncThrowingStream<SpeechEvent, Error>.Continuation) async throws {
         let plan = try MingPlan(request)
         let config = request.config
-        let verifier = try LocalWordVerifier.prepare(lines: plan.chunks.map(\.spoken.text), config: config, shouldContinue: { !Task.isCancelled })
+        let verifier = try LocalWordVerifier.prepare(lines: plan.chunks.map(\.spoken.text), language: request.language, config: config, shouldContinue: { !Task.isCancelled })
         let language = plan.language.flatMap(MingCues.languageCode).flatMap(MingLanguage.init(id:)) ?? .english
         continuation.yield(.loadingModel(progress: 0, detail: "Loading Ming"))
         let model = try await loadedModel { detail in continuation.yield(.loadingModel(progress: 0, detail: detail)) }

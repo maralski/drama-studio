@@ -23,10 +23,10 @@ package enum MingCues {
         return languages.contains(code) ? code : nil
     }
 
-    /// Throws for a script in a language Ming does not speak, naming the ones it does.
+    /// Throws for a request in a language Ming does not speak, naming the ones it does.
     /// A script whose language is uncertain passes; Ming reads it as English.
-    static func checkLanguage(of text: String) throws {
-        guard let identified = try? ScriptLanguage.identify(text), languageCode(identified) == nil else { return }
+    static func checkLanguage(of request: SpeechRequest) throws {
+        guard let identified = try? ScriptLanguage.language(of: request), languageCode(identified) == nil else { return }
         let english = Locale(identifier: "en")
         let name = { (code: String) in english.localizedString(forLanguageCode: code) ?? code }
         throw PromptError.engineUnsupported(.ming, "speak \(name(identified)); it speaks \(languages.map(name).formatted(.list(type: .and)))")
