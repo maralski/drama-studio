@@ -11,7 +11,7 @@ struct MenuBarContent: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Text(MenuBarStatus.model(preview: model.engines.engineDescription.isMock, loaded: model.modelLoaded, session: model.state, job: server.job))
+        Text(MenuBarStatus.model(model.engines.engineDescription, loaded: model.modelLoaded, session: model.state, job: server.job))
         Divider()
         Text(server.statusLine)
         Button("Copy API URL") { server.copyURL() }
@@ -30,8 +30,8 @@ struct MenuBarContent: View {
 }
 
 enum MenuBarStatus {
-    static func model(preview: Bool, loaded: Bool, session: PlaybackState, job: SpeechJob?) -> String {
-        let engine = preview ? "Preview engine" : "Drama 3 on Metal"
+    static func model(_ description: EngineDescription, loaded: Bool, session: PlaybackState, job: SpeechJob?) -> String {
+        let engine = description.isMock ? "Preview engine" : "\(description.engine.capabilities.name) on Metal"
         if case .loading(_, let detail, _) = session { return "\(engine): loading, \(detail)" }
         if case .loadingModel(let detail)? = job?.progress { return "\(engine): loading, \(detail)" }
         return "\(engine): \(loaded ? "loaded" : "not loaded yet")"

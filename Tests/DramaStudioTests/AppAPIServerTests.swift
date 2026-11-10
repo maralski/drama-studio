@@ -51,9 +51,12 @@ final class AppAPIServerTests: XCTestCase {
         XCTAssertEqual(MenuBarStatus.job(session: .ready, job: nil), "No generation running")
         XCTAssertEqual(MenuBarStatus.job(session: .loading(progress: 0, detail: "Tuning kernels for this Mac, about a minute"), job: nil),
                        "Loading model: Tuning kernels for this Mac, about a minute", "the load phase shows in the menu bar")
-        XCTAssertEqual(MenuBarStatus.model(preview: false, loaded: false, session: .idle, job: nil), "Drama 3 on Metal: not loaded yet")
-        XCTAssertEqual(MenuBarStatus.model(preview: true, loaded: true, session: .ready, job: nil), "Preview engine: loaded")
-        XCTAssertEqual(MenuBarStatus.model(preview: false, loaded: false, session: .idle, job: SpeechJob(id: UUID(), progress: .loadingModel("Mapping weights"))), "Drama 3 on Metal: loading, Mapping weights")
+        let drama = EngineDescription(engine: .drama3, modelID: "fishaudio/drama-3", snapshot: "e0a9218", isMock: false)
+        let ming = EngineDescription(engine: .ming, modelID: "inclusionAI/Ming-3.0-tts-0.5B", snapshot: "7247f4c", isMock: false)
+        XCTAssertEqual(MenuBarStatus.model(drama, loaded: false, session: .idle, job: nil), "Drama 3 on Metal: not loaded yet")
+        XCTAssertEqual(MenuBarStatus.model(ming, loaded: true, session: .idle, job: nil), "Ming on Metal: loaded", "the status names the selected engine")
+        XCTAssertEqual(MenuBarStatus.model(MockSynthesizer().engineDescription, loaded: true, session: .ready, job: nil), "Preview engine: loaded")
+        XCTAssertEqual(MenuBarStatus.model(drama, loaded: false, session: .idle, job: SpeechJob(id: UUID(), progress: .loadingModel("Mapping weights"))), "Drama 3 on Metal: loading, Mapping weights")
     }
 
     func testSessionLearnsTheModelLoadedFromTheEngine() async {
