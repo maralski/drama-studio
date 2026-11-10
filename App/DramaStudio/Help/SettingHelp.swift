@@ -131,7 +131,7 @@ enum SettingHelp: String, CaseIterable, Identifiable {
         case .modelLocation:
             "Where Drama Studio looks for the Drama 3 weights, about 41.5 GB. It checks your chosen folder first, then its own download, then the newest Hugging Face cache snapshot. Choose Folder selects an existing model; Use Default Location returns to automatic discovery and download. Setup checks the new location and attaches the engine without requiring a restart."
         case .license:
-            "Drama Studio is written by Peter Marelas and its code is under the Apache License 2.0. It runs Fish Audio's Drama 3 model, whose weights are under the Fish Audio Community License, and the parts of Drama Studio derived from Fish Audio's code stay under that license too. It also runs inclusionAI's Ming model, whose weights inclusionAI publishes under the MIT License. Everything runs on this Mac, and scripts and voices are not uploaded. Clone a real person's voice only with their consent, and read the license for what else it allows."
+            "Drama Studio is written by Peter Marelas and its code is under the Apache License 2.0. It runs Fish Audio's Drama 3 model, whose weights are under the Fish Audio Community License, as are the parts of Drama Studio derived from Fish Audio's code, and inclusionAI's Ming model, whose weights are under the MIT License. Everything runs on this Mac, and scripts and voices are not uploaded. Clone a real person's voice only with their consent, and read the license for what else it allows."
         }
     }
 }
