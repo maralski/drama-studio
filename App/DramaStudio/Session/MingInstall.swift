@@ -17,6 +17,10 @@ final class MingInstall {
 
     /// The last check; nil until the first finishes.
     private(set) var report: SetupReport?
+    /// Where the last check looked, complete or not; nil when there is no checkpoint.
+    private(set) var candidate: MingLocation?
+    /// Every checkpoint file the candidate folder lacks.
+    private(set) var missingFiles: [String] = []
     private(set) var phase = Phase.idle
     @ObservationIgnored private let session: SessionModel
     @ObservationIgnored private var download: Task<Void, Never>?
@@ -32,9 +36,17 @@ final class MingInstall {
     /// Checks the files again and, once they are complete, gives the session a Ming factory.
     func refresh() async {
         let path = ModelSetup.mingCustomPath
-        report = await Task.detached { DramaSetup.check(ming: ModelSetup.mingCandidate(customPath: path)) }.value
+        let found = await Task.detached {
+            let candidate = ModelSetup.mingCandidate(customPath: path)
+            return (candidate, DramaSetup.check(ming: candidate), candidate.map { Self.missingFiles(in: $0.directory) } ?? [])
+        }.value
+        (candidate, report, missingFiles) = found
         guard let factory = ModelSetup.factory(for: .ming) else { return }
         await session.install(.ming, factory)
+    }
+
+    nonisolated static func missingFiles(in directory: URL) -> [String] {
+        MingLocation.requiredFiles.filter { !FileManager.default.fileExists(atPath: directory.appending(path: $0).path) }
     }
 
     /// Why the download can't start now: too little disk.
@@ -67,6 +79,10 @@ final class MingInstall {
     }
 
     func cancelDownload() { download?.cancel() }
+
+    var isDownloading: Bool {
+        if case .downloading = phase { true } else { false }
+    }
 
     private func show(_ progress: DownloadProgress) {
         if case .downloading = phase { phase = .downloading(progress) }

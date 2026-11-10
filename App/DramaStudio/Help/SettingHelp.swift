@@ -27,6 +27,7 @@ enum SettingHelp: String, CaseIterable, Identifiable {
     case playbackSpeed
     case streaming
     case modelLocation
+    case mingLocation
     case license
 
     enum Group: String, CaseIterable {
@@ -46,7 +47,7 @@ enum SettingHelp: String, CaseIterable, Identifiable {
         case .screenplayMode, .speakerVoice, .performanceCues, .examples, .sections, .pronunciation, .projects: .script
         case .surpriseMe, .voiceDesign, .referenceClip, .voiceTranscript, .voiceConsent: .voices
         case .newTake, .directorsNote, .keepTake, .expressiveness, .playbackSpeed: .takes
-        case .modelLocation, .streaming: .model
+        case .modelLocation, .mingLocation, .streaming: .model
         case .license: .about
         }
     }
@@ -83,6 +84,7 @@ enum SettingHelp: String, CaseIterable, Identifiable {
         case .playbackSpeed: "Playback Speed"
         case .streaming: "Streaming"
         case .modelLocation: "Model Location"
+        case .mingLocation: "Ming Location"
         case .license: "License and Consent"
         }
     }
@@ -135,6 +137,8 @@ enum SettingHelp: String, CaseIterable, Identifiable {
             "Plays completed chunks while the rest of the script generates. Generation checks each chunk and can retry an incomplete attempt before you hear it. Each chunk finishes generation and word checks before playback."
         case .modelLocation:
             "Where Drama Studio looks for the Drama 3 weights, about 41.5 GB. It checks your chosen folder first, then its own download, then the newest Hugging Face cache snapshot. Choose Folder selects an existing model; Use Default Location returns to automatic discovery and download. Setup checks the new location and attaches the engine without requiring a restart."
+        case .mingLocation:
+            "Where Drama Studio looks for Ming, a \(ModelSetup.gigabytes(SpeechEngineID.ming.install.plan.totalBytes)) engine for Macs with less memory than Drama 3 needs. The MING_WEIGHTS environment variable comes first when it is set; then your chosen folder, Drama Studio's own download, and the newest Hugging Face cache snapshot. Choose Folder selects an existing checkpoint; Use Default Location returns to automatic discovery. Download fetches Ming into Drama Studio's own folder, and Ming is ready without a restart."
         case .license:
             "Drama Studio is written by Peter Marelas and its code is under the Apache License 2.0. It runs Fish Audio's Drama 3 model, whose weights are under the Fish Audio Community License, as are the parts of Drama Studio derived from Fish Audio's code, and inclusionAI's Ming model, whose weights are under the MIT License. Everything runs on this Mac, and scripts and voices are not uploaded. Clone a real person's voice only with their consent, and read the license for what else it allows."
         }
