@@ -84,4 +84,21 @@ final class MingCuesTests: XCTestCase {
         XCTAssertTrue(SpeechEngineID.ming.capabilities.builtInVoices.contains("US_Emma"))
         XCTAssertEqual(SpeechEngineID.ming.capabilities.languages, .only(["zh", "en", "ja", "ko", "de", "fr", "es"]))
     }
+
+    /// Catches Chinese refused because the language recognizer names it with
+    /// a script (`zh-Hans`, `zh-Hant`), and a language Ming does not speak
+    /// passing the pre-flight, so the API answered 500 from the word check, or
+    /// a stream failed after its 200, instead of a 400 that names the limit.
+    func testOutlineTakesMingsLanguagesAndRefusesOthers() throws {
+        for text in ["你好，今天天气很好。我们去公园散步吧。", "早安。今天天氣很好，我們去公園散步吧。", "Guten Morgen. Wie geht es dir heute?",
+                     "Buenos días. ¿Cómo estás hoy? Hace un tiempo precioso.", "こんにちは。今日はいい天気ですね。"] {
+            XCTAssertNoThrow(try SpeechOutline(SpeechRequest(text: text), engine: .ming), text)
+        }
+        let italian = SpeechRequest(text: "Buongiorno, come stai oggi? Spero che tu stia molto bene.")
+        XCTAssertThrowsError(try SpeechOutline(italian, engine: .ming)) { error in
+            guard case .engineUnsupported(.ming, let what)? = error as? PromptError else { return XCTFail("\(error)") }
+            XCTAssertTrue(what.contains("Italian"), what)
+        }
+        XCTAssertNoThrow(try SpeechOutline(italian, engine: .drama3))
+    }
 }
