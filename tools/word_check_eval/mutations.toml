@@ -165,8 +165,32 @@ new = 'if let tensWord = Optional<String>.none {'
 [[mutation]]
 name = 'no spellings'
 file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
-old = 'let spelled = forms.spellings[word] ?? word'
-new = 'let spelled = word'
+old = 'let spelled = forms.spellings[word] ?? forms.homophones[word] ?? word'
+new = 'let spelled = forms.homophones[word] ?? word'
+
+[[mutation]]
+name = 'no homophones'
+file = 'Sources/DramaEngine/Verification/EnglishNumbers.swift'
+old = 'let spelled = forms.spellings[word] ?? forms.homophones[word] ?? word'
+new = 'let spelled = forms.spellings[word] ?? word'
+
+[[mutation]]
+name = 'no shared s'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = 'return short.count >= 3 && long == short + "s" && !isNumber(short)'
+new = 'return false'
+
+[[mutation]]
+name = 'shared s before any word'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = 'following == otherFollowing, following.hasPrefix("s"), !isNumber(following)'
+new = 'following == otherFollowing, !isNumber(following)'
+
+[[mutation]]
+name = 'shared s on short words'
+file = 'Sources/DramaEngine/Verification/WordCoverage.swift'
+old = 'return short.count >= 3 && long == short + "s" && !isNumber(short)'
+new = 'return short.count >= 1 && long == short + "s" && !isNumber(short)'
 
 [[mutation]]
 name = 'non-homophone spelling'

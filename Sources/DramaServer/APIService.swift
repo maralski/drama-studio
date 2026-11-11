@@ -286,8 +286,10 @@ public final class APIService: Sendable {
     /// speaks it rewritten by `rules`.
     private static func speechRequest(speaking line: String, rules: PronunciationDictionary, parameters: SpeechParameters,
                                       references: [ReferenceVoice], character: VoiceDesign?, previousTakes: [Take]) -> SpeechRequest {
-        SpeechRequest(text: rules.apply(to: line), references: references, character: character, note: parameters.note,
-                      previousTakes: previousTakes, config: parameters.config)
+        var request = SpeechRequest(text: rules.apply(to: line), references: references, character: character, note: parameters.note,
+                                    previousTakes: previousTakes, config: parameters.config)
+        request.language = parameters.language
+        return request
     }
 
     /// The engine the request names; else, for a request that continues a
@@ -413,7 +415,7 @@ public final class APIService: Sendable {
             } catch {
                 Self.send(framing.error(Self.describe(error)), to: out)
                 await jobs.release(job)
-                out.finish(throwing: error)
+                framing.finish(out, after: error)
             }
         }
         out.onTermination = { _ in task.cancel() }
@@ -463,10 +465,16 @@ public final class APIService: Sendable {
             var sentences = 0
             var seconds = 0.0
             var notices: [SpeechNotice] = []
+            // The language of the sentence before, which a sentence too short to tell is in.
+            var language = parameters.language
             func say(_ sentence: String) async throws {
                 let context = spoken.count <= 3 ? spoken : [spoken[0]] + spoken.suffix(2)
-                let request = Self.speechRequest(speaking: sentence, rules: rules, parameters: parameters,
+                var request = Self.speechRequest(speaking: sentence, rules: rules, parameters: parameters,
                                                  references: references, character: parameters.character, previousTakes: context)
+                if parameters.language == nil, let told = try? ScriptLanguage.identify(request.text, fallback: language ?? ScriptLanguage.userLanguage) {
+                    language = told
+                    request.language = told
+                }
                 await jobs.begin(job, estimate: GenerationEstimate(outline: try SpeechOutline(request, engine: synthesizer.engine)))
                 guard let result = try await forward(request, on: synthesizer, framing: framing, job: job, into: out, sentences: &sentences) else { return }
                 spoken.append(result.take)
@@ -494,7 +502,7 @@ public final class APIService: Sendable {
                 let message = (error as? PromptError)?.description ?? (error as? APIError)?.message ?? Self.describe(error)
                 Self.send(framing.error(message), to: out)
                 await jobs.release(job)
-                out.finish(throwing: error)
+                framing.finish(out, after: error)
             }
         }
         out.onTermination = { _ in task.cancel() }

@@ -484,6 +484,10 @@ public struct SpeechRequest: Sendable {
     public var previousTakes: [Take]
     /// Sampling and pacing. Defaults to the measured configuration.
     public var config: GenerationConfig
+    /// The language the text is spoken and checked in, as a BCP 47 code such
+    /// as `en` or `zh-Hans`. `nil`, the default, tells it from the text; a
+    /// line too short to tell is read in the language of the user's macOS.
+    public var language: String? = nil
     /// Creates a request.
     public init(text: String, references: [ReferenceVoice] = [], character: VoiceDesign? = nil, note: String? = nil,
                 previousTakes: [Take] = [], config: GenerationConfig = GenerationConfig()) {

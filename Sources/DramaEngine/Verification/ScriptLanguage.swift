@@ -4,16 +4,34 @@ import Foundation
 import NaturalLanguage
 
 package enum ScriptLanguage {
-    package static func identify(_ text: String) throws -> String {
+    /// The language of the user's macOS, which a line too short to tell is read in.
+    package static var userLanguage: String {
+        let language = Locale.Language(identifier: Locale.preferredLanguages.first ?? "en")
+        let code = language.languageCode?.identifier ?? "en"
+        return language.script.map { "\(code)-\($0.identifier)" } ?? code
+    }
+
+    /// The language a request is spoken and checked in: the one it names,
+    /// else the one its text is written in.
+    package static func language(of request: SpeechRequest) throws -> String {
+        try request.language ?? identify(request.text, fallback: userLanguage)
+    }
+
+    /// The language `text` is written in. `fallback` answers for text the
+    /// recognizer cannot tell in a script that language is written in: an
+    /// uncertain result, or a line of under four words.
+    package static func identify(_ text: String, fallback: String? = nil) throws -> String {
         let spoken = DirectorsNote.spokenWords(text)
-        let segments = DirectorsNote.sentences(spoken).filter { text in
+        let enough = 4
+        func words(_ text: String) -> Int {
             let tokenizer = NLTokenizer(unit: .word)
             tokenizer.string = text
             var count = 0
-            tokenizer.enumerateTokens(in: text.startIndex..<text.endIndex) { _, _ in count += 1; return count < 4 }
-            return count >= 4
+            tokenizer.enumerateTokens(in: text.startIndex..<text.endIndex) { _, _ in count += 1; return count < enough }
+            return count
         }
-        return try choose(overall: evidence(spoken), segments: segments.map(evidence))
+        let segments = DirectorsNote.sentences(spoken).filter { words($0) >= enough }
+        return try choose(overall: evidence(spoken), segments: segments.map(evidence), short: words(spoken) < enough, fallback: fallback)
     }
 
     private static func evidence(_ text: String) -> [String: Double] {
@@ -35,7 +53,13 @@ package enum ScriptLanguage {
         return candidates.sorted { $0.identifier(.bcp47) < $1.identifier(.bcp47) }.first
     }
 
-    package static func choose(overall: [String: Double], segments: [[String: Double]]) throws -> String {
+    /// On 164 everyday English lines of one to three words the recognizer
+    /// named another language at 0.75 or more once ("Hi." as Catalan at 0.80)
+    /// and never at 0.9; on 60 French, Spanish and German ones it named a
+    /// wrong language at up to 0.93 and never at 0.95.
+    static let shortLineConfidence = 0.95
+
+    package static func choose(overall: [String: Double], segments: [[String: Double]], short: Bool = false, fallback: String? = nil) throws -> String {
         let strong = Set(segments.compactMap { scores -> String? in
             guard let best = scores.max(by: { $0.value < $1.value }), best.value >= 0.8 else { return nil }
             return best.key
@@ -43,11 +67,21 @@ package enum ScriptLanguage {
         guard strong.count <= 1 else {
             throw SpeechVerificationError.unavailable("this script mixes languages; generate each language separately")
         }
-        guard let best = overall.max(by: { $0.value < $1.value }), best.value >= 0.75, best.key != "und",
-              strong.isEmpty || strong.contains(best.key) else {
+        let best = overall.max(by: { $0.value < $1.value })
+        let confident = best.map { $0.value >= 0.75 && $0.key != "und" && (strong.isEmpty || strong.contains($0.key)) } ?? false
+        if let fallback, strong.isEmpty {
+            let sameScript = best.map { $0.key == "und" || script($0.key) == script(fallback) } ?? true
+            let sure = confident && !(short && best!.value < shortLineConfidence)
+            if sameScript && !sure { return fallback }
+        }
+        guard let best, confident else {
             throw SpeechVerificationError.unavailable("the script's language is uncertain; use a complete sentence")
         }
         return best.key
+    }
+
+    private static func script(_ language: String) -> String? {
+        Locale.Language(identifier: Locale.Language(identifier: language).maximalIdentifier).script?.identifier
     }
 
     package static func requireLocale(language: String, recognizerAvailable: Bool, locale: Locale?, installed: [Locale]) throws -> Locale {

@@ -26,7 +26,7 @@ public struct SpeechOutline: Sendable, Equatable {
         if request.note.flatMap(DirectorsNote.clean) != nil, DirectorsNote.sentences(text).isEmpty { throw PromptError.emptyText("line") }
         var config = request.config
         if engine == .ming {
-            try MingCues.checkLanguage(of: text)
+            try MingCues.checkLanguage(of: request)
             config.chunking = .sentences
         }
         lines = GenerationPlan.lines(text: text, config: config)

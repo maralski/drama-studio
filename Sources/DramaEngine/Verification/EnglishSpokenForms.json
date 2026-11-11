@@ -139,6 +139,10 @@
     "yelling",
     "yells"
   ],
+  "homophones": {
+    "fairies": "ferries",
+    "fairy": "ferry"
+  },
   "range_words": [
     "through",
     "thru",

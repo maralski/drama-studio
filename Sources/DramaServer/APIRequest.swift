@@ -62,6 +62,8 @@ public struct SpeechParameters: Sendable, Equatable {
     public var applyPronunciation: Bool
     /// The engine `model` asks for.
     public var model: ModelChoice
+    /// The language `language` names, as a BCP 47 code; nil tells it from the text.
+    public var language: String?
 
     public var config: GenerationConfig {
         var config = GenerationConfig.make(expressiveness: expressiveness)
@@ -274,6 +276,7 @@ extension APIRequest {
         var note: String?
         var previous_takes: [TakeBody]?
         var apply_pronunciation: Bool?
+        var language: String?
         var model: String?
     }
 
@@ -317,6 +320,7 @@ extension APIRequest {
         body.input = query["input"]
         body.voice = query["voice"]
         body.model = query["model"]
+        body.language = query["language"]
         body.expressiveness = try number("expressiveness")
         body.seed = try number("seed")
         if let value = query["apply_pronunciation"]?.lowercased() {
@@ -371,8 +375,17 @@ extension APIRequest {
             expressiveness: expressiveness,
             seed: decoded.seed.map(UInt64.init),
             applyPronunciation: decoded.apply_pronunciation ?? true,
-            model: ModelChoice(decoded.model)
+            model: ModelChoice(decoded.model),
+            language: try language(decoded.language)
         )
+    }
+
+    private static func language(_ name: String?) throws -> String? {
+        guard let name = name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty else { return nil }
+        guard name.range(of: #"^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$"#, options: .regularExpression) != nil else {
+            throw APIError.bad("language must be a language code such as en, fr or zh-Hans.")
+        }
+        return name
     }
 
     private static func character(_ body: CharacterBody?) throws -> VoiceDesign? {

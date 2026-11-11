@@ -29,7 +29,7 @@ package struct MingPlan: Sendable, Equatable {
 
     package var chunks: [Chunk]
     package var voice: Voice
-    /// The script's language as ``ScriptLanguage`` identified it, or nil when it could not.
+    /// The language the request names or its text is written in, or nil when that is uncertain.
     package var language: String?
     package var turnText: String
     package var notices: [SpeechNotice]
@@ -69,7 +69,7 @@ package struct MingPlan: Sendable, Equatable {
             notices.append(.unsupportedCue(cue))
         }
         self.notices = notices
-        language = try? ScriptLanguage.identify(request.text)
+        language = try? ScriptLanguage.language(of: request)
     }
 
     /// The reference a chunk clones, once the voice is known: its speaker's

@@ -152,6 +152,40 @@ final class APIStreamingTests: XCTestCase {
         XCTAssertTrue(String(decoding: health.bodyData ?? Data(), as: UTF8.self).contains("\"busy\":false"))
     }
 
+    /// Catches a live session ended by "Goodbye.": one word does not tell a
+    /// language, so the sentence is in the language of the one before it.
+    func testLiveReadsASentenceTooShortToTellInTheSessionsLanguage() async throws {
+        func languages(query: [String: String] = [:], _ lines: String) async throws -> [String?] {
+            let before = await engine.requests.count
+            let (input, feed) = AsyncThrowingStream<Data, Error>.makeStream()
+            feed.yield(Data(lines.utf8))
+            feed.finish()
+            let response = await service.respond(to: HTTPRequest(method: "POST", path: "/v1/audio/speech/live", query: query, headers: ["Accept": "text/event-stream"]), body: input)
+            var reader = EventReader(try body(response))
+            let done = try await reader.next(named: "done")
+            XCTAssertNotNil(done, lines)
+            return await engine.requests.dropFirst(before).map(\.language)
+        }
+        let german = try await languages("Guten Morgen, wie geht es dir heute?\nSalut.\nThis sentence is long enough to be plainly English.\nGoodbye.\n")
+        XCTAssertEqual(german, ["de", "de", "en", "en"])
+        let opening = try await languages("Hi.\nGoodbye.\n")
+        XCTAssertEqual(opening, [ScriptLanguage.userLanguage, ScriptLanguage.userLanguage], "before any sentence tells, the user's language")
+        let named = try await languages(query: ["language": "fr"], "Salut.\nThis sentence is long enough to be plainly English.\n")
+        XCTAssertEqual(named, ["fr", "fr"], "a named language is the session's")
+    }
+
+    func testSpeechCarriesTheLanguageARequestNames() async throws {
+        _ = await service.respond(to: HTTPRequest(method: "POST", path: "/v1/audio/speech", body: Data(#"{"input":"Salut.","language":"fr"}"#.utf8)))
+        _ = await service.respond(to: HTTPRequest(method: "POST", path: "/v1/tts", body: Data(#"{"text":"Hi."}"#.utf8)))
+        let stream = await service.respond(to: HTTPRequest(method: "GET", path: "/v1/audio/speech/stream", query: ["input": "Hola.", "language": "es"]))
+        for try await _ in try body(stream) {}
+        let languages = await engine.requests.map(\.language)
+        XCTAssertEqual(languages, ["fr", nil, "es"], "unnamed, the engine tells the language from the text")
+        let bad = await service.respond(to: HTTPRequest(method: "POST", path: "/v1/audio/speech", body: Data(#"{"input":"Hi.","language":"English!"}"#.utf8)))
+        XCTAssertEqual(bad.status, .badRequest)
+        XCTAssertEqual(String(decoding: bad.bodyData ?? Data(), as: UTF8.self), "language must be a language code such as en, fr or zh-Hans.\n")
+    }
+
     func testLiveWithoutEventsStreamsRawPCM() async throws {
         let (input, feed) = AsyncThrowingStream<Data, Error>.makeStream()
         let response = await service.respond(to: HTTPRequest(method: "POST", path: "/v1/audio/speech/live"), body: input)

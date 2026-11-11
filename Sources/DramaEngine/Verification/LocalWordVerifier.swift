@@ -14,16 +14,17 @@ package struct LocalWordVerifier: Sendable {
     private let plannedLines: [String]?
 
     /// A verifier for the planned `lines`, one per generated unit; nil unless the config requires word verification.
-    package static func prepare(lines: [String], config: GenerationConfig, shouldContinue: () -> Bool) throws -> Self? {
+    /// `language` is the request's, or nil to tell it from the lines.
+    package static func prepare(lines: [String], language: String? = nil, config: GenerationConfig, shouldContinue: () -> Bool) throws -> Self? {
         guard config.wordVerification == .required else { return nil }
-        return try prepare(text: lines.joined(separator: " "), plannedLines: lines, shouldContinue: shouldContinue)
+        return try prepare(text: lines.joined(separator: " "), language: language, plannedLines: lines, shouldContinue: shouldContinue)
     }
 
     package static func prepare(text: String, shouldContinue: () -> Bool) throws -> Self {
-        try prepare(text: text, plannedLines: nil, shouldContinue: shouldContinue)
+        try prepare(text: text, language: nil, plannedLines: nil, shouldContinue: shouldContinue)
     }
 
-    private static func prepare(text: String, plannedLines: [String]?, shouldContinue: () -> Bool) throws -> Self {
+    private static func prepare(text: String, language: String?, plannedLines: [String]?, shouldContinue: () -> Bool) throws -> Self {
         guard #available(macOS 26, *) else {
             throw SpeechVerificationError.unavailable("checked generation requires macOS 26 or later")
         }
@@ -31,7 +32,7 @@ package struct LocalWordVerifier: Sendable {
         try WordCoverage.prepare()
         let spoken = DirectorsNote.spokenWords(text)
         guard !spoken.isEmpty else { throw PromptError.emptyText("spoken words") }
-        let language = try ScriptLanguage.identify(spoken)
+        let language = try language ?? ScriptLanguage.identify(spoken, fallback: ScriptLanguage.userLanguage)
         let locale = try blocking(timeout: ContinuousClock.now.duration(to: deadline), shouldContinue: shouldContinue) {
             let installed = await SpeechTranscriber.installedLocales
             let requested = ScriptLanguage.preferredLocale(language: language, installed: installed, preferences: Locale.preferredLanguages)

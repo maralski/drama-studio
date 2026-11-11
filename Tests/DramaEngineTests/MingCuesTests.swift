@@ -102,4 +102,24 @@ final class MingCuesTests: XCTestCase {
         }
         XCTAssertNoThrow(try SpeechOutline(italian, engine: .drama3))
     }
+
+    /// Catches "Hi." refused as Catalan: a line too short to tell is in the
+    /// request's language, else the user's, and only a named or certain
+    /// language Ming does not speak is refused.
+    func testOutlineTakesALineTooShortToTellItsLanguage() throws {
+        for text in ["Hi.", "No.", "Salut.", "Goodbye."] {
+            var request = SpeechRequest(text: text)
+            request.language = "en"
+            XCTAssertNoThrow(try SpeechOutline(request, engine: .ming), text)
+            request.language = "ca"
+            XCTAssertThrowsError(try SpeechOutline(request, engine: .ming), text) { error in
+                guard case .engineUnsupported(.ming, let what)? = error as? PromptError else { return XCTFail("\(error)") }
+                XCTAssertTrue(what.contains("Catalan"), what)
+            }
+        }
+        try XCTSkipUnless(MingCues.languageCode(ScriptLanguage.userLanguage) != nil, "this Mac's language is one Ming does not speak")
+        for text in ["Hi.", "No.", "Salut.", "Goodbye."] {
+            XCTAssertNoThrow(try SpeechOutline(SpeechRequest(text: text), engine: .ming), text)
+        }
+    }
 }

@@ -281,7 +281,7 @@ enum EnglishNumbers {
                 if let currency { result.append("¤?" + currency) }
             case .word(let word):
                 let afterNumber = if offset > 0, case .number = amounts[offset - 1] { true } else { false }
-                let spelled = forms.spellings[word] ?? word
+                let spelled = forms.spellings[word] ?? forms.homophones[word] ?? word
                 let spoken = afterNumber ? forms.units[spelled] ?? spelled : spelled
                 if afterNumber, let currency = forms.currency_words[spoken] {
                     if result.last.map(isImpliedCurrency) == true { result.removeLast() }

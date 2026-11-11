@@ -23,6 +23,39 @@ final class ScriptLanguageTests: XCTestCase {
         XCTAssertThrowsError(try ScriptLanguage.choose(overall: ["en": 0.9], segments: [["en": 0.99], ["ja": 0.99]]))
     }
 
+    /// Catches a one-word line refused as uncertain, or read in whatever
+    /// language the recognizer guessed: "Hi." came back Catalan at 0.80.
+    func testALineTooShortToTellIsReadInTheFallbackLanguage() throws {
+        XCTAssertEqual(try ScriptLanguage.choose(overall: ["en": 0.23, "nl": 0.13], segments: [], short: true, fallback: "en"), "en")
+        XCTAssertEqual(try ScriptLanguage.choose(overall: ["ca": 0.80, "tr": 0.07], segments: [], short: true, fallback: "en"), "en")
+        XCTAssertEqual(try ScriptLanguage.choose(overall: ["it": 0.93], segments: [], short: true, fallback: "fr"), "fr")
+        XCTAssertEqual(try ScriptLanguage.choose(overall: [:], segments: [], short: true, fallback: "en"), "en")
+        XCTAssertEqual(try ScriptLanguage.choose(overall: ["es": 0.98], segments: [], short: true, fallback: "en"), "es", "a short line the recognizer is sure of keeps its language")
+        XCTAssertEqual(try ScriptLanguage.choose(overall: ["ja": 1.0], segments: [], short: true, fallback: "en"), "ja", "another script is never the fallback's language")
+        XCTAssertEqual(try ScriptLanguage.choose(overall: ["zh-Hant": 0.80, "zh-Hans": 0.20], segments: [], short: true, fallback: "en"), "zh-Hant")
+        XCTAssertThrowsError(try ScriptLanguage.choose(overall: ["bg": 0.53, "ru": 0.42], segments: [], short: true, fallback: "en"))
+        XCTAssertEqual(try ScriptLanguage.choose(overall: ["ca": 0.80], segments: [], short: true), "ca", "without a fallback, detection decides as before")
+
+        XCTAssertEqual(try ScriptLanguage.choose(overall: ["es": 0.80], segments: [], fallback: "en"), "es", "a longer line needs only 0.75")
+        XCTAssertEqual(try ScriptLanguage.choose(overall: ["en": 0.5, "nl": 0.4], segments: [], fallback: "en"), "en", "an uncertain longer line is read in the fallback")
+        XCTAssertThrowsError(try ScriptLanguage.choose(overall: ["en": 0.9], segments: [["en": 0.99], ["ja": 0.99]], fallback: "en"), "the fallback never hides mixed languages")
+
+        for line in ["Hi.", "Goodbye.", "No.", "Hello.", "Okay.", "[laughs] Stop!", "42."] {
+            XCTAssertEqual(try ScriptLanguage.identify(line, fallback: "en"), "en", line)
+        }
+        XCTAssertEqual(try ScriptLanguage.identify("こんにちは。", fallback: "en"), "ja")
+        XCTAssertEqual(try ScriptLanguage.identify("Guten Morgen. Wie geht es dir heute?", fallback: "en"), "de")
+        XCTAssertThrowsError(try ScriptLanguage.identify("Goodbye."), "detection alone cannot tell")
+    }
+
+    func testARequestsLanguageIsItsOwnBeforeItsTexts() throws {
+        var request = SpeechRequest(text: "Guten Morgen. Wie geht es dir heute?")
+        XCTAssertEqual(try ScriptLanguage.language(of: request), "de")
+        request.language = "en"
+        XCTAssertEqual(try ScriptLanguage.language(of: request), "en")
+        XCTAssertEqual(try ScriptLanguage.language(of: SpeechRequest(text: "Goodbye.")), ScriptLanguage.userLanguage)
+    }
+
     func testUnsupportedRecognizerLocaleAndMissingAssetsFailBeforeGeneration() throws {
         let english = Locale(identifier: "en_US")
         XCTAssertThrowsError(try ScriptLanguage.requireLocale(language: "en", recognizerAvailable: false, locale: english, installed: [english]))

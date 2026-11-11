@@ -105,6 +105,16 @@ enum StreamFraming: Sendable {
 
     func error(_ message: String) -> Data { self.message("error", ["message": message]) }
 
+    /// Ends a response that failed. An event stream has said so in its
+    /// `error` event and ends as a complete body. Raw PCM has no other way
+    /// to say it, so its body ends without the chunk that completes it.
+    func finish(_ out: AsyncThrowingStream<Data, Error>.Continuation, after error: Error) {
+        switch self {
+        case .events: out.finish()
+        case .pcm: out.finish(throwing: error)
+        }
+    }
+
     private func message(_ name: String, _ fields: [String: Any]) -> Data {
         guard case .events = self else { return Data() }
         let rounded = fields.mapValues { value -> Any in
