@@ -612,7 +612,16 @@ func serve(_ args: Args) throws -> Never {
     dispatchMain()
 }
 
+let usage = "usage: drama <dump|bench|kbench|dbench|fbench|profile|trace|tune|pack|schedule-ab|generate|decode|codec-bench|serve|setup|check-words> [options]"
 let args = Args(Array(CommandLine.arguments.dropFirst()))
+if args.flags.contains("help") || args.positional.contains("-h") || args.positional.first == "help" {
+    if args.positional.first == "serve" {
+        print("usage: drama serve [--port N] [--engine drama3|ming] [--model DIR] [--ming-weights DIR] [--voices DIR] [--no-token]")
+    } else {
+        print(usage)
+    }
+    exit(0)
+}
 switch args.positional.first {
 case "dump": try dump(args)
 case "bench": try bench(args)
@@ -630,5 +639,5 @@ case "codec-bench": try codecBench(args)
 case "serve": try serve(args)
 case "setup": setup(args)
 case "check-words": exit(WordCheckDiagnostic.run(Array(args.positional.dropFirst())))
-default: fail("usage: drama <dump|bench|kbench|dbench|fbench|profile|trace|tune|pack|schedule-ab|generate|decode|codec-bench|serve|setup> [options]")
+default: fail(usage)
 }
