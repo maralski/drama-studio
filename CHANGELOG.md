@@ -83,6 +83,11 @@ Ming instead of Drama 3.
   `error` event. Before, it closed without the last chunk and curl exited
   with code 18. A failed raw PCM stream still ends without the last chunk,
   because raw PCM has no other way to report the failure.
+- The app's API server answers while the **Recover unsaved work?** alert is
+  open. Before, `GET /v1/health`, the voice routes and every speech request
+  waited until the alert was answered, so a launcher polling `/v1/health`
+  timed out. `/v1/health` now also answers while the app's main thread is
+  busy, and its `busy` field still reports a generation in the window.
 - New public API: `MingSynthesizer`, `MingLocation`, `MingVoiceEncoding`,
   `SpeechEngines`, `EngineCapabilities`, `CueSupport`, `EngineInstall`,
   `HuggingFaceCache`, `SpeechNotice`, `SpeechOutline`, `EngineDescription`,
