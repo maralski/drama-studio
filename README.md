@@ -76,8 +76,10 @@ was not measured. Speed is seconds of audio per second of wall time, from
 request to response, for a paragraph of about 20 seconds, including the word
 check. Each figure is the median of seeds 100 to 104, two rounds each, with
 the range in parentheses. Every Ming run completed. Drama 3's figure covers only
-the runs that completed, because some Drama 3 runs in this test failed and
-are under investigation.
+the runs that completed before a word-check fix. The others failed because a
+recognizer heard "beams sweep" for "beam sweep" and the word check rejected
+correct takes. The word check now accepts that difference, and with the fix
+the same paragraph passes on Drama 3 for every seed from 100 to 104.
 
 When an engine cannot perform part of a script, it still speaks every word.
 The app, the API, `drama-say` and the MCP server report each change as a
@@ -298,9 +300,11 @@ On Ming:
   request that sets `expressiveness` to anything but the default gets the
   notice "Ming ignores the Expressiveness setting."
 - Ming speaks Chinese, English, Japanese, Korean, German, French and Spanish.
-  A script in another language fails before generation with an error such as
+  A script in another language, or an API request whose `language` names
+  another language, fails before generation with an error such as
   "Ming can't speak Italian; it speaks Chinese, English, Japanese, Korean,
-  German, French, and Spanish". The API returns it with `400`.
+  German, French, and Spanish". The API returns it with `400`, except on the
+  live route, which reports it in an `error` event.
   MingTTS spells out numbers, dates, currencies and units in English text
   only. It does not normalize Chinese text.
 - A voice saved before voices kept their recording has only Drama 3 codes,
@@ -311,6 +315,17 @@ On Ming:
 
 Drama 3 has no language list of its own. On either engine, the word check
 needs an installed Apple speech model for the script's language.
+
+Each request is spoken and checked in one language. An API request can name
+it in `language`, and the engine uses that language instead of detecting one.
+Otherwise the engine tells the language from the text. A
+line it cannot tell is read in your macOS language, if the text is in a
+script that language uses. A line cannot be told when the language
+recognizer is uncertain, or when the line has fewer than four words and the
+recognizer is less than 0.95 sure. So "Hi." and "Goodbye." are read in
+English on an English Mac, and "こんにちは。" is still read in Japanese. In a
+live session, a sentence that cannot be told takes the language of the
+sentence before it. The app passes no language and relies on this fallback.
 
 ## Troubleshooting
 
@@ -325,9 +340,15 @@ needs an installed Apple speech model for the script's language.
   notices ("1 notice"). `drama-say` prints each notice on standard error, the
   MCP tools return them, and the API returns them in `X-Drama-Notices`.
   [Cues on each engine](#cues-on-each-engine) lists what Ming performs.
-- **"Ming can't speak …; it speaks …".** The script is in a language Ming
-  does not speak. Switch to Drama 3, or use Chinese, English, Japanese,
-  Korean, German, French or Spanish.
+- **"Ming can't speak …; it speaks …".** The script, or the API request's
+  `language`, is in a language Ming does not speak. Switch to Drama 3, or use
+  Chinese, English, Japanese, Korean, German, French or Spanish. If the line
+  is short and the engine named the wrong language, send the right one in the
+  API's `language` field.
+- **"Cannot check the generated words: the script's language is uncertain;
+  use a complete sentence".** The engine could not tell the line's language,
+  and the line is not in a script your macOS language uses. Through the API,
+  send the language in `language`. In the app, write a complete sentence.
 - **"The voice … was saved without its recording".** The voice predates
   saved clips and needs Drama 3's codec. Set up Drama 3 in **Settings**, or
   add the voice again from a recording.
@@ -714,6 +735,7 @@ The speech body takes these fields:
 | `note` | A director's note, such as `"softer and warmer"`. On Drama 3, the line is generated again, sentence by sentence, with the note as a direction and as a cue before every sentence. On Ming, a note that names an emotion sets that emotion, and any other note gets a notice. |
 | `previous_takes` | Earlier takes of the line, oldest first: `[{take_id}]`, or `[{text, codes_base64}]` for a Drama 3 take. With no `voice` or `references`, the first one is the voice. On Drama 3, the last two are also context. A take from the other engine gets a notice and is not used. |
 | `model` | The engine to speak with: its id (`drama3`, `ming`), model id or name. Without it, a request that continues a cached take runs on that take's engine, and any other runs on the selected one. OpenAI's model names, `tts-1`, `tts-1-hd` and `gpt-4o-mini-tts`, are treated as no model, so OpenAI clients work unchanged. Any other name, and an engine that isn't installed, gets `400` listing the installed engine ids. Only one engine is loaded at a time, so a request for the other engine unloads the current one first. |
+| `language` | The language of `input`, as a BCP 47 code such as `en`, `fr` or `zh-Hans`. The engine speaks and checks the text in that language and does not tell the language from the text. A wrong code fails the word check. A value that is not a language code gets `400`, and on Ming, a language Ming does not speak gets `400`. Without it, the engine tells the language from the text, and reads a line too short to tell in your macOS language, as [Voices, takes and languages on each engine](#voices-takes-and-languages-on-each-engine) describes. |
 | `apply_pronunciation` | `true` (default) rewrites `input` with the pronunciation rules in `~/Library/Application Support/DramaStudio/pronunciation.json`, the same rules the app uses, before it is spoken; `false` speaks it as sent. |
 
 A request takes at most one of `voice`, `references`, `speaker_voices`, and
@@ -776,8 +798,11 @@ The audio is always 16-bit little-endian mono at 44.1 kHz, as the
 **PCM.** `stream: true` on `POST /v1/audio/speech` answers with
 `Transfer-Encoding: chunked` and raw PCM in the HTTP chunks. A chunk boundary
 means nothing; concatenate the chunks. Every chunk holds whole 16-bit
-samples. On Drama 3 it also holds whole 2048-sample frames. Pipe it into a
-player:
+samples. On Drama 3 it also holds whole 2048-sample frames. Raw PCM has no
+way to report an error, so a stream that fails after its headers are sent
+ends without the zero-length chunk that completes a chunked body. curl then
+reports "transfer closed with outstanding read data remaining" and exits with
+code 18. Pipe the stream into a player:
 
 ```bash
 curl -sSN -H "$AUTH" localhost:8780/v1/audio/speech \
@@ -786,7 +811,7 @@ curl -sSN -H "$AUTH" localhost:8780/v1/audio/speech \
 ```
 
 **Server-Sent Events.** `GET /v1/audio/speech/stream` takes its fields as query
-parameters: `input` (required), `voice`, `model`, `expressiveness`,
+parameters: `input` (required), `voice`, `model`, `language`, `expressiveness`,
 `seed`, and `character_name`, `character_description` and `character_scene`
 for a designed voice. `apply_pronunciation=false` turns off the pronunciation
 rules, as in the speech body. It answers with `Content-Type: text/event-stream`
@@ -797,7 +822,7 @@ and these events:
 | `audio` | Base64 of the next PCM bytes: whole samples, and on Drama 3 whole frames. |
 | `sentence` | `{"index", "text", "seconds"}` after the last audio of each sentence. |
 | `done` | `{"take_id", "engine", "samples", "word_coverage", "seconds"}` once the take is complete, plus `frames` for a Drama 3 take, with `notices`, an array of messages, when the engine could not perform part of the request. |
-| `error` | `{"message"}`, after which the stream ends. |
+| `error` | `{"message"}`. The stream then ends as a complete chunked body. |
 
 The route still needs the bearer token, and the server sends no CORS headers,
 so a browser's `EventSource`, which cannot send an `Authorization` header, does
@@ -809,7 +834,7 @@ curl -sSN -H "$AUTH" "localhost:8780/v1/audio/speech/stream?input=Hello%20there.
 ```
 
 **Live text input.** `POST /v1/audio/speech/live` is for an agent that writes
-text a piece at a time. It takes `voice`, `model`, `expressiveness`,
+text a piece at a time. It takes `voice`, `model`, `language`, `expressiveness`,
 `seed` and the `character_*` fields as query parameters, and the text as the
 request body:
 
@@ -829,11 +854,19 @@ request body:
 - Each sentence is a take, and the session's takes carry the voice and the
   history: the first take is the voice of every later sentence when no
   `voice` is given. On Drama 3, the last two are also context.
+- With `language`, every sentence is spoken and checked in that language.
+  Without it, the engine tells each sentence's language from its text. A
+  sentence it cannot tell takes the language of the sentence before it, and
+  a first sentence it cannot tell takes your macOS language.
 - The response is chunked PCM as for `stream: true`. Send
   `Accept: text/event-stream` to get the events above instead, with `done`
   carrying `{"engine", "sentences", "seconds", "take_ids"}` and any `notices` of the
   session. The response ends once the
   body has ended and its last sentence is spoken.
+- The live route answers `200` before it speaks the first sentence, so it
+  reports a failure to speak as an `error` event, such as "Ming can't speak
+  Italian" for `language=it` on Ming. An event stream then ends as a complete chunked
+  body. A PCM response ends without the last chunk, as `stream: true` does.
 - The session holds the engine from the request to the end of the response,
   so other requests get `429` meanwhile.
 
@@ -846,7 +879,8 @@ some-agent | tools/live_speech.py --voice Narrator |
 tools/live_speech.py --events < script.txt      # prints each event with its arrival time
 ```
 
-`curl -T -` also speaks a piped body, but it holds the piped lines back before
+`curl -X POST -T -` also speaks a piped body. Without `-X POST`, `-T` sends
+`PUT`, which the route answers with `501`. curl holds the piped lines back before
 sending them, so its first audio comes later than the same feed through
 `tools/live_speech.py`.
 
@@ -1206,8 +1240,12 @@ The speed rows time a seeded `POST /v1/audio/speech` of a paragraph of about
 20 seconds against `drama serve --engine ming` or `--engine drama3`, from
 request to response. Each engine ran seeds 100 to 104, two rounds each. All
 10 Ming runs completed. The Drama 3 median covers only the runs that
-completed, because some Drama 3 runs in this test failed and are under
-investigation. The resident sizes are the maximum resident set size from
+completed before a word-check fix. The other Drama 3 runs failed because a
+recognizer heard "beams sweep" for "beam sweep" and the word check rejected
+correct takes. The word check now accepts that difference, and with the fix
+the same paragraph passes on Drama 3 for every seed from 100 to 104. The speed
+figures were not measured again after the fix. The resident sizes are the
+maximum resident set size from
 `/usr/bin/time -l` around `drama serve`. The scripts that ran these
 measurements are not in the repository.
 
@@ -1385,7 +1423,13 @@ matches "twelve hundred", "3:30" matches "three thirty", and "$4.99" matches
 "four ninety-nine". A different value or kind never matches, so "three, two,
 one" never matches "321", "2.5" never matches "25", and "50 cents" never
 matches "50 dollars". UK and US spellings, unit abbreviations such as "kg",
-silent possessive apostrophes and compound spacing also match. Apple's
+silent possessive apostrophes and compound spacing also match. A word
+matches the same word plus a final s when the same word starting with s
+follows both, because the two s sounds run together: "beam sweep" matches
+"beams sweep". Both words must have three letters or more. The `homophones` table in
+`Sources/DramaEngine/Verification/EnglishSpokenForms.json` lists words the
+engines' voices say alike. It holds "fairy" for "ferry" and "fairies" for
+"ferries". Apple's
 transcriber writes some times and decimals without the separator, such as
 "130" for "one thirty". Those forms are accepted only from Apple; the
 independent recognizer must still give a reading that only the right speech

@@ -31,7 +31,7 @@ engine can do, such as the cues it performs and the languages it speaks.
   Ming, allow about 3 GB of free disk. Ming states no memory minimum and has
   also run only on the 128 GB M3 Max, where its largest resident size was
   5.9 GB. No Mac with less memory has been tested.
-- Xcode 26 or its command line tools. Checked generation requires macOS 26 and an installed on-device speech model for one identifiable script language; unchecked preview targets macOS 15.
+- Xcode 26 or its command line tools. Checked generation requires macOS 26 and an installed on-device speech model for the request's language; unchecked preview targets macOS 15.
 - For Drama 3, the model in the Hugging Face cache and the Core ML codec models
   built once from it. For Ming, its checkpoint. See <doc:GettingTheModel>.
 

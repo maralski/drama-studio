@@ -20,6 +20,28 @@ The retry check uses the script's length at 16 characters per second instead,
 because reference audio may include pauses or trailing silence. If you opt
 into silence stopping, probe readings follow the voice-aware allowance.
 
+### Name the language
+
+The word check listens in one language, and Ming speaks in one. Set
+``SpeechRequest/language`` to a BCP 47 code such as `en` or `zh-Hans`, and
+the engine uses that language without detecting it from the text:
+
+```swift
+var request = SpeechRequest(text: "Hi.", references: [voice])
+request.language = "en"
+```
+
+The engine does not compare the code with the text, so a wrong code fails
+the word check. On ``MingSynthesizer``, a language Ming does not speak throws
+before generation.
+
+With `nil`, the default, the engine detects the language from the text. A
+line it cannot tell is read in the language of the user's macOS, if the text
+is in a script that language uses. A line cannot be told when detection is
+uncertain, or when the line has fewer than four words and detection is less
+than 0.95 sure. So "Hi." reads as English on an English Mac, and
+"こんにちは。" still reads as Japanese.
+
 ### Pick when audio leaves the engine
 
 Every request uses sentence mode, regardless of the requested streaming mode

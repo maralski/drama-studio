@@ -131,9 +131,13 @@ per reason. Decisions land in `cache/decisions/<set>.json`.
 ## Mutations
 
 **What it measures.** Whether the word-check tests notice a wrong change to the
-matcher. `mutations.toml` lists 107 source edits. For each one the tool applies
+matcher. `mutations.toml` lists 110 source edits. For each one the tool applies
 the edit, runs `WordCoverageTests`, `BoundaryVerificationTests`,
 `WordCheckCorpusTests` and `LocalWordVerifierTests`, and restores the file.
+Four of them cover the two newest rules. `no shared s` removes the rule
+that accepts "beams sweep" for "beam sweep", `shared s before any word` and
+`shared s on short words` widen it, and `no homophones` removes the table that
+accepts "fairy" for "ferry".
 
 **What it needs.** macOS, Swift, Python 3.11 or later, and an APFS volume.
 Each worker clones the checkout with copy-on-write, so the checkout itself is
@@ -152,8 +156,8 @@ mutation's `old` text occurs exactly once, without running tests.
 
 **Time.** Each worker first builds its clone and runs the tests unmutated.
 Each mutation then costs one incremental build and one test run. Twelve
-mutations on 6 workers took 229 seconds. A full run of all 107 took 1222
-seconds with the scratch scripts this tool replaced.
+mutations on 6 workers took 229 seconds. A full run of the 107 mutations the file
+held then took 1222 seconds with the scratch scripts this tool replaced.
 
 **Output.** One line per mutation: `killed`, `SURVIVED`, `BUILD ERROR`,
 `equivalent` or `EQUIVALENT KILLED`, with the failing tests. It ends with

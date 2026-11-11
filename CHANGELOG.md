@@ -66,10 +66,28 @@ Ming instead of Drama 3.
   `DRAMA_STUDIO_HOME` when that is set.
 - The MCP `synthesize_speech` tool takes an `engine`, and `studio_status`
   lists every installed engine.
+- Every speech route takes `language`, a BCP 47 code such as `en` or
+  `zh-Hans`, in the JSON body or the query string. The engine speaks and
+  checks the text in that language and skips detection, so a wrong code fails
+  the word check. A value that is not a language code gets `400`, and so does
+  a language Ming does not speak on Ming. The MCP tools do not take it.
+- A line whose language the engine cannot tell is read in the macOS user's
+  language, when the text is in a script that language uses. A line cannot be
+  told when the recognizer is uncertain, or when the line has fewer than four
+  words and the recognizer is less than 0.95 sure. "Hi." no longer fails as
+  Catalan, and "Goodbye." no longer fails with "the script's language is
+  uncertain". In a live session, such a sentence takes the language of the
+  sentence before it.
+- A failed event stream, from `GET /v1/audio/speech/stream` or the live route
+  with `Accept: text/event-stream`, ends as a complete chunked body after its
+  `error` event. Before, it closed without the last chunk and curl exited
+  with code 18. A failed raw PCM stream still ends without the last chunk,
+  because raw PCM has no other way to report the failure.
 - New public API: `MingSynthesizer`, `MingLocation`, `MingVoiceEncoding`,
   `SpeechEngines`, `EngineCapabilities`, `CueSupport`, `EngineInstall`,
   `HuggingFaceCache`, `SpeechNotice`, `SpeechOutline`, `EngineDescription`,
-  `VoiceEncodingStore`, `DramaSetup.check(ming:)` and `SpeechResult.notices`.
+  `VoiceEncodingStore`, `DramaSetup.check(ming:)`, `SpeechResult.notices` and
+  `SpeechRequest.language`.
   `EngineInstall` names each engine's `publisher`, `license` (an
   `EngineInstall.License` with `requiresAgreement`), `recommendedMemory`
   and `downloadBytes`. `EngineCapabilities` has `expressiveness` and
@@ -109,6 +127,17 @@ second engine can share them.
   sample is heard as it is. The separate end-of-audio confirmation pass and its
   0.9 floor are gone. The acceptance policy is revision 8, so takes checked
   under an earlier revision show "earlier word check".
+- The word check takes a word with a final s and the same word without it as
+  the same before a word that starts with s, when both have three letters or
+  more: "beam sweep" matches "beams sweep". The two s sounds run together, and
+  Apple's transcriber and whisper wrote different forms for the same takes.
+- The word check's `homophones` table in `EnglishSpokenForms.json` accepts
+  "fairy" for "ferry" and "fairies" for "ferries".
+- Those two fixes end false rejections of correct takes that were already on
+  `main`. A 20-second Drama 3 paragraph that failed for some seeds now passes
+  for seeds 100 to 104. "The ferry docked at dawn." failed all six attempts on
+  both engines because whisper heard "fairy". The acceptance policy stays at
+  revision 8.
 
 ## 2.1.3
 
