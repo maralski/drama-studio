@@ -97,11 +97,9 @@ struct ContentView: View {
         if model.visibleTakes.isEmpty {
             editorAndTransport
         } else {
-            VSplitView {
+            VStack(spacing: 0) {
                 editorAndTransport.frame(minHeight: 220)
-                TakesStrip(model: model, resizable: true)
-                    .frame(minHeight: model.document == nil ? 300 : 180,
-                           idealHeight: model.document == nil ? 340 : 240)
+                TakesStrip(model: model).layoutPriority(1)
             }
         }
     }

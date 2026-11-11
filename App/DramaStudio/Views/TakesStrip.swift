@@ -5,10 +5,15 @@ import SwiftUI
 
 struct TakesStrip: View {
     let model: SessionModel
-    var resizable = false
     @State private var note = ""
     @State private var takeToDelete: SessionTake?
     @State private var takeToSave: SessionTake?
+    /// What whole rows of tiles need, as last laid out. One plain row until the first layout.
+    @State private var wholeRows: CGFloat = 68
+    /// The grid height the user dragged to; nil shows whole rows.
+    @State private var chosenHeight: CGFloat?
+    @State private var gridHeight: CGFloat = 0
+    @State private var dragStart: CGFloat?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -22,7 +27,7 @@ struct TakesStrip: View {
             }
             ScrollViewReader { scroll in
                 ScrollView(.vertical) {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), alignment: .top)], spacing: 8) {
+                    TakeGrid {
                         ForEach(model.visibleTakes) { take in
                             TakeCard(take: take, engine: model.engineLabel(for: take), isSelected: take.id == model.visibleSelectedTakeID, isKept: take.id == model.visibleExportTakeID, isOutdated: model.isOutdated(take, in: model.selectedSegment), delete: {
                                 takeToDelete = take
@@ -31,16 +36,27 @@ struct TakesStrip: View {
                             }
                             .id(take.id)
                             .disabled(model.state.isGenerating)
+                            .anchorPreference(key: TakeRows.self, value: .bounds) { [$0] }
                         }
                     }
-                    .padding(2)
+                    .padding(Self.gridInset)
                     .padding(.trailing, 10)
+                    .onGeometryChange(for: CGSize.self, of: \.size) { _ in
+                        // A new column count moves every row, so bring the selected take back.
+                        if let id = model.visibleSelectedTakeID { scroll.scrollTo(id) }
+                    }
+                    .backgroundPreferenceValue(TakeRows.self) { tiles in
+                        GeometryReader { grid in
+                            let height = TakeRows.wholeRows(tiles.map { grid[$0] }, limit: Self.wholeRowsLimit) + 2 * Self.gridInset
+                            Color.clear.onChange(of: height, initial: true) { wholeRows = height }
+                        }
+                    }
                 }
                 .scrollIndicators(.visible)
-                .frame(height: resizable ? nil : (model.visibleTakes.count == 1 ? 76 : 152))
-                .frame(minHeight: resizable ? 76 : nil, maxHeight: resizable ? .infinity : nil)
+                .frame(idealHeight: max(wholeRows, chosenHeight ?? 0), maxHeight: max(wholeRows, chosenHeight ?? 0))
+                .onGeometryChange(for: CGFloat.self, of: \.size.height) { gridHeight = $0 }
                 .onChange(of: model.visibleSelectedTakeID, initial: true) { _, id in
-                    if let id { scroll.scrollTo(id, anchor: .center) }
+                    if let id { scroll.scrollTo(id) }
                 }
             }
             HStack {
@@ -99,6 +115,7 @@ struct TakesStrip: View {
         .padding(.bottom, 16)
         .background(.bar)
         .overlay(alignment: .top) { Divider() }
+        .overlay(alignment: .top) { resizeHandle }
         .sheet(item: $takeToSave) { take in
             SaveTakeVoiceSheet(model: model, take: take)
         }
@@ -115,11 +132,108 @@ struct TakesStrip: View {
         }
     }
 
+    private static let gridInset: CGFloat = 2
+    /// Room for two rows of tiles that each carry a status line and a one-line
+    /// note. Taller rows show one at a time, so long notes leave the editor its space.
+    private static let wholeRowsLimit: CGFloat = 160
+
+    /// The strip's top edge, dragged to show more rows, or fewer down to the whole rows the grid starts with.
+    private var resizeHandle: some View {
+        Color.clear
+            .frame(height: 8)
+            .contentShape(Rectangle())
+            .pointerStyle(.rowResize)
+            .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                .onChanged { drag in
+                    let start = dragStart ?? gridHeight
+                    dragStart = start
+                    choose(start - drag.translation.height)
+                }
+                .onEnded { _ in
+                    dragStart = nil
+                    choose(gridHeight)
+                })
+            .accessibilityElement()
+            .accessibilityLabel("Takes height")
+            .accessibilityValue("\(Int(gridHeight)) points")
+            .accessibilityAdjustableAction { direction in
+                let step = wholeRows / 2
+                choose(gridHeight + (direction == .increment ? step : -step))
+            }
+            .help("Drag to show more or fewer takes")
+    }
+
+    /// Back at the whole rows the grid starts with, the grid follows its tiles again.
+    private func choose(_ height: CGFloat) {
+        chosenHeight = height > wholeRows ? height : nil
+    }
+
     private var isSelectedKept: Bool { model.visibleSelectedTakeID != nil && model.visibleSelectedTakeID == model.visibleExportTakeID }
 
     private func retake() {
         guard model.canRetake else { return }
         model.retake(note: note)
+    }
+}
+
+/// Tiles in as many equal columns as fit, each row as tall as its tallest
+/// tile. Every tile is laid out, in view or not, so `TakeRows` knows every
+/// row's height before the grid has scrolled to it.
+private struct TakeGrid: Layout {
+    private static let minimumWidth: CGFloat = 220
+    private static let spacing: CGFloat = 8
+
+    private struct Row {
+        var top: CGFloat
+        var height: CGFloat
+        var tiles: Range<Int>
+    }
+
+    private func arrange(_ subviews: Subviews, width: CGFloat) -> (column: CGFloat, rows: [Row]) {
+        let columns = max(1, Int((width + Self.spacing) / (Self.minimumWidth + Self.spacing)))
+        let column = (width - CGFloat(columns - 1) * Self.spacing) / CGFloat(columns)
+        var rows: [Row] = []
+        for start in stride(from: 0, to: subviews.count, by: columns) {
+            let tiles = start..<min(start + columns, subviews.count)
+            let height = tiles.map { subviews[$0].sizeThatFits(ProposedViewSize(width: column, height: nil)).height }.max() ?? 0
+            rows.append(Row(top: rows.last.map { $0.top + $0.height + Self.spacing } ?? 0, height: height, tiles: tiles))
+        }
+        return (column, rows)
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        // SwiftUI proposes an infinite width to ask how wide the grid could be.
+        let width = proposal.width.flatMap { $0.isFinite ? $0 : nil } ?? 2 * Self.minimumWidth + Self.spacing
+        let rows = arrange(subviews, width: width).rows
+        return CGSize(width: width, height: rows.last.map { $0.top + $0.height } ?? 0)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let (column, rows) = arrange(subviews, width: bounds.width)
+        for row in rows {
+            for (position, tile) in row.tiles.enumerated() {
+                subviews[tile].place(at: CGPoint(x: bounds.minX + CGFloat(position) * (column + Self.spacing), y: bounds.minY + row.top),
+                                     proposal: ProposedViewSize(width: column, height: nil))
+            }
+        }
+    }
+}
+
+/// Where the grid put its tiles, for sizing the grid by whole rows.
+struct TakeRows: PreferenceKey {
+    static let defaultValue: [Anchor<CGRect>] = []
+    static func reduce(value: inout [Anchor<CGRect>], nextValue: () -> [Anchor<CGRect>]) { value += nextValue() }
+
+    /// The height that shows any two neighbouring rows of `tiles` whole when
+    /// that is within `limit`, and otherwise any one row, up to `limit`. A
+    /// grid this tall, scrolled to rest on a row's edge, cuts no tile.
+    static func wholeRows(_ tiles: [CGRect], limit: CGFloat) -> CGFloat {
+        let rows = Dictionary(grouping: tiles) { $0.minY.rounded() }
+            .map { (top: $0.key, bottom: $0.value.map(\.maxY).max() ?? $0.key) }
+            .sorted { $0.top < $1.top }
+        let one = rows.map { $0.bottom - $0.top }.max() ?? 0
+        let two = zip(rows, rows.dropFirst()).map { $1.bottom - $0.top }.max() ?? one
+        return (two <= limit ? two : min(one, limit)).rounded(.up)
     }
 }
 

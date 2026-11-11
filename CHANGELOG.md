@@ -51,6 +51,12 @@ Ming instead of Drama 3.
   Drama 3 is set up, because only Drama 3's codec can recreate its clip.
 - The status line reads "4.2 s of audio · 1.8x real time · generated in
   2.3 s" for the selected take.
+- Fix the take grid cutting off its top row. The grid was as tall as the
+  space left under a fixed-height panel, which at the default window size
+  was less than two rows, and it scrolled to the newest take. The grid is now
+  as tall as two rows of its tiles need, whatever the tiles carry, and it
+  scrolls only as far as showing the selected take requires. Drag the grid's
+  top edge up to show more rows; the editor takes the rest of the window.
 - The HTTP API lists every installed engine in `GET /v1/models`, takes the
   engine in the speech body's `model` field or the `model` query parameter,
   and names the engine in `X-Drama-Engine` and `X-Drama-Model`. A file
