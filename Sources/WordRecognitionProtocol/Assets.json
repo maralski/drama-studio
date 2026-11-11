@@ -1,5 +1,5 @@
 {
-  "policyRevision": 8,
+  "policyRevision": 9,
   "protocolVersion": 1,
   "configurationID": "whisper-b5454-metal-greedy-v1",
   "helperName": "drama-word-recognizer",
@@ -28,5 +28,5 @@
       "englishOnly": false
     }
   ],
-  "policyDefinition": "strict-raw-units-exact-adjacent-pairs-positional-boundary-confidence-0.3-final-0.5-silent-tail-endpoint-english-number-readings-spelling-compounds-v4"
+  "policyDefinition": "strict-raw-units-exact-adjacent-pairs-positional-boundary-confidence-0.3-final-0.5-silent-tail-endpoint-english-number-readings-spelling-compounds-v4-language-rules-v1-single-recognizer-fallback"
 }
