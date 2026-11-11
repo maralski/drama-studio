@@ -323,10 +323,13 @@ installed for the script's language, with Apple's speech model too. Apple
 installs its speech models one language at a time. In a language without
 one, Whisper alone checks the words and the take carries the notice "This Mac
 has no Apple speech model for Spanish, so only Whisper checked the words."
-Drama Studio never downloads Apple's speech models. A language Whisper does not
-know, such as Cherokee, fails with "Cannot check the generated words: Drama
-Studio's speech recognizer doesn't know Cherokee, so it can't check words in
-it." (`400` from the API).
+On a Mac where Apple speech recognition isn't available at all, the notice is
+"Apple speech recognition isn't available on this Mac, so only Whisper checked
+the words." Drama Studio never downloads Apple's speech models. A language
+Whisper does not know, such as Cherokee, fails with "Cannot check the generated
+words: Drama Studio's speech recognizer doesn't know Cherokee, so it can't
+check words in it." The API returns it with `400` on every speech route,
+streams included, before any audio.
 
 The check compares words with each language's own rules. Spanish, French,
 Italian and Catalan ignore accents, which recognizers write either way for the
@@ -949,7 +952,8 @@ request body:
   body has ended and its last sentence is spoken.
 - The live route answers `200` before it speaks the first sentence, so it
   reports a failure to speak as an `error` event, such as "Ming can't speak
-  Italian" for `language=it` on Ming. An event stream then ends as a complete chunked
+  Italian" for `language=it` on Ming. A `language` the word check can't hear,
+  such as `chr`, is refused with `400` before the session starts. An event stream then ends as a complete chunked
   body. A PCM response ends without the last chunk, as `stream: true` does.
 - The session holds the engine from the request to the end of the response,
   so other requests get `429` meanwhile.

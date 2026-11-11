@@ -163,10 +163,10 @@ final class APIEngineNeutralTests: XCTestCase {
     func testALanguageTheCheckCannotHearIsABadRequestOnEveryRoute() async throws {
         guard #available(macOS 26, *) else { throw XCTSkip("checked generation requires macOS 26") }
         let cherokee = "doesn't know Cherokee"
-        for format in ["wav", "pcm", "pcm_stream"] {
-            let response = await send("POST", "/v1/audio/speech", json: ["input": "ᎣᏏᏲ", "language": "chr", "response_format": format])
-            XCTAssertEqual(response.status, .badRequest, format)
-            XCTAssertTrue(text(response).contains(cherokee), "\(format): \(text(response))")
+        for (format, stream) in [("wav", false), ("pcm", false), ("pcm", true)] {
+            let response = await send("POST", "/v1/audio/speech", json: ["input": "ᎣᏏᏲ", "language": "chr", "response_format": format, "stream": stream])
+            XCTAssertEqual(response.status, .badRequest, "\(format), stream \(stream)")
+            XCTAssertTrue(text(response).contains(cherokee), "\(format), stream \(stream): \(text(response))")
         }
         let events = await service.respond(to: HTTPRequest(method: "GET", path: "/v1/audio/speech/stream", query: ["input": "ᎣᏏᏲ", "language": "chr"]))
         XCTAssertEqual(events.status, .badRequest)
@@ -177,13 +177,27 @@ final class APIEngineNeutralTests: XCTestCase {
         XCTAssertEqual(live.status, .badRequest)
         XCTAssertTrue(text(live).contains(cherokee), text(live))
         let mixed = await send("POST", "/v1/audio/speech", json: ["input": "This is a complete English sentence. これは日本語で書かれた完全な文章です。",
-                                                                  "response_format": "pcm_stream"])
+                                                                  "stream": true])
         XCTAssertEqual(mixed.status, .badRequest)
         XCTAssertTrue(text(mixed).contains("mixes languages"), text(mixed))
 
-        let next = await send("POST", "/v1/audio/speech", json: ["input": "Keep the light lit.", "response_format": "pcm_stream"])
+        let next = await send("POST", "/v1/audio/speech", json: ["input": "Keep the light lit.", "stream": true])
         XCTAssertEqual(next.status, .ok, "a refused request never held the job slot")
         _ = try await streamed(next)
+    }
+
+    /// Apple has no speech model for Welsh, so a stream's header says,
+    /// before any audio, that Whisper alone will check the words.
+    func testAStreamNamesTheOneRecognizerCheckInItsHeader() async throws {
+        guard #available(macOS 26, *) else { throw XCTSkip("checked generation requires macOS 26") }
+        try engines.select(.drama3)
+        let stream = await send("POST", "/v1/audio/speech", json: ["input": "Bore da, sut wyt ti heddiw?", "language": "cy", "stream": true])
+        XCTAssertEqual(stream.status, .ok, text(stream))
+        let header = try notices(stream.headers["X-Drama-Notices"])
+        XCTAssertEqual(header.count, 1)
+        XCTAssertTrue(["This Mac has no Apple speech model for Welsh, so only Whisper checked the words.",
+                       "Apple speech recognition isn't available on this Mac, so only Whisper checked the words."].contains(header.first ?? ""), "\(header)")
+        _ = try await streamed(stream)
     }
 
     func testDrama3PerformsTheCueAndSendsNoNotices() async throws {

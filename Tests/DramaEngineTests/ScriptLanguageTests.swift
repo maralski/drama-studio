@@ -58,13 +58,34 @@ final class ScriptLanguageTests: XCTestCase {
 
     func testAnAppleModelChecksOnlyWhenTheRecognizerRunsAndTheLanguageIsInstalled() {
         let english = Locale(identifier: "en_US")
-        XCTAssertNil(ScriptLanguage.installedLocale(recognizerAvailable: false, locale: english, installed: [english]))
-        XCTAssertNil(ScriptLanguage.installedLocale(recognizerAvailable: true, locale: nil, installed: [english]))
-        XCTAssertNil(ScriptLanguage.installedLocale(recognizerAvailable: true, locale: Locale(identifier: "fr_FR"), installed: [english]))
+        XCTAssertEqual(ScriptLanguage.appleModel(recognizerAvailable: false, locale: english, installed: [english]), .missing(.recognizer),
+                       "an installed model is no use without the recognizer, and the notice must say so")
+        XCTAssertEqual(ScriptLanguage.appleModel(recognizerAvailable: true, locale: nil, installed: [english]), .missing(.model))
+        XCTAssertEqual(ScriptLanguage.appleModel(recognizerAvailable: true, locale: Locale(identifier: "fr_FR"), installed: [english]), .missing(.model))
         let australian = Locale(identifier: "en_AU")
-        XCTAssertEqual(ScriptLanguage.installedLocale(recognizerAvailable: true, locale: english, installed: [australian]), australian)
-        XCTAssertEqual(ScriptLanguage.installedLocale(recognizerAvailable: true, locale: english,
-                                                      installed: [australian, Locale(identifier: "en-US")])?.identifier(.bcp47), "en-US")
+        XCTAssertEqual(ScriptLanguage.appleModel(recognizerAvailable: true, locale: english, installed: [australian]), .model(australian))
+        guard case .model(let exact) = ScriptLanguage.appleModel(recognizerAvailable: true, locale: english,
+                                                                  installed: [australian, Locale(identifier: "en-US")]) else { return XCTFail("no model") }
+        XCTAssertEqual(exact.identifier(.bcp47), "en-US")
+    }
+
+    /// Streamed responses send these before the audio, so they must refuse
+    /// what the engine's own check would, and name the notice it would add.
+    func testNoticesBeforeTheRunRefuseWhatTheCheckCannotHear() async throws {
+        guard #available(macOS 26, *) else { throw XCTSkip("checked generation requires macOS 26") }
+        for (text, language, reason) in [("ᎣᏏᏲ", "chr" as String?, "doesn't know Cherokee"),
+                                         ("This is a complete English sentence. これは日本語で書かれた完全な文章です。", nil, "mixes languages")] {
+            do {
+                _ = try await LocalWordVerifier.notices(text: text, language: language, config: GenerationConfig())
+                XCTFail("\(reason): no error")
+            } catch SpeechVerificationError.language(let message) {
+                XCTAssertTrue(message.contains(reason), message)
+            }
+        }
+        var unchecked = GenerationConfig()
+        unchecked.wordVerification = .uncheckedPreview
+        let skipped = try await LocalWordVerifier.notices(text: "ᎣᏏᏲ", language: "chr", config: unchecked)
+        XCTAssertEqual(skipped, [], "an unchecked request has no word check to refuse it")
     }
 
     /// The request, not the Mac, is at fault, so this is a bad request and

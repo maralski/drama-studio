@@ -1,5 +1,6 @@
 // Copyright 2026 Peter Marelas
 // SPDX-License-Identifier: Apache-2.0
+import Speech
 import XCTest
 @testable import DramaEngine
 
@@ -16,6 +17,34 @@ final class LocalWordVerifierTests: XCTestCase {
             XCTAssertTrue(try verifier.check(samples: samples, line: line, shouldContinue: { true }), fixture)
             XCTAssertFalse(try verifier.check(samples: samples, line: wrong, shouldContinue: { true }), fixture)
         }
+    }
+
+    /// A Mac without Apple's model for the language still checks every word,
+    /// with Whisper alone, and the result says so.
+    func testWhisperAloneAcceptsTheRightWordsAndRejectsTheWrongOnes() throws {
+        guard #available(macOS 26, *) else { throw XCTSkip("Native word checking requires macOS 26.") }
+        let line = "The first door is open."
+        let independent = try IndependentWordRecognizer(language: "en", deadline: .now + .seconds(30), shouldContinue: { true })
+        let verifier = LocalWordVerifier(apple: .missing(.model), language: "en", independent: independent, plannedLines: nil)
+        XCTAssertEqual(verifier.notices, [.wordsCheckedByOneRecognizer(language: "en", missing: .model)])
+        let url = try XCTUnwrap(Bundle.module.url(forResource: "ordinal-first-door", withExtension: "wav", subdirectory: "Fixtures"))
+        let samples = try ReferenceAudio.load(url: url)
+        XCTAssertTrue(try verifier.check(samples: samples, line: line, shouldContinue: { true }))
+        XCTAssertFalse(try verifier.check(samples: samples, line: "The second door is open.", shouldContinue: { true }))
+    }
+
+    /// The Whisper-only path must not swallow English on a Mac that has
+    /// Apple's English model: both recognizers keep checking it.
+    func testEnglishWithAnInstalledAppleModelUsesBothRecognizers() async throws {
+        guard #available(macOS 26, *) else { throw XCTSkip("Native word checking requires macOS 26.") }
+        let installed = await SpeechTranscriber.installedLocales
+        guard SpeechTranscriber.isAvailable, installed.contains(where: { $0.language.languageCode == .english }) else {
+            throw XCTSkip("This Mac has no Apple English speech model installed.")
+        }
+        let verifier = try LocalWordVerifier.prepare(text: "The first door is open.", shouldContinue: { true })
+        XCTAssertEqual(verifier.notices, [], "no one-recognizer notice, so Apple's model is in the check")
+        let notices = try await LocalWordVerifier.notices(text: "The first door is open.", language: "en", config: GenerationConfig())
+        XCTAssertEqual(notices, [])
     }
 
     func testRejectsHumanConfirmedGoldenInsteadOfGarden() throws {

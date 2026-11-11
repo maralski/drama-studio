@@ -334,6 +334,10 @@ public final class APIService: Sendable {
                     + "Leave out previous_takes to start in \(voice.name), or leave out voice to keep the take's voice.")
             }
         }
+        // Decided before the job slot is claimed, so a language the word check
+        // can't hear is a 400 on a stream as on a file, and turns no one away.
+        let checkNotices = try await LocalWordVerifier.notices(text: rules.apply(to: resolved.line), language: parameters.language,
+                                                               config: parameters.config)
         guard await !engineBusyElsewhere(), let job = await jobs.claim() else { throw busy }
         let request: SpeechRequest
         let outline: SpeechOutline
@@ -362,7 +366,7 @@ public final class APIService: Sendable {
             headers["X-Drama-Take-Id"] = takeID.uuidString
             headers.merge(Self.engineHeaders(synthesizer.engineDescription)) { $1 }
             headers["X-Drama-Estimated-Seconds"] = String(format: "%.1f", estimate.remainingSeconds(at: 0) ?? 0)
-            headers["X-Drama-Notices"] = Self.header(outline.notices + (await LocalWordVerifier.notices(for: request)), on: outline.engine)
+            headers["X-Drama-Notices"] = Self.header(outline.notices + checkNotices, on: outline.engine)
             return APIResponse(status: .ok, headers: headers, body: .chunked(body), abandon: { generation.cancel() })
         case .file(let format):
             let start = ContinuousClock.now
@@ -471,6 +475,10 @@ public final class APIService: Sendable {
         let cast = try await cast(parameters.casting)
         try cast.builtIn?.check(on: synthesizer.engine)
         let rules = rules(for: parameters)
+        // Text arrives after the headers, so only a named language can be refused up front.
+        if parameters.config.wordVerification == .required, let language = parameters.language {
+            _ = try LocalWordVerifier.checkedLanguage(of: "", named: language)
+        }
         guard await !engineBusyElsewhere(), let job = await jobs.claim() else { throw Self.busy }
         let framing = StreamFraming(parameters.delivery)!
         let (stream, out) = AsyncThrowingStream<Data, Error>.makeStream()

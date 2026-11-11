@@ -246,11 +246,12 @@ library or a project works on either engine.
   that a Mac usually has no Apple speech model for, and Drama Studio never
   downloads one. So `LocalWordVerifier` checks with the bundled Whisper model
   alone when Apple's model for the script's language is missing, and adds
-  `SpeechNotice.wordsCheckedByOneRecognizer` to the result. Streaming routes
-  ask `LocalWordVerifier.notices(for:)` before the run, so the header carries
-  the same notice. A language no recognizer knows fails as
-  `SpeechVerificationError.language`, a `400`: the script, not the Mac, has
-  to change. `WordCoverage.LanguageRules` is the one table of how each
+  `SpeechNotice.wordsCheckedByOneRecognizer` to the result, naming whether
+  the Mac lacks the language's model or Apple's recognizer altogether. The
+  server asks `LocalWordVerifier.notices(text:language:config:)` before it
+  claims the job slot, so a streaming header carries the same notice and a
+  language the check can't hear fails as `SpeechVerificationError.language`,
+  a `400`, on every route: the script, not the Mac, has to change. `WordCoverage.LanguageRules` is the one table of how each
   language compares words; the English grammar of numbers, contractions,
   spellings and homophones never applies to another language.
 - Ming's cue table is data. Ming reads 14 fixed tags and one emotion per

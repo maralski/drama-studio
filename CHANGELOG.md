@@ -95,9 +95,16 @@ Ming instead of Drama 3.
   fails with `500`. The bundled Whisper model alone checks its words, and the
   take carries the notice "This Mac has no Apple speech model for Spanish, so
   only Whisper checked the words." in the app, `X-Drama-Notices`, the MCP tools
-  and `drama-say`. Drama Studio downloads no speech model. A script whose
-  language the check cannot hear (it mixes languages, its language is
-  uncertain, or Whisper does not know it) fails with `400` instead of `500`.
+  and `drama-say`. On a Mac where Apple speech recognition isn't available
+  at all, the notice says "Apple speech recognition isn't available on this
+  Mac, so only Whisper checked the words." Drama Studio downloads no speech
+  model. A script whose language the check cannot hear (it mixes languages,
+  its language is uncertain, or Whisper does not know it) fails with `400`
+  instead of `500` on every speech route. A streamed response refuses it
+  before it starts, instead of sending `200` and then an `error` event, and
+  the refused request does not hold the one generation slot. The live route
+  refuses a `language` Whisper does not know up front; a sentence whose
+  language it cannot tell still ends the session with an `error` event.
 - The word check compares other languages with their own rules. Spanish,
   French, Italian and Catalan ignore accents except "ñ", German spells out
   umlauts and "ß", and Chinese and Japanese compare character by character
@@ -126,7 +133,8 @@ Ming instead of Drama 3.
   `SpeechEngines`, `EngineCapabilities`, `CueSupport`, `EngineInstall`,
   `HuggingFaceCache`, `SpeechNotice`, `SpeechOutline`, `EngineDescription`,
   `VoiceEncodingStore`, `DramaSetup.check(ming:)`, `SpeechResult.notices`,
-  `SpeechRequest.language`, `SpeechNotice.wordsCheckedByOneRecognizer(language:)`
+  `SpeechRequest.language`, `SpeechNotice.wordsCheckedByOneRecognizer(language:missing:)`,
+  `SpeechNotice.AppleSpeech`
   and `SpeechVerificationError.language(_:)`.
   `EngineInstall` names each engine's `publisher`, `license` (an
   `EngineInstall.License` with `requiresAgreement`), `recommendedMemory`

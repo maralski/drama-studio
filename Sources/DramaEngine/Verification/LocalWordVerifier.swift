@@ -11,14 +11,12 @@ internal import WordRecognitionProtocol
 package struct LocalWordVerifier: Sendable {
     /// The language the words are compared in.
     let locale: Locale
-    /// Apple's installed speech model for the language; nil when this Mac has
-    /// none, and the independent recognizer alone checks the words.
-    private let native: Locale?
+    /// Apple's installed speech model for the language, or what this Mac
+    /// lacks, in which case the independent recognizer alone checks the words.
+    private let apple: AppleRecognizer
     private let independent: IndependentWordRecognizer
     /// What the request should know about how its words were checked.
-    package var notices: [SpeechNotice] {
-        native == nil ? [.wordsCheckedByOneRecognizer(language: locale.identifier(.bcp47))] : []
-    }
+    package var notices: [SpeechNotice] { Self.notices(apple, language: locale) }
     private let owner = UUID()
     private let plannedLines: [String]?
 
@@ -41,36 +39,57 @@ package struct LocalWordVerifier: Sendable {
         try WordCoverage.prepare()
         let spoken = DirectorsNote.spokenWords(text)
         guard !spoken.isEmpty else { throw PromptError.emptyText("spoken words") }
-        let language = try language ?? ScriptLanguage.identify(spoken, fallback: ScriptLanguage.userLanguage)
-        let recognitionLanguage = Self.recognitionLanguage(language)
-        guard WordRecognitionAssets.multilingualLanguages.contains(recognitionLanguage) else {
+        let language = try checkedLanguage(of: spoken, named: language)
+        let apple = try blocking(timeout: ContinuousClock.now.duration(to: deadline), shouldContinue: shouldContinue) {
+            await appleRecognizer(language: language)
+        }
+        let independent = try IndependentWordRecognizer(language: recognitionLanguage(language), deadline: deadline, shouldContinue: shouldContinue)
+        return Self(apple: apple, language: language, independent: independent, plannedLines: plannedLines)
+    }
+
+    init(apple: AppleRecognizer, language: String, independent: IndependentWordRecognizer, plannedLines: [String]?) {
+        if case .model(let model) = apple { locale = model } else { locale = Locale(identifier: language) }
+        self.apple = apple
+        self.independent = independent
+        self.plannedLines = plannedLines
+    }
+
+    /// The language `text` is spoken in, `language` when the request names
+    /// one. Throws ``SpeechVerificationError/language(_:)`` when no word
+    /// check can hear it: the script mixes languages, its language is
+    /// uncertain, or Whisper doesn't know it. Needs no recognizer, so a
+    /// server can refuse the request before it starts.
+    package static func checkedLanguage(of text: String, named language: String?) throws -> String {
+        let language = try language ?? ScriptLanguage.identify(text, fallback: ScriptLanguage.userLanguage)
+        guard WordRecognitionAssets.multilingualLanguages.contains(recognitionLanguage(language)) else {
             let name = Locale(identifier: "en").localizedString(forLanguageCode: language) ?? language
             throw SpeechVerificationError.language("Drama Studio's speech recognizer doesn't know \(name), so it can't check words in it")
         }
-        let native = try blocking(timeout: ContinuousClock.now.duration(to: deadline), shouldContinue: shouldContinue) {
-            await nativeLocale(language: language)
-        }
-        let independent = try IndependentWordRecognizer(language: recognitionLanguage, deadline: deadline, shouldContinue: shouldContinue)
-        return Self(locale: native ?? Locale(identifier: language), native: native, independent: independent, plannedLines: plannedLines)
+        return language
     }
 
     @available(macOS 26, *)
-    private static func nativeLocale(language: String) async -> Locale? {
+    private static func appleRecognizer(language: String) async -> AppleRecognizer {
         let installed = await SpeechTranscriber.installedLocales
         let requested = ScriptLanguage.preferredLocale(language: language, installed: installed, preferences: Locale.preferredLanguages)
             ?? Locale(identifier: language)
         let locale = await SpeechTranscriber.supportedLocale(equivalentTo: requested)
-        return ScriptLanguage.installedLocale(recognizerAvailable: SpeechTranscriber.isAvailable, locale: locale, installed: installed)
+        return ScriptLanguage.appleModel(recognizerAvailable: SpeechTranscriber.isAvailable, locale: locale, installed: installed)
     }
 
-    /// The notices `request`'s word check will add, known before it runs,
-    /// for responses that send their notices ahead of the audio.
-    package static func notices(for request: SpeechRequest) async -> [SpeechNotice] {
-        guard #available(macOS 26, *), request.config.wordVerification == .required,
-              let language = try? ScriptLanguage.language(of: request),
-              WordRecognitionAssets.multilingualLanguages.contains(recognitionLanguage(language)),
-              await nativeLocale(language: language) == nil else { return [] }
-        return [.wordsCheckedByOneRecognizer(language: Locale(identifier: language).identifier(.bcp47))]
+    private static func notices(_ apple: AppleRecognizer, language: Locale) -> [SpeechNotice] {
+        guard case .missing(let missing) = apple else { return [] }
+        return [.wordsCheckedByOneRecognizer(language: language.identifier(.bcp47), missing: missing)]
+    }
+
+    /// The notices a checked request for `text` will carry, known before it
+    /// runs, for responses that send their notices ahead of the audio.
+    /// Throws as ``checkedLanguage(of:named:)`` does, so a request the check
+    /// can't hear fails before any response starts.
+    package static func notices(text: String, language: String?, config: GenerationConfig) async throws -> [SpeechNotice] {
+        guard #available(macOS 26, *), config.wordVerification == .required, !DirectorsNote.spokenWords(text).isEmpty else { return [] }
+        let language = try checkedLanguage(of: text, named: language)
+        return notices(await appleRecognizer(language: language), language: Locale(identifier: language))
     }
 
     /// Whisper's code for a BCP 47 language.
@@ -129,7 +148,7 @@ package struct LocalWordVerifier: Sendable {
         let deadline = ContinuousClock.now + .seconds(30)
         let locale = locale
         var recognition: Recognition?
-        if let native {
+        if case .model(let native) = apple {
             do {
                 // A take whose last frame is silent has finished speaking and gets
                 // an acoustic endpoint: 0.75 s of silence after it, for the

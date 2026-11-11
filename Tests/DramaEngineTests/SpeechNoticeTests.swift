@@ -26,9 +26,14 @@ final class SpeechNoticeTests: XCTestCase {
     }
 
     func testAOneRecognizerCheckNamesTheLanguageInEnglish() {
-        XCTAssertEqual(SpeechNotice.wordsCheckedByOneRecognizer(language: "es").message(on: .ming),
+        XCTAssertEqual(SpeechNotice.wordsCheckedByOneRecognizer(language: "es", missing: .model).message(on: .ming),
                        "This Mac has no Apple speech model for Spanish, so only Whisper checked the words.")
-        XCTAssertEqual(SpeechNotice.wordsCheckedByOneRecognizer(language: "zh-Hans").message(on: .drama3),
+        XCTAssertEqual(SpeechNotice.wordsCheckedByOneRecognizer(language: "zh-Hans", missing: .model).message(on: .drama3),
                        "This Mac has no Apple speech model for Chinese, so only Whisper checked the words.")
+    }
+
+    func testWithoutApplesRecognizerTheNoticeBlamesTheRecognizerNotTheLanguage() {
+        XCTAssertEqual(SpeechNotice.wordsCheckedByOneRecognizer(language: "en", missing: .recognizer).message(on: .ming),
+                       "Apple speech recognition isn't available on this Mac, so only Whisper checked the words.")
     }
 }

@@ -84,12 +84,21 @@ package enum ScriptLanguage {
         Locale.Language(identifier: Locale.Language(identifier: language).maximalIdentifier).script?.identifier
     }
 
-    /// The installed Apple speech model for `locale`'s language, or nil when
-    /// this Mac has none: no recognizer, no model for the language, or one
-    /// it supports but has not downloaded.
-    package static func installedLocale(recognizerAvailable: Bool, locale: Locale?, installed: [Locale]) -> Locale? {
-        guard recognizerAvailable, let locale else { return nil }
-        return installed.first { $0.identifier(.bcp47) == locale.identifier(.bcp47) }
-            ?? installed.first { $0.language.languageCode == locale.language.languageCode }
+    /// The installed Apple speech model for `locale`'s language, or what this
+    /// Mac lacks: the recognizer itself, or a model for the language, which
+    /// covers one Apple has none for and one it has not downloaded.
+    package static func appleModel(recognizerAvailable: Bool, locale: Locale?, installed: [Locale]) -> AppleRecognizer {
+        guard recognizerAvailable else { return .missing(.recognizer) }
+        guard let locale, let model = installed.first(where: { $0.identifier(.bcp47) == locale.identifier(.bcp47) })
+                ?? installed.first(where: { $0.language.languageCode == locale.language.languageCode }) else {
+            return .missing(.model)
+        }
+        return .model(model)
     }
+}
+
+/// Apple's half of the word check: the model it uses, or what this Mac lacks.
+package enum AppleRecognizer: Equatable, Sendable {
+    case model(Locale)
+    case missing(SpeechNotice.AppleSpeech)
 }

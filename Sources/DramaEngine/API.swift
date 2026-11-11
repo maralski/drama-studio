@@ -645,9 +645,18 @@ public enum SpeechNotice: Sendable, Hashable, Codable {
     case otherEngineTakes(SpeechEngineID, count: Int)
     /// Expressiveness other than the default, on an engine that ignores it.
     case ignoredExpressiveness
-    /// This Mac has no Apple speech model for the language, a BCP 47 code,
-    /// so the independent recognizer alone checked the words.
-    case wordsCheckedByOneRecognizer(language: String)
+    /// Apple's speech recognizer could not check words in the language, a
+    /// BCP 47 code, for the reason `missing` names, so the independent
+    /// recognizer alone checked them.
+    case wordsCheckedByOneRecognizer(language: String, missing: AppleSpeech)
+
+    /// What this Mac lacks that would let Apple's speech recognizer check the words.
+    public enum AppleSpeech: Sendable, Hashable, Codable {
+        /// A speech model for the request's language.
+        case model
+        /// Apple speech recognition itself, whatever the language.
+        case recognizer
+    }
 
     /// One sentence for a person, naming `engine`, the engine that ran the request.
     public func message(on engine: SpeechEngineID) -> String {
@@ -667,9 +676,11 @@ public enum SpeechNotice: Sendable, Hashable, Codable {
             return "\(count) earlier \(count == 1 ? "take" : "takes") from \(other.capabilities.name) can't carry the voice into this \(name) take."
         case .ignoredExpressiveness:
             return "\(name) ignores the Expressiveness setting."
-        case .wordsCheckedByOneRecognizer(let language):
+        case .wordsCheckedByOneRecognizer(let language, .model):
             let languageName = Locale(identifier: "en").localizedString(forLanguageCode: language) ?? language
             return "This Mac has no Apple speech model for \(languageName), so only Whisper checked the words."
+        case .wordsCheckedByOneRecognizer(_, .recognizer):
+            return "Apple speech recognition isn't available on this Mac, so only Whisper checked the words."
         }
     }
 }
