@@ -162,6 +162,8 @@ final class APIEngineNeutralTests: XCTestCase {
     /// refuses it with 400 as a file does, and the next request still runs.
     func testALanguageTheCheckCannotHearIsABadRequestOnEveryRoute() async throws {
         guard #available(macOS 26, *) else { throw XCTSkip("checked generation requires macOS 26") }
+        // Ming refuses Cherokee itself, so Drama 3 shows the word check's refusal.
+        try engines.select(.drama3)
         let cherokee = "doesn't know Cherokee"
         for (format, stream) in [("wav", false), ("pcm", false), ("pcm", true)] {
             let response = await send("POST", "/v1/audio/speech", json: ["input": "ᎣᏏᏲ", "language": "chr", "response_format": format, "stream": stream])
@@ -180,6 +182,11 @@ final class APIEngineNeutralTests: XCTestCase {
                                                                   "stream": true])
         XCTAssertEqual(mixed.status, .badRequest)
         XCTAssertTrue(text(mixed).contains("mixes languages"), text(mixed))
+
+        try engines.select(.ming)
+        let ming = await send("POST", "/v1/audio/speech", json: ["input": "ᎣᏏᏲ", "language": "chr", "stream": true])
+        XCTAssertEqual(ming.status, .badRequest)
+        XCTAssertTrue(text(ming).contains("Ming can't speak Cherokee"), "the engine's own refusal comes first: \(text(ming))")
 
         let next = await send("POST", "/v1/audio/speech", json: ["input": "Keep the light lit.", "stream": true])
         XCTAssertEqual(next.status, .ok, "a refused request never held the job slot")

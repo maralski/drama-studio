@@ -345,8 +345,13 @@ public final class APIService: Sendable {
                     + "Leave out previous_takes to start in \(voice.name), or leave out voice to keep the take's voice.")
             }
         }
-        // Decided before the job slot is claimed, so a language the word check
-        // can't hear is a 400 on a stream as on a file, and turns no one away.
+        // What the engine refuses, then a language the word check can't hear,
+        // is decided before the job slot is claimed: a 400 on a stream as on a
+        // file, which turns no one away. Clips are encoded only once the slot
+        // is held, so the outline is built again then.
+        _ = try SpeechOutline(Self.speechRequest(speaking: resolved.line, rules: rules, parameters: parameters, references: cast.references,
+                                                 builtInVoice: cast.builtIn, character: resolved.character, previousTakes: resolved.previous),
+                              engine: synthesizer.engine)
         let checkNotices = try await LocalWordVerifier.notices(text: rules.apply(to: resolved.line), language: parameters.language,
                                                                config: parameters.config)
         guard await !engineBusyElsewhere(), let job = await jobs.claim() else { throw busy }
