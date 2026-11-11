@@ -13,15 +13,19 @@ final class TakeGridWindow {
     let host: NSHostingView<AnyView>
     let window: NSWindow
 
-    /// `shown` puts the window on screen behind every other window, without
-    /// focus, which SwiftUI needs before it follows a mouse drag.
+    /// `shown` orders the window in, behind every other window and without
+    /// focus, which SwiftUI needs before it follows a mouse drag. It sits past
+    /// the edge of every display, so nothing shows.
     init(_ view: some View, size: CGSize, shown: Bool = false) {
         _ = NSApplication.shared
         host = NSHostingView(rootView: AnyView(view))
         window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.borderless], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         window.contentView = host
-        if shown { window.orderBack(nil) }
+        if shown {
+            window.setFrameOrigin(CGPoint(x: -30000, y: -30000))
+            window.orderBack(nil)
+        }
     }
 
     private static var shot = 0
