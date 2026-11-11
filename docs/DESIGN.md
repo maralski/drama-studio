@@ -242,6 +242,17 @@ library or a project works on either engine.
   them in headers before the first audio. `SpeechNotice.message(on:)` writes
   the one sentence that the app, the API, the MCP tools and `drama-say` all
   show, and it names the engine that ran the request.
+- The word check runs with what this Mac has. Every engine speaks languages
+  that a Mac usually has no Apple speech model for, and Drama Studio never
+  downloads one. So `LocalWordVerifier` checks with the bundled Whisper model
+  alone when Apple's model for the script's language is missing, and adds
+  `SpeechNotice.wordsCheckedByOneRecognizer` to the result. Streaming routes
+  ask `LocalWordVerifier.notices(for:)` before the run, so the header carries
+  the same notice. A language no recognizer knows fails as
+  `SpeechVerificationError.language`, a `400`: the script, not the Mac, has
+  to change. `WordCoverage.LanguageRules` is the one table of how each
+  language compares words; the English grammar of numbers, contractions,
+  spellings and homophones never applies to another language.
 - Ming's cue table is data. Ming reads 14 fixed tags and one emotion per
   request, so `MingCues.table` maps typed cues to tags or emotions, matches a
   longer cue by its leading words, and reports the rest.

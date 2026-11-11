@@ -93,9 +93,10 @@ notice, such as "Ming can't perform [shouting], so it was left out."
 Both engines need:
 
 - An Apple silicon Mac. Intel Macs are not supported.
-- macOS 26 or later and an installed on-device speech model for the script
-  language. Drama Studio checks every generated sentence with on-device speech
-  recognition.
+- macOS 26 or later. Drama Studio checks every generated sentence with
+  on-device speech recognition: the bundled Whisper model, and Apple's speech
+  model for the script's language when this Mac has it installed. Without
+  Apple's model, Whisper alone checks the words and the take carries a notice.
 
 Ming needs about 3 GB of free disk. A Ming-only install downloads only the
 3.0 GB checkpoint. It has no codec download and no tuning step.
@@ -314,7 +315,24 @@ On Ming:
   Drama 3 in Settings, or add the voice again from a recording."
 
 Drama 3 has no language list of its own. On either engine, the word check
-needs an installed Apple speech model for the script's language.
+hears each sentence with the bundled Whisper model and, when this Mac has one
+installed for the script's language, with Apple's speech model too. Apple
+installs its speech models one language at a time. In a language without
+one, Whisper alone checks the words and the take carries the notice "This Mac
+has no Apple speech model for Spanish, so only Whisper checked the words."
+Drama Studio never downloads Apple's speech models. A language Whisper does not
+know, such as Cherokee, fails with "Cannot check the generated words: Drama
+Studio's speech recognizer doesn't know Cherokee, so it can't check words in
+it." (`400` from the API).
+
+The check compares words with each language's own rules. Spanish, French,
+Italian and Catalan ignore accents, which recognizers write either way for the
+same sound ("si" and "sí"), but "ñ" still differs from "n". German spells
+out umlauts, so "schön" matches "schoen" and never "schon", and "ß" matches
+"ss". Chinese and Japanese compare character by character, whatever the word
+breaks, with traditional and simplified Chinese as one, and katakana and
+hiragana as one. The English rules for numbers, contractions such as
+"wanna", spellings, homophones and a shared final s apply only to English.
 
 Each request is spoken and checked in one language. An API request can name
 it in `language`, and the engine uses that language instead of detecting one.
@@ -345,6 +363,10 @@ sentence before it. The app passes no language and relies on this fallback.
   Chinese, English, Japanese, Korean, German, French or Spanish. If the line
   is short and the engine named the wrong language, send the right one in the
   API's `language` field.
+- **"This Mac has no Apple speech model for …, so only Whisper checked the
+  words."** The take was checked by one recognizer instead of two. Nothing is
+  wrong with it. Apple installs its speech models one language at a time, and
+  Drama Studio does not download them.
 - **"Cannot check the generated words: the script's language is uncertain;
   use a complete sentence".** The engine could not tell the line's language,
   and the line is not in a script your macOS language uses. Through the API,
@@ -424,10 +446,11 @@ a verified download and installation.
   cover every generated join within one request; they do not establish a global
   transcript for a long recording or certify joins between separate requests. Missing or uncertain words
   trigger a bounded retry; exhaustion fails instead of creating a completed take.
-  Checked generation requires macOS 26, an installed Apple on-device speech
-  model for the script's language, and the bundled independent recognizer.
-  Both audio-only recognizers must find every scripted word before a sentence
-  is accepted. A disagreement retries generation; an unavailable checker stops
+  Checked generation requires macOS 26 and the bundled independent recognizer.
+  When this Mac has Apple's on-device speech model for the script's language,
+  both audio-only recognizers must find every scripted word before a sentence
+  is accepted; without it, the independent recognizer alone must, and the take
+  says so in a notice. A disagreement retries generation; an unavailable checker stops
   generation. These checks reduce word errors but cannot guarantee recognition
   accuracy or acting quality.
   Voice auditions always use checked generation.
@@ -755,9 +778,13 @@ carries `X-Drama-Samples`, `X-Drama-Seconds`, `X-Drama-Generation-Seconds`,
 `X-Drama-Frames` and `X-Drama-Generated-Frames` (including rejected
 attempts). When the engine cannot perform part of the request as written,
 such as a cue Ming has no tag for, `X-Drama-Notices` holds a JSON array of
-one-sentence messages; the words are still spoken. A sentence that still fails the word check
+one-sentence messages; the words are still spoken. The same header carries
+the notice that only Whisper checked the words, in a language this Mac has no
+Apple speech model for. A sentence that still fails the word check
 after its retries, or a missing word checker, fails the request with `500`
-and a plain-text message. The engine runs one generation at a time. A
+and a plain-text message. A script whose language the check cannot hear (it
+mixes languages, its language is uncertain, or Whisper does not know it) fails
+with `400`. The engine runs one generation at a time. A
 request that arrives while another runs, through the API or in the window, gets
 `429` with `Retry-After`. A bad request gets `400` with a plain-text message
 that names the field.
@@ -908,7 +935,7 @@ repository's `dist/DramaStudio.app`. `DRAMA_API_URL` overrides
 
 | Tool | Does |
 | --- | --- |
-| `synthesize_speech` | `text`, with optional `voice` or `character` (`{name, description, scene?}`), `engine` (`drama3` or `ming`), `output_path`, `expressiveness`, and `play`. Writes a WAV, by default to `~/Library/Application Support/DramaStudio/Output/<timestamp>.wav`. Returns the path, the engine, seconds, frames (Drama 3 only), generation seconds, `take_id`, and any notices about cues or notes the engine could not perform. `play` plays it with `afplay`. |
+| `synthesize_speech` | `text`, with optional `voice` or `character` (`{name, description, scene?}`), `engine` (`drama3` or `ming`), `language` (as the API takes it), `output_path`, `expressiveness`, and `play`. Writes a WAV, by default to `~/Library/Application Support/DramaStudio/Output/<timestamp>.wav`. Returns the path, the engine, seconds, frames (Drama 3 only), generation seconds, `take_id`, and any notices about cues or notes the engine could not perform. `play` plays it with `afplay`. |
 | `retake_with_note` | `take_id` and `note`, with optional `output_path` and `play`. Generates that take's line again in the same voice with the note, on the engine that made the take. On Ming, the note must name an emotion to change the delivery. Returns what `synthesize_speech` returns, with the new `take_id`. |
 | `list_voices` | The voice library. |
 | `add_voice` | Clones `audio_path` with its `transcript` under `name`. |
@@ -964,7 +991,9 @@ It prints nothing on success, except a `drama-say:` line on standard error for
 each notice about a cue or note the engine could not perform. It speaks on
 the engine selected in the app, or for `--retake` on the engine that made the
 take. `-e` or `--engine` picks one by id, model id or name, such as
-`drama-say -e ming "Hello there."`. It exits with 64 on a bad command line, 75 when
+`drama-say -e ming "Hello there."`. `-l` or `--language` names the text's
+language as the API's `language` takes it, such as `drama-say -l es "Hola."`.
+It exits with 64 on a bad command line, 75 when
 the studio is busy with another generation, after printing the `Retry-After`
 wait, and 1 on any other error, after printing the server's message.
 
@@ -1446,7 +1475,9 @@ fallback.
 `tools/word_check_eval` measures the check on 841 recorded Drama 3 clips.
 See its README.
 
-Acceptance policy revision 7 records these matching rules. Opt-in local audits record the exact PCM identities,
+Other languages have their own, smaller set of rules, as
+[Voices, takes and languages on each engine](#voices-takes-and-languages-on-each-engine)
+describes. Acceptance policy revision 9 records these matching rules. Opt-in local audits record the exact PCM identities,
 unit indices, token and confidence-span positions used by the boundary check.
 
 

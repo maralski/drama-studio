@@ -70,7 +70,22 @@ Ming instead of Drama 3.
   `zh-Hans`, in the JSON body or the query string. The engine speaks and
   checks the text in that language and skips detection, so a wrong code fails
   the word check. A value that is not a language code gets `400`, and so does
-  a language Ming does not speak on Ming. The MCP tools do not take it.
+  a language Ming does not speak on Ming. The MCP `synthesize_speech` tool
+  takes `language`, and `drama-say` takes `-l` or `--language`.
+- A script in a language this Mac has no Apple speech model for no longer
+  fails with `500`. The bundled Whisper model alone checks its words, and the
+  take carries the notice "This Mac has no Apple speech model for Spanish, so
+  only Whisper checked the words." in the app, `X-Drama-Notices`, the MCP tools
+  and `drama-say`. Drama Studio downloads no speech model. A script whose
+  language the check cannot hear (it mixes languages, its language is
+  uncertain, or Whisper does not know it) fails with `400` instead of `500`.
+- The word check compares other languages with their own rules. Spanish,
+  French, Italian and Catalan ignore accents except "ñ", German spells out
+  umlauts and "ß", and Chinese and Japanese compare character by character
+  with traditional and simplified Chinese, and katakana and hiragana, as one.
+  The shared final s rule now applies only to English, like the other English
+  rules. The acceptance policy is revision 9, so takes checked under an
+  earlier revision show "earlier word check".
 - A line whose language the engine cannot tell is read in the macOS user's
   language, when the text is in a script that language uses. A line cannot be
   told when the recognizer is uncertain, or when the line has fewer than four
@@ -86,8 +101,9 @@ Ming instead of Drama 3.
 - New public API: `MingSynthesizer`, `MingLocation`, `MingVoiceEncoding`,
   `SpeechEngines`, `EngineCapabilities`, `CueSupport`, `EngineInstall`,
   `HuggingFaceCache`, `SpeechNotice`, `SpeechOutline`, `EngineDescription`,
-  `VoiceEncodingStore`, `DramaSetup.check(ming:)`, `SpeechResult.notices` and
-  `SpeechRequest.language`.
+  `VoiceEncodingStore`, `DramaSetup.check(ming:)`, `SpeechResult.notices`,
+  `SpeechRequest.language`, `SpeechNotice.wordsCheckedByOneRecognizer(language:)`
+  and `SpeechVerificationError.language(_:)`.
   `EngineInstall` names each engine's `publisher`, `license` (an
   `EngineInstall.License` with `requiresAgreement`), `recommendedMemory`
   and `downloadBytes`. `EngineCapabilities` has `expressiveness` and
