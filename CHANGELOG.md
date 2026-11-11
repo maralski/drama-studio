@@ -68,15 +68,22 @@ Ming instead of Drama 3.
   Drama 3 is set up, because only Drama 3's codec can recreate its clip.
 - The status line reads "4.2 s of audio · 1.8x real time · generated in
   2.3 s" for the selected take.
-- Fix the take grid cutting off its top row. The grid was as tall as the
-  space left under a fixed-height panel, which at the default window size
-  was less than two rows, and it scrolled to the newest take. The grid is now
-  as tall as two rows of its tiles need, whatever the tiles carry, and it
-  scrolls only as far as showing the selected take requires. A window resize
-  that changes the number of columns brings the selected take back into view;
-  deleting a take or editing the script leaves the grid where you scrolled it.
-  Drag the grid's top edge up to show more rows; the editor takes the rest of
-  the window.
+- Fix the take grid cutting off rows. The grid was as tall as the space left
+  under a fixed-height panel, which at the default window size was less than
+  two rows, and it scrolled to the newest take. The grid now shows whole rows
+  only. It is as tall as the rows that fit in 160 points from the row at its
+  top, which is two rows of plain tiles, or one row of tiles that carry a
+  status line and a long note, so its height can change by a few points as
+  you scroll past tiles of different heights. Scrolling with a wheel, a
+  trackpad or the scroller comes to rest on a row's top edge, one slow turn
+  of a wheel moves one row, and the last rows rest with nothing under them.
+  Selecting a take scrolls only as far as showing its row requires. A window
+  resize that changes the number of columns brings the selected take back
+  into view; deleting a take or editing the script leaves the grid on the row
+  you scrolled to. Drag the grid's top edge up to show more rows. On release
+  the height settles on the nearest whole rows, and it never takes the editor
+  below 220 points, in a shorter window too. Drag the edge back down for the
+  automatic height.
 - The HTTP API lists every installed engine in `GET /v1/models`, takes the
   engine in the speech body's `model` field or the `model` query parameter,
   and names the engine in `X-Drama-Engine` and `X-Drama-Model`. A file

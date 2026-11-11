@@ -24,6 +24,8 @@ final class TakeGridWindow {
         if shown { window.orderBack(nil) }
     }
 
+    private static var shot = 0
+
     func close() { window.close() }
 
     func settle(_ milliseconds: Int = 500) async throws {
@@ -55,6 +57,11 @@ final class TakeGridWindow {
         let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
         host.cacheDisplay(in: host.bounds, to: bitmap)
         let scale = CGFloat(bitmap.pixelsHigh) / host.bounds.height
+        if let shots = ProcessInfo.processInfo.environment["DRAMA_GRID_SHOTS"] {
+            try FileManager.default.createDirectory(atPath: shots, withIntermediateDirectories: true)
+            Self.shot += 1
+            try XCTUnwrap(bitmap.representation(using: .png, properties: [:])).write(to: URL(filePath: shots).appending(path: "grid-\(Self.shot).png"))
+        }
         let grid = try scroll.convert(scroll.bounds, to: host)
         let top = host.isFlipped ? grid.minY : host.bounds.height - grid.maxY
         func line(_ y: CGFloat) -> [NSColor] {

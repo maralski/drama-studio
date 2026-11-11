@@ -97,10 +97,7 @@ struct ContentView: View {
         if model.visibleTakes.isEmpty {
             editorAndTransport
         } else {
-            VStack(spacing: 0) {
-                editorAndTransport.frame(minHeight: 220)
-                TakesStrip(model: model).layoutPriority(1)
-            }
+            EditorOverTakes(model: model) { editorAndTransport }
         }
     }
 
@@ -112,6 +109,28 @@ struct ContentView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
+}
+
+/// An editor over the takes. The editor keeps a floor of height, and the
+/// takes are told how much the floor leaves them, so the grid shows whole
+/// rows within it.
+struct EditorOverTakes<Editor: View>: View {
+    let model: SessionModel
+    @ViewBuilder var editor: Editor
+    @State private var height: CGFloat?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            editor.frame(minHeight: EditorFloor.height)
+            TakesStrip(model: model, room: height.map { $0 - EditorFloor.height }).layoutPriority(1)
+        }
+        .onGeometryChange(for: CGFloat.self, of: \.size.height) { height = $0 }
+    }
+}
+
+enum EditorFloor {
+    /// The least height the editor and transport keep above the takes.
+    static let height: CGFloat = 220
 }
 
 struct NewVoiceRequest: Identifiable {

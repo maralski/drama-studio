@@ -22,7 +22,8 @@ final class TakeGridRestTests: XCTestCase {
     private let editor = EditorHeight()
 
     private func strip(_ model: SessionModel, width: CGFloat, height: CGFloat = 640, shown: Bool = false) async throws -> TakeGridWindow {
-        let window = TakeGridWindow(EditorOverTakesHost(model: model, editor: editor).frame(width: width, height: height), size: CGSize(width: width, height: height), shown: shown)
+        editor.window = height
+        let window = TakeGridWindow(EditorOverTakesHost(model: model, editor: editor).frame(width: width), size: CGSize(width: width, height: height), shown: shown)
         try await window.settle()
         return window
     }
@@ -53,6 +54,9 @@ final class TakeGridRestTests: XCTestCase {
             try assertWholeRows(window, "\(name), a trackpad flick")
             try await window.scroller(to: try window.offset + 23)
             try assertWholeRows(window, "\(name), 23 points by scroller")
+            let rest = try window.offset
+            try await window.scroller(to: rest + 23)
+            XCTAssertEqual(try window.offset, rest, accuracy: 0.5, "\(name): the same 23 points again come back to the same row")
 
             for _ in 0..<12 { try await window.wheel(lines: -40) }
             let end = try window.offset
@@ -102,7 +106,7 @@ final class TakeGridRestTests: XCTestCase {
     func testDraggingTheTopEdgeRestsOnWholeRows() async throws {
         let model = TakeFixture.model(in: scratch)
         try await TakeFixture.mixed(in: model)
-        for (height, name) in [(760.0, "760 tall"), (620, "620 tall")] {
+        for (height, name) in [(760.0, "760 tall"), (680, "680 tall")] {
             let window = try await strip(model, width: 520, height: height, shown: true)
             defer { window.close() }
             try await window.scroller(to: 0)
@@ -139,6 +143,90 @@ final class TakeGridRestTests: XCTestCase {
         }
     }
 
+    /// A height chosen in a tall window still shows whole rows, and leaves the
+    /// editor its floor, when the window gets shorter.
+    func testAChosenHeightFitsAShorterWindow() async throws {
+        let model = TakeFixture.model(in: scratch)
+        try await TakeFixture.mixed(in: model)
+        let window = try await strip(model, width: 520, height: 760, shown: true)
+        defer { window.close() }
+        try await window.scroller(to: 0)
+        try await window.drag(from: CGPoint(x: 260, y: 760 - editor.points - 4), rise: 600)
+        let chosen = try window.viewport
+        XCTAssertGreaterThan(chosen, 250, "four rows")
+        for height in [700.0, 640, 600, 560] {
+            editor.window = height
+            try await window.settle()
+            XCTAssertGreaterThanOrEqual(editor.points, 219.5, "\(Int(height)) tall: the editor keeps its floor")
+            try assertWholeRows(window, "\(Int(height)) tall")
+            try await window.wheel(lines: -3)
+            try assertWholeRows(window, "\(Int(height)) tall, scrolled")
+        }
+        editor.window = 760
+        try await window.settle()
+        try await window.scroller(to: 0)
+        XCTAssertEqual(try window.viewport, chosen, accuracy: 0.5, "tall again, the chosen rows come back")
+    }
+
+    /// Selecting a take and deleting takes leave the grid on whole rows.
+    func testSelectingAndDeletingTakesRestOnWholeRows() async throws {
+        let model = TakeFixture.model(in: scratch)
+        try await TakeFixture.mixed(in: model)
+        let window = try await strip(model, width: 520)
+        defer { window.close() }
+        XCTAssertEqual(try window.content - (try window.offset), try window.viewport, accuracy: 0.5, "the newest take shows at the end")
+        try assertWholeRows(window, "the newest take")
+        var last: Int?
+        for take in model.visibleTakes.reversed() + model.visibleTakes {
+            let before = try window.offset
+            model.selectTake(take.id)
+            model.stopPreview()
+            try await window.settle(200)
+            try assertWholeRows(window, "take \(take.number) selected")
+            if take.id == model.visibleTakes.first?.id { XCTAssertEqual(try window.offset, 0, accuracy: 0.5, "the first take") }
+            if let last, abs(last - take.number) == 1, min(last, take.number) % 2 == 1 {
+                XCTAssertEqual(try window.offset, before, accuracy: 0.5, "take \(take.number) shares a row with take \(last), so nothing scrolls")
+            }
+            last = take.number
+        }
+        XCTAssertEqual(try window.content - (try window.offset), try window.viewport, accuracy: 0.5, "the last take shows at the end")
+        model.selectTake(try XCTUnwrap(model.visibleTakes.dropFirst(3).first).id)
+        model.stopPreview()
+        try await window.settle()
+        try await window.scroller(to: 0)
+        try await window.wheel(lines: -3)
+        let scrolled = try window.offset
+        XCTAssertGreaterThan(scrolled, 1)
+        for take in model.visibleTakes.suffix(3) { model.deleteTake(take.id) }
+        try await window.settle()
+        try assertWholeRows(window, "three takes deleted")
+        XCTAssertEqual(try window.offset, scrolled, accuracy: 0.5, "deleting takes out of view leaves the grid where it was scrolled")
+        for take in model.visibleTakes.prefix(3) { model.deleteTake(take.id) }
+        try await window.settle()
+        try assertWholeRows(window, "three takes deleted from the start, which moves every row")
+    }
+
+    /// A hundred rows rest as a few do, and a take in the middle shows whole when selected.
+    func testHundredsOfTakesRestOnWholeRows() async throws {
+        let model = TakeFixture.model(in: scratch)
+        try await TakeFixture.plain(300, in: model)
+        let window = try await strip(model, width: 760)
+        defer { window.close() }
+        XCTAssertEqual(try window.content - (try window.offset), try window.viewport, accuracy: 0.5, "the newest take shows at the end")
+        try assertWholeRows(window, "300 takes, at the end")
+        try await window.wheel(lines: 40)
+        try assertWholeRows(window, "300 takes, 40 lines up by wheel")
+        try await window.wheel(lines: -1)
+        try assertWholeRows(window, "300 takes, one line down by wheel")
+        try await window.trackpad(points: [30, 30, 30, 30], momentum: [25, 20, 15, 10, 5])
+        try assertWholeRows(window, "300 takes, a trackpad flick")
+        model.selectTake(model.visibleTakes[150].id)
+        model.stopPreview()
+        try await window.settle()
+        XCTAssertEqual(try window.offset, 50 * 72, accuracy: 0.5, "take 151 is in the 51st of rows 72 points apart, which rests at the top")
+        try assertWholeRows(window, "300 takes, take 151 selected")
+    }
+
     /// The top edge takes the pointer over its eight points and nowhere else.
     func testOnlyTheTopEdgeResizes() async throws {
         let model = TakeFixture.model(in: scratch)
@@ -156,20 +244,21 @@ final class TakeGridRestTests: XCTestCase {
     }
 }
 
-@MainActor
+@Observable @MainActor
 private final class EditorHeight {
-    var points: CGFloat = 0
+    /// The height the host gives the editor and the strip together.
+    var window: CGFloat = 640
+    @ObservationIgnored var points: CGFloat = 0
 }
 
-/// The editor's floor above the strip, as the workspace lays them out.
+/// The workspace's own arrangement, with an empty editor that reports its height.
 private struct EditorOverTakesHost: View {
     let model: SessionModel
     let editor: EditorHeight
     var body: some View {
-        VStack(spacing: 0) {
-            Color.clear.frame(minHeight: 220)
-                .onGeometryChange(for: CGFloat.self, of: \.size.height) { editor.points = $0 }
-            TakesStrip(model: model).layoutPriority(1)
+        EditorOverTakes(model: model) {
+            Color.clear.onGeometryChange(for: CGFloat.self, of: \.size.height) { editor.points = $0 }
         }
+        .frame(height: editor.window)
     }
 }

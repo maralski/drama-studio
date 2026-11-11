@@ -8,12 +8,21 @@ struct TakesStrip: View {
     @State private var note = ""
     @State private var takeToDelete: SessionTake?
     @State private var takeToSave: SessionTake?
-    /// What whole rows of tiles need, as last laid out. One plain row until the first layout.
-    @State private var wholeRows: CGFloat = 68
-    /// The grid height the user dragged to; nil shows whole rows.
+    /// The most the strip may be tall, which leaves the editor above it its floor. Nil is no limit.
+    var room: CGFloat?
+    @State private var rows = TakeRows()
+    /// The row the grid rests on: its top edge is the top of the grid.
+    @State private var topRow = 0
+    /// The grid height the user dragged to; nil shows up to `wholeRowsLimit` of whole rows.
     @State private var chosenHeight: CGFloat?
-    @State private var gridHeight: CGFloat = 0
+    /// The grid height under the pointer while the top edge is dragged.
+    @State private var draggedHeight: CGFloat?
     @State private var dragStart: CGFloat?
+    @State private var gridHeight: CGFloat = 0
+    /// The strip's height apart from the grid.
+    @State private var chrome: CGFloat = 0
+    @State private var position = ScrollPosition()
+    @State private var scroll = TakeScroll()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -25,41 +34,41 @@ struct TakesStrip: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            ScrollViewReader { scroll in
-                ScrollView(.vertical) {
-                    TakeGrid {
-                        ForEach(model.visibleTakes) { take in
-                            TakeCard(take: take, engine: model.engineLabel(for: take), isSelected: take.id == model.visibleSelectedTakeID, isKept: take.id == model.visibleExportTakeID, isOutdated: model.isOutdated(take, in: model.selectedSegment), delete: {
-                                takeToDelete = take
-                            }) {
-                                model.selectTake(take.id)
-                            }
-                            .id(take.id)
-                            .disabled(model.state.isGenerating)
-                            .anchorPreference(key: TakeRows.self, value: .bounds) { [$0] }
-                        }
-                    }
-                    .onGeometryChange(for: Int.self, of: { TakeGrid.columns(fitting: $0.size.width) }) { _ in
-                        // A new column count moves every row, so bring the selected take back.
-                        // Any other change in size leaves the grid where the user scrolled it.
-                        if let id = model.visibleSelectedTakeID { scroll.scrollTo(id) }
-                    }
-                    .padding(Self.gridInset)
-                    .padding(.trailing, 10)
-                    .backgroundPreferenceValue(TakeRows.self) { tiles in
-                        GeometryReader { grid in
-                            let height = TakeRows.wholeRows(tiles.map { grid[$0] }, limit: Self.wholeRowsLimit) + 2 * Self.gridInset
-                            Color.clear.onChange(of: height, initial: true) { wholeRows = height }
-                        }
+            ScrollView(.vertical) {
+                TakeTiles(model: model, takeToDelete: $takeToDelete)
+                .padding(Self.gridInset)
+                .padding(.trailing, 10)
+                .backgroundPreferenceValue(TakeTilePlaces.self) { tiles in
+                    GeometryReader { grid in
+                        let placed = TakeRows(tiles: tiles.map { grid[$0] }, inset: Self.gridInset)
+                        Color.clear.onChange(of: placed, initial: true) { rows = placed }
                     }
                 }
-                .scrollIndicators(.visible)
-                .frame(idealHeight: max(wholeRows, chosenHeight ?? 0), maxHeight: max(wholeRows, chosenHeight ?? 0))
-                .onGeometryChange(for: CGFloat.self, of: \.size.height) { gridHeight = $0 }
-                .onChange(of: model.visibleSelectedTakeID, initial: true) { _, id in
-                    if let id { scroll.scrollTo(id) }
-                }
+                // Room under the last rows, so the grid can scroll them to its top edge
+                // before it shrinks to fit them.
+                .padding(.bottom, max(0, rows.lastRest(within: restBudget) + height - rows.contentHeight))
             }
+            .scrollIndicators(.visible)
+            .scrollPosition($position)
+            .scrollTargetBehavior(TakeRowRests(rows: rows, budget: restBudget))
+            .onScrollGeometryChange(for: CGFloat.self, of: \.contentOffset.y) { _, offset in
+                scroll.offset = offset
+                if !scroll.isMoving { scroll.settle(after: .milliseconds(200)) { rest(nearest: offset, animated: true) } }
+            }
+            .onScrollPhaseChange { _, phase, context in
+                scroll.isMoving = phase != .idle
+                if phase == .idle { rest(nearest: context.geometry.contentOffset.y, animated: true) }
+            }
+            .frame(idealHeight: height, maxHeight: height)
+            .onGeometryChange(for: [CGFloat].self, of: { grid in
+                [grid.size.height, (grid.bounds(of: .named(Self.strip))?.height ?? grid.size.height) - grid.size.height]
+            }) {
+                gridHeight = $0[0]
+                chrome = $0[1]
+            }
+            .onChange(of: rows) { old, new in arrange(reflowed: old.columns != new.columns) }
+            .onChange(of: model.visibleSelectedTakeID, initial: true) { arrange() }
+            .onChange(of: budget) { arrange() }
             HStack {
                 Text(model.exportSummary).font(.caption).foregroundStyle(.secondary)
                 if model.previewingTakeID != nil {
@@ -115,6 +124,7 @@ struct TakesStrip: View {
         .padding(.top, 12)
         .padding(.bottom, 16)
         .background(.bar)
+        .coordinateSpace(.named(Self.strip))
         .overlay(alignment: .top) { Divider() }
         .overlay(alignment: .top) { resizeHandle }
         .sheet(item: $takeToSave) { take in
@@ -134,9 +144,51 @@ struct TakesStrip: View {
     }
 
     private static let gridInset: CGFloat = 2
+    private static let strip = "TakesStrip"
     /// Room for two rows of tiles that each carry a status line and a one-line
     /// note. Taller rows show one at a time, so long notes leave the editor its space.
     private static let wholeRowsLimit: CGFloat = 160
+
+    /// The most the grid may be tall.
+    private var gridRoom: CGFloat { room.map { max($0 - chrome, 0).rounded(.down) } ?? .infinity }
+    private var automaticBudget: CGFloat { min(Self.wholeRowsLimit, gridRoom) }
+    /// The height the grid fills with whole rows.
+    private var budget: CGFloat { min(chosenHeight ?? Self.wholeRowsLimit, gridRoom) }
+    /// The height that decides where scrolling rests: under the pointer during a drag, otherwise the budget.
+    private var restBudget: CGFloat { draggedHeight ?? budget }
+    /// The whole rows from the resting row that the budget holds. One plain row until the first layout.
+    private var height: CGFloat { draggedHeight ?? (rows.isEmpty ? 68 : rows.height(from: topRow, within: budget)) }
+
+    /// Rests the grid on a row from which the selected take shows whole when the
+    /// selection is new or the columns changed, and otherwise on the row it was on.
+    private func arrange(reflowed: Bool = false) {
+        guard !rows.isEmpty, draggedHeight == nil else { return }
+        var top = min(topRow, rows.lastStop(within: budget))
+        let selected = model.visibleSelectedTakeID
+        if reflowed || selected != scroll.shownTake,
+           let row = model.visibleTakes.firstIndex(where: { $0.id == selected }).flatMap(rows.row(ofTile:)) {
+            top = rows.top(showing: row, from: top, within: budget)
+            scroll.shownTake = selected
+        }
+        if topRow != top { topRow = top }
+        scroll(to: rows.offset(of: top, near: scroll.offset, within: budget), animated: false)
+    }
+
+    /// Rests the grid on the row nearest `offset`, where free scrolling left it.
+    private func rest(nearest offset: CGFloat, animated: Bool) {
+        guard !rows.isEmpty, draggedHeight == nil else { return }
+        let rest = rows.rest(for: offset, from: offset, within: budget)
+        let row = rows.row(restingAt: rest)
+        if topRow != row { topRow = row }
+        scroll(to: rest, animated: animated)
+    }
+
+    private func scroll(to offset: CGFloat, animated: Bool) {
+        scroll.cancelSettle()
+        guard abs(offset - scroll.offset) > 0.5 else { return }
+        // In a task, because a scroll asked for inside the update that changes the grid's rows or height is dropped.
+        Task { withAnimation(animated ? .snappy(duration: 0.2) : nil) { position.scrollTo(y: offset) } }
+    }
 
     /// The strip's top edge, dragged to show more rows, or fewer down to the whole rows the grid starts with.
     private var resizeHandle: some View {
@@ -146,27 +198,38 @@ struct TakesStrip: View {
             .pointerStyle(.rowResize)
             .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
                 .onChanged { drag in
-                    let start = dragStart ?? gridHeight
+                    let start = dragStart ?? height
                     dragStart = start
-                    choose(start - drag.translation.height)
+                    let least = rows.height(from: topRow, within: automaticBudget)
+                    draggedHeight = min(max(start - drag.translation.height, least), max(gridRoom, least))
                 }
                 .onEnded { _ in
                     dragStart = nil
-                    choose(gridHeight)
+                    if let draggedHeight { choose(draggedHeight) }
                 })
             .accessibilityElement()
             .accessibilityLabel("Takes height")
             .accessibilityValue("\(Int(gridHeight)) points")
             .accessibilityAdjustableAction { direction in
-                let step = wholeRows / 2
-                choose(gridHeight + (direction == .increment ? step : -step))
+                let heights = rows.wholeHeights(around: topRow)
+                let next = direction == .increment ? heights.first { $0 > height + 0.5 } : heights.last { $0 < height - 0.5 }
+                if let next { choose(next) }
             }
             .help("Drag to show more or fewer takes")
     }
 
-    /// Back at the whole rows the grid starts with, the grid follows its tiles again.
-    private func choose(_ height: CGFloat) {
-        chosenHeight = height > wholeRows ? height : nil
+    /// Settles a height chosen by hand on the nearest whole rows around the
+    /// resting row. Back at the rows the grid starts with, it follows its tiles again.
+    private func choose(_ wanted: CGFloat) {
+        draggedHeight = nil
+        guard !rows.isEmpty else { return }
+        let top = rows.row(restingAt: rows.rest(for: scroll.offset, from: scroll.offset, within: wanted))
+        let automatic = rows.height(from: top, within: automaticBudget)
+        let settled = rows.wholeHeights(around: top).filter { $0 <= gridRoom + 0.5 }
+            .min { abs($0 - wanted) < abs($1 - wanted) } ?? automatic
+        chosenHeight = settled > automatic + 0.5 ? settled : nil
+        if topRow != top { topRow = top }
+        arrange()
     }
 
     private var isSelectedKept: Bool { model.visibleSelectedTakeID != nil && model.visibleSelectedTakeID == model.visibleExportTakeID }
@@ -174,6 +237,27 @@ struct TakesStrip: View {
     private func retake() {
         guard model.canRetake else { return }
         model.retake(note: note)
+    }
+}
+
+/// The takes as tiles in their grid. A view of its own, so that a change in
+/// the strip around it, such as the grid's height, lays no tile out again.
+private struct TakeTiles: View {
+    let model: SessionModel
+    @Binding var takeToDelete: SessionTake?
+
+    var body: some View {
+        TakeGrid {
+            ForEach(model.visibleTakes) { take in
+                TakeCard(take: take, engine: model.engineLabel(for: take), isSelected: take.id == model.visibleSelectedTakeID, isKept: take.id == model.visibleExportTakeID, isOutdated: model.isOutdated(take, in: model.selectedSegment), delete: {
+                    takeToDelete = take
+                }) {
+                    model.selectTake(take.id)
+                }
+                .disabled(model.state.isGenerating)
+                .anchorPreference(key: TakeTilePlaces.self, value: .bounds) { [$0] }
+            }
+        }
     }
 }
 
@@ -242,22 +326,146 @@ struct TakeGrid: Layout {
     }
 }
 
-/// Where the grid put its tiles, for sizing the grid by whole rows.
-struct TakeRows: PreferenceKey {
+/// Where the grid put its tiles.
+struct TakeTilePlaces: PreferenceKey {
     static let defaultValue: [Anchor<CGRect>] = []
     static func reduce(value: inout [Anchor<CGRect>], nextValue: () -> [Anchor<CGRect>]) { value += nextValue() }
+}
 
-    /// The height that shows any two neighbouring rows of `tiles` whole when
-    /// that is within `limit`, and otherwise any one row, up to `limit`. A
-    /// grid this tall, scrolled to rest on a row's edge, cuts no tile.
-    static func wholeRows(_ tiles: [CGRect], limit: CGFloat) -> CGFloat {
-        let rows = Dictionary(grouping: tiles) { $0.minY.rounded() }
-            .map { (top: $0.key, bottom: $0.value.map(\.maxY).max() ?? $0.key) }
-            .sorted { $0.top < $1.top }
-        let one = rows.map { $0.bottom - $0.top }.max() ?? 0
-        let two = zip(rows, rows.dropFirst()).map { $1.bottom - $0.top }.max() ?? one
-        return (two <= limit ? two : min(one, limit)).rounded(.up)
+/// The grid's rows as it placed them, in the scroll content's coordinates,
+/// each reaching to the grid's inset above and below its tiles. The grid's
+/// height, where scrolling rests and where a selected take shows all read
+/// rows from here.
+struct TakeRows: Equatable {
+    struct Row: Equatable {
+        var top: CGFloat
+        var bottom: CGFloat
+        var tiles: Range<Int>
+        var height: CGFloat { bottom - top }
     }
+
+    private(set) var rows: [Row] = []
+    /// Slack for heights that differ by rounding.
+    private static let slack: CGFloat = 0.5
+
+    init() {}
+
+    /// Rows from tile frames in the order the grid holds them.
+    init(tiles: [CGRect], inset: CGFloat) {
+        for (index, tile) in tiles.enumerated() {
+            if let last = rows.indices.last, abs(rows[last].top + inset - tile.minY) < Self.slack {
+                rows[last].bottom = max(rows[last].bottom, tile.maxY + inset)
+                rows[last].tiles = rows[last].tiles.lowerBound..<index + 1
+            } else {
+                rows.append(Row(top: tile.minY - inset, bottom: tile.maxY + inset, tiles: index..<index + 1))
+            }
+        }
+    }
+
+    var isEmpty: Bool { rows.isEmpty }
+    var columns: Int { rows.first?.tiles.count ?? 0 }
+    var contentHeight: CGFloat { rows.last?.bottom ?? 0 }
+
+    func row(ofTile index: Int) -> Int? { rows.firstIndex { $0.tiles.contains(index) } }
+
+    /// The height of the whole rows from `top` down that fit `budget`: one row
+    /// at least, and `budget` itself for a row taller than it, which scrolls.
+    func height(from top: Int, within budget: CGFloat) -> CGFloat {
+        guard rows.indices.contains(top) else { return 0 }
+        let last = rows[top...].lastIndex { $0.bottom - rows[top].top <= budget + Self.slack }
+        return last.map { rows[$0].bottom - rows[top].top } ?? min(rows[top].height, budget)
+    }
+
+    /// The first row from which every row to the end fits `budget`. The grid
+    /// rests no lower than this, so its last rows show whole with nothing under them.
+    func lastStop(within budget: CGFloat) -> Int {
+        rows.firstIndex { contentHeight - $0.top <= budget + Self.slack } ?? max(rows.count - 1, 0)
+    }
+
+    /// The scroll offsets the grid may rest at: each row's top edge down to the
+    /// last stop, and anywhere that keeps a row taller than `budget` filling the grid.
+    private func rests(within budget: CGFloat) -> [ClosedRange<CGFloat>] {
+        guard !rows.isEmpty else { return [0...0] }
+        return rows[...lastStop(within: budget)].map { $0.top...max($0.top, $0.bottom - budget) }
+    }
+
+    /// The lowest offset the grid may rest at.
+    func lastRest(within budget: CGFloat) -> CGFloat { rests(within: budget).last?.upperBound ?? 0 }
+
+    /// Where a scroll from `origin` that would stop at `target` rests instead:
+    /// the rest nearest `target`, and at least one rest on from `origin`, so
+    /// that a single slow turn of a wheel moves a row.
+    func rest(for target: CGFloat, from origin: CGFloat, within budget: CGFloat) -> CGFloat {
+        let rests = rests(within: budget)
+        func into(_ rest: ClosedRange<CGFloat>) -> CGFloat { min(max(target, rest.lowerBound), rest.upperBound) }
+        let nearest = rests.map(into).min { abs($0 - target) < abs($1 - target) } ?? 0
+        if target > origin + Self.slack, let next = rests.first(where: { $0.upperBound > origin + Self.slack }) {
+            return max(nearest, into(next))
+        }
+        if target < origin - Self.slack, let next = rests.last(where: { $0.lowerBound < origin - Self.slack }) {
+            return min(nearest, into(next))
+        }
+        return nearest
+    }
+
+    /// The row whose top edge is at or last above `offset`.
+    func row(restingAt offset: CGFloat) -> Int {
+        max((rows.firstIndex { $0.top > offset + Self.slack } ?? rows.count) - 1, 0)
+    }
+
+    /// The offset that rests the grid on `row`: its top edge, or `current` when
+    /// that already rests inside a row taller than `budget`.
+    func offset(of row: Int, near current: CGFloat, within budget: CGFloat) -> CGFloat {
+        guard rows.indices.contains(row) else { return 0 }
+        return min(max(current, rows[row].top), max(rows[row].top, rows[row].bottom - budget))
+    }
+
+    /// The row to rest on so that `row` shows whole, moving from `top` no further than that takes.
+    func top(showing row: Int, from top: Int, within budget: CGFloat) -> Int {
+        guard rows.indices.contains(row), row >= top else { return max(min(row, rows.count - 1), 0) }
+        let first = rows[top...row].firstIndex { rows[row].bottom - $0.top <= budget + Self.slack } ?? row
+        return min(first, lastStop(within: budget))
+    }
+
+    /// Every height that shows whole rows with `top` among them, shortest
+    /// first: more rows below `top`, then, past the last row, more above it.
+    func wholeHeights(around top: Int) -> [CGFloat] {
+        guard rows.indices.contains(top) else { return [] }
+        return rows[top...].map { $0.bottom - rows[top].top } + rows[..<top].reversed().map { contentHeight - $0.top }
+    }
+}
+
+/// Rests free scrolling on a row's top edge.
+struct TakeRowRests: ScrollTargetBehavior {
+    var rows: TakeRows
+    var budget: CGFloat
+
+    func updateTarget(_ target: inout ScrollTarget, context: TargetContext) {
+        target.rect.origin.y = rows.rest(for: target.rect.minY, from: context.originalTarget.rect.minY, within: budget)
+    }
+}
+
+/// Where the grid is scrolled, kept out of view state so that scrolling
+/// redraws nothing.
+@MainActor
+final class TakeScroll {
+    var offset: CGFloat = 0
+    /// The take the grid last scrolled to show.
+    var shownTake: SessionTake.ID?
+    /// A wheel, trackpad or animation is moving the grid. A dragged scroller is not reported.
+    var isMoving = false
+    private var settling: Task<Void, Never>?
+
+    /// Runs `action` once the grid has stayed still for `delay`.
+    func settle(after delay: Duration, _ action: @escaping @MainActor () -> Void) {
+        settling?.cancel()
+        settling = Task {
+            try? await Task.sleep(for: delay)
+            if !Task.isCancelled { action() }
+        }
+    }
+
+    func cancelSettle() { settling?.cancel() }
 }
 
 private struct SaveTakeVoiceSheet: View {

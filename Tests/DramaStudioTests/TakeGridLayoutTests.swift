@@ -110,10 +110,7 @@ private struct StripHost: View {
     let model: SessionModel
     let width: Width
     var body: some View {
-        VStack(spacing: 0) {
-            Color.clear.frame(minHeight: 220)
-            TakesStrip(model: model).layoutPriority(1)
-        }
-        .frame(width: width.points, height: 640)
+        EditorOverTakes(model: model) { Color.clear }
+            .frame(width: width.points, height: 640)
     }
 }

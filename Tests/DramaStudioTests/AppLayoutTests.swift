@@ -78,11 +78,8 @@ final class AppLayoutTests: XCTestCase {
         try await finish()
         // The inspector beside the workspace makes SwiftUI ask the grid how wide it could be.
         let host = NSHostingView(rootView: HStack(spacing: 0) {
-            VStack(spacing: 0) {
-                Color.clear.frame(minHeight: 220)
-                TakesStrip(model: model).layoutPriority(1)
-            }
-            .frame(minWidth: 520, maxWidth: .infinity)
+            EditorOverTakes(model: model) { Color.clear }
+                .frame(minWidth: 520, maxWidth: .infinity)
             Color.clear.frame(width: 0)
         }.frame(width: 520, height: 640))
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 520, height: 640), styleMask: [.borderless], backing: .buffered, defer: false)
@@ -121,21 +118,6 @@ final class AppLayoutTests: XCTestCase {
 
     private static func scrollView(in view: NSView) -> NSScrollView? {
         (view as? NSScrollView) ?? view.subviews.lazy.compactMap(scrollView(in:)).first
-    }
-
-    func testGridHeightShowsWholeRows() {
-        func row(_ top: CGFloat, _ heights: CGFloat...) -> [CGRect] {
-            heights.enumerated().map { CGRect(x: CGFloat($0.offset) * 228, y: top, width: 220, height: $0.element) }
-        }
-        XCTAssertEqual(TakeRows.wholeRows([], limit: 160), 0)
-        XCTAssertEqual(TakeRows.wholeRows(row(0, 64), limit: 160), 64)
-        XCTAssertEqual(TakeRows.wholeRows(row(0, 64, 73), limit: 160), 73, "A row is as tall as its tallest tile")
-        XCTAssertEqual(TakeRows.wholeRows(row(0, 64, 64) + row(72, 64), limit: 160), 136)
-        XCTAssertEqual(TakeRows.wholeRows(row(0, 64, 64) + row(72, 64, 73) + row(153, 73, 73) + row(234, 64), limit: 160), 154,
-                       "Any two neighbouring rows fit, so the last rows show whole when the grid is scrolled to its end")
-        XCTAssertEqual(TakeRows.wholeRows(row(0, 64) + row(72, 98) + row(178, 98), limit: 160), 98,
-                       "Rows too tall for two to fit show one at a time")
-        XCTAssertEqual(TakeRows.wholeRows(row(0, 240), limit: 160), 160, "A tile taller than the limit scrolls")
     }
 
     private func renderTakeBrowser(_ model: SessionModel, width: Double, name: String, in directory: URL, panelHeight: CGFloat? = nil) async throws {

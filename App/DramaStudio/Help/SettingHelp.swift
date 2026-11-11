@@ -124,7 +124,7 @@ enum SettingHelp: String, CaseIterable, Identifiable {
         case .voiceConsent:
             "Confirms that the voice is yours or that the speaker agreed to have it cloned. Drama Studio won't add a voice until you check it. The Fish Audio Community License forbids imitating an identifiable person without their consent."
         case .newTake:
-            "Click Generate or Generate All again for a fresh take of the same text, voices, and settings. Scroll the grid to browse takes or drag its top edge up to show more rows, click a card to audition it, and choose Use for Export to change the exported take. The trash button deletes a take after confirmation, replacing the export take with the newest remaining take when needed. Generating after an edit preserves earlier takes and marks them as outdated."
+            "Click Generate or Generate All again for a fresh take of the same text, voices, and settings. Scroll the grid to browse takes a row at a time or drag its top edge up to show more whole rows, click a card to audition it, and choose Use for Export to change the exported take. The trash button deletes a take after confirmation, replacing the export take with the newest remaining take when needed. Generating after an edit preserves earlier takes and marks them as outdated."
         case .directorsNote:
             "Tells the performer how to read the line again, such as softer and warmer or slower, with more pauses. Retake reads the whole script once more with the note written in, after the takes so far, so the model hears what to change. Retakes work on scripts with one speaker."
         case .keepTake:
