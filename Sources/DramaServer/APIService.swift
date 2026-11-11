@@ -211,7 +211,8 @@ public final class APIService: Sendable {
                 engines.description(of: engine).map { ModelEntry($0, selected: engine == selected) }
             }))
         case .listVoices:
-            return .json(VoiceList(voices: await voices.allVoices().map(VoiceSummary.init)))
+            let builtIn = SpeechEngineID.allCases.filter(engines.available.contains).flatMap(\.builtInVoices)
+            return .json(VoiceList(voices: await voices.allVoices().map(VoiceSummary.init), built_in: builtIn.map(BuiltInVoiceSummary.init)))
         case .addVoice(let new):
             var (voice, clip) = try await withAudioFile(new.audio, field: "the clip") { url in
                 try await engines.cloneVoice(audioURL: url, transcript: new.transcript, name: new.name)
@@ -242,8 +243,10 @@ public final class APIService: Sendable {
     /// first take (the voice) and its recent history. Without input, the
     /// request retakes the line, voice and character of the last named take.
     /// `engine` is the engine that made the last named take.
+    /// `continued` holds every cached take the request builds on.
     private func resolve(_ parameters: SpeechParameters) async throws -> (line: String, casting: VoiceCasting, character: VoiceDesign?, previous: [Take],
-                                                                           lineage: [UUID], engine: SpeechEngineID?) {
+                                                                           lineage: [UUID], engine: SpeechEngineID?, continued: [TakeCache.Entry]) {
+        var continued: [TakeCache.Entry] = []
         var previous: [Take] = []
         var lineage: [UUID] = []
         var named: TakeCache.Entry?
@@ -259,6 +262,7 @@ public final class APIService: Sendable {
                     guard let found = await takes.entry(earlier) else { continue }
                     previous.append(found.take)
                     lineage.append(earlier)
+                    continued.append(found)
                 }
                 named = entry
             }
@@ -267,7 +271,7 @@ public final class APIService: Sendable {
         let casting = inherits ? named?.casting ?? .none : parameters.casting
         let character = inherits ? named?.character : parameters.character
         guard let line = parameters.text ?? named?.line else { throw APIError.bad("input is required: the text to speak.") }
-        return (line, casting, character, previous, lineage, named?.take.context.engine)
+        return (line, casting, character, previous, lineage, named?.take.context.engine, continued)
     }
 
     private func isBusy() async -> Bool {
@@ -285,9 +289,11 @@ public final class APIService: Sendable {
     /// `line` is the client's text, which the take cache keeps; the engine
     /// speaks it rewritten by `rules`.
     private static func speechRequest(speaking line: String, rules: PronunciationDictionary, parameters: SpeechParameters,
-                                      references: [ReferenceVoice], character: VoiceDesign?, previousTakes: [Take]) -> SpeechRequest {
+                                      references: [ReferenceVoice], builtInVoice: BuiltInVoice?, character: VoiceDesign?,
+                                      previousTakes: [Take]) -> SpeechRequest {
         var request = SpeechRequest(text: rules.apply(to: line), references: references, character: character, note: parameters.note,
                                     previousTakes: previousTakes, config: parameters.config)
+        request.builtInVoice = builtInVoice
         request.language = parameters.language
         return request
     }
@@ -317,15 +323,23 @@ public final class APIService: Sendable {
         let resolved = try await resolve(parameters)
         let synthesizer = try synthesizer(for: parameters, continuing: resolved.engine)
         let rules = rules(for: parameters)
-        let fromLibrary = try await libraryReferences(for: resolved.casting)
+        let cast = try await cast(resolved.casting)
+        if let voice = cast.builtIn {
+            try voice.check(on: synthesizer.engine)
+            // On its own engine an earlier take is the voice a built-in voice continues from, so one spoken in another voice would replace it.
+            if let other = resolved.continued.first(where: { $0.take.context.engine == voice.engine && $0.casting != cast.casting }) {
+                throw APIError.bad("The take \(other.id.uuidString) was not spoken in the built-in voice \(voice.name), so it can't continue in it. "
+                    + "Leave out previous_takes to start in \(voice.name), or leave out voice to keep the take's voice.")
+            }
+        }
         guard await !engineBusyElsewhere(), let job = await jobs.claim() else { throw busy }
         let request: SpeechRequest
         let outline: SpeechOutline
         do {
-            var references = fromLibrary ?? []
-            if fromLibrary == nil { references = try await encodedClips(for: resolved.casting, on: synthesizer) }
-            request = Self.speechRequest(speaking: resolved.line, rules: rules, parameters: parameters,
-                                         references: references, character: resolved.character, previousTakes: resolved.previous)
+            var references = cast.references
+            if case .clips = cast.casting { references = try await encodedClips(for: cast.casting, on: synthesizer) }
+            request = Self.speechRequest(speaking: resolved.line, rules: rules, parameters: parameters, references: references,
+                                         builtInVoice: cast.builtIn, character: resolved.character, previousTakes: resolved.previous)
             outline = try SpeechOutline(request, engine: synthesizer.engine)
         } catch {
             await jobs.release(job)
@@ -335,7 +349,7 @@ public final class APIService: Sendable {
         await jobs.begin(job, estimate: estimate)
         let takeID = UUID()
         let remember: @Sendable (Take) async -> Void = { [takes] take in
-            await takes.insert(TakeCache.Entry(id: takeID, take: take, line: resolved.line, casting: resolved.casting, character: resolved.character,
+            await takes.insert(TakeCache.Entry(id: takeID, take: take, line: resolved.line, casting: cast.casting, character: resolved.character,
                                                lineage: resolved.lineage + [takeID]))
         }
         switch parameters.delivery {
@@ -452,7 +466,8 @@ public final class APIService: Sendable {
     /// connection. Each sentence's take is the voice and history of the next.
     private func live(_ parameters: SpeechParameters, body: AsyncThrowingStream<Data, Error>) async throws -> APIResponse {
         let synthesizer = try synthesizer(for: parameters)
-        let references = try await libraryReferences(for: parameters.casting) ?? []
+        let cast = try await cast(parameters.casting)
+        try cast.builtIn?.check(on: synthesizer.engine)
         let rules = rules(for: parameters)
         guard await !engineBusyElsewhere(), let job = await jobs.claim() else { throw Self.busy }
         let framing = StreamFraming(parameters.delivery)!
@@ -470,7 +485,8 @@ public final class APIService: Sendable {
             func say(_ sentence: String) async throws {
                 let context = spoken.count <= 3 ? spoken : [spoken[0]] + spoken.suffix(2)
                 var request = Self.speechRequest(speaking: sentence, rules: rules, parameters: parameters,
-                                                 references: references, character: parameters.character, previousTakes: context)
+                                                 references: cast.references, builtInVoice: cast.builtIn, character: parameters.character,
+                                                 previousTakes: context)
                 if parameters.language == nil, let told = try? ScriptLanguage.identify(request.text, fallback: language ?? ScriptLanguage.userLanguage) {
                     language = told
                     request.language = told
@@ -481,7 +497,7 @@ public final class APIService: Sendable {
                 notices += result.notices.filter { !notices.contains($0) }
                 seconds += Self.seconds(result.samples)
                 let id = UUID()
-                await takes.insert(TakeCache.Entry(id: id, take: result.take, line: sentence, casting: parameters.casting,
+                await takes.insert(TakeCache.Entry(id: id, take: result.take, line: sentence, casting: cast.casting,
                                                    character: parameters.character, lineage: [id]))
                 takeIDs.append(id.uuidString)
             }
@@ -528,19 +544,37 @@ public final class APIService: Sendable {
         (Double(samples.count) / Double(AudioEncoding.sampleRate) * 1000).rounded() / 1000
     }
 
-    /// Library voices resolve before the job slot is claimed, so a typo gets
-    /// a 400 without turning another request away. Nil for clips.
-    private func libraryReferences(for casting: VoiceCasting) async throws -> [ReferenceVoice]? {
+    /// A casting with its keys looked up. `casting` is what the take cache
+    /// keeps: a built-in voice under its qualified name, so a retake finds
+    /// the same voice whatever the library holds by then.
+    private struct Cast {
+        var casting: VoiceCasting
+        /// Library voices in speaker order; empty for clips, which are encoded once the job slot is held.
+        var references: [ReferenceVoice] = []
+        var builtIn: BuiltInVoice?
+    }
+
+    /// Voice keys resolve before the job slot is claimed, so a typo gets a
+    /// 400 without turning another request away.
+    private func cast(_ casting: VoiceCasting) async throws -> Cast {
         switch casting {
-        case .none:
-            return []
+        case .none, .clips:
+            return Cast(casting: casting)
         case .voice(let key):
-            return [try VoiceLookup.find(key, in: await voices.allVoices()).get()]
+            switch try VoiceLookup.resolve(key, in: await voices.allVoices()).get() {
+            case .library(let voice): return Cast(casting: casting, references: [voice])
+            case .builtIn(let voice): return Cast(casting: .voice(voice.qualifiedName), builtIn: voice)
+            }
         case .speakers(let keys):
             let library = await voices.allVoices()
-            return try keys.map { try VoiceLookup.find($0, in: library).get() }
-        case .clips:
-            return nil
+            return Cast(casting: casting, references: try keys.map { key in
+                switch try VoiceLookup.resolve(key, in: library).get() {
+                case .library(let voice): return voice
+                case .builtIn(let voice):
+                    throw APIError.bad("speaker_voices takes library voices, and \"\(key)\" is a built-in \(voice.engine.capabilities.name) voice. "
+                        + "A request speaks in one built-in voice; pass it as voice.")
+                }
+            })
         }
     }
 
@@ -652,8 +686,27 @@ struct VoiceSummary: Encodable {
     }
 }
 
+/// A built-in voice of an installed engine. A speech request's `voice`
+/// takes `name`, or `voice` when a library voice has the same name.
+struct BuiltInVoiceSummary: Encodable {
+    var name: String
+    var engine: String
+    var voice: String
+    var group: String
+    var note: String?
+
+    init(_ voice: BuiltInVoice) {
+        name = voice.name
+        engine = voice.engine.rawValue
+        self.voice = voice.qualifiedName
+        group = voice.group
+        note = voice.note
+    }
+}
+
 struct VoiceList: Encodable {
     var voices: [VoiceSummary]
+    var built_in: [BuiltInVoiceSummary]
 }
 
 struct TakeSummary: Encodable {

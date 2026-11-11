@@ -32,8 +32,8 @@ final class SayTests: XCTestCase {
             (["-f", "/tmp/line.txt"], command { $0.source = .file(URL(filePath: "/tmp/line.txt")) }),
             (["-f", "-"], command { $0.source = .standardInput }),
             (["--input-file=/tmp/line.txt"], command { $0.source = .file(URL(filePath: "/tmp/line.txt")) }),
-            (["-v", "Narrator", "Hi"], command { $0.voice = .library("Narrator"); $0.source = .text("Hi") }),
-            (["--voice=Narrator", "Hi"], command { $0.voice = .library("Narrator"); $0.source = .text("Hi") }),
+            (["-v", "Narrator", "Hi"], command { $0.voice = .named("Narrator"); $0.source = .text("Hi") }),
+            (["--voice=Narrator", "Hi"], command { $0.voice = .named("Narrator"); $0.source = .text("Hi") }),
             (["-v", "?"], command { $0.listVoices = true }),
             (["--list-voices"], command { $0.listVoices = true }),
             (["--character", "Captain: gravelly old male voice", "Hi"],
@@ -109,7 +109,7 @@ final class SayTests: XCTestCase {
         let file = URL(filePath: "/tmp/out.m4a")
         let cases: [(SayCommand, String?, JSON)] = [
             (SayCommand(), "Hi", ["input": "Hi", "stream": true, "response_format": "pcm"]),
-            (command { $0.voice = .library("Narrator"); $0.output = .file(file) }, "Hi",
+            (command { $0.voice = .named("Narrator"); $0.output = .file(file) }, "Hi",
              ["input": "Hi", "voice": "Narrator", "response_format": "m4a"]),
             (command { $0.voice = .character(name: "Captain", description: "gravelly", scene: "a storm"); $0.output = .standardOutput }, "Hi",
              ["input": "Hi", "character": ["name": "Captain", "description": "gravelly", "scene": "a storm"], "response_format": "pcm"]),

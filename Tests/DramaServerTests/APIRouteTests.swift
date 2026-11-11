@@ -290,7 +290,7 @@ final class APIRouteTests: XCTestCase {
         let spoken = await engine.requests
         XCTAssertTrue(spoken.isEmpty, "a refused request never reaches the engine")
         let voices = await refused.respond(to: HTTPRequest(method: "GET", path: "/v1/voices"))
-        XCTAssertEqual(String(decoding: voices.bodyData ?? Data(), as: UTF8.self), "{\"voices\":[]}", "no voice was cloned")
+        XCTAssertEqual(String(decoding: voices.bodyData ?? Data(), as: UTF8.self), "{\"built_in\":[],\"voices\":[]}", "no voice was cloned")
         for path in ["/v1/health", "/v1/models", "/v1/voices"] {
             let response = await refused.respond(to: HTTPRequest(method: "GET", path: path))
             XCTAssertEqual(response.status, .ok, path)
