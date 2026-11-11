@@ -46,7 +46,7 @@ struct ProjectRecovery: ViewModifier {
     func body(content: Content) -> some View {
         content
             .task {
-                checked = await RecoveryStore.shared.exists() ? FilePanels.offerRecovery(model) : true
+                checked = await RecoveryStore.shared.exists() ? FilePanels.outsideTask { FilePanels.offerRecovery(model) } : true
             }
             .task(id: RecoveryTrigger(revision: model.recoveryRevision, generating: model.state.isGenerating,
                                       checked: checked, dirty: model.hasUnsavedChanges)) {

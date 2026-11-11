@@ -4,6 +4,7 @@ import CryptoKit
 import DramaEngine
 import DramaServer
 import SwiftUI
+import Synchronization
 
 @MainActor @Observable
 final class SessionModel {
@@ -63,7 +64,13 @@ final class SessionModel {
     var notice: String?
     var exportedURL: URL?
 
-    private(set) var state: PlaybackState = .idle
+    private(set) var state: PlaybackState = .idle {
+        didSet { generating.withLock { $0 = state.isGenerating } }
+    }
+    /// `state.isGenerating` for readers off the main actor: the API server
+    /// answers `/v1/health` from it while the main thread is busy.
+    nonisolated var isGenerating: Bool { generating.withLock { $0 } }
+    @ObservationIgnored private nonisolated let generating = Mutex(false)
     private(set) var telemetry = GenerationTelemetry()
     private(set) var audio: [Float] = [] {
         didSet { audioRevision &+= 1 }

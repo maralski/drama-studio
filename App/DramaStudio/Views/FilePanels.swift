@@ -99,6 +99,18 @@ enum FilePanels {
         return true
     }
 
+    /// Runs `present` from the run loop, not inside the calling task. A task
+    /// that blocks in a modal alert never returns to the main actor, so every
+    /// other main-actor task, and each API request that needs one, would wait
+    /// for the alert to close.
+    static func outsideTask<Answer: Sendable>(_ present: @escaping @MainActor () -> Answer) async -> Answer {
+        await withCheckedContinuation { continuation in
+            RunLoop.main.perform(inModes: [.common]) {
+                MainActor.assumeIsolated { continuation.resume(returning: present()) }
+            }
+        }
+    }
+
     private static func confirmExport(_ model: SessionModel) -> Bool {
         guard let warning = model.exportWarning else { return true }
         let alert = NSAlert()

@@ -55,20 +55,25 @@ final class APIServerController {
             state = .failed("Couldn't create the API token: \(error.localizedDescription)")
             return
         }
-        let service = APIService(
-            synthesizer: session.synthesizer,
-            voices: session.library,
-            token: token,
-            version: Self.version,
-            jobs: jobs,
-            engineBusyElsewhere: { [session] in await session.state.isGenerating },
-            refusal: { [session] in await session.generationRefusal() }
-        )
+        let service = makeService()
         let server = APIServer(service: service, port: port) { state in
             DispatchQueue.main.async { MainActor.assumeIsolated { self.serverChanged(state, from: service) } }
         }
         self.server = server
         server.start()
+    }
+
+    /// The service the server runs, wired to this window's session.
+    func makeService() -> APIService {
+        APIService(
+            synthesizer: session.synthesizer,
+            voices: session.library,
+            token: token,
+            version: Self.version,
+            jobs: jobs,
+            engineBusyElsewhere: { [session] in session.isGenerating },
+            refusal: { [session] in await session.generationRefusal() }
+        )
     }
 
     func stop(then next: (@MainActor () -> Void)? = nil) {
