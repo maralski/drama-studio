@@ -4,12 +4,21 @@ import AVFoundation
 import Foundation
 import Speech
 import Synchronization
+internal import WordRecognitionProtocol
 
 /// Native recognition receives only audio and a language, never the script as
 /// hints. Keep this bridge independent of the occupied synthesizer actor.
 package struct LocalWordVerifier: Sendable {
+    /// The language the words are compared in.
     let locale: Locale
+    /// Apple's installed speech model for the language; nil when this Mac has
+    /// none, and the independent recognizer alone checks the words.
+    private let native: Locale?
     private let independent: IndependentWordRecognizer
+    /// What the request should know about how its words were checked.
+    package var notices: [SpeechNotice] {
+        native == nil ? [.wordsCheckedByOneRecognizer(language: locale.identifier(.bcp47))] : []
+    }
     private let owner = UUID()
     private let plannedLines: [String]?
 
@@ -33,18 +42,41 @@ package struct LocalWordVerifier: Sendable {
         let spoken = DirectorsNote.spokenWords(text)
         guard !spoken.isEmpty else { throw PromptError.emptyText("spoken words") }
         let language = try language ?? ScriptLanguage.identify(spoken, fallback: ScriptLanguage.userLanguage)
-        let locale = try blocking(timeout: ContinuousClock.now.duration(to: deadline), shouldContinue: shouldContinue) {
-            let installed = await SpeechTranscriber.installedLocales
-            let requested = ScriptLanguage.preferredLocale(language: language, installed: installed, preferences: Locale.preferredLanguages)
-                ?? Locale(identifier: language)
-            let locale = await SpeechTranscriber.supportedLocale(equivalentTo: requested)
-            return try ScriptLanguage.requireLocale(language: language, recognizerAvailable: SpeechTranscriber.isAvailable,
-                                                     locale: locale, installed: installed)
+        let recognitionLanguage = Self.recognitionLanguage(language)
+        guard WordRecognitionAssets.multilingualLanguages.contains(recognitionLanguage) else {
+            let name = Locale(identifier: "en").localizedString(forLanguageCode: language) ?? language
+            throw SpeechVerificationError.language("Drama Studio's speech recognizer doesn't know \(name), so it can't check words in it")
         }
-        let baseLanguage = Locale(identifier: language).language.languageCode?.identifier ?? language
-        let recognitionLanguage = baseLanguage == "nb" ? "no" : (baseLanguage == "fil" ? "tl" : baseLanguage)
+        let native = try blocking(timeout: ContinuousClock.now.duration(to: deadline), shouldContinue: shouldContinue) {
+            await nativeLocale(language: language)
+        }
         let independent = try IndependentWordRecognizer(language: recognitionLanguage, deadline: deadline, shouldContinue: shouldContinue)
-        return Self(locale: locale, independent: independent, plannedLines: plannedLines)
+        return Self(locale: native ?? Locale(identifier: language), native: native, independent: independent, plannedLines: plannedLines)
+    }
+
+    @available(macOS 26, *)
+    private static func nativeLocale(language: String) async -> Locale? {
+        let installed = await SpeechTranscriber.installedLocales
+        let requested = ScriptLanguage.preferredLocale(language: language, installed: installed, preferences: Locale.preferredLanguages)
+            ?? Locale(identifier: language)
+        let locale = await SpeechTranscriber.supportedLocale(equivalentTo: requested)
+        return ScriptLanguage.installedLocale(recognizerAvailable: SpeechTranscriber.isAvailable, locale: locale, installed: installed)
+    }
+
+    /// The notices `request`'s word check will add, known before it runs,
+    /// for responses that send their notices ahead of the audio.
+    package static func notices(for request: SpeechRequest) async -> [SpeechNotice] {
+        guard #available(macOS 26, *), request.config.wordVerification == .required,
+              let language = try? ScriptLanguage.language(of: request),
+              WordRecognitionAssets.multilingualLanguages.contains(recognitionLanguage(language)),
+              await nativeLocale(language: language) == nil else { return [] }
+        return [.wordsCheckedByOneRecognizer(language: Locale(identifier: language).identifier(.bcp47))]
+    }
+
+    /// Whisper's code for a BCP 47 language.
+    static func recognitionLanguage(_ language: String) -> String {
+        let base = Locale(identifier: language).language.languageCode?.identifier ?? language
+        return ["nb": "no", "fil": "tl", "jv": "jw"][base] ?? base
     }
 
     package func check(samples: [Float], line: String, shouldContinue: () -> Bool) throws -> Bool {
@@ -96,36 +128,38 @@ package struct LocalWordVerifier: Sendable {
         }
         let deadline = ContinuousClock.now + .seconds(30)
         let locale = locale
-        let recognition: Recognition
-        do {
-            // A take whose last frame is silent has finished speaking and gets
-            // an acoustic endpoint: 0.75 s of silence after it, for the
-            // recognizer only, never in the generated samples. A take still
-            // sounding at its end is cut mid-word and is judged as it is.
-            let frame = ModelConstants.samplesPerFrame
-            let endsSilent = samples.count >= frame && DramaSynthesizer.isSilent(samples[(samples.count - frame)...])
-            let endpoint = endsSilent ? Array(repeating: Float(0), count: ModelConstants.sampleRate * 3 / 4) : []
-            recognition = try Self.blocking(timeout: ContinuousClock.now.duration(to: deadline), shouldContinue: shouldContinue) {
-                try await Self.transcribe(samples + endpoint, locale: locale)
+        var recognition: Recognition?
+        if let native {
+            do {
+                // A take whose last frame is silent has finished speaking and gets
+                // an acoustic endpoint: 0.75 s of silence after it, for the
+                // recognizer only, never in the generated samples. A take still
+                // sounding at its end is cut mid-word and is judged as it is.
+                let frame = ModelConstants.samplesPerFrame
+                let endsSilent = samples.count >= frame && DramaSynthesizer.isSilent(samples[(samples.count - frame)...])
+                let endpoint = endsSilent ? Array(repeating: Float(0), count: ModelConstants.sampleRate * 3 / 4) : []
+                recognition = try Self.blocking(timeout: ContinuousClock.now.duration(to: deadline), shouldContinue: shouldContinue) {
+                    try await Self.transcribe(samples + endpoint, locale: native)
+                }
+            } catch {
+                independent.cancel()
+                SpeechAttemptAudit.record(samples: samples, line: line, reason: error is CancellationError ? "cancelled" : "recognition_error", locale: locale.identifier,
+                                          error: error.localizedDescription)
+                throw error
             }
-        } catch {
-            independent.cancel()
-            SpeechAttemptAudit.record(samples: samples, line: line, reason: error is CancellationError ? "cancelled" : "recognition_error", locale: locale.identifier,
-                                      error: error.localizedDescription)
-            throw error
         }
         guard shouldContinue() else { independent.cancel(); throw CancellationError() }
-        let boundarySpan = boundary.flatMap {
-            recognition.boundaryWordSpan(previousLine: $0.previousLine, currentLine: $0.currentLine, locale: locale)
+        let boundarySpan = boundary.flatMap { boundary in
+            recognition?.boundaryWordSpan(previousLine: boundary.previousLine, currentLine: boundary.currentLine, locale: locale)
         }
-        let nativeMatches = recognition.matches(line: line, locale: locale) || boundarySpan != nil
+        let nativeMatches = recognition.map { $0.matches(line: line, locale: locale) || boundarySpan != nil } ?? true
         var independentTranscript = ""
         if nativeMatches {
             do {
                 independentTranscript = try independent.transcript(pcm16: PCM16.encode(samples), deadline: deadline, shouldContinue: shouldContinue)
             } catch {
                 SpeechAttemptAudit.record(samples: samples, line: line, reason: "independent_recognition_error", locale: locale.identifier,
-                                          transcript: recognition.text, error: error.localizedDescription)
+                                          transcript: recognition?.text ?? "", error: error.localizedDescription)
                 throw error
             }
         }
@@ -136,17 +170,17 @@ package struct LocalWordVerifier: Sendable {
                     session: owner, previousIndex: $0.previous.index, currentIndex: $0.current.index,
                     previousSamples: $0.previous.samples, currentSamples: $0.current.samples,
                     expectedTokenOrdinal: WordCoverage.expectedTokens($0.previousLine, locale: locale).count,
-                    heardTokenOrdinal: boundarySpan.map { span in
-                        recognition.spans[..<span].reduce(0) { count, item in
+                    heardTokenOrdinal: boundarySpan.flatMap { span in
+                        recognition?.spans[..<span].reduce(0) { count, item in
                             count + WordCoverage.recognizedTokens(item.text, line: line, locale: locale, profile: Recognition.profile).count
                         }
                     }, nativeSpanOrdinal: boundarySpan)
             }
             SpeechAttemptAudit.record(samples: samples, line: line, reason: matches ? "verified_boundary_word_matched" : (nativeMatches ? "independent_word_check_rejected" : "word_check_rejected"), locale: locale.identifier,
-                                      transcript: recognition.text, uncertainSpans: recognition.uncertainSpans(),
+                                      transcript: recognition?.text ?? "", uncertainSpans: recognition?.uncertainSpans() ?? [],
                                       independentTranscript: independentTranscript,
                                       independentIdentity: independent.identity,
-                                      confidenceSpans: recognition.spans, boundary: witness)
+                                      confidenceSpans: recognition?.spans ?? [], boundary: witness)
         }
         guard shouldContinue() else { independent.cancel(); throw CancellationError() }
         guard ContinuousClock.now < deadline else { independent.cancel(); throw SpeechVerificationError.timedOut }

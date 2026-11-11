@@ -624,7 +624,8 @@ public struct SpeechResult: Sendable {
 }
 
 /// Something an engine changed about a request because it cannot perform it
-/// as written. The words are always kept; only the direction is lost.
+/// as written, or a weaker word check than usual. The words are always kept;
+/// only the direction is lost.
 public enum SpeechNotice: Sendable, Hashable, Codable {
     /// A cue the engine has no equivalent for. Its markup was removed: a
     /// `[bracket cue]` is left out, a `<tag>` passage's words are spoken plainly.
@@ -637,6 +638,9 @@ public enum SpeechNotice: Sendable, Hashable, Codable {
     case otherEngineTakes(SpeechEngineID, count: Int)
     /// Expressiveness other than the default, on an engine that ignores it.
     case ignoredExpressiveness
+    /// This Mac has no Apple speech model for the language, a BCP 47 code,
+    /// so the independent recognizer alone checked the words.
+    case wordsCheckedByOneRecognizer(language: String)
 
     /// One sentence for a person, naming `engine`, the engine that ran the request.
     public func message(on engine: SpeechEngineID) -> String {
@@ -656,6 +660,9 @@ public enum SpeechNotice: Sendable, Hashable, Codable {
             return "\(count) earlier \(count == 1 ? "take" : "takes") from \(other.capabilities.name) can't carry the voice into this \(name) take."
         case .ignoredExpressiveness:
             return "\(name) ignores the Expressiveness setting."
+        case .wordsCheckedByOneRecognizer(let language):
+            let languageName = Locale(identifier: "en").localizedString(forLanguageCode: language) ?? language
+            return "This Mac has no Apple speech model for \(languageName), so only Whisper checked the words."
         }
     }
 }

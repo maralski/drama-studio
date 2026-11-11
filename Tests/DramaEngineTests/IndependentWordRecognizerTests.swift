@@ -100,4 +100,16 @@ final class IndependentWordRecognizerTests: XCTestCase {
         }
         try assertExited(count: 1)
     }
+
+    /// The verifier decides from this list, without starting whisper, whether
+    /// any recognizer can check a language; whisper itself must agree with it.
+    func testTheMultilingualLanguageListIsTheOneWhisperReports() throws {
+        let (helper, model) = IndependentWordRecognizer.runtimeFiles(language: "es")
+        guard FileManager.default.isExecutableFile(atPath: helper.path), FileManager.default.fileExists(atPath: model.path) else {
+            throw XCTSkip("Stage the recognizer with tools/stage_word_recognition.py.")
+        }
+        let recognizer = try IndependentWordRecognizer(language: "es", deadline: .now + .seconds(30), shouldContinue: { true })
+        defer { recognizer.cancel() }
+        XCTAssertEqual(Set(try XCTUnwrap(recognizer.identity).languages), WordRecognitionAssets.multilingualLanguages)
+    }
 }

@@ -20,7 +20,30 @@ private struct WordCheckFailureSynthesizer: SpeechSynthesizer {
     }
 }
 
+private struct UncheckableLanguageSynthesizer: SpeechSynthesizer {
+    var isLoaded: Bool { true }
+    func load(onPhase: @escaping @Sendable (String) -> Void) async throws {}
+    var engineDescription: EngineDescription { EngineDescription(engine: .ming, modelID: "inclusionAI/Ming-3.0-tts-0.5B", snapshot: "test", isMock: true) }
+    var isTuned: Bool? { false }
+    func encodeVoice(samples: [Float], transcript: String) async throws -> VoiceEncoding { throw CancellationError() }
+    func synthesize(_ request: SpeechRequest) -> AsyncThrowingStream<SpeechEvent, Error> {
+        AsyncThrowingStream { $0.finish(throwing: SpeechVerificationError.language("this script mixes languages; generate each language separately")) }
+    }
+}
+
 final class APIGenerationFailureTests: XCTestCase {
+    /// The request's language, not the server, is at fault, so the client hears 400 and why.
+    func testALanguageTheCheckCannotHearIsABadRequest() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let service = APIService(synthesizer: UncheckableLanguageSynthesizer(), voices: VoiceDirectory(url: directory),
+                                 token: nil, version: "test", pronunciation: { PronunciationDictionary() })
+        let response = await service.respond(to: HTTPRequest(method: "POST", path: "/v1/audio/speech",
+                                                             body: Data(#"{"input":"Hello there, friend.","response_format":"pcm"}"#.utf8)))
+        XCTAssertEqual(response.status, .badRequest)
+        XCTAssertTrue(String(decoding: response.bodyData ?? Data(), as: UTF8.self).contains("mixes languages"))
+    }
+
     func testFileFailureDoesNotReturnAudioOrCacheACompletedTake() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

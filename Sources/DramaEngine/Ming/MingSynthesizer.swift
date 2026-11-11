@@ -225,7 +225,8 @@ public actor MingSynthesizer: SpeechSynthesizer {
         timings.codecSeconds += Date().timeIntervalSince(encodeStart)
         let take = Take(text: plan.turnText, context: .ming(reference: reference, sampleCount: samples.count))
         continuation.yield(.finished(SpeechResult(take: take, samples: samples, timings: timings, finishedByEOS: finishedByEOS, sentences: sentences,
-                                                wordCoverage: config.wordVerification == .required ? .recognized : .unchecked, notices: plan.notices)))
+                                                wordCoverage: config.wordVerification == .required ? .recognized : .unchecked,
+                                                notices: plan.notices + (verifier?.notices ?? []))))
     }
 
     /// The flow head's classifier-free guidance scale per attempt. Ming's
