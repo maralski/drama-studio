@@ -109,20 +109,20 @@ public enum VoiceLookup {
     }
 
     /// What a `voice` key names. A library voice wins over a built-in voice
-    /// of the same name, so a name that worked before built-in voices still
-    /// picks the same voice; `engine:name`, such as `ming:US_Emma`, always
-    /// means the built-in one.
+    /// of the same name, so every key that named a library voice before
+    /// built-in voices still names it. `engine:name`, such as `ming:US_Emma`,
+    /// means the built-in one, which a library voice called `US_Emma` cannot
+    /// stand in for.
     public static func resolve(_ key: VoiceKey, in voices: [ReferenceVoice]) -> Result<NamedVoice, APIError> {
-        if let qualified = BuiltInVoice.qualifier(of: key) {
-            if let voice = BuiltInVoice.named(key) { return .success(.builtIn(voice)) }
-            return .failure(.bad("\(qualified.engine.capabilities.name) has no built-in voice \"\(qualified.name)\". GET /v1/voices lists them."))
-        }
         switch find(key, in: voices) {
         case .success(let voice):
             return .success(.library(voice))
         case .failure(let error):
             let ambiguous = voices.contains { $0.name.caseInsensitiveCompare(key) == .orderedSame }
             if !ambiguous, let voice = BuiltInVoice.named(key) { return .success(.builtIn(voice)) }
+            if !ambiguous, let qualified = BuiltInVoice.qualifier(of: key) {
+                return .failure(.bad("\(qualified.engine.capabilities.name) has no built-in voice \"\(qualified.name)\". GET /v1/voices lists them."))
+            }
             return .failure(ambiguous ? error : .bad("No voice \"\(key)\" in the library or built into an engine. GET /v1/voices lists them."))
         }
     }

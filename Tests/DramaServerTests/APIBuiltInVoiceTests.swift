@@ -110,6 +110,12 @@ final class APIBuiltInVoiceTests: XCTestCase {
         XCTAssertEqual(builtIn.status, .ok, text(builtIn))
         XCTAssertEqual(log.requests.last?.references, [])
         XCTAssertEqual(log.requests.last?.builtInVoice, emma)
+
+        let prefixed = await send("POST", "/v1/voices", json: ["name": "Ming: Narrator", "transcript": "Hello there.", "audio_base64": Self.clip.base64EncodedString()])
+        XCTAssertEqual(prefixed.status, .created, text(prefixed))
+        let old = await speak(["voice": "Ming: Narrator"])
+        XCTAssertEqual(old.status, .ok, text(old))
+        XCTAssertEqual(log.requests.last?.references.map(\.name), ["Ming: Narrator"], "a library name that starts like an engine id still names its voice")
     }
 
     /// Catches Drama 3 speaking a Ming voice's line in a voice of its own.

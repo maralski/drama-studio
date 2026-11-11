@@ -48,7 +48,7 @@ Ming instead of Drama 3.
   in a new `built_in` array beside `voices`. `drama-say -v` and the MCP
   `synthesize_speech` tool take the same names, and `drama-say -v '?'` and
   `list_voices` list them. A library voice wins a name both have, so existing
-  clients behave as before; `ming:US_Emma` always means the built-in voice. A
+  clients behave as before; `ming:US_Emma` means the built-in voice. A
   built-in voice on another engine fails with "Drama 3 can't speak in
   UK_George, a built-in Ming voice; switch to Ming or choose another voice",
   which the API returns with `400`. DramaEngine adds `BuiltInVoice`,

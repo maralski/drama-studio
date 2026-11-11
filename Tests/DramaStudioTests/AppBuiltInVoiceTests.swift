@@ -108,6 +108,9 @@ final class AppBuiltInVoiceTests: XCTestCase {
         await generate(session)
         XCTAssertEqual(log.requests.map(\.builtInVoice), [george, george])
         XCTAssertEqual(log.requests[1].previousTakes, [try XCTUnwrap(session.takes.first?.take)])
+        XCTAssertTrue(session.canKeepVoice(for: narrator))
+        session.keepVoice(for: narrator)
+        XCTAssertEqual(session.library.voices.map(\.name), ["UK_George (saved)"])
 
         session.setVoice(.builtIn(BuiltInVoice(engine: .ming, name: "US_Emma")), for: narrator)
         await generate(session)

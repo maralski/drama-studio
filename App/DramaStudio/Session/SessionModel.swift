@@ -1192,7 +1192,8 @@ final class SessionModel {
         let choice = voice(for: speaker)
         guard let take = sessionVoices[choice] else { return }
         let design = choice.design
-        let voice = ReferenceVoice(name: design?.name ?? "Surprise voice",
+        // Not the built-in voice's own name: a library voice wins that name over the built-in one in the API.
+        let voice = ReferenceVoice(name: design?.name ?? choice.builtIn.map { "\($0.name) (saved)" } ?? "Surprise voice",
                                    transcript: DirectorsNote.spokenText(ofTurn: take.text, character: design), encodings: [take.context.voiceEncoding])
         let clip = (takes + sectionTakes.values.flatMap(\.takes)).first { $0.take == take }?.samples
         do {

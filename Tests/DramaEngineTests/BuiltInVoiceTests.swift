@@ -66,6 +66,7 @@ final class BuiltInVoiceTests: XCTestCase {
         request.builtInVoice = BuiltInVoice(engine: .ming, name: "UK_George")
         XCTAssertEqual(try MingPlan(request).voice, .builtIn("UK_George"))
         XCTAssertEqual(try MingPlan(request).voice.references, [])
+        XCTAssertTrue(String(describing: try MingPlan(request).voice.openingTask).contains("UK_George"), "the name reaches Ming's task")
 
         let earlier = try MockSynthesizer.mingReference(transcript: line, sampleCount: 44_100)
         request.previousTakes = [Take(text: line, context: .ming(reference: earlier, sampleCount: 44_100))]

@@ -366,14 +366,15 @@ These rules apply everywhere:
   The API returns that message with `400`.
 - A library voice wins its name. If you save a library voice called
   `US_Emma`, then `"voice": "US_Emma"` means your voice, as it did before.
-  `ming:US_Emma`, the engine id, a colon and the name, always means the
-  built-in voice. A name is matched exactly first, then without regard to
+  `ming:US_Emma`, the engine id, a colon and the name, means the built-in
+  voice. A name is matched exactly first, then without regard to
   case.
 - A built-in voice speaks the first sentence, and Ming clones that sentence
   for the rest of the take, as it does for a designed voice. Later takes of
   the line clone the first take. In the app, the first take that passes the
   word check becomes the session voice, and **Save Session Voice** saves it
-  to the library as a cloned voice that both engines can use.
+  to the library as a cloned voice, named like "UK_George (saved)", that both
+  engines can use.
 - A script with several speakers takes library voices only. A request speaks
   in one built-in voice.
 
@@ -777,7 +778,7 @@ The speech body takes these fields:
 | Field | Meaning |
 | --- | --- |
 | `input` | The text. Performance cues such as `[laughs]` and `<\|speaker:1\|>` tags work as in the app, and Ming rewrites or removes cues as [Cues on each engine](#cues-on-each-engine) describes. |
-| `voice` | A library voice, by id or name, or a [built-in voice](#built-in-voices) by name, such as `UK_George`. A library voice wins a name both have; `ming:UK_George` always means the built-in one. A built-in voice on an engine other than its own gets `400`. |
+| `voice` | A library voice, by id or name, or a [built-in voice](#built-in-voices) by name, such as `UK_George`. A library voice wins a name both have; `ming:UK_George` means the built-in one. A built-in voice on an engine other than its own gets `400`. |
 | `references` | Clips to clone on the fly: `[{audio_path or audio_base64, text}]`. |
 | `speaker_voices` | Library voices per speaker for a multi-speaker script: `{"0": "Narrator", "1": "<id>"}`, with no gaps from speaker 0. |
 | `response_format` | `wav` (default, 16-bit), `pcm` (raw 16-bit little-endian), or `m4a`. |
