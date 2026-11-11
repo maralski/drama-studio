@@ -63,10 +63,85 @@ final class AppLayoutTests: XCTestCase {
         XCTAssertTrue(model.saveProject(to: directory.appending(path: "Take deletion demo.dramaproj")))
     }
 
+    func testTakeGridShowsTwoWholeRowsWhateverTheTilesCarry() async throws {
+        let scratch = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: scratch) }
+        let model = SessionModel(synthesizer: MockSynthesizer(pace: .instant), library: VoiceLibrary(directory: scratch),
+                                 pronunciationURL: scratch.appending(path: "pronunciation.json"))
+        model.playsWhileGenerating = false
+        func finish() async throws {
+            for _ in 0..<500 where model.state.isGenerating { try await Task.sleep(for: .milliseconds(10)) }
+            XCTAssertFalse(model.state.isGenerating)
+        }
+        model.script = "A short line for comparing takes."
+        model.generate()
+        try await finish()
+        // The inspector beside the workspace makes SwiftUI ask the grid how wide it could be.
+        let host = NSHostingView(rootView: HStack(spacing: 0) {
+            VStack(spacing: 0) {
+                Color.clear.frame(minHeight: 220)
+                TakesStrip(model: model).layoutPriority(1)
+            }
+            .frame(minWidth: 520, maxWidth: .infinity)
+            Color.clear.frame(width: 0)
+        }.frame(width: 520, height: 640))
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 520, height: 640), styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        defer { window.close() }
+        func grid() async throws -> (viewport: CGFloat, content: CGFloat) {
+            for _ in 0..<8 {
+                host.layoutSubtreeIfNeeded()
+                try await Task.sleep(for: .milliseconds(30))
+            }
+            let scroll = try XCTUnwrap(Self.scrollView(in: host))
+            return (scroll.contentView.bounds.height, try XCTUnwrap(scroll.documentView).frame.height)
+        }
+        let oneRow = try await grid()
+        XCTAssertGreaterThanOrEqual(oneRow.viewport, oneRow.content - 0.5, "One row shows whole, with nothing to scroll")
+
+        for _ in 0..<3 {
+            model.retake(note: "Softer and warmer")
+            try await finish()
+        }
+        model.script += " Revised."
+        let twoRows = try await grid()
+        XCTAssertGreaterThan(twoRows.content, 152, "Tiles with a status line and a note are taller than plain ones")
+        XCTAssertGreaterThanOrEqual(twoRows.viewport, twoRows.content - 0.5, "Two rows show whole, with nothing to scroll")
+
+        model.script = "A short line for comparing takes."
+        for _ in 0..<2 {
+            model.retake(note: "Softer and warmer")
+            try await finish()
+        }
+        let threeRows = try await grid()
+        XCTAssertGreaterThan(threeRows.content, threeRows.viewport, "A third row scrolls")
+        XCTAssertLessThan(threeRows.viewport, twoRows.content + 0.5, "The grid stays two rows tall until it is dragged")
+    }
+
+    private static func scrollView(in view: NSView) -> NSScrollView? {
+        (view as? NSScrollView) ?? view.subviews.lazy.compactMap(scrollView(in:)).first
+    }
+
+    func testGridHeightShowsWholeRows() {
+        func row(_ top: CGFloat, _ heights: CGFloat...) -> [CGRect] {
+            heights.enumerated().map { CGRect(x: CGFloat($0.offset) * 228, y: top, width: 220, height: $0.element) }
+        }
+        XCTAssertEqual(TakeRows.wholeRows([], limit: 160), 0)
+        XCTAssertEqual(TakeRows.wholeRows(row(0, 64), limit: 160), 64)
+        XCTAssertEqual(TakeRows.wholeRows(row(0, 64, 73), limit: 160), 73, "A row is as tall as its tallest tile")
+        XCTAssertEqual(TakeRows.wholeRows(row(0, 64, 64) + row(72, 64), limit: 160), 136)
+        XCTAssertEqual(TakeRows.wholeRows(row(0, 64, 64) + row(72, 64, 73) + row(153, 73, 73) + row(234, 64), limit: 160), 154,
+                       "Any two neighbouring rows fit, so the last rows show whole when the grid is scrolled to its end")
+        XCTAssertEqual(TakeRows.wholeRows(row(0, 64) + row(72, 98) + row(178, 98), limit: 160), 98,
+                       "Rows too tall for two to fit show one at a time")
+        XCTAssertEqual(TakeRows.wholeRows(row(0, 240), limit: 160), 160, "A tile taller than the limit scrolls")
+    }
+
     private func renderTakeBrowser(_ model: SessionModel, width: Double, name: String, in directory: URL, panelHeight: CGFloat? = nil) async throws {
         let host = NSHostingView(rootView: VStack(spacing: 0) {
             TransportBar(model: model)
-            TakesStrip(model: model, resizable: panelHeight != nil).frame(height: panelHeight)
+            TakesStrip(model: model).frame(height: panelHeight)
         }.frame(width: width).background(Color(nsColor: .windowBackgroundColor)))
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: width, height: 500), styleMask: [.borderless], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false

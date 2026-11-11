@@ -476,6 +476,7 @@ a verified download and installation.
   menu (see [Which engine to use](#which-engine-to-use)).
 - **Takes**: Generate or Generate All produces a fresh take each time. A
   scrolling grid shows take durations, notes, export choices and outdated audio.
+  It is two rows tall. Drag its top edge up to show more rows.
   The status line gives the selected take's numbers, such as "4.2 s of audio ·
   1.8x real time · generated in 2.3 s". The speed is that take's audio over
   its wall time, with model loading and the word check included.
