@@ -39,12 +39,13 @@ struct TakesStrip: View {
                             .anchorPreference(key: TakeRows.self, value: .bounds) { [$0] }
                         }
                     }
-                    .padding(Self.gridInset)
-                    .padding(.trailing, 10)
-                    .onGeometryChange(for: CGSize.self, of: \.size) { _ in
+                    .onGeometryChange(for: Int.self, of: { TakeGrid.columns(fitting: $0.size.width) }) { _ in
                         // A new column count moves every row, so bring the selected take back.
+                        // Any other change in size leaves the grid where the user scrolled it.
                         if let id = model.visibleSelectedTakeID { scroll.scrollTo(id) }
                     }
+                    .padding(Self.gridInset)
+                    .padding(.trailing, 10)
                     .backgroundPreferenceValue(TakeRows.self) { tiles in
                         GeometryReader { grid in
                             let height = TakeRows.wholeRows(tiles.map { grid[$0] }, limit: Self.wholeRowsLimit) + 2 * Self.gridInset
@@ -179,18 +180,38 @@ struct TakesStrip: View {
 /// Tiles in as many equal columns as fit, each row as tall as its tallest
 /// tile. Every tile is laid out, in view or not, so `TakeRows` knows every
 /// row's height before the grid has scrolled to it.
-private struct TakeGrid: Layout {
+struct TakeGrid: Layout {
     private static let minimumWidth: CGFloat = 220
     private static let spacing: CGFloat = 8
 
-    private struct Row {
+    struct Row {
         var top: CGFloat
         var height: CGFloat
         var tiles: Range<Int>
     }
 
-    private func arrange(_ subviews: Subviews, width: CGFloat) -> (column: CGFloat, rows: [Row]) {
-        let columns = max(1, Int((width + Self.spacing) / (Self.minimumWidth + Self.spacing)))
+    struct Arrangement {
+        var column: CGFloat
+        var rows: [Row]
+    }
+
+    /// Arrangements by grid width. SwiftUI asks for the grid's size and then
+    /// places it in one pass, often at one width, and every tile would be
+    /// measured for each. A new pass starts with an empty cache, because the
+    /// tiles or their contents may have changed since the last.
+    typealias Cache = [CGFloat: Arrangement]
+
+    static func columns(fitting width: CGFloat) -> Int {
+        max(1, Int((width + spacing) / (minimumWidth + spacing)))
+    }
+
+    func makeCache(subviews: Subviews) -> Cache { [:] }
+
+    func updateCache(_ cache: inout Cache, subviews: Subviews) { cache = [:] }
+
+    private func arrange(_ subviews: Subviews, width: CGFloat, cache: inout Cache) -> Arrangement {
+        if let arranged = cache[width] { return arranged }
+        let columns = Self.columns(fitting: width)
         let column = (width - CGFloat(columns - 1) * Self.spacing) / CGFloat(columns)
         var rows: [Row] = []
         for start in stride(from: 0, to: subviews.count, by: columns) {
@@ -198,22 +219,24 @@ private struct TakeGrid: Layout {
             let height = tiles.map { subviews[$0].sizeThatFits(ProposedViewSize(width: column, height: nil)).height }.max() ?? 0
             rows.append(Row(top: rows.last.map { $0.top + $0.height + Self.spacing } ?? 0, height: height, tiles: tiles))
         }
-        return (column, rows)
+        let arranged = Arrangement(column: column, rows: rows)
+        cache[width] = arranged
+        return arranged
     }
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) -> CGSize {
         // SwiftUI proposes an infinite width to ask how wide the grid could be.
         let width = proposal.width.flatMap { $0.isFinite ? $0 : nil } ?? 2 * Self.minimumWidth + Self.spacing
-        let rows = arrange(subviews, width: width).rows
+        let rows = arrange(subviews, width: width, cache: &cache).rows
         return CGSize(width: width, height: rows.last.map { $0.top + $0.height } ?? 0)
     }
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let (column, rows) = arrange(subviews, width: bounds.width)
-        for row in rows {
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) {
+        let arranged = arrange(subviews, width: bounds.width, cache: &cache)
+        for row in arranged.rows {
             for (position, tile) in row.tiles.enumerated() {
-                subviews[tile].place(at: CGPoint(x: bounds.minX + CGFloat(position) * (column + Self.spacing), y: bounds.minY + row.top),
-                                     proposal: ProposedViewSize(width: column, height: nil))
+                subviews[tile].place(at: CGPoint(x: bounds.minX + CGFloat(position) * (arranged.column + Self.spacing), y: bounds.minY + row.top),
+                                     proposal: ProposedViewSize(width: arranged.column, height: nil))
             }
         }
     }

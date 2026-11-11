@@ -72,8 +72,11 @@ Ming instead of Drama 3.
   space left under a fixed-height panel, which at the default window size
   was less than two rows, and it scrolled to the newest take. The grid is now
   as tall as two rows of its tiles need, whatever the tiles carry, and it
-  scrolls only as far as showing the selected take requires. Drag the grid's
-  top edge up to show more rows; the editor takes the rest of the window.
+  scrolls only as far as showing the selected take requires. A window resize
+  that changes the number of columns brings the selected take back into view;
+  deleting a take or editing the script leaves the grid where you scrolled it.
+  Drag the grid's top edge up to show more rows; the editor takes the rest of
+  the window.
 - The HTTP API lists every installed engine in `GET /v1/models`, takes the
   engine in the speech body's `model` field or the `model` query parameter,
   and names the engine in `X-Drama-Engine` and `X-Drama-Model`. A file
