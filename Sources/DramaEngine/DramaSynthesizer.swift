@@ -200,6 +200,7 @@ public actor DramaSynthesizer: SpeechSynthesizer {
         let sentences = results.map { SpokenSentence(text: plan.chunks[$0.index].line, samples: $0.frames.count * ModelConstants.samplesPerFrame) }
         guard !results.isEmpty else { throw PromptError.emptyText("spoken words") }
         continuation.yield(.finished(SpeechResult(take: take, samples: allSamples, timings: timings, finishedByEOS: eos, sentences: sentences,
-                                                wordCoverage: request.config.wordVerification == .required ? .recognized : .unchecked, notices: outline.notices)))
+                                                wordCoverage: request.config.wordVerification == .required ? .recognized : .unchecked,
+                                                notices: outline.notices + (verifier?.notices ?? []))))
     }
 }

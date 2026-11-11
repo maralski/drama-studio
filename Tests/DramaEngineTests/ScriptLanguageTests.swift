@@ -56,16 +56,34 @@ final class ScriptLanguageTests: XCTestCase {
         XCTAssertEqual(try ScriptLanguage.language(of: SpeechRequest(text: "Goodbye.")), ScriptLanguage.userLanguage)
     }
 
-    func testUnsupportedRecognizerLocaleAndMissingAssetsFailBeforeGeneration() throws {
+    func testAnAppleModelChecksOnlyWhenTheRecognizerRunsAndTheLanguageIsInstalled() {
         let english = Locale(identifier: "en_US")
-        XCTAssertThrowsError(try ScriptLanguage.requireLocale(language: "en", recognizerAvailable: false, locale: english, installed: [english]))
-        XCTAssertThrowsError(try ScriptLanguage.requireLocale(language: "xx", recognizerAvailable: true, locale: nil, installed: [english]))
-        XCTAssertThrowsError(try ScriptLanguage.requireLocale(language: "fr", recognizerAvailable: true, locale: Locale(identifier: "fr_FR"), installed: [english]))
+        XCTAssertNil(ScriptLanguage.installedLocale(recognizerAvailable: false, locale: english, installed: [english]))
+        XCTAssertNil(ScriptLanguage.installedLocale(recognizerAvailable: true, locale: nil, installed: [english]))
+        XCTAssertNil(ScriptLanguage.installedLocale(recognizerAvailable: true, locale: Locale(identifier: "fr_FR"), installed: [english]))
         let australian = Locale(identifier: "en_AU")
-        XCTAssertEqual(try ScriptLanguage.requireLocale(language: "en", recognizerAvailable: true, locale: english,
-                                                        installed: [australian]), australian)
-        XCTAssertEqual(try ScriptLanguage.requireLocale(language: "en", recognizerAvailable: true, locale: english,
-                                                        installed: [australian, Locale(identifier: "en-US")]).identifier(.bcp47), "en-US")
+        XCTAssertEqual(ScriptLanguage.installedLocale(recognizerAvailable: true, locale: english, installed: [australian]), australian)
+        XCTAssertEqual(ScriptLanguage.installedLocale(recognizerAvailable: true, locale: english,
+                                                      installed: [australian, Locale(identifier: "en-US")])?.identifier(.bcp47), "en-US")
+    }
+
+    /// The request, not the Mac, is at fault, so this is a bad request and
+    /// fails before any recognizer starts.
+    func testALanguageNoRecognizerKnowsFailsAsTheRequestsLanguage() {
+        guard #available(macOS 26, *) else { return }
+        XCTAssertThrowsError(try LocalWordVerifier.prepare(lines: ["ᎣᏏᏲ. ᏙᎯᏧ?"], language: "chr", config: GenerationConfig(), shouldContinue: { true })) {
+            guard case SpeechVerificationError.language = $0 else { return XCTFail("Unexpected \($0)") }
+            XCTAssertEqual($0.localizedDescription,
+                           "Cannot check the generated words: Drama Studio's speech recognizer doesn't know Cherokee, so it can't check words in it.")
+        }
+    }
+
+    /// whisper names some languages by older codes.
+    func testTheIndependentRecognizerHearsEachLanguageByItsWhisperCode() {
+        XCTAssertEqual(LocalWordVerifier.recognitionLanguage("zh-Hans"), "zh")
+        XCTAssertEqual(LocalWordVerifier.recognitionLanguage("es-MX"), "es")
+        XCTAssertEqual(LocalWordVerifier.recognitionLanguage("nb"), "no")
+        XCTAssertEqual(LocalWordVerifier.recognitionLanguage("jv"), "jw")
     }
 
     func testActualEnglishCueScriptIsIdentifiedWithoutReadingTheCueAsSpeech() throws {

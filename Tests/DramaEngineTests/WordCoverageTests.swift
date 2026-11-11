@@ -512,6 +512,47 @@ final class WordCoverageTests: XCTestCase {
                      ("The ferry docked at dawn.", "The ferries docked at dawn.")], false)
     }
 
+    private func assertHeard(_ pairs: [(String, String)], in language: String, _ expected: Bool,
+                             file: StaticString = #filePath, line: UInt = #line) {
+        let locale = Locale(identifier: language)
+        for (script, heard) in pairs {
+            XCTAssertEqual(WordCoverage.matches(line: script, transcript: heard, locale: locale, profile: .exact), expected,
+                           "\(language): \(script) | \(heard)", file: file, line: line)
+        }
+    }
+
+    /// Recognizers write accents a speaker can't be heard to say either way;
+    /// a German umlaut is a different sound, so it never matches the plain vowel.
+    func testAccentsThatAreNotHeardMatchButUmlautsDoNot() {
+        assertHeard([("Sí, él está aquí.", "Si, el esta aqui."), ("Tengo 26 años.", "Tengo veintiseis años.")], in: "es", true)
+        assertHeard([("J’habite à Paris.", "J'habite a Paris."), ("Je m'appelle Claire.", "Je m' appelle Claire.")], in: "fr", true)
+        assertHeard([("Das ist schön.", "Das ist schoen."), ("Die Straße ist lang.", "Die Strasse ist lang.")], in: "de", true)
+        assertHeard([("Das ist schön.", "Das ist schon."), ("Er hat gezählt.", "Er hat gezahlt.")], in: "de", false)
+        assertHeard([("Sí, él está aquí.", "Sí, está aquí."), ("Tengo 26 años.", "Tengo veinte años."), ("Tengo un año.", "Tengo un ano.")], in: "es", false)
+    }
+
+    /// Chinese and Japanese have no spaces, so a recognizer's word breaks
+    /// differ from the tokenizer's; every character must still be heard in order.
+    func testChineseAndJapaneseCompareEveryCharacterWhateverTheWordBreaks() {
+        assertHeard([("今天天气很好，我们一起去公园散步吧。", "今天 天气很好 我们一起去公园散步吧"),
+                     ("今天天气很好。", "今天天氣很好。"),
+                     ("我有3个苹果。", "我有三个苹果。")], in: "zh-Hans", true)
+        assertHeard([("今天天气很好。", "今天天气不好。"), ("今天天气很好。", "今天天气好。"),
+                     ("我有3个苹果。", "我有四个苹果。")], in: "zh-Hans", false)
+        assertHeard([("今日はとても良い天気ですね。", "今日は とても 良い天気ですね"),
+                     ("コーヒーを飲みます。", "こーひーを飲みます。")], in: "ja", true)
+        assertHeard([("今日はとても良い天気ですね。", "今日は良い天気ですね。"),
+                     ("今日はとても良い天気ですね。", "今日はとても良い天気でした。")], in: "ja", false)
+    }
+
+    /// The final-s, homophone and "wanna" rules describe English speech only.
+    func testEnglishOnlyRulesDoNotApplyToOtherLanguages() {
+        assertHeard([("Las casas sucias.", "Las casa sucias.")], in: "es", false)
+        assertHeard([("Les amis sont là.", "Les ami sont là."), ("Le ferry part.", "Le fairy part.")], in: "fr", false)
+        assertHeard([("He watched its beam sweep across the dark water.", "He watched its beams sweep across the dark water."),
+                     ("The ferry docked at dawn.", "The fairy docked at dawn.")], in: "en", true)
+    }
+
     func testAnUncertainMatchingWordCannotCertifySpeech() {
         let line = "[clears throat] The garden gate is closed."
         XCTAssertFalse(WordCoverage.matches(line: line, transcript: "The garden gate is closed.", locale: english, profile: .exact, uncertainSpans: ["garden"]))

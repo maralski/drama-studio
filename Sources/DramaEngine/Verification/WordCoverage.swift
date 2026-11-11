@@ -112,8 +112,40 @@ package enum WordCoverage {
         return result
     }
 
+    /// How one language's words are compared. English has its own number,
+    /// contraction and spelling grammar; other languages get only rules that
+    /// cannot change which words were said.
+    struct LanguageRules {
+        var english = false
+        /// Marks a recognizer writes either way for the same sound: "si" and
+        /// "sí", "a" and "à". Letters whose mark is a different sound are
+        /// spelled out first: "schön" is "schoen", never "schon", and "año"
+        /// is "anyo", never "ano".
+        var foldsDiacritics = false
+        var spelledOut: [String: String] = [:]
+        /// Written without spaces, so each character is a token and the
+        /// recognizer's word breaks don't matter.
+        var characters = false
+        /// One spelling for characters that are read the same: traditional
+        /// and simplified Chinese, katakana and hiragana.
+        var transform: (StringTransform, reverse: Bool)?
+
+        init(_ locale: Locale) {
+            switch locale.language.languageCode?.identifier ?? "" {
+            case "en": english = true
+            case "de": foldsDiacritics = true; spelledOut = ["ä": "ae", "ö": "oe", "ü": "ue"]
+            case "es": foldsDiacritics = true; spelledOut = ["ñ": "ny"]
+            case "fr", "it", "ca": foldsDiacritics = true
+            case "zh", "yue": characters = true; transform = (StringTransform("Hant-Hans"), false)
+            case "ja": characters = true; transform = (.hiraganaToKatakana, true)
+            default: break
+            }
+        }
+    }
+
     package static func tokens(_ text: String, locale: Locale, profile: RecognizerProfile) -> [String] {
-        let english = locale.language.languageCode?.identifier == "en"
+        let rules = LanguageRules(locale)
+        let english = rules.english
         var original = text
         if english {
             original = replacing(titlePattern, in: original) { englishForms.titles[$0] }
@@ -140,7 +172,12 @@ package enum WordCoverage {
             text = wordHyphen.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: " ")
             return EnglishNumbers.tokens(englishPieces(text, profile: profile), forms: englishForms, profile: profile)
         }
+        text = text.replacingOccurrences(of: "'", with: " ")
         text = text.replacingOccurrences(of: "%", with: " percent_symbol ")
+        // A number sits between characters with no space, so set it apart to read it.
+        if rules.characters {
+            text = text.replacingOccurrences(of: #"[0-9]+(?:\.[0-9]+)?"#, with: " $0 ", options: .regularExpression)
+        }
         for match in digits.matches(in: text, range: NSRange(text.startIndex..., in: text)).reversed() {
             guard let range = Range(match.range, in: text) else { continue }
             let numeric = String(text[range]).replacingOccurrences(of: "−", with: "-")
@@ -154,6 +191,9 @@ package enum WordCoverage {
             text.replaceSubrange(range, with: spoken.replacingOccurrences(of: "-", with: " "))
         }
         text = text.replacingOccurrences(of: "-", with: " ")
+        for (letter, spelled) in rules.spelledOut { text = text.replacingOccurrences(of: letter, with: spelled) }
+        if rules.foldsDiacritics { text = text.folding(options: .diacriticInsensitive, locale: locale) }
+        if let (transform, reverse) = rules.transform { text = text.applyingTransform(transform, reverse: reverse) ?? text }
         let tokenizer = NLTokenizer(unit: .word)
         tokenizer.setLanguage(NLLanguage(rawValue: locale.language.languageCode?.identifier ?? "und"))
         tokenizer.string = text
@@ -163,7 +203,7 @@ package enum WordCoverage {
             if word.unicodeScalars.contains(where: CharacterSet.alphanumerics.contains) { words.append(word) }
             return true
         }
-        return words
+        return rules.characters ? words.flatMap { $0.map(String.init) } : words
     }
 
     private static func englishPieces(_ text: String, profile: RecognizerProfile) -> [(piece: EnglishNumbers.Piece, gap: EnglishNumbers.Gap)] {
@@ -215,13 +255,14 @@ package enum WordCoverage {
         let expected = expectedTokens(line, locale: locale)
         let heard = recognizedTokens(transcript, line: line, locale: locale, profile: profile)
         let reactions = hasCue(line)
+        let english = LanguageRules(locale).english
         for span in uncertainSpans {
             let words = recognizedTokens(span, line: line, locale: locale, profile: profile)
             let insertedReaction = reactions && words.allSatisfy(nonverbal)
                 && words.allSatisfy { !expected.contains($0) }
             if !words.isEmpty && !insertedReaction { return false }
         }
-        return match(expected: expected, heard: heard, reactions: reactions) != nil
+        return match(expected: expected, heard: heard, reactions: reactions, english: english) != nil
     }
 
     package static func recognizedTokens(_ transcript: String, line: String, locale: Locale, profile: RecognizerProfile) -> [String] {
@@ -259,7 +300,7 @@ package enum WordCoverage {
         guard expected.indices.contains(expectedOrdinal),
               !(reactions && nonverbal(expected[expectedOrdinal])),
               let ordinals = match(expected: expected, heard: recognizedTokens(transcript, line: line, locale: locale, profile: profile),
-                                   reactions: reactions) else { return nil }
+                                   reactions: reactions, english: LanguageRules(locale).english) else { return nil }
         return ordinals[expectedOrdinal]
     }
 
@@ -271,10 +312,10 @@ package enum WordCoverage {
     /// Returns, for each expected token, the ordinal of the heard token that
     /// matched it. Spacing may differ inside a compound: "web site" == "website",
     /// punctuation inside a run of digits: "three two one" == "3, 2, 1", and
-    /// a final s before a word that starts with s: "beams sweep" == "beam sweep".
-    /// A currency only a symbol implies may be absent from the other side, but
-    /// never replaced by a different currency.
-    private static func match(expected: [String], heard: [String], reactions: Bool) -> [Int]? {
+    /// and in English a final s before a word that starts with s: "beams
+    /// sweep" == "beam sweep". A currency only a symbol implies may be absent
+    /// from the other side, but never replaced by a different currency.
+    private static func match(expected: [String], heard: [String], reactions: Bool, english: Bool) -> [Int]? {
         func joinable(_ tokens: [String], _ index: Int) -> Bool {
             index + 1 < tokens.count && !isNumber(tokens[index]) && !isNumber(tokens[index + 1])
         }
@@ -295,7 +336,7 @@ package enum WordCoverage {
             let word = heard[ordinal]
             if next < expected.count, EnglishNumbers.same(word, expected[next]) {
                 ordinals.append(ordinal); next += 1; ordinal += 1
-            } else if next < expected.count, sharesS(word, expected[next], before: ordinal + 1 < heard.count ? heard[ordinal + 1] : nil,
+            } else if english, next < expected.count, sharesS(word, expected[next], before: ordinal + 1 < heard.count ? heard[ordinal + 1] : nil,
                                                       next + 1 < expected.count ? expected[next + 1] : nil) {
                 ordinals.append(ordinal); next += 1; ordinal += 1
             } else if next < expected.count, joinable(expected, next), word == expected[next] + expected[next + 1] {

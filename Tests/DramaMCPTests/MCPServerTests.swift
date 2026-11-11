@@ -161,6 +161,12 @@ final class MCPServerTests: XCTestCase {
         XCTAssertEqual(spoken["result"]?["structuredContent"]?["engine"], "ming")
     }
 
+    func testSynthesizePassesTheLanguageToTheAPI() async throws {
+        let api = StubAPI(["POST /v1/audio/speech": APIReply(status: 200, headers: ["X-Drama-Engine": "ming", "X-Drama-Take-Id": "T"], body: Data("RIFF".utf8))])
+        _ = try await call(server(api), "synthesize_speech", ["text": "Hola.", "language": "es", "output_path": .string(output.appending(path: "l.wav").path)])
+        XCTAssertEqual(api.calls.last?.json, ["input": "Hola.", "language": "es", "response_format": "wav"])
+    }
+
     func testAPIFailuresBecomeToolErrors() async throws {
         let api = StubAPI(["POST /v1/audio/speech": APIReply(status: 429, body: Data("Drama Studio is already generating.\n".utf8))])
         let busy = try await call(server(api), "synthesize_speech", ["text": "Hi."])

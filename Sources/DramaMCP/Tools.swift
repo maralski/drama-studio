@@ -81,6 +81,7 @@ extension MCPTool {
                     "additionalProperties": false,
                 ],
                 "engine": ["type": "string", "enum": ["drama3", "ming"], "description": "The engine to speak with, if installed. Defaults to the studio's selected engine."],
+                "language": ["type": "string", "description": "The language of the text as a code such as en, es, ja or zh-Hans. The engine speaks it and the word check hears it in it. Defaults to the language the text is written in."],
                 "output_path": ["type": "string", "description": "Where to write the WAV. Defaults to ~/Library/Application Support/DramaStudio/Output/<timestamp>.wav."],
                 "expressiveness": ["type": "number", "minimum": 0, "maximum": 1, "description": "0 reads flat and steady, 0.5 is the vendor's sampling, 1 is the Fish Audio demo's sampling: lively, keeps every sentence of cue lines, a few more slurred words on prose. Default 0.5."],
                 "play": ["type": "boolean", "description": "Play the result through the speakers."],
@@ -94,7 +95,7 @@ extension MCPTool {
             }
             if arguments["character"] != nil, arguments["voice"] != nil { throw ToolInputError(message: "Pass voice or character, not both.") }
             var body: [String: JSON] = ["input": .string(text), "response_format": "wav"]
-            for key in ["voice", "character", "expressiveness"] { body[key] = arguments[key] }
+            for key in ["voice", "character", "expressiveness", "language"] { body[key] = arguments[key] }
             body["model"] = arguments["engine"]
             return try await speak(body, arguments, context)
         }

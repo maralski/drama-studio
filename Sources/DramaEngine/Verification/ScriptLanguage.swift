@@ -65,7 +65,7 @@ package enum ScriptLanguage {
             return best.key
         })
         guard strong.count <= 1 else {
-            throw SpeechVerificationError.unavailable("this script mixes languages; generate each language separately")
+            throw SpeechVerificationError.language("this script mixes languages; generate each language separately")
         }
         let best = overall.max(by: { $0.value < $1.value })
         let confident = best.map { $0.value >= 0.75 && $0.key != "und" && (strong.isEmpty || strong.contains($0.key)) } ?? false
@@ -75,7 +75,7 @@ package enum ScriptLanguage {
             if sameScript && !sure { return fallback }
         }
         guard let best, confident else {
-            throw SpeechVerificationError.unavailable("the script's language is uncertain; use a complete sentence")
+            throw SpeechVerificationError.language("the script's language is uncertain; use a complete sentence")
         }
         return best.key
     }
@@ -84,16 +84,12 @@ package enum ScriptLanguage {
         Locale.Language(identifier: Locale.Language(identifier: language).maximalIdentifier).script?.identifier
     }
 
-    package static func requireLocale(language: String, recognizerAvailable: Bool, locale: Locale?, installed: [Locale]) throws -> Locale {
-        guard recognizerAvailable else { throw SpeechVerificationError.unavailable("on-device recognition is unavailable on this Mac") }
-        guard let locale else {
-            throw SpeechVerificationError.unavailable("on-device recognition does not support this script's language (\(language))")
-        }
-        let exact = installed.first { $0.identifier(.bcp47) == locale.identifier(.bcp47) }
-        let sameLanguage = installed.first { $0.language.languageCode == locale.language.languageCode }
-        guard let installedLocale = exact ?? sameLanguage else {
-            throw SpeechVerificationError.unavailable("the Mac has no installed on-device speech model for \(locale.identifier)")
-        }
-        return installedLocale
+    /// The installed Apple speech model for `locale`'s language, or nil when
+    /// this Mac has none: no recognizer, no model for the language, or one
+    /// it supports but has not downloaded.
+    package static func installedLocale(recognizerAvailable: Bool, locale: Locale?, installed: [Locale]) -> Locale? {
+        guard recognizerAvailable, let locale else { return nil }
+        return installed.first { $0.identifier(.bcp47) == locale.identifier(.bcp47) }
+            ?? installed.first { $0.language.languageCode == locale.language.languageCode }
     }
 }

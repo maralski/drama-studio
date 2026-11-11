@@ -24,4 +24,11 @@ final class SpeechNoticeTests: XCTestCase {
         XCTAssertEqual(try messages("Fine."), [], "the default is no change to report")
         XCTAssertEqual(try messages("Fine.", expressiveness: 0.9, on: .drama3), [])
     }
+
+    func testAOneRecognizerCheckNamesTheLanguageInEnglish() {
+        XCTAssertEqual(SpeechNotice.wordsCheckedByOneRecognizer(language: "es").message(on: .ming),
+                       "This Mac has no Apple speech model for Spanish, so only Whisper checked the words.")
+        XCTAssertEqual(SpeechNotice.wordsCheckedByOneRecognizer(language: "zh-Hans").message(on: .drama3),
+                       "This Mac has no Apple speech model for Chinese, so only Whisper checked the words.")
+    }
 }

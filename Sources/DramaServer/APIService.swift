@@ -190,6 +190,8 @@ public final class APIService: Sendable {
                 return .error(error)
             } catch let error as PromptError {
                 return .error(.bad(error.description))
+            } catch SpeechVerificationError.language(let reason) {
+                return .error(.bad(Self.describe(SpeechVerificationError.language(reason))))
             } catch let error as EngineError {
                 guard case .noClip = error else { return .error(APIError(.internalServerError, error.description)) }
                 return .error(.bad(error.description))
@@ -346,7 +348,7 @@ public final class APIService: Sendable {
             headers["X-Drama-Take-Id"] = takeID.uuidString
             headers.merge(Self.engineHeaders(synthesizer.engineDescription)) { $1 }
             headers["X-Drama-Estimated-Seconds"] = String(format: "%.1f", estimate.remainingSeconds(at: 0) ?? 0)
-            headers["X-Drama-Notices"] = Self.header(outline.notices, on: outline.engine)
+            headers["X-Drama-Notices"] = Self.header(outline.notices + (await LocalWordVerifier.notices(for: request)), on: outline.engine)
             return APIResponse(status: .ok, headers: headers, body: .chunked(body), abandon: { generation.cancel() })
         case .file(let format):
             let start = ContinuousClock.now

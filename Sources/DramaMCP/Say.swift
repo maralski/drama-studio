@@ -23,6 +23,8 @@ public struct SayCommand: Sendable, Equatable {
     public var output: Output = .play
     /// The engine to speak with, by id, model id or name, as the API's `model` takes it.
     public var engine: String?
+    /// The text's language as a code such as `es` or `zh-Hans`; nil tells it from the text.
+    public var language: String?
     public var expressiveness: Double?
     public var seed: UInt64?
     public var note: String?
@@ -53,6 +55,7 @@ public struct SayCommand: Sendable, Equatable {
         case .standardOutput: body["response_format"] = "pcm"
         }
         if let engine { body["model"] = .string(engine) }
+        if let language { body["language"] = .string(language) }
         if let expressiveness { body["expressiveness"] = .double(expressiveness) }
         if let seed { body["seed"] = .int(Int(seed)) }
         if let note { body["note"] = .string(note) }
@@ -82,6 +85,8 @@ public struct SayUsageError: Error, Equatable {
       -e, --engine ENGINE     the engine to speak with: drama3 or ming; by
                               default the studio's selected engine, or for
                               --retake the engine that made the take
+      -l, --language LANG     the text's language, such as es, ja or zh-Hans;
+                              by default the language the text is written in
       -o FILE                 write FILE instead of playing (.wav, .m4a, .pcm)
       -o -                    write raw 16-bit mono 44.1 kHz PCM to standard output
       --expressiveness 0..1   0 flat, 0.5 default, 1 lively
@@ -167,11 +172,13 @@ extension SayCommand {
         }
         let help = Flag.toggle { _ in throw SayUsageError(message: nil) }
         let engine = Flag.value { draft, name in draft.command.engine = name }
+        let language = Flag.value { draft, code in draft.command.language = code }
         return [
             "-f": input, "--input-file": input,
             "-v": voice, "--voice": voice,
             "-o": output, "--output-file": output,
             "-e": engine, "--engine": engine,
+            "-l": language, "--language": language,
             "-h": help, "--help": help,
             "--list-voices": .toggle { $0.command.listVoices = true },
             "--character": .value { draft, value in
