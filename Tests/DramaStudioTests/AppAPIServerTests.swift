@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import DramaEngine
 import DramaServer
+import Synchronization
 import XCTest
 @testable import DramaStudio
 
@@ -35,13 +36,43 @@ final class AppAPIServerTests: XCTestCase {
     func testAGenerationInTheWindowTurnsAPIRequestsAway() async throws {
         let session = SessionModel(synthesizer: MockSynthesizer(pace: .init(loadSeconds: 0, framesPerSecond: 10)), library: VoiceLibrary(directory: directory))
         session.playsWhileGenerating = false
-        let service = APIService(synthesizer: session.synthesizer, voices: session.library, token: nil, version: "test", engineBusyElsewhere: { await session.state.isGenerating })
+        let service = APIServerController(session: session).makeService()
         session.script = "A line long enough to keep the engine busy for a moment."
         session.generate()
         XCTAssertTrue(session.state.isGenerating)
         let response = await service.respond(to: HTTPRequest(method: "POST", path: "/v1/tts", body: Data(#"{"text":"Me too."}"#.utf8)))
         XCTAssertEqual(response.status, .tooManyRequests)
         session.stopGeneration()
+    }
+
+    /// The test holds the main thread the way a modal alert shown from a task does.
+    func testHealthAnswersTruthfullyWhileTheMainThreadIsHeld() throws {
+        let session = SessionModel(synthesizer: MockSynthesizer(pace: .init(loadSeconds: 0, framesPerSecond: 10)), library: VoiceLibrary(directory: directory))
+        session.playsWhileGenerating = false
+        let service = APIServerController(session: session).makeService()
+        XCTAssertEqual(try busy(accordingTo: service), false)
+        session.script = "A line long enough to keep the engine busy for a moment."
+        session.generate()
+        XCTAssertEqual(try busy(accordingTo: service), true, "health reports the window's generation, not an idle guess")
+        session.stopGeneration()
+        XCTAssertEqual(try busy(accordingTo: service), false)
+    }
+
+    /// `/v1/health`'s `busy`, asked off the main thread while this thread waits for the answer.
+    private func busy(accordingTo service: APIService) throws -> Bool? {
+        let answer = Mutex<Data?>(nil)
+        let answered = DispatchSemaphore(value: 0)
+        Task.detached {
+            let response = await service.respond(to: HTTPRequest(method: "GET", path: "/v1/health"))
+            if case .data(let body) = response.body { answer.withLock { $0 = body } }
+            answered.signal()
+        }
+        guard answered.wait(timeout: .now() + 5) == .success else {
+            XCTFail("GET /v1/health did not answer while the main thread was held")
+            return nil
+        }
+        let body = try XCTUnwrap(answer.withLock { $0 })
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])["busy"] as? Bool
     }
 
     func testTheAPIChipTooltipShowsThePortUngrouped() {
