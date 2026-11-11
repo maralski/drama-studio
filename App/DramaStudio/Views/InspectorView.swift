@@ -6,11 +6,12 @@ import SwiftUI
 struct InspectorView: View {
     @Bindable var model: SessionModel
     @State private var designing: Speaker?
+    @State private var choosingBuiltIn: Speaker?
 
     var body: some View {
         Form {
             EngineSection(model: model)
-            CastSection(model: model, designing: $designing)
+            CastSection(model: model, designing: $designing, choosingBuiltIn: $choosingBuiltIn)
             Section("Performance") {
                 HStack {
                     Menu("Insert Cue", systemImage: "theatermasks") { CueMenuItems(model: model) }
@@ -32,6 +33,7 @@ struct InspectorView: View {
         .formStyle(.grouped)
         .disabled(model.state.isGenerating)
         .sheet(item: $designing) { DesignVoiceSheet(model: model, speaker: $0) }
+        .sheet(item: $choosingBuiltIn) { BuiltInVoiceSheet(model: model, speaker: $0) }
     }
 }
 
@@ -98,6 +100,7 @@ extension SpeechEngineID {
 private struct CastSection: View {
     @Bindable var model: SessionModel
     @Binding var designing: Speaker?
+    @Binding var choosingBuiltIn: Speaker?
 
     var body: some View {
         Section {
@@ -117,8 +120,12 @@ private struct CastSection: View {
                         Text("Model default").tag(VoicePickerTag.choice(.modelDefault))
                         Text("Surprise me").tag(VoicePickerTag.choice(.surprise))
                         ForEach(model.castDesigns, id: \.self) { Label($0.name, systemImage: "wand.and.stars").tag(VoicePickerTag.choice(.designed($0))) }
+                        ForEach(model.castBuiltIns, id: \.self) { Label($0.name, systemImage: "person.wave.2").tag(VoicePickerTag.choice(.builtIn($0))) }
                         Divider()
                         Text("Design a Voice\u{2026}").tag(VoicePickerTag.designNew)
+                        if !model.builtInVoices.isEmpty {
+                            Text("Choose a Built-in Voice\u{2026}").tag(VoicePickerTag.chooseBuiltIn)
+                        }
                     } label: {
                         HStack(spacing: 4) {
                             VStack(alignment: .leading, spacing: 1) {
@@ -128,6 +135,12 @@ private struct CastSection: View {
                         }
                     }
                     .accessibilityLabel("Voice for \(speaker.name)")
+                    if let problem = model.voiceProblem(for: speaker) {
+                        Label(problem, systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     if model.canKeepVoice(for: speaker) {
                         Button("Save Session Voice", systemImage: "square.and.arrow.down") { model.keepVoice(for: speaker) }
                             .help("Save the checked voice to the library for later sessions")
@@ -155,6 +168,7 @@ private struct CastSection: View {
             switch tag {
             case .choice(let choice): model.setVoice(choice, for: speaker)
             case .designNew: designing = speaker
+            case .chooseBuiltIn: choosingBuiltIn = speaker
             }
         })
     }

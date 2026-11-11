@@ -491,8 +491,7 @@ final class SessionModel {
         }
         guard case .success(let script) = prepared else { return }
         let casting = casting
-        start(SpeechRequest(text: script.text, references: casting.references, character: casting.character,
-                            previousTakes: casting.voiceTake.map { [$0] } ?? [], config: config),
+        start(casting.request(text: script.text, previousTakes: casting.voiceTake.map { [$0] } ?? [], config: config),
               as: .take(note: nil, recordsVoice: casting.recordsVoice))
     }
 
@@ -543,8 +542,7 @@ final class SessionModel {
         let casting = casting
         let matching = takes.filter { $0.hasCurrentWordCheck && !$0.isIncomplete && $0.basis == currentPlainBasis }
         let voice = casting.voiceTake.flatMap { $0 == matching.first?.take ? nil : $0 }
-        start(SpeechRequest(text: script.text, references: casting.references, character: casting.character, note: note,
-                            previousTakes: (voice.map { [$0] } ?? []) + matching.compactMap(\.take), config: config),
+        start(casting.request(text: script.text, note: note, previousTakes: (voice.map { [$0] } ?? []) + matching.compactMap(\.take), config: config),
               as: .take(note: note, recordsVoice: casting.recordsVoice), on: engine)
     }
 
@@ -599,7 +597,10 @@ final class SessionModel {
         }
         let engine = engine ?? self.engine
         let synthesizer: any SpeechSynthesizer
-        do { synthesizer = try engines.pinned(to: engine) } catch {
+        do {
+            synthesizer = try engines.pinned(to: engine)
+            try request.builtInVoice?.check(on: engine)
+        } catch {
             settleAfterGeneration(.failed(Self.describe(error)))
             return
         }
@@ -1119,6 +1120,25 @@ final class SessionModel {
         return speakerVoices.sorted { $0.key < $1.key }.compactMap(\.value.design).filter { seen.insert($0).inserted }
     }
 
+    /// Built-in voices currently cast, for the voice pickers.
+    var castBuiltIns: [BuiltInVoice] {
+        var seen = Set<BuiltInVoice>()
+        return speakerVoices.sorted { $0.key < $1.key }.compactMap(\.value.builtIn).filter { seen.insert($0).inserted }
+    }
+
+    /// The built-in voices of the installed engines, the selected engine's first.
+    var builtInVoices: [BuiltInVoice] {
+        let installed = SpeechEngineID.allCases.filter(availableEngines.contains)
+        return (installed.filter { $0 == engine } + installed.filter { $0 != engine }).flatMap(\.builtInVoices)
+    }
+
+    /// Why the speaker's voice can't speak on the selected engine; nil when it can.
+    func voiceProblem(for speaker: Speaker) -> String? {
+        guard let voice = voice(for: speaker).builtIn, voice.engine != engine else { return nil }
+        let owner = voice.engine.capabilities.name
+        return "\(voice.name) is a built-in \(owner) voice, and the engine is \(engine.capabilities.name). Switch the engine to \(owner), or choose another voice."
+    }
+
     func canKeepVoice(for speaker: Speaker) -> Bool {
         sessionVoices[voice(for: speaker)] != nil
     }
@@ -1261,7 +1281,7 @@ final class SessionModel {
         }
     }
 
-    /// Library voices by speaker; surprise and designed voices live only in the session.
+    /// Library voices by speaker; the project's archive keeps every other choice.
     private var libraryCasting: [Int: UUID] {
         speakerVoices.compactMapValues { if case .library(let id) = $0 { id } else { nil } }
     }
@@ -1440,7 +1460,7 @@ struct GenerationClock: Equatable {
 
 /// What a request carries for its voices. Library assignments normally form
 /// an unbroken run from speaker 0; a solo nonzero speaker gets a tagged reference.
-/// Surprise and designed voices cast only a script with one speaker.
+/// Surprise, designed and built-in voices cast only a script with one speaker.
 struct Casting: Equatable {
     struct Ignored: Equatable, Identifiable {
         enum Reason: Equatable { case gap, needsLibrary }
@@ -1458,6 +1478,7 @@ struct Casting: Equatable {
 
     var references: [ReferenceVoice] = []
     var character: VoiceDesign?
+    var builtInVoice: BuiltInVoice?
     /// The session voice the request reuses as its voice reference.
     var voiceTake: Take?
     /// The choice whose session voice this request's take becomes.
@@ -1486,13 +1507,21 @@ struct Casting: Equatable {
                 gap = true
             case let choice where speakers.count == 1:
                 character = choice.design
+                builtInVoice = choice.builtIn
                 voiceTake = sessionVoices[choice]
                 if voiceTake == nil { recordsVoice = choice }
-            case .surprise, .designed:
+            case .surprise, .designed, .builtIn:
                 ignored.append(Ignored(speaker: speaker, reason: .needsLibrary))
                 gap = true
             }
         }
+    }
+
+    /// A request in this casting's voice.
+    func request(text: String, note: String? = nil, previousTakes: [Take], config: GenerationConfig) -> SpeechRequest {
+        var request = SpeechRequest(text: text, references: references, character: character, note: note, previousTakes: previousTakes, config: config)
+        request.builtInVoice = builtInVoice
+        return request
     }
 }
 

@@ -50,7 +50,6 @@ enum SectionRequests {
         // sentence mode keeps the short-chunk retry that low-latency streaming gives up.
         var narration = config
         narration.streaming = .sentence
-        return SpeechRequest(text: spokenText(of: segment), references: casting.references, character: casting.character,
-                             previousTakes: previous, config: narration)
+        return casting.request(text: spokenText(of: segment), previousTakes: previous, config: narration)
     }
 }
