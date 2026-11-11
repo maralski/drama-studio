@@ -12,7 +12,6 @@ package enum MingCues {
     /// Ming's tags, exact spelling. Ming's text frontend passes these through untouched.
     package static let tags = ["[Breathing]", "[Cough]", "[Sigh]", "[Laughter]", "[Surprise-ah]", "[Surprise-oh]", "[Dissatisfaction-hnn]",
                                "[Uhm]", "[Confirmation-en]", "[Question-ei]", "[Question-ah]", "[Question-en]", "[Question-oh]", "[Question-huh]"]
-    static let builtInVoices = MingVoice.catalog.map(\.ip)
     static let languages = ["zh", "en", "ja", "ko", "de", "fr", "es"]
 
     /// The code in ``languages`` for a language ``ScriptLanguage`` identified,

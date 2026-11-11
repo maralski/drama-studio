@@ -16,7 +16,7 @@ public enum PromptError: Error, CustomStringConvertible, Equatable {
     case badCodes(String)
     /// The prompt has this many rows, over ``Drama3Prompt/maxRows``.
     case tooLong(Int)
-    /// The request has both a designed voice and reference voices.
+    /// The request names more than one of reference voices, a designed voice and a built-in voice.
     case voiceConflict
     /// The named voice has no encoding for the engine.
     case notEncoded(String, SpeechEngineID)
@@ -26,7 +26,7 @@ public enum PromptError: Error, CustomStringConvertible, Equatable {
     /// A message for a person.
     public var description: String {
         switch self {
-        case .voiceConflict: return "a designed character and reference voices can't be combined"
+        case .voiceConflict: return "a request takes one voice: reference voices, a designed character or a built-in voice"
         case .notEncoded(let name, let engine): return "the voice \(name) has not been encoded for \(engine.capabilities.name)"
         case .engineUnsupported(let engine, let what): return "\(engine.capabilities.name) can't \(what)"
         case .emptyText(let w): return "\(w): text must not be empty"

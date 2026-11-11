@@ -72,7 +72,7 @@ public extension SpeechEngineID {
                                cues: .freeForm, passageTags: true, speakerTurns: true, history: true, expressiveness: true, noteEmotions: nil, languages: .unrestricted,
                                samplesPerStep: ModelConstants.samplesPerFrame, typicalStepsPerSecond: GenerationEstimate.typicalFramesPerSecond)
         case .ming:
-            EngineCapabilities(name: "Ming", cloning: true, maxCloneSeconds: 15, builtInVoices: MingCues.builtInVoices, voiceDesign: true,
+            EngineCapabilities(name: "Ming", cloning: true, maxCloneSeconds: 15, builtInVoices: MingVoices.names, voiceDesign: true,
                                cues: .fixed(MingCues.tags), passageTags: false, speakerTurns: true, history: false, expressiveness: false,
                                noteEmotions: MingCues.Emotion.allCases.map(\.rawValue),
                                languages: .only(MingCues.languages), samplesPerStep: MingVoiceEncoding.samplesPerLatent, typicalStepsPerSecond: 60)
