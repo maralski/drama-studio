@@ -158,6 +158,34 @@ final class APIEngineNeutralTests: XCTestCase {
         XCTAssertTrue(note.headers["X-Drama-Notices"]?.allSatisfy(\.isASCII) == true, "a header value stays ASCII")
     }
 
+    /// The language is decided before the job slot is taken, so a stream
+    /// refuses it with 400 as a file does, and the next request still runs.
+    func testALanguageTheCheckCannotHearIsABadRequestOnEveryRoute() async throws {
+        guard #available(macOS 26, *) else { throw XCTSkip("checked generation requires macOS 26") }
+        let cherokee = "doesn't know Cherokee"
+        for format in ["wav", "pcm", "pcm_stream"] {
+            let response = await send("POST", "/v1/audio/speech", json: ["input": "ᎣᏏᏲ", "language": "chr", "response_format": format])
+            XCTAssertEqual(response.status, .badRequest, format)
+            XCTAssertTrue(text(response).contains(cherokee), "\(format): \(text(response))")
+        }
+        let events = await service.respond(to: HTTPRequest(method: "GET", path: "/v1/audio/speech/stream", query: ["input": "ᎣᏏᏲ", "language": "chr"]))
+        XCTAssertEqual(events.status, .badRequest)
+        XCTAssertTrue(text(events).contains(cherokee), text(events))
+        let body = AsyncThrowingStream<Data, Error> { $0.yield(Data("ᎣᏏᏲ\n".utf8)); $0.finish() }
+        let live = await service.respond(to: HTTPRequest(method: "POST", path: "/v1/audio/speech/live", query: ["language": "chr"],
+                                                         headers: ["Accept": "text/event-stream"]), body: body)
+        XCTAssertEqual(live.status, .badRequest)
+        XCTAssertTrue(text(live).contains(cherokee), text(live))
+        let mixed = await send("POST", "/v1/audio/speech", json: ["input": "This is a complete English sentence. これは日本語で書かれた完全な文章です。",
+                                                                  "response_format": "pcm_stream"])
+        XCTAssertEqual(mixed.status, .badRequest)
+        XCTAssertTrue(text(mixed).contains("mixes languages"), text(mixed))
+
+        let next = await send("POST", "/v1/audio/speech", json: ["input": "Keep the light lit.", "response_format": "pcm_stream"])
+        XCTAssertEqual(next.status, .ok, "a refused request never held the job slot")
+        _ = try await streamed(next)
+    }
+
     func testDrama3PerformsTheCueAndSendsNoNotices() async throws {
         try engines.select(.drama3)
         let file = await send("POST", "/v1/audio/speech", json: ["input": "<whisper>Keep the light lit.</whisper>"])
