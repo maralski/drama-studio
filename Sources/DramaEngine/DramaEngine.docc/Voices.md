@@ -78,8 +78,23 @@ let captain = VoiceDesign(name: "Captain", description: "gravelly old male voice
 let request = SpeechRequest(text: "[low and menacing] Pray ye never find out.", character: captain)
 ```
 
-A request cannot have both a character and references: the stream throws
-``PromptError/voiceConflict``.
+### Speak in a built-in voice
+
+A ``BuiltInVoice`` is a voice an engine ships with. It has no clip, and only
+its own engine speaks in it. ``SpeechEngineID/builtInVoices`` lists an
+engine's voices: Ming has 241 and Drama 3 has none.
+
+```swift
+var request = SpeechRequest(text: "Good evening. Here is the news.")
+request.builtInVoice = BuiltInVoice.named("UK_George")
+```
+
+On an engine other than the voice's, the stream throws
+``PromptError/engineUnsupported(_:_:)``. It never speaks in another voice
+instead.
+
+A request takes one of references, a character and a built-in voice. With
+two of them, the stream throws ``PromptError/voiceConflict``.
 
 ### Keep the voice across takes
 
@@ -87,7 +102,7 @@ Every request returns its take in ``SpeechResult/take``. Pass earlier takes,
 oldest first, as ``SpeechRequest/previousTakes``. On Drama 3, the last two
 become history. Ming has no history, so it uses earlier takes only as the
 voice. With no references, the first take is also the voice reference, so
-a designed or model-chosen voice stays the same from take to take:
+a designed, built-in or model-chosen voice stays the same from take to take:
 
 ```swift
 var takes: [Take] = []

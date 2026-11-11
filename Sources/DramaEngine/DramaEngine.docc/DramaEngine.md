@@ -148,6 +148,7 @@ release changed.
 - ``VoiceEncoding``
 - ``ReferenceAudio``
 - ``VoiceDesign``
+- ``BuiltInVoice``
 - ``Take``
 - ``TakeContext``
 
