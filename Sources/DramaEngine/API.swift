@@ -461,8 +461,9 @@ public struct VoiceDesign: Sendable, Codable, Hashable {
 
 /// One thing to speak, in one voice, with one configuration.
 ///
-/// The voice comes from at most one of `references`, `character`, and the
-/// first of `previousTakes`. With none of them the model picks a voice.
+/// The voice comes from at most one of `references`, `character` and
+/// `builtInVoice`, or from the first of `previousTakes`. With none of them
+/// the model picks a voice.
 public struct SpeechRequest: Sendable {
     /// The script. Performance cues such as `[laughs]`, paired tags such as
     /// `<whisper>…</whisper>`, and `<|speaker:N|>` tags for up to 16
@@ -471,16 +472,22 @@ public struct SpeechRequest: Sendable {
     /// Cloned voices. One is the usual case; several voice a multi-speaker
     /// script in speaker order.
     public var references: [ReferenceVoice]
-    /// A designed voice. Mutually exclusive with `references`: setting both
-    /// fails with ``PromptError/voiceConflict``.
+    /// A designed voice. Mutually exclusive with `references` and
+    /// `builtInVoice`: setting two fails with ``PromptError/voiceConflict``.
     public var character: VoiceDesign?
+    /// One of the engine's own voices. Setting it with `references` or
+    /// `character` fails with ``PromptError/voiceConflict``, and an engine
+    /// other than the voice's fails with ``PromptError/engineUnsupported(_:_:)``.
+    /// Like a designed voice, it speaks the first take, and a later request
+    /// that passes that take in `previousTakes` continues from the take.
+    public var builtInVoice: BuiltInVoice? = nil
     /// A director's note, such as "softer and warmer". The line is generated
     /// again as one turn, with the note as a direction and as a cue before
     /// every sentence. The note is cut to 120 characters, without `[ ] < > |`.
     public var note: String?
     /// Earlier takes, oldest first; the last two become history. With no
     /// references the first one is the voice reference, which keeps a
-    /// designed or model-default voice the same across takes.
+    /// designed, built-in or model-default voice the same across takes.
     public var previousTakes: [Take]
     /// Sampling and pacing. Defaults to the measured configuration.
     public var config: GenerationConfig

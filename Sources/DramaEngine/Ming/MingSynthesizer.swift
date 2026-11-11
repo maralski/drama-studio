@@ -158,10 +158,8 @@ public actor MingSynthesizer: SpeechSynthesizer {
             if let reference = plan.reference(for: chunk, among: cloned) {
                 conditioning = .clone(try reference.mingReference())
                 task = chunk.spoken.style.map { .emotion($0.emotion.ming) } ?? .plain
-            } else if case .design(let description) = plan.voice {
-                task = .voiceDesign(description)
             } else {
-                task = .builtInVoice(.emma)
+                task = plan.voice.openingTask
             }
             let mingRequest = try MingRequest(text: text, task: task, language: language, conditioning: conditioning)
             let expected = FrameGenerator.expectedSeconds(for: chunk.line)
@@ -269,6 +267,17 @@ public actor MingSynthesizer: SpeechSynthesizer {
     static func trimmed(_ samples: [Float]) -> [Float] {
         let silence = Int(DramaSynthesizer.trailingSilenceSeconds(samples) * Double(ModelConstants.sampleRate))
         return silence > 0 ? Array(samples.dropLast(silence)) : samples
+    }
+}
+
+extension MingPlan.Voice {
+    /// The task of a chunk that speaks before there is audio to clone.
+    var openingTask: MingTask {
+        switch self {
+        case .design(let description): .voiceDesign(description)
+        case .builtIn(let name): .builtInVoice(MingVoice(ip: name))
+        case .clone: .plain
+        }
     }
 }
 

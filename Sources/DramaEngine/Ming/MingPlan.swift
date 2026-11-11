@@ -19,7 +19,8 @@ package struct MingPlan: Sendable, Equatable {
         /// Reference voices in speaker order; a chunk's speaker tag picks one.
         case clone([MingVoiceEncoding])
         case design(String)
-        case builtIn
+        /// A built-in voice by its Ming name.
+        case builtIn(String)
 
         /// The encodings chunks clone before any chunk has spoken.
         package var references: [MingVoiceEncoding] {
@@ -58,7 +59,7 @@ package struct MingPlan: Sendable, Equatable {
             try Drama3Prompt.validate(character)
             voice = .design(character.description)
         } else {
-            voice = .builtIn
+            voice = .builtIn(request.builtInVoice?.name ?? MingVoices.defaultName)
         }
         if case .clone(let encodings) = voice {
             for chunk in chunks where chunk.spoken.speaker >= encodings.count {

@@ -20,7 +20,8 @@ public struct SpeechOutline: Sendable, Equatable {
     /// - Throws: ``PromptError`` for a request the engine cannot take.
     public init(_ request: SpeechRequest, engine: SpeechEngineID) throws {
         self.engine = engine
-        if request.character != nil && !request.references.isEmpty { throw PromptError.voiceConflict }
+        if [!request.references.isEmpty, request.character != nil, request.builtInVoice != nil].filter({ $0 }).count > 1 { throw PromptError.voiceConflict }
+        try request.builtInVoice?.check(on: engine)
         let text = request.text
         guard !UnicodeWhitespace.strip(text).isEmpty else { throw PromptError.emptyText("text") }
         if request.note.flatMap(DirectorsNote.clean) != nil, DirectorsNote.sentences(text).isEmpty { throw PromptError.emptyText("line") }

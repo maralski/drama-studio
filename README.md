@@ -59,6 +59,7 @@ That is a guess until someone runs it on one.
 | `<whisper>` and other passage tags | Left out with a notice; the words are spoken plainly | Performed |
 | Voice cloning | Yes; clips of up to 15 seconds clone best | Yes |
 | Voice design from a description | Yes; uses the description only | Yes; uses the name, description and scene |
+| Built-in voices | 241: 3 English and 238 Chinese | None |
 | Director's notes | One of five emotions, or a notice | Any note, as written |
 | Earlier takes | Give the voice only | Give the voice, and the last two are context |
 | Expressiveness control | Ignored, with a notice | 0 to 1 |
@@ -247,8 +248,8 @@ The rest of the rules:
 - An emotion cue applies to its sentence and to the sentences after it, until
   the next emotion cue. A sentence takes one emotion. A second emotion cue in
   the same sentence is removed with a notice.
-- With a designed voice or the model default voice, Ming speaks the first
-  sentence from the voice description or the built-in voice, and that
+- With a designed voice, a built-in voice or the model default voice, Ming
+  speaks the first sentence from the voice description or the built-in voice, and that
   sentence cannot take an emotion. An emotion cue in the first sentence gets a
   notice and applies from the second sentence on.
 - Any other bracket cue, such as `[shouting]`, is left out with the notice
@@ -292,6 +293,8 @@ On Ming:
 - A designed voice uses the description only. The character's name and scene
   are not used.
 - The model default voice is Ming's built-in `US_Emma` voice.
+- Ming has 241 built-in voices, and you can choose any of them. See
+  [Built-in voices](#built-in-voices).
 - Earlier takes of a line give the voice only. Ming clones the opening
   sentences, up to 10 seconds, of the line's first take. It does not continue
   the last two takes as context, the way Drama 3 does.
@@ -344,6 +347,54 @@ recognizer is less than 0.95 sure. So "Hi." and "Goodbye." are read in
 English on an English Mac, and "こんにちは。" is still read in Japanese. In a
 live session, a sentence that cannot be told takes the language of the
 sentence before it. The app passes no language and relies on this fallback.
+
+### Built-in voices
+
+A built-in voice comes with an engine. It has no recording and no transcript,
+it is not in the voice library, and only its own engine can speak in it. Ming
+has 241, and Drama Studio reads their names from the MingTTS package. Drama 3
+has none.
+
+| Group | Voices | Names |
+| --- | --- | --- |
+| English | 3 | `US_Emma`, `UK_George`, `UK_Charlotte` |
+| Chinese | 33 | Such as `灵小安` |
+| Chinese characters | 8 | A show and a character, such as `西游记_唐僧` |
+| Chinese, in one emotion | 197 | A voice and the emotion it was recorded in, such as `灵晓声_高兴` (happy) |
+
+Choose one in these places:
+
+- In the app, the voice picker under **Cast** has **Choose a Built-in
+  Voice…**. The sheet lists the voices of the installed engines under the
+  groups above. The search field matches a name, a group, an engine or an
+  emotion in English, such as "happy". The picker then shows the chosen voice
+  beside the library voices. A project saves the choice.
+- Over the HTTP API, pass the name as `voice`, and `GET /v1/voices` lists the
+  names in `built_in`.
+- `drama-say -v UK_George` and the MCP `synthesize_speech` tool's `voice` take
+  the same names. `drama-say -v '?'` and `list_voices` list them.
+
+These rules apply everywhere:
+
+- A built-in voice on another engine is an error, not a different voice. With
+  Drama 3 selected, the app shows "UK_George is a built-in Ming voice, and the
+  engine is Drama 3. Switch the engine to Ming, or choose another voice."
+  under the picker, and Generate fails with "Drama 3 can't speak in
+  UK_George, a built-in Ming voice; switch to Ming or choose another voice".
+  The API returns that message with `400`.
+- A library voice wins its name. If you save a library voice called
+  `US_Emma`, then `"voice": "US_Emma"` means your voice, as it did before.
+  `ming:US_Emma`, the engine id, a colon and the name, means the built-in
+  voice. A name is matched exactly first, then without regard to
+  case.
+- A built-in voice speaks the first sentence, and Ming clones that sentence
+  for the rest of the take, as it does for a designed voice. Later takes of
+  the line clone the first take. In the app, the first take that passes the
+  word check becomes the session voice, and **Save Session Voice** saves it
+  to the library as a cloned voice, named like "UK_George (saved)", that both
+  engines can use.
+- A script with several speakers takes library voices only. A request speaks
+  in one built-in voice.
 
 ## Troubleshooting
 
@@ -473,6 +524,9 @@ a verified download and installation.
   passed the current word check and contain one speaker can be saved; outdated
   script text does not prevent it.
   **Save Session Voice** in Cast saves the retained session voice instead.
+- **Built-in voices.** Ming's 241 voices are in the voice picker under
+  **Choose a Built-in Voice…**, grouped and searchable
+  (see [Built-in voices](#built-in-voices)).
 - **Streaming playback** as chunks finish, scrubbing, a speed control from
   0.75x to 1.5x, the sentence being spoken highlighted in the editor, and
   export to WAV or M4A.
@@ -737,7 +791,7 @@ The speech request follows the
 | `POST /v1/tts` | The same, with the text in `text`. |
 | `GET /v1/audio/speech/stream` | Speaks the `input` query parameter as Server-Sent Events. See [Streaming](#streaming-framing). |
 | `POST /v1/audio/speech/live` | Speaks text while the client is still sending it, and streams the audio back on the same connection. See [Streaming](#streaming-framing). |
-| `GET /v1/voices` | The voice library: id, name, transcript, seconds, source file. |
+| `GET /v1/voices` | `voices` is the voice library: id, name, transcript, seconds, source file. `built_in` is the installed engines' built-in voices: `name`, `engine`, `voice` (the name with its engine, such as `ming:US_Emma`), `group`, and for some a `note` such as the emotion. |
 | `POST /v1/voices` | Clones a voice: JSON `{name, transcript, audio_base64 or audio_path}`, or multipart with a `file` part plus `name` and `transcript` fields. |
 | `DELETE /v1/voices/{id}` | Deletes a voice. |
 | `GET /v1/takes/{id}` | One of the last 20 takes: `{id, engine, input, text, seconds, samples, previous_take_ids}`, plus `frames` and `codes_base64` for a Drama 3 take. |
@@ -747,7 +801,7 @@ The speech body takes these fields:
 | Field | Meaning |
 | --- | --- |
 | `input` | The text. Performance cues such as `[laughs]` and `<\|speaker:1\|>` tags work as in the app, and Ming rewrites or removes cues as [Cues on each engine](#cues-on-each-engine) describes. |
-| `voice` | A library voice, by id or name. |
+| `voice` | A library voice, by id or name, or a [built-in voice](#built-in-voices) by name, such as `UK_George`. A library voice wins a name both have; `ming:UK_George` means the built-in one. A built-in voice on an engine other than its own gets `400`. |
 | `references` | Clips to clone on the fly: `[{audio_path or audio_base64, text}]`. |
 | `speaker_voices` | Library voices per speaker for a multi-speaker script: `{"0": "Narrator", "1": "<id>"}`, with no gaps from speaker 0. |
 | `response_format` | `wav` (default, 16-bit), `pcm` (raw 16-bit little-endian), or `m4a`. |
@@ -756,7 +810,7 @@ The speech body takes these fields:
 | `seed` | A fixed sampler seed, for repeatable takes. |
 | `character` | A voice designed from a description instead of a clip: `{name, description, scene?}`. Ming uses only `description`. |
 | `note` | A director's note, such as `"softer and warmer"`. On Drama 3, the line is generated again, sentence by sentence, with the note as a direction and as a cue before every sentence. On Ming, a note that names an emotion sets that emotion, and any other note gets a notice. |
-| `previous_takes` | Earlier takes of the line, oldest first: `[{take_id}]`, or `[{text, codes_base64}]` for a Drama 3 take. With no `voice` or `references`, the first one is the voice. On Drama 3, the last two are also context. A take from the other engine gets a notice and is not used. |
+| `previous_takes` | Earlier takes of the line, oldest first: `[{take_id}]`, or `[{text, codes_base64}]` for a Drama 3 take. With no `voice` or `references`, or with a built-in `voice`, the first one is the voice. A built-in `voice` with a Ming take that was spoken in another voice gets `400`. On Drama 3, the last two are also context. A take from the other engine gets a notice and is not used. |
 | `model` | The engine to speak with: its id (`drama3`, `ming`), model id or name. Without it, a request that continues a cached take runs on that take's engine, and any other runs on the selected one. OpenAI's model names, `tts-1`, `tts-1-hd` and `gpt-4o-mini-tts`, are treated as no model, so OpenAI clients work unchanged. Any other name, and an engine that isn't installed, gets `400` listing the installed engine ids. Only one engine is loaded at a time, so a request for the other engine unloads the current one first. |
 | `language` | The language of `input`, as a BCP 47 code such as `en`, `fr` or `zh-Hans`. The engine speaks and checks the text in that language and does not tell the language from the text. A wrong code fails the word check. A value that is not a language code gets `400`, and on Ming, a language Ming does not speak gets `400`. Without it, the engine tells the language from the text, and reads a line too short to tell in your macOS language, as [Voices, takes and languages on each engine](#voices-takes-and-languages-on-each-engine) describes. |
 | `apply_pronunciation` | `true` (default) rewrites `input` with the pronunciation rules in `~/Library/Application Support/DramaStudio/pronunciation.json`, the same rules the app uses, before it is spoken; `false` speaks it as sent. |
@@ -793,6 +847,8 @@ that names the field.
 curl -sS localhost:8780/v1/health
 curl -sS -H "$AUTH" localhost:8780/v1/audio/speech \
   -d '{"input": "Hello there. [laughs] Good to see you.", "voice": "Narrator"}' -o hello.wav
+curl -sS -H "$AUTH" localhost:8780/v1/audio/speech \
+  -d '{"input": "Good evening. Here is the news.", "voice": "UK_George", "model": "ming"}' -o george.wav
 curl -sS -H "$AUTH" localhost:8780/v1/tts -d '{"text": "The alias route."}' -o alias.wav
 curl -sS -H "$AUTH" localhost:8780/v1/audio/speech \
   -d '{"input": "Cloned on the fly.", "references": [{"audio_path": "/path/to/clip.wav", "text": "What the clip says."}]}' -o clone.wav
@@ -937,7 +993,7 @@ repository's `dist/DramaStudio.app`. `DRAMA_API_URL` overrides
 | --- | --- |
 | `synthesize_speech` | `text`, with optional `voice` or `character` (`{name, description, scene?}`), `engine` (`drama3` or `ming`), `language` (as the API takes it), `output_path`, `expressiveness`, and `play`. Writes a WAV, by default to `~/Library/Application Support/DramaStudio/Output/<timestamp>.wav`. Returns the path, the engine, seconds, frames (Drama 3 only), generation seconds, `take_id`, and any notices about cues or notes the engine could not perform. `play` plays it with `afplay`. |
 | `retake_with_note` | `take_id` and `note`, with optional `output_path` and `play`. Generates that take's line again in the same voice with the note, on the engine that made the take. On Ming, the note must name an emotion to change the delivery. Returns what `synthesize_speech` returns, with the new `take_id`. |
-| `list_voices` | The voice library. |
+| `list_voices` | The voice library in `voices`, and the installed engines' built-in voices in `built_in`. |
 | `add_voice` | Clones `audio_path` with its `transcript` under `name`. |
 | `delete_voice` | Deletes a voice by `id`. |
 | `studio_status` | Health, the selected engine's model entry, every installed engine in `models`, and the API address. |
@@ -974,6 +1030,7 @@ it at `DramaStudio.app/Contents/MacOS/drama-say`.
 ```bash
 drama-say "Hello there. [laughs] Good to see you."
 drama-say -v Narrator -o hello.wav -f chapter.txt
+drama-say -e ming -v UK_George "Good evening. Here is the news."
 drama-say --character "Captain: gravelly old male voice" --verbose "Pray ye never find out."
 drama-say --retake "$TAKE" --note "softer and warmer"
 ```
@@ -983,7 +1040,7 @@ plays each completed chunk when it arrives. Startup time depends on model
 loading, the script, the voice and retries; it is not a fixed delay. `-o FILE` writes a WAV, M4A or PCM file, chosen by
 the extension, and `-o -` writes raw PCM to standard output. With no text and
 no `-f`, it reads the text from standard input. `-v '?'` lists the voice
-library. `--verbose` prints, on standard error, the take id that `--retake`
+library and the installed engines' built-in voices. `--verbose` prints, on standard error, the take id that `--retake`
 takes, the engine that made it, and timings. `drama-say
 --help` lists every option.
 
@@ -1101,6 +1158,8 @@ Drama Studio adds the layer that makes both engines take the same requests.
   sentence through MingTTS, with the same word check and retries as Drama 3.
   `MingCues` rewrites cues and notes as Ming's tags and emotions.
   `MingVoiceEncoding` stores a voice's Ming latents and speaker embedding.
+  `MingVoices` reads Ming's built-in voice names from the MingTTS catalog, and
+  `BuiltInVoice` in `Engines` is the voice type every layer passes.
 - `Sources/DramaEngine/Weights`: the eight safetensors shards are memory-mapped
   (`MAP_SHARED`) and wrapped as Metal buffers without copying. Experts stay in
   FP8 E4M3 with their 128x128 block scales and are decoded inside the kernel

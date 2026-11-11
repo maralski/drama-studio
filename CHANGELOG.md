@@ -40,6 +40,19 @@ Ming instead of Drama 3.
   suggestions are Ming's five emotions. A request that sets Expressiveness
   away from the default gets the notice "Ming ignores the Expressiveness
   setting."
+- Ming's 241 built-in voices can be chosen. Before, an unvoiced line on Ming
+  always spoke as `US_Emma`. In the app, the voice picker under **Cast** has
+  **Choose a Built-in Voice…**, a grouped, searchable list, and a project
+  saves the choice. The HTTP API's `voice` takes a built-in voice's name, such
+  as `UK_George`, on every speech route, and `GET /v1/voices` lists the names
+  in a new `built_in` array beside `voices`. `drama-say -v` and the MCP
+  `synthesize_speech` tool take the same names, and `drama-say -v '?'` and
+  `list_voices` list them. A library voice wins a name both have, so existing
+  clients behave as before; `ming:US_Emma` means the built-in voice. A
+  built-in voice on another engine fails with "Drama 3 can't speak in
+  UK_George, a built-in Ming voice; switch to Ming or choose another voice",
+  which the API returns with `400`. DramaEngine adds `BuiltInVoice`,
+  `SpeechEngineID.builtInVoices` and `SpeechRequest.builtInVoice`.
 - **Add Voice** advises 5 to 15 seconds of speech for Ming and 5 to 20 for
   Drama 3. Ming encodes the whole clip, and a clip over 15 seconds gets a
   warning, not a refusal.

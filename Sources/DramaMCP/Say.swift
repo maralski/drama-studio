@@ -7,7 +7,8 @@ public struct SayCommand: Sendable, Equatable {
     public enum Source: Sendable, Equatable { case text(String), file(URL), standardInput }
     public enum Voice: Sendable, Equatable {
         case studio
-        case library(String)
+        /// A library voice by name or id, or a built-in voice by name.
+        case named(String)
         case character(name: String, description: String, scene: String?)
         case speakers([Int: String])
     }
@@ -39,7 +40,7 @@ public struct SayCommand: Sendable, Equatable {
         if let text { body["input"] = .string(text) }
         switch voice {
         case .studio: break
-        case .library(let key): body["voice"] = .string(key)
+        case .named(let key): body["voice"] = .string(key)
         case .character(let name, let description, let scene):
             var character: [String: JSON] = ["name": .string(name), "description": .string(description)]
             if let scene { character["scene"] = .string(scene) }
@@ -75,8 +76,11 @@ public struct SayUsageError: Error, Equatable {
     reads the text from standard input.
 
       -f FILE                 read the text from FILE (- for standard input)
-      -v VOICE                a library voice, by name or id
-      -v '?', --list-voices   list the voice library and exit
+      -v VOICE                a library voice, by name or id, or one of an
+                              engine's built-in voices, such as US_Emma
+                              (ming:US_Emma when a library voice shares the name)
+      -v '?', --list-voices   list the voice library and the installed
+                              engines' built-in voices, and exit
       --character "Name: description"
                               design a voice from a description
       --scene TEXT            where the character speaks (with --character)
@@ -160,7 +164,7 @@ extension SayCommand {
     private static let flags: [String: Flag] = {
         let input = Flag.value { draft, path in draft.file = path == "-" ? .standardInput : .file(URL(filePath: path)) }
         let voice = Flag.value { draft, key in
-            if key == "?" { draft.command.listVoices = true } else { try draft.setVoice(.library(key), flag: "-v") }
+            if key == "?" { draft.command.listVoices = true } else { try draft.setVoice(.named(key), flag: "-v") }
         }
         let output = Flag.value { draft, path in
             if path == "-" { draft.command.output = .standardOutput; return }
@@ -338,10 +342,16 @@ extension SayCommand {
         guard case .array(let voices)? = (try? JSON(parsing: reply.body))?["voices"] else {
             throw SayExit(status: 1, message: "Drama Studio's voice list is not the JSON it should be: \(reply.text.prefix(200))")
         }
-        let rows = voices.map { ($0["name"]?.string ?? "", $0["id"]?.string ?? "", $0["seconds"]?.double ?? 0) }
+        var rows = voices.map { ($0["name"]?.string ?? "", $0["id"]?.string ?? "", String(format: "%.1f s", $0["seconds"]?.double ?? 0)) }
+        if case .array(let builtIn)? = (try? JSON(parsing: reply.body))?["built_in"] {
+            rows += builtIn.map { voice in
+                let group = voice["group"]?.string ?? ""
+                return (voice["name"]?.string ?? "", voice["voice"]?.string ?? "", "built-in, " + (voice["note"]?.string.map { "\(group) (\($0))" } ?? group))
+            }
+        }
         let width = rows.map(\.0.count).max() ?? 0
-        let lines = rows.map { name, id, seconds in
-            name.padding(toLength: width, withPad: " ", startingAt: 0) + "  " + id + "  " + String(format: "%.1f s", seconds) + "\n"
+        let lines = rows.map { name, key, detail in
+            name.padding(toLength: width, withPad: " ", startingAt: 0) + "  " + key + "  " + detail + "\n"
         }
         environment.writeStandardOutput(Data(lines.joined().utf8))
     }
