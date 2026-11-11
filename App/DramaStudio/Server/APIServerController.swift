@@ -71,7 +71,7 @@ final class APIServerController {
             token: token,
             version: Self.version,
             jobs: jobs,
-            engineBusyElsewhere: { [session] in await session.state.isGenerating },
+            engineBusyElsewhere: { [session] in session.isGenerating },
             refusal: { [session] in await session.generationRefusal() }
         )
     }
