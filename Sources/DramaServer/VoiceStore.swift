@@ -108,12 +108,20 @@ public enum VoiceLookup {
         return .failure(.bad("No voice \"\(key)\" in the library. GET /v1/voices lists them."))
     }
 
-    /// What a `voice` key names. A library voice wins over a built-in voice
-    /// of the same name, so every key that named a library voice before
-    /// built-in voices still names it. `engine:name`, such as `ming:US_Emma`,
-    /// means the built-in one, which a library voice called `US_Emma` cannot
-    /// stand in for.
+    /// The built-in voice a qualified `engine:name` key names, such as
+    /// `ming:US_Emma`; nil for a bare name, or for a key like "Ming: Narrator"
+    /// that names no engine's built-in voice.
+    static func qualifiedBuiltIn(_ key: VoiceKey) -> BuiltInVoice? {
+        BuiltInVoice.qualifier(of: key) == nil ? nil : BuiltInVoice.named(key)
+    }
+
+    /// What a `voice` key names. A library voice wins a bare name over a
+    /// built-in voice, so every key that named a library voice before
+    /// built-in voices still names it. A qualified `engine:name` key such as
+    /// `ming:US_Emma` always means the built-in voice, whatever the library
+    /// holds; other keys with a colon, such as "Ming: Narrator", are library names.
     public static func resolve(_ key: VoiceKey, in voices: [ReferenceVoice]) -> Result<NamedVoice, APIError> {
+        if let voice = qualifiedBuiltIn(key) { return .success(.builtIn(voice)) }
         switch find(key, in: voices) {
         case .success(let voice):
             return .success(.library(voice))

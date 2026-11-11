@@ -118,6 +118,57 @@ final class APIBuiltInVoiceTests: XCTestCase {
         XCTAssertEqual(log.requests.last?.references.map(\.name), ["Ming: Narrator"], "a library name that starts like an engine id still names its voice")
     }
 
+    /// Catches a library voice saved under a qualified built-in key taking
+    /// over the built-in voice, which then breaks retakes of takes cast in it.
+    func testAQualifiedKeyAlwaysMeansTheBuiltInVoice() async throws {
+        let first = await speak(["voice": "ming:US_Emma"])
+        let id = try XCTUnwrap(first.headers["X-Drama-Take-Id"], text(first))
+        let added = await send("POST", "/v1/voices", json: ["name": "Impostor", "transcript": "Hello there.", "audio_base64": Self.clip.base64EncodedString()])
+        XCTAssertEqual(added.status, .created, text(added))
+        // Saved before the API refused such names, or by hand.
+        let store = VoiceDirectory(url: directory)
+        var impostor = try XCTUnwrap(store.load().voices.first)
+        impostor.name = "ming:US_Emma"
+        try store.add(impostor, clip: nil)
+
+        let named = await speak(["voice": "ming:US_Emma"])
+        XCTAssertEqual(named.status, .ok, text(named))
+        XCTAssertEqual(log.requests.last?.builtInVoice, emma)
+        XCTAssertEqual(log.requests.last?.references, [])
+        let retake = await send("POST", "/v1/audio/speech", json: ["previous_takes": [["take_id": id]]])
+        XCTAssertEqual(retake.status, .ok, text(retake))
+        XCTAssertEqual(log.requests.last?.builtInVoice, emma)
+        let byID = await speak(["voice": impostor.id.uuidString])
+        XCTAssertEqual(byID.status, .ok, text(byID))
+        XCTAssertEqual(log.requests.last?.references.map(\.id), [impostor.id], "its id still reaches the library voice")
+    }
+
+    func testANewLibraryVoiceCannotTakeAQualifiedBuiltInName() async throws {
+        for name in ["ming:US_Emma", "MING:us_emma"] {
+            let added = await send("POST", "/v1/voices", json: ["name": name, "transcript": "Hello there.", "audio_base64": Self.clip.base64EncodedString()])
+            XCTAssertEqual(added.status, .badRequest, name)
+            XCTAssertTrue(text(added).contains("names the built-in Ming voice US_Emma"), text(added))
+        }
+        let unknown = await send("POST", "/v1/voices", json: ["name": "ming:Nobody", "transcript": "Hello there.", "audio_base64": Self.clip.base64EncodedString()])
+        XCTAssertEqual(unknown.status, .created, "no built-in voice is called that, so the name is free")
+    }
+
+    /// Catches a take cast in a library voice that was since deleted turning
+    /// into the built-in voice of the same name.
+    func testARetakeOfADeletedLibraryVoiceSaysSo() async throws {
+        let added = await send("POST", "/v1/voices", json: ["name": "US_Emma", "transcript": "Hello there.", "audio_base64": Self.clip.base64EncodedString()])
+        XCTAssertEqual(added.status, .created, text(added))
+        let first = await speak(["voice": "US_Emma"])
+        let id = try XCTUnwrap(first.headers["X-Drama-Take-Id"], text(first))
+        let deleted = await send("DELETE", "/v1/voices/US_Emma")
+        XCTAssertEqual(deleted.status, .ok, text(deleted))
+
+        let retake = await send("POST", "/v1/audio/speech", json: ["previous_takes": [["take_id": id]]])
+        XCTAssertEqual(retake.status, .badRequest)
+        XCTAssertTrue(text(retake).contains("was spoken in a library voice that is no longer in the library"), text(retake))
+        XCTAssertEqual(log.requests.count, 1, "the built-in US_Emma never spoke the retake")
+    }
+
     /// Catches Drama 3 speaking a Ming voice's line in a voice of its own.
     func testAnotherEngineAnswers400OnEveryRouteAndNeverRuns() async throws {
         let message = "Drama 3 can't speak in UK_George, a built-in Ming voice; switch to Ming or choose another voice"

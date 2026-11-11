@@ -387,9 +387,15 @@ These rules apply everywhere:
   The API returns that message with `400`.
 - A library voice wins its name. If you save a library voice called
   `US_Emma`, then `"voice": "US_Emma"` means your voice, as it did before.
-  `ming:US_Emma`, the engine id, a colon and the name, means the built-in
-  voice. A name is matched exactly first, then without regard to
-  case.
+  `ming:US_Emma`, the engine id, a colon and the name, always means the
+  built-in voice, so `POST /v1/voices` refuses it as a library name with
+  `400`. A name with a colon that names no built-in voice, such as
+  "Ming: Narrator", stays a library name. A name is matched exactly first,
+  then without regard to case.
+- A retake keeps the voice its take was spoken in. If that was a library
+  voice you have since deleted, the retake fails with `400` and "The take …
+  was spoken in a library voice that is no longer in the library", rather than
+  switching to a built-in voice of the same name.
 - A built-in voice speaks the first sentence, and Ming clones that sentence
   for the rest of the take, as it does for a designed voice. Later takes of
   the line clone the first take. In the app, the first take that passes the
