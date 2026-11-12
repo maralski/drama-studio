@@ -34,6 +34,7 @@ struct ScriptEditorView: View {
                 let highlight = model.state.isPlaying ? model.highlight(at: model.position) : nil
                 editor(highlight: model.document == nil || highlight?.segmentID == model.selectedSegmentID ? highlight : nil)
             }
+            .background(GeometryReader { Color.clear.preference(key: ScriptTextHeight.self, value: $0.size.height) })
             Divider()
             ScriptFooter(model: model)
         }

@@ -82,7 +82,8 @@ Ming instead of Drama 3.
   into view; deleting a take or editing the script leaves the grid on the row
   you scrolled to. Drag the grid's top edge up to show more rows. On release
   the height settles on the nearest whole rows, and it never takes the editor
-  below 220 points, in a shorter window too. Drag the edge back down for the
+  below 220 points or the script text below one line, in a shorter window
+  too. Drag the edge back down for the
   automatic height.
 - The HTTP API lists every installed engine in `GET /v1/models`, takes the
   engine in the speech body's `model` field or the `model` query parameter,

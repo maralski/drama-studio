@@ -118,19 +118,39 @@ struct EditorOverTakes<Editor: View>: View {
     let model: SessionModel
     @ViewBuilder var editor: Editor
     @State private var height: CGFloat?
+    @State private var editorHeight: CGFloat?
+    @State private var textHeight: CGFloat?
 
     var body: some View {
         VStack(spacing: 0) {
             editor.frame(minHeight: EditorFloor.height)
-            TakesStrip(model: model, room: height.map { $0 - EditorFloor.height }).layoutPriority(1)
+                .onGeometryChange(for: CGFloat.self, of: \.size.height) { editorHeight = $0 }
+                .onPreferenceChange(ScriptTextHeight.self) { textHeight = $0 }
+            TakesStrip(model: model, room: height.map { $0 - floor }).layoutPriority(1)
         }
         .onGeometryChange(for: CGFloat.self, of: \.size.height) { height = $0 }
+    }
+
+    /// The banners, footer and transport around the script text keep their
+    /// heights whatever the takes leave, so the floor is theirs plus a few
+    /// lines of text.
+    private var floor: CGFloat {
+        guard let editorHeight, let textHeight else { return EditorFloor.height }
+        return max(EditorFloor.height, editorHeight - textHeight + EditorFloor.text)
     }
 }
 
 enum EditorFloor {
     /// The least height the editor and transport keep above the takes.
     static let height: CGFloat = 220
+    /// The least height the script text keeps when the editor reports it: one line.
+    static let text: CGFloat = 40
+}
+
+/// The height of the script text inside the editor.
+struct ScriptTextHeight: PreferenceKey {
+    static let defaultValue: CGFloat? = nil
+    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) { value = nextValue() ?? value }
 }
 
 struct NewVoiceRequest: Identifiable {

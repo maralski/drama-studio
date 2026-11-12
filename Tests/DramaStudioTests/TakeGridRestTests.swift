@@ -143,6 +143,26 @@ final class TakeGridRestTests: XCTestCase {
         }
     }
 
+    /// The script text keeps a few lines when the grid is dragged as far as
+    /// it goes, whatever banners and transport share the editor with it.
+    func testTheScriptTextStaysInViewUnderATallGrid() async throws {
+        let model = TakeFixture.model(in: scratch)
+        try await TakeFixture.mixed(in: model)
+        editor.chrome = 200
+        let window = try await strip(model, width: 520, height: 760, shown: true)
+        defer { window.close() }
+        try await window.scroller(to: 0)
+        try await window.drag(from: CGPoint(x: 260, y: 760 - editor.points - 4), rise: 600)
+        XCTAssertGreaterThanOrEqual(editor.text, EditorFloor.text - 0.5, "the text keeps its lines")
+        try assertWholeRows(window, "dragged past the text's floor")
+        for height in [700.0, 640] {
+            editor.window = height
+            try await window.settle()
+            XCTAssertGreaterThanOrEqual(editor.text, EditorFloor.text - 0.5, "\(Int(height)) tall: the text keeps its lines")
+            try assertWholeRows(window, "\(Int(height)) tall under a tall editor")
+        }
+    }
+
     /// A height chosen in a tall window still shows whole rows, and leaves the
     /// editor its floor, when the window gets shorter.
     func testAChosenHeightFitsAShorterWindow() async throws {
@@ -248,16 +268,30 @@ final class TakeGridRestTests: XCTestCase {
 private final class EditorHeight {
     /// The height the host gives the editor and the strip together.
     var window: CGFloat = 640
+    /// The height of what shares the editor with the script text.
+    var chrome: CGFloat = 0
     @ObservationIgnored var points: CGFloat = 0
+    @ObservationIgnored var text: CGFloat = 0
 }
 
-/// The workspace's own arrangement, with an empty editor that reports its height.
+/// The workspace's own arrangement, with an empty editor that reports its
+/// height and, when it has chrome, the height of its text.
 private struct EditorOverTakesHost: View {
     let model: SessionModel
     let editor: EditorHeight
     var body: some View {
         EditorOverTakes(model: model) {
-            Color.clear.onGeometryChange(for: CGFloat.self, of: \.size.height) { editor.points = $0 }
+            VStack(spacing: 0) {
+                if editor.chrome > 0 {
+                    Color.clear
+                        .onGeometryChange(for: CGFloat.self, of: \.size.height) { editor.text = $0 }
+                        .background(GeometryReader { Color.clear.preference(key: ScriptTextHeight.self, value: $0.size.height) })
+                    Color.clear.frame(height: editor.chrome)
+                } else {
+                    Color.clear
+                }
+            }
+            .onGeometryChange(for: CGFloat.self, of: \.size.height) { editor.points = $0 }
         }
         .frame(height: editor.window)
     }
