@@ -1068,7 +1068,7 @@ wait, and 1 on any other error, after printing the server's message.
 
 ## Using the engine in your own app
 
-`DramaEngine` is a Swift library, version 2.1.3 (`DramaEngineVersion.string`,
+`DramaEngine` is a Swift library, version 3.0.0 (`DramaEngineVersion.string`,
 `CHANGELOG.md`). Add this repository as a package dependency and the
 `DramaEngine` product to a target; the app, the server and the CLI are not
 needed. The public API includes `ModelLocation`, `MingLocation` and

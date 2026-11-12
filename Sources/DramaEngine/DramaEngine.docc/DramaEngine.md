@@ -110,7 +110,7 @@ Every value type is `Sendable`. ``DramaSynthesizer``, ``MingSynthesizer``,
 ``DramaSynthesizer`` runs one request at a time. A second request waits for the
 first to finish.
 
-`DramaEngineVersion.string` is the library's semantic version, `"2.1.3"`
+`DramaEngineVersion.string` is the library's semantic version, `"3.0.0"`
 for this release. `CHANGELOG.md` at the repository root lists what each
 release changed.
 

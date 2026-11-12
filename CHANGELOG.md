@@ -5,7 +5,7 @@ DramaEngine follows [semantic versioning](https://semver.org). The version is
 release removes a public symbol or changes what one means, a minor release
 adds one, and a patch release changes neither.
 
-## Unreleased
+## 3.0.0
 
 Drama Studio adds a second engine, Ming: inclusionAI's Ming-3.0-tts-0.5B
 through MingTTS 0.1.0, a Swift and Metal port. Its checkpoint is 3.0 GB
