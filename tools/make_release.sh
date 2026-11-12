@@ -15,6 +15,7 @@
 #                   codecs by archive digest, and zipping the same models
 #                   again gives a new digest, so a fresh zip makes every
 #                   user download the codec again.
+#                   Its NOTICE may differ from this release's.
 set -euo pipefail
 
 root=${0:A:h:h}
@@ -83,7 +84,11 @@ fi
 for package in $packages; do
     [[ -f "$roundtrip/$package/Manifest.json" ]] || { print -u2 "$package unpacked without its Manifest.json."; exit 1; }
 done
-if ! diff -rq "$codec_stage" "$roundtrip" >&2; then
+# A reused zip keeps the NOTICE of the release it was made for. NOTICE also
+# covers the app, so it can change while the codec and its license do not.
+unchecked=()
+[[ -n ${CODEC_ZIP:-} ]] && unchecked=(--exclude NOTICE)
+if ! diff -rq $unchecked "$codec_stage" "$roundtrip" >&2; then
     print -u2 "The codec zip's contents differ from the local models and licenses."
     exit 1
 fi
