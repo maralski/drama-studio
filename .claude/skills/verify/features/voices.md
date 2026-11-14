@@ -29,6 +29,7 @@ Proof for a built-in voice: `200` with `X-Drama-Engine: ming` and a WAV. Proof f
 
 ## Gotchas
 
+- Under `ds_serve`, `POST /v1/voices` writes to `$DS_HOME/Voices` only because `ds_serve` passes `--voices`. A hand-started `drama serve` writes to the user's real library.
 - A fresh verify home has no library voices. To test with one, `POST /v1/voices` with a clip from `Tests/DramaEngineTests/Fixtures`, never by copying the user's real `Voices` folder for anything that writes.
 - Choosing a file in the Add Voice sheet goes through an open panel, which accessibility cannot drive here. Use `POST /v1/voices` or the hosted tests in `Tests/DramaStudioTests/AppBuiltInVoiceTests.swift`.
 - Nobody hears the result. A `200` and a passed word check do not show that the voice is the one named.

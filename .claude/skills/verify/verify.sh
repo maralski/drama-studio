@@ -72,7 +72,8 @@ _ds_start() { # _ds_start <log> <command...>
   ds_doctor
 }
 ds_app() { _ds_start app.log $DS_BIN/DramaStudio }
-ds_serve() { _ds_start serve.log $DS_BIN/drama serve --port $DS_PORT --engine ${1:-ming} --ming-weights $MING_WEIGHTS }
+# --voices is required: without it drama serve uses the real voice library, whatever DRAMA_STUDIO_HOME says
+ds_serve() { mkdir -p $DS_HOME/Voices; _ds_start serve.log $DS_BIN/drama serve --port $DS_PORT --engine ${1:-ming} --ming-weights $MING_WEIGHTS --voices $DS_HOME/Voices }
 
 ds_doctor() { # read-only: our process, our port, our build, our home
   _ds_load

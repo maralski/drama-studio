@@ -18,6 +18,7 @@ Each Bash tool call is a new shell. The script records the running instance's pi
 ## Rules that are not negotiable
 
 - Never read-modify or write `~/Library/Application Support/DramaStudio`. It is the user's real voice library and projects. `ds_home` makes a home under `.build/verify/` and every launch sets `DRAMA_STUDIO_HOME` to it.
+- `drama serve` keeps voices in the real library unless it gets `--voices`, whatever `DRAMA_STUDIO_HOME` says. `ds_serve` passes `--voices $DS_HOME/Voices`. Never start `drama serve` by hand without it, and after any run that adds a voice, check that the real `Voices` folder is unchanged.
 - Never use port 8780. The user's own app listens there. The script uses 8791 and refuses 8780. `drama-say` and `drama-mcp` default to 8780 and start the user's app when nothing answers, so call `drama-say` only through `ds_say`.
 - Never download model weights and never press a Download button. `ds_home ming` points at weights already on this Mac: `MING_WEIGHTS`, else the untracked `local.env` beside the script (one line, `MING_WEIGHTS=/path`), else the newest snapshot in the Hugging Face cache. It stops when none has `model.safetensors`. `ds_home drama3` reuses the installed Drama 3 snapshot and codec and stops if they are missing.
 - Never click "I Agree" on the Fish Audio terms. `ds_home drama3` records the user's existing agreement in the test home, which is the only thing the user approved.
