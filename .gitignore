@@ -14,7 +14,9 @@ dist/
 !Tests/DramaEngineTests/Fixtures/*.wav
 !Tests/DramaStudioTests/Fixtures/FormatV4/**/*.wav
 .DS_Store
-.claude/
+.claude/*
+!.claude/skills/
+.claude/skills/verify/local.env
 __pycache__/
 App/Icon/AppIcon.iconset/
 
