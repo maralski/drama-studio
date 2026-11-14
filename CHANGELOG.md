@@ -5,14 +5,14 @@ DramaEngine follows [semantic versioning](https://semver.org). The version is
 release removes a public symbol or changes what one means, a minor release
 adds one, and a patch release changes neither.
 
-## Unreleased
+## 3.1.0
 
 - Fix the word check not finding its helper in tests built with Xcode's
   build system, which `swift test` uses from Swift 6.4. The helper lookup
   assumed the engine's resource bundle sat beside the helper, and that build
   embeds it in the test bundle. 15 tests that run the real recognizers failed
   with "the bundled independent recognition helper or model is missing".
-- DramaEngine builds against MingTTS 0.2.0 and takes Ming's sound tags, the
+- DramaEngine builds against MingTTS 0.2.1 and takes Ming's sound tags, the
   files a checkpoint folder needs, each built-in voice's group and emotion,
   and the 15-second clone limit from the package. Before, it kept its own
   copies.

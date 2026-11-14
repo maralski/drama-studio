@@ -10,7 +10,7 @@ let engineLibraryType: Product.Library.LibraryType? = Context.environment["DRAMA
 // MING_PACKAGE_PATH builds against a local MingTTS checkout instead of the release.
 let mingPackagePath = Context.environment["MING_PACKAGE_PATH"]
 let mingPackage: Package.Dependency = mingPackagePath.map { .package(path: $0) }
-    ?? .package(url: "https://github.com/maralski/ming-tts.git", exact: "0.2.0")
+    ?? .package(url: "https://github.com/maralski/ming-tts.git", exact: "0.2.1")
 let mingPackageName = mingPackagePath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "ming-tts"
 
 let package = Package(
