@@ -11,7 +11,7 @@ public struct SetupItem: Sendable, Equatable {
     public enum Component: String, Sendable, CaseIterable {
         /// Drama 3: `config.json`, `model.safetensors.index.json` and every
         /// shard the index names, eight shards, 39.6 GB, in a 41.5 GB download.
-        /// Ming: `config.json` and `model.safetensors`, 3.0 GB in all.
+        /// Ming: `model.safetensors`, 3.0 GB.
         case weights
         /// `tokenizer.json` in the snapshot.
         case tokenizer
@@ -274,7 +274,7 @@ public enum DramaSetup: Sendable {
             return SetupItem(component: component, state: .ready, url: dir.appending(path: names.last!), summary: "\(what), \(megabytes(bytes)) at \(dir.path).")
         }
         return SetupReport(engine: .ming, directory: location?.directory, items: [
-            file(.weights, ["config.json", "model.safetensors"], "Weights"),
+            file(.weights, ["model.safetensors"], "Weights"),
             file(.tokenizer, ["tokenizer.json"], "Tokenizer"),
             file(.speakerEncoder, ["campplus.onnx"], "Speaker encoder"),
             wordRecognizerItem(),

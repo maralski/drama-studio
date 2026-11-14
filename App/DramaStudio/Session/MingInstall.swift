@@ -46,7 +46,7 @@ final class MingInstall {
     }
 
     nonisolated static func missingFiles(in directory: URL) -> [String] {
-        MingLocation.requiredFiles.filter { !FileManager.default.fileExists(atPath: directory.appending(path: $0).path) }
+        MingLocation(directory: directory).missingFiles
     }
 
     /// Why the download can't start now: too little disk.

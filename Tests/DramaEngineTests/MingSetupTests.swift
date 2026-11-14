@@ -42,6 +42,15 @@ final class MingSetupTests: XCTestCase {
         XCTAssertEqual(plan.files.first { $0.path == "model.safetensors" }?.size, 2_959_055_504)
     }
 
+    func testAMingFolderIsCompleteWithoutConfigJSONWhichTheEngineNeverReads() throws {
+        let folder = try checkpoint(at: root.appending(path: "no-config"), files: ["model.safetensors", "tokenizer.json", "campplus.onnx"])
+        XCTAssertTrue(MingLocation(directory: folder).isComplete)
+        let checkpointItems = DramaSetup.check(ming: MingLocation(directory: folder)).items.filter { $0.component != .wordRecognizer }
+        XCTAssertEqual(checkpointItems.map(\.state), [.ready, .ready, .ready])
+        try FileManager.default.removeItem(at: folder.appending(path: "campplus.onnx"))
+        XCTAssertEqual(MingLocation(directory: folder).missingFiles, ["campplus.onnx"])
+    }
+
     func testMingIsFoundInTheHubCacheThatHFHubCacheNames() throws {
         unsetenv("MING_WEIGHTS")
         let hub = root.appending(path: "hub", directoryHint: .isDirectory)

@@ -247,7 +247,7 @@ private struct MingSection: View {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
-        panel.message = "Choose the folder that holds Ming's model.safetensors, config.json, tokenizer.json and campplus.onnx."
+        panel.message = "Choose the folder that holds Ming's model.safetensors, tokenizer.json and campplus.onnx."
         if panel.runModal() == .OK, let url = panel.url { path = url.path }
     }
 }

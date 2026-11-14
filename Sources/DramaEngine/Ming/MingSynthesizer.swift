@@ -5,7 +5,7 @@ import Synchronization
 internal import MingTTS
 
 /// Where the Ming-3.0-tts-0.5B checkpoint lives: `model.safetensors`,
-/// `config.json`, `tokenizer.json` and, for cloning, `campplus.onnx`.
+/// `tokenizer.json` and, for cloning, `campplus.onnx`.
 public struct MingLocation: Sendable, Equatable {
     /// Where a checkpoint folder came from, which decides how setup says to
     /// complete it.
@@ -30,18 +30,18 @@ public struct MingLocation: Sendable, Equatable {
     /// ``HuggingFaceCache``, or the newest one when none is complete; nil
     /// when there is neither.
     public static func find() -> MingLocation? {
-        if let path = ProcessInfo.processInfo.environment["MING_WEIGHTS"], !path.isEmpty {
-            return MingLocation(directory: URL(filePath: path, directoryHint: .isDirectory))
-        }
-        return HuggingFaceCache.latestSnapshot(of: SpeechEngineID.ming.install.repo) { MingLocation(directory: $0).isComplete }
-            .map { MingLocation(directory: $0, source: .huggingFaceCache) }
+        let environment = ProcessInfo.processInfo.environment
+        let named = environment["MING_WEIGHTS"].map { !$0.isEmpty } ?? false
+        return MingCheckpoint.find(environment: environment).map { MingLocation(directory: $0.directory, source: named ? .named : .huggingFaceCache) }
     }
 
-    public static let requiredFiles = ["model.safetensors", "config.json", "tokenizer.json", "campplus.onnx"]
+    /// The files MingTTS reads: the weights, the tokenizer and, to clone a voice, the speaker encoder.
+    public static let requiredFiles = MingCheckpoint.synthesisFiles + MingCheckpoint.cloningFiles
 
-    public var isComplete: Bool {
-        Self.requiredFiles.allSatisfy { FileManager.default.fileExists(atPath: directory.appendingPathComponent($0).path) }
-    }
+    /// The files of ``requiredFiles`` the folder lacks.
+    public var missingFiles: [String] { MingCheckpoint(directory: directory).missingFiles }
+
+    public var isComplete: Bool { missingFiles.isEmpty }
 }
 
 /// Ming-3.0-tts-0.5B behind the same protocol as Drama 3. Requests run one
@@ -129,7 +129,7 @@ public actor MingSynthesizer: SpeechSynthesizer {
         let plan = try MingPlan(request)
         let config = request.config
         let verifier = try LocalWordVerifier.prepare(lines: plan.chunks.map(\.spoken.text), language: request.language, config: config, shouldContinue: { !Task.isCancelled })
-        let language = plan.language.flatMap(MingCues.languageCode).flatMap(MingLanguage.init(id:)) ?? .english
+        let language = plan.language.flatMap(MingLanguage.init(id:)) ?? .english
         continuation.yield(.loadingModel(progress: 0, detail: "Mapping weights"))
         let model = try await loadedModel { detail in continuation.yield(.loadingModel(progress: 0, detail: detail)) }
         continuation.yield(.loadingModel(progress: 1, detail: "Ready"))

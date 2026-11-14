@@ -565,7 +565,7 @@ uvx --from huggingface_hub hf download inclusionAI/Ming-3.0-tts-0.5B
 ```
 
 To use a checkpoint in another folder, set `MING_WEIGHTS` to the folder that
-holds `model.safetensors`, `config.json`, `tokenizer.json` and
+holds `model.safetensors`, `tokenizer.json` and
 `campplus.onnx`. The app's **Settings > Ming** can also download the pinned
 revision.
 
