@@ -16,21 +16,29 @@ package final class IndependentWordRecognizer: @unchecked Sendable {
     package private(set) var identity: RecognitionReady?
 
     /// Where the helper and the language's model must be: beside the
-    /// executable, or beside the engine resource bundle in embedded hosts such
-    /// as XCTest. Installed apps keep the model in Contents/Resources.
+    /// executable, or in embedded hosts such as XCTest beside the engine
+    /// resource bundle or up to three folders above it. Installed apps keep
+    /// the model in Contents/Resources.
     package static func runtimeFiles(language: String, runtimeDirectory: URL? = nil) -> (helper: URL, model: URL) {
         var executableDirectory = URL(fileURLWithPath: Bundle.main.executablePath ?? CommandLine.arguments[0]).deletingLastPathComponent()
         if let runtimeDirectory {
             executableDirectory = runtimeDirectory
-        } else if Bundle.main.bundleURL.pathExtension != "app",
-                  !FileManager.default.isExecutableFile(atPath: executableDirectory.appendingPathComponent(WordRecognitionAssets.helperName).path) {
-            executableDirectory = EngineResources.bundle().bundleURL.deletingLastPathComponent()
+        } else if Bundle.main.bundleURL.pathExtension != "app", !hasHelper(executableDirectory) {
+            // SwiftPM puts the resource bundle beside the helper. Xcode's build system embeds it in
+            // the test bundle's Contents/Resources, three folders below the helper.
+            let besideBundle = EngineResources.bundle().bundleURL.deletingLastPathComponent()
+            let folders = sequence(first: besideBundle) { $0.deletingLastPathComponent() }.prefix(4)
+            executableDirectory = folders.first(where: hasHelper) ?? besideBundle
         }
         let helper = executableDirectory.appendingPathComponent(WordRecognitionAssets.helperName)
         let resourceDirectory = Bundle.main.bundleURL.pathExtension == "app" ? Bundle.main.resourceURL! : executableDirectory
         let model = resourceDirectory.appendingPathComponent(WordRecognitionAssets.modelDirectory)
             .appendingPathComponent(WordRecognitionAssets.model(for: language).fileName)
         return (helper, model)
+    }
+
+    private static func hasHelper(_ directory: URL) -> Bool {
+        FileManager.default.isExecutableFile(atPath: directory.appendingPathComponent(WordRecognitionAssets.helperName).path)
     }
 
     package init(language: String, deadline: ContinuousClock.Instant, shouldContinue: () -> Bool, runtimeDirectory: URL? = nil) throws {
