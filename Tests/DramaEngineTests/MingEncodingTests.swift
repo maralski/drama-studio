@@ -10,6 +10,33 @@ final class MingEncodingTests: XCTestCase {
                               speakerEmbedding: (0..<192).map { Float($0) / 192 })
     }
 
+    private func tone(seconds: Double) -> [Float] {
+        (0..<Int(seconds * 44_100)).map { 0.3 * sin(Float($0) * 2 * .pi * 220 / 44_100) }
+    }
+
+    func testAClipIsEncodedWithoutTheSilenceAtItsEnds() throws {
+        let silence = { (seconds: Double) in [Float](repeating: 0, count: Int(seconds * 44_100)) }
+        let speech = try MingSynthesizer.speech(in: silence(0.7) + tone(seconds: 1) + silence(2))
+        XCTAssertEqual(Double(speech.count) / 44_100, 1.1, accuracy: 0.02, "the tone and 50 ms either side")
+        XCTAssertGreaterThan(abs(speech[speech.count / 2]), 0, "the speech itself is kept")
+        XCTAssertEqual(try MingSynthesizer.speech(in: tone(seconds: 1)).count, 44_100, "a clip with no silence is left whole")
+    }
+
+    func testASilentClipIsRefusedByName() {
+        XCTAssertThrowsError(try MingSynthesizer.speech(in: [Float](repeating: 0, count: 44_100))) { error in
+            XCTAssertEqual("\(error)", "bad voice encoding: the clip is silent")
+        }
+    }
+
+    func testTheRealEngineEncodesOnlyTheSpeechOfAClip() async throws {
+        guard let path = ProcessInfo.processInfo.environment["MING_WEIGHTS"], case let location = MingLocation(directory: URL(filePath: path)), location.isComplete else {
+            throw XCTSkip("set MING_WEIGHTS to a Ming checkpoint")
+        }
+        let clip = tone(seconds: 2) + [Float](repeating: 0, count: 2 * 44_100)
+        let encoding = try await MingSynthesizer(location: location).encodeVoice(samples: clip, transcript: "A steady tone.")
+        XCTAssertEqual(Double(encoding.sampleCount) / 44_100, 2.05, accuracy: 0.05, "2 s of tone, not the 4 s clip")
+    }
+
     func testAMingVoiceRoundTripsThroughFormatFiveJSONUnderItsOwnKey() throws {
         let voice = ReferenceVoice(name: "Ada", transcript: "Hello there.", encodings: [try .ming(reference: reference())], clipSampleCount: 10_584)
         let data = try JSONEncoder().encode(voice)

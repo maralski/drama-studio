@@ -5,6 +5,16 @@ DramaEngine follows [semantic versioning](https://semver.org). The version is
 release removes a public symbol or changes what one means, a minor release
 adds one, and a patch release changes neither.
 
+## Unreleased
+
+- Ming clones a voice from the speech in a clip, without the silence at its
+  ends. Before, **Add Voice** and `POST /v1/voices` encoded the whole clip,
+  and a clip that ended in silence could make Ming stop a line early: with
+  2 seconds of trailing silence, one test line in six failed its word check
+  on every attempt. The library still keeps the clip as you gave it. A voice
+  added before this keeps its encoding until you add it again. A silent clip
+  is refused with "the clip is silent".
+
 ## 3.1.0
 
 - Fix the word check not finding its helper in tests built with Xcode's

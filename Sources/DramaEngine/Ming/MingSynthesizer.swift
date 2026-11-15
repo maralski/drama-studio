@@ -93,7 +93,16 @@ public actor MingSynthesizer: SpeechSynthesizer {
     /// for a 12 s clip on an M3 Max.
     public func encodeVoice(samples: [Float], transcript: String) async throws -> VoiceEncoding {
         let model = try await loadedModel()
-        return .ming(reference: try Self.encode(samples, transcript: transcript, with: model))
+        return .ming(reference: try Self.encode(try Self.speech(in: samples), transcript: transcript, with: model))
+    }
+
+    /// A clip without the silence at its ends. A reference that ends in
+    /// silence teaches Ming to stop: with 2 s of it, one line in six ran out
+    /// of attempts, and none did once it was trimmed.
+    package static func speech(in clip: [Float]) throws -> [Float] {
+        let speech = trimSilence(clip, sampleRate: ModelConstants.sampleRate)
+        guard !speech.isEmpty else { throw EngineError.badVoiceEncoding("the clip is silent") }
+        return speech
     }
 
     static func encode(_ samples: [Float], transcript: String, with model: MingTTSModel) throws -> MingVoiceEncoding {
