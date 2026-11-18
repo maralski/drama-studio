@@ -13,16 +13,12 @@ final class FrameBudgetTests: XCTestCase {
             transcript: "Hey there my name is Joey and I love you",
             codes: Array(repeating: Array(repeating: 1, count: 142), count: 10))
         let text = "Here is a poem for you.\nThe morning light begins to break, Across the quiet, misty lake."
-        let plan = try GenerationPlan(text: text, references: [reference], config: GenerationConfig())
+        let plan = try GenerationPlan(SpeechRequest(text: text, references: [Self.voice(reference)]))
         XCTAssertEqual(GenerationEstimate(outline: try SpeechOutline(SpeechRequest(text: text, references: [Self.voice(reference)]), engine: .drama3)).expectedFrames, [82, 227],
                        "A slow reference must not use the generic 16 characters/second timing.")
         let line = try XCTUnwrap(plan.chunks.last).line
         let expected = plan.expectedSeconds(for: line)
         XCTAssertEqual(FrameGenerator.frameBudget(for: line, config: GenerationConfig(), expectedSeconds: expected), 384)
-        let probe = SilenceProbePolicy.shipped.schedule(expectedSeconds: expected, silenceFrames: 44)
-        XCTAssertFalse(probe.reads(at: 96), "A pause within the poem sentence must not end this slow chunk.")
-        XCTAssertFalse(probe.reads(at: 256))
-        XCTAssertTrue(probe.reads(at: 272))
         var fixed = GenerationConfig()
         fixed.frameCap = .fixed(100)
         XCTAssertEqual(FrameGenerator.frameBudget(for: line, config: fixed, expectedSeconds: expected), 100)
@@ -35,26 +31,23 @@ final class FrameBudgetTests: XCTestCase {
         let reference = Drama3Prompt.Reference(transcript: line,
             codes: Array(repeating: Array(repeating: 1, count: 157), count: 10))
         let config = GenerationConfig()
-        let plan = try GenerationPlan(text: line, references: [reference], config: config)
+        let plan = try GenerationPlan(SpeechRequest(text: line, references: [Self.voice(reference)], config: config))
         let allowance = plan.expectedSeconds(for: line)
         XCTAssertEqual(allowance, 7.291065759637188, accuracy: 1e-9)
         XCTAssertEqual(GenerationEstimate(outline: try SpeechOutline(SpeechRequest(text: line, references: [Self.voice(reference)]), engine: .drama3)).expectedFrames, [157])
         XCTAssertEqual(FrameGenerator.frameBudget(for: line, config: config, expectedSeconds: allowance), 279)
         let expected = FrameGenerator.expectedSeconds(for: line)
         XCTAssertEqual(expected, 1.9375)
-        XCTAssertFalse(FrameGenerator.shouldRetry(end: .eos, spokenSeconds: 3.07, expectedSeconds: expected, config: config))
-        XCTAssertTrue(FrameGenerator.shouldRetry(end: .eos, spokenSeconds: 1, expectedSeconds: expected, config: config),
+        XCTAssertFalse(FrameGenerator.shouldRetry(end: .eos, spokenSeconds: 3.07, expectedSeconds: expected, config: config.drama))
+        XCTAssertTrue(FrameGenerator.shouldRetry(end: .eos, spokenSeconds: 1, expectedSeconds: expected, config: config.drama),
                       "The text-only threshold must still reject a short attempt.")
-        let probe = SilenceProbePolicy.shipped.schedule(expectedSeconds: allowance, silenceFrames: 44)
-        XCTAssertFalse(probe.reads(at: 192))
-        XCTAssertTrue(probe.reads(at: 208), "Opt-in silence probes must keep the full reference-aware allowance.")
     }
 
     func testFastReferencesDoNotShortenTheDefaultAllowance() throws {
         let reference = Drama3Prompt.Reference(transcript: "Twelve chars",
             codes: Array(repeating: Array(repeating: 1, count: 10), count: 10))
         for references in [[], [reference]] {
-            let plan = try GenerationPlan(text: "Twelve chars", references: references, config: GenerationConfig())
+            let plan = try GenerationPlan(SpeechRequest(text: "Twelve chars", references: references.map(Self.voice)))
             XCTAssertEqual(plan.expectedSeconds(for: "Twelve chars"), 0.75)
             let request = SpeechRequest(text: "Twelve chars", references: references.map(Self.voice))
             XCTAssertEqual(GenerationEstimate(outline: try SpeechOutline(request, engine: .drama3)).expectedFrames, [16])

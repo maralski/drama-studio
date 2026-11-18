@@ -53,7 +53,7 @@ for package in $packages; do
 done
 if (( $#missing )); then
     print -u2 "Missing from $codec_dir: ${(j:, :)missing}."
-    print -u2 "Build them with Sources/DramaEngine/CodecConversion/convert_codec.py (see the README's codec section)."
+    print -u2 "Build them with the conversion commands .build/release/drama setup prints (see the README's Build requirements)."
     exit 1
 fi
 

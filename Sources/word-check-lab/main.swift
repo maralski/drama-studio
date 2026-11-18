@@ -14,6 +14,7 @@
 // WORD_CHECK_VOICE_<NAME>, for example WORD_CHECK_VOICE_NEWSREADER.
 import AVFoundation
 import DramaEngine
+import DramaTTS
 import Foundation
 import Speech
 
@@ -73,22 +74,21 @@ func gen(_ items: [Item], out: URL) throws {
             .appendingPathComponent("Library/Application Support/DramaStudio/Models/drama-3-e0a9218")
         return FileManager.default.fileExists(atPath: own.path) ? ModelLocation(directory: own) : nil
     }() else { log("no model"); exit(1) }
-    let model = try DramaModel(location: loc, precision: .exact, capacity: DramaModel.defaultCapacity, schedule: nil)
-    let tokenizer = try Tokenizer(url: model.location.directory.appendingPathComponent("tokenizer.json"))
+    let model = try DramaModel(checkpoint: loc.checkpoint, tuningDirectory: DramaSynthesizer.defaultTuningDirectory, packedDirectory: DramaSynthesizer.packedDirectory)
+    let tokenizer = try DramaTokenizer(url: loc.directory.appendingPathComponent("tokenizer.json"))
     let gen = FrameGenerator(model: model, tokenizer: tokenizer)
-    let codec = try blocking { try await DramaCodec(directory: DramaCodec.defaultDirectory) }
-    gen.codec = { codes, window in try DramaSynthesizer.decodeBlocking(codec, codes: codes, window: window) }
+    let codec = try blocking { try await DramaCodec(directory: DramaCodec.defaultDirectory) }.audioCodec
+    gen.codec = { codes, window in try codec.decodeBlocking(codes: codes, window: window) }
     for item in items where item.audio == nil {
         let wav = out.appendingPathComponent(item.id + ".wav")
         if FileManager.default.fileExists(atPath: wav.path) { continue }
-        var refs: [Drama3Prompt.Reference] = []
+        var refs: [DramaPrompt.Reference] = []
         if let voice = item.voice {
             struct V: Decodable { var transcript: String; var codes: [[Int32]] }
             let v = try JSONDecoder().decode(V.self, from: Data(contentsOf: URL(fileURLWithPath: voices[voice]!)))
             refs.append(.init(transcript: v.transcript, codes: v.codes))
         }
-        var config = GenerationConfig()
-        config.wordVerification = .uncheckedPreview
+        var config = DramaSynthesisOptions()
         config.chunking = .sentences
         config.minSpokenRatio = 0          // raw attempts: no duration-based retries
         if let seed = item.seed { config.seed = seed }

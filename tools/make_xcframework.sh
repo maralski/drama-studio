@@ -9,15 +9,16 @@
 # dynamic library through xcodebuild (DRAMA_ENGINE_DYNAMIC=1 in Package.swift)
 # and assembles the framework from the archive. Xcode leaves two things out of a
 # package framework, and both are added here: the Swift module interface, and the
-# resource bundle with the Metal kernel sources and convert_codec.py. The bundle
-# goes in the framework's Resources, where SwiftPM's generated Bundle.module looks
+# resource bundles: DramaEngine's with the word-check data, and DramaTTS's with
+# the Metal kernel sources and convert_codec.py. The bundles go in the
+# framework's Resources, where SwiftPM's generated Bundle.module looks
 # (Bundle(for:).resourceURL).
 set -euo pipefail
 
 root=${0:A:h:h}
 cd "$root"
 work="$root/.build/xcframework"
-bundle="DramaStudio_DramaEngine.bundle"
+bundles=(DramaStudio_DramaEngine.bundle DramaTTS_DramaTTS.bundle)
 out="$root/dist/DramaEngine.xcframework"
 
 rm -rf "$work" "$out"
@@ -40,15 +41,21 @@ for f in "$products/DramaEngine.swiftmodule"/*; do
     cp -R "$f" "$fw/Versions/A/Modules/DramaEngine.swiftmodule/"
 done
 ln -sfh Versions/Current/Modules "$fw/Modules"
-# The archive holds the bundle as a symlink into the build folder; copy what it points at.
-cp -RL "$products/$bundle" "$fw/Versions/A/Resources/$bundle"
+# A consumer has only this binary, so the public interface must not import the
+# engine packages DramaEngine links.
+if grep -nE '\b(DramaTTS|MingTTS)\b' "$fw/Versions/A/Modules/DramaEngine.swiftmodule"/*.swiftinterface; then
+    print -u2 "ERROR: DramaEngine's public interface names DramaTTS or MingTTS."
+    exit 1
+fi
+# The archive holds the bundles as symlinks into the build folder; copy what they point at.
+for bundle in $bundles; do cp -RL "$products/$bundle" "$fw/Versions/A/Resources/$bundle"; done
 codesign --force --sign - "$fw"
 
 mkdir -p "$root/dist"
 xcodebuild -create-xcframework -framework "$fw" -output "$out" >/dev/null
 print "Built $out"
 
-# The consumer must find the kernels inside the framework, not in a build folder.
+# The consumer must find the resources inside the framework, not in a build folder.
 rm -rf "$work/dd"
 consumer="$work/consumer"
 mkdir -p "$consumer/Sources/SpeakCLI"
@@ -67,9 +74,16 @@ let package = Package(
     ]
 )
 MANIFEST
-swift build --package-path "$consumer" -c release
+# SwiftPM copies the framework beside the executable but, from Swift 6.4, adds
+# no rpath that finds it there.
+swift build --package-path "$consumer" -c release -Xlinker -rpath -Xlinker @executable_path
 bin=$(swift build --package-path "$consumer" -c release --show-bin-path)
-"$bin/SpeakCLI" --check || true
+check=$("$bin/SpeakCLI" --check || true)
+print -r -- "$check"
+if [[ $check != *"conversion script: "*"/DramaEngine.framework/"*"/DramaTTS_DramaTTS.bundle/"*"/CodecConversion/convert_codec.py"* ]]; then
+    print -u2 "ERROR: convert_codec.py does not resolve inside the framework's DramaTTS bundle."
+    exit 1
+fi
 say -o "$work/clip.aiff" "The quick brown fox jumps over the lazy dog."
 "$bin/SpeakCLI" "$work/clip.aiff" "The quick brown fox jumps over the lazy dog." \
     "A binary framework speaks. The kernels came from inside it." "$work/mock.wav" --mock

@@ -58,7 +58,7 @@ final class SDKUsageTests: XCTestCase {
                     default: XCTFail("\(page): teach this test the setting \(line)")
                     }
                 }
-                let plan = try GenerationPlan(text: "Hello there. Good to see you.", references: [], config: config)
+                let plan = try GenerationPlan(SpeechRequest(text: "Hello there. Good to see you.", config: config))
                 XCTAssertEqual(plan.streaming, .defaultLowLatency, "\(page) shows a low-latency sample that the engine runs in sentence mode")
                 checked += 1
             }

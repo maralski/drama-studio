@@ -557,6 +557,9 @@ Install the following tools, then the files of at least one engine:
 - [MingTTS](https://github.com/maralski/ming-tts), the Swift and Metal port
   of Ming-3.0-tts. SwiftPM fetches it at `0.1.0`. To build against a local
   checkout instead, set `MING_PACKAGE_PATH` to its folder.
+- [DramaTTS](https://github.com/maralski/drama-tts), the Swift and Metal port
+  of Fish Audio Drama 3. SwiftPM fetches it at `0.1.0`. To build against a
+  local checkout instead, set `DRAMA_TTS_PACKAGE_PATH` to its folder.
 
 For Ming, put the 3.0 GB checkpoint in the Hugging Face cache:
 
@@ -577,14 +580,11 @@ For Drama 3, install these files:
 uvx --from huggingface_hub hf download fishaudio/drama-3
 ```
 
-- The Core ML codec models, built once from `codec.pth`:
-
-```bash
-cd tools && uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python "torch==2.7.1" coremltools "numpy<2.4" einops soundfile
-.venv/bin/python -I ../Sources/DramaEngine/CodecConversion/convert_codec.py
-```
-
-  They land in `~/Library/Application Support/DramaStudio/Codec/` (encoder
+- The Core ML codec models, built once from `codec.pth`. After the build,
+  `.build/release/drama setup` prints the two commands when the models are
+  missing: one makes a Python environment with torch 2.7.1 and coremltools,
+  and one runs `convert_codec.py` from DramaTTS's resource bundle on the
+  snapshot's `codec.pth`. They land in `~/Library/Application Support/DramaStudio/Codec/` (encoder
   809 MB in fp32, decoder 353 MB and the 64-frame silence-probe decoder
   352 MB in fp16).
 
@@ -615,8 +615,8 @@ Run the retained wrong-word and complete-ending controls with
 fail if required local assets are missing; they do not skip that failure.
 
 `tools/make_cli.sh` assembles a signed, relocatable CLI runtime in
-`dist/drama-cli`, including the helper, framework, resource bundle, models and
-licenses. Set `DS_VERIFY_NATIVE_WORD_CHECKS=1` when running either packaging
+`dist/drama-cli`, including the helper, framework, both resource bundles
+(DramaEngine's and DramaTTS's), models and licenses. Set `DS_VERIFY_NATIVE_WORD_CHECKS=1` when running either packaging
 script to require the installed native model and exercise the full dual check
 on the retained complete-ending and wrong-word recordings. Packaging always
 tests the independent runtime. The full offline check can also be rerun with
@@ -624,13 +624,14 @@ tests the independent runtime. The full offline check can also be rerun with
 `--check-words` flag. These commands do not load the speech generation model.
 
 ```bash
-.build/release/drama tune                      # once per Mac, about 30 s; the app does it on first load
-.build/release/drama generate --text "Hello there." --out frames.npy
-.build/release/drama bench                     # add --untuned to compare against the hand-written schedule
 .build/release/drama setup                     # what each engine's install has and lacks, with the fixes; --model <dir>, --ming-weights <dir>
 .build/release/drama serve                     # the HTTP API without the app; --port 8780, --no-token, --engine drama3|ming, --model <dir>, --ming-weights <dir>, --voices <dir>
 .build/release/drama-say "Hello there."         # speaks through the running app, like say; see From the terminal
 ```
+
+The engine's own commands, such as `tune`, `generate`, `bench` and `dump`,
+are in DramaTTS's `drama-tts` CLI, with the same flags they had here. Build it
+from a DramaTTS checkout.
 
 `drama setup` exits with 1 when no engine is ready. It finds Ming in
 `MING_WEIGHTS`, then in the Hugging Face cache, and Drama 3 in the Hugging
@@ -653,8 +654,8 @@ then the newest Hugging Face cache snapshot (`HF_HUB_CACHE` or `HF_HOME` move
 it). Ming is found the same way, after `MING_WEIGHTS`, with its download in
 `Models/Ming-3.0-tts-0.5B-7247f4c/`. The Inspector and the Speech menu pick
 the engine; one without its files shows as not installed. A build from `tools/make_app.sh`
-has no codec download, so its setup window shows the Python conversion command
-above when the codec models are missing; `tools/make_release.sh` builds the
+has no codec download, so its setup window shows the Python conversion commands
+that `drama setup` prints when the codec models are missing; `tools/make_release.sh` builds the
 release DMG and the codec zip and writes the zip's URL and SHA-256 into the
 app. `DRAMA_STUDIO_HOME=<folder>` moves the downloads, the codec, the tuning,
 the settings and the API token into one folder and ignores the Hugging Face cache, to try a
@@ -715,7 +716,8 @@ done.
 
 ## Reliability
 
-`eval/reliability/REPORT.md` is a 330-run study of whether Drama 3 speaks
+`eval/reliability/REPORT.md` in [DramaTTS](https://github.com/maralski/drama-tts),
+the package that holds the Drama 3 engine, is a 330-run study of whether Drama 3 speaks
 every sentence: 33 conditions (short and long lines, numbers,
 abbreviations, all caps, performance cues, multi-speaker tags, Spanish,
 French and German, a cloned voice, both expressiveness extremes, and two
@@ -736,13 +738,14 @@ Paired by seed, balanced is never right where full is wrong, and wrong where
 full is right in 4 of 130 prose pairs. Performance cues are the one area
 where both modes drop content a few times in twenty; `[laughs]` can also turn
 into a laughter loop that the app's text-derived frame cap ends near 8 s.
-Reproduce with `eval/reliability.py` (slices under `eval/reliability/slices/`).
+DramaTTS's `eval/reliability.py` reproduces it (slices under
+`eval/reliability/slices/`).
 The `balanced` mode was removed after this study, so the engine has one
 precision, `full`; the column stays as the record of why.
 
 The cue dropouts were then investigated on eight cue lines, five seeds each,
-eleven variants (`eval/cues/`, section "Performance cues: investigation" of
-the report). The model stops at a cue that follows a sentence end, whatever
+eleven variants (DramaTTS's `eval/cues/`, section "Performance cues:
+investigation" of the report). The model stops at a cue that follows a sentence end, whatever
 the chunking; longer chunks lose more. Three guards now ship: a laughter loop
 is detected in the code stream (the main tokens cycle with a period of 17 or
 more, which the 16-frame repetition redraw forces) and the chunk is
@@ -1119,14 +1122,14 @@ for try await event in engine.synthesize(request) {
 }
 ```
 
-The package depends on MingTTS, which SwiftPM fetches with it. The Ming
-checkpoint itself is not in any package; download it as
+The package depends on MingTTS and DramaTTS, which SwiftPM fetches with it.
+Neither engine's checkpoint is in any package; download it as
 [Build requirements](#build-requirements) describes.
 
 - `DramaSetup.check` reads files only and names what is missing for Drama 3:
   a weight shard, the tokenizer, `codec.pth`, the Core ML codec models, the word
   checker, or a tuned kernel schedule for this Mac, each with a fix. `DramaSetup.prepare` builds
-  the codec models with the `convert_codec.py` that ships in the engine's
+  the codec models with the `convert_codec.py` that ships in DramaTTS's
   resource bundle, through a Python you name (it throws the exact commands
   when you name none and never downloads Python), and loads the model once to
   tune the kernels. `DramaSetup.check(ming:)` names a missing Ming weight
@@ -1153,12 +1156,14 @@ checkpoint itself is not in any package; download it as
   --minimum-access-level public`) lists the public symbols and fails on one
   without a doc comment or a public value type that is not `Sendable`.
 - `tools/make_xcframework.sh` builds `dist/DramaEngine.xcframework` for macOS
-  on Apple silicon, with the Metal kernel sources and the conversion script
-  inside the framework, then builds and runs `SpeakCLI` against it.
+  on Apple silicon, with DramaEngine's resource bundle and DramaTTS's (the
+  Metal kernel sources and the conversion script) inside the framework, then
+  builds and runs `SpeakCLI` against it.
 
 ## How it is built
 
-Most of the engine code is Drama 3's. Ming's model code is in MingTTS, and
+Each engine's model code is in its own package: Drama 3's in
+[DramaTTS](https://github.com/maralski/drama-tts) and Ming's in MingTTS.
 Drama Studio adds the layer that makes both engines take the same requests.
 
 - `Sources/DramaEngine/Engines`: what both engines share. `EngineCapabilities`
@@ -1172,38 +1177,14 @@ Drama Studio adds the layer that makes both engines take the same requests.
   `MingVoiceEncoding` stores a voice's Ming latents and speaker embedding.
   `MingVoices` reads Ming's built-in voice names from the MingTTS catalog, and
   `BuiltInVoice` in `Engines` is the voice type every layer passes.
-- `Sources/DramaEngine/Weights`: the eight safetensors shards are memory-mapped
-  (`MAP_SHARED`) and wrapped as Metal buffers without copying. Experts stay in
-  FP8 E4M3 with their 128x128 block scales and are decoded inside the kernel
-  through a 256-entry table; every other weight is bf16 widened to fp32 in the
-  kernel. One-row decode reads eight bf16 weight families from a lossless
-  exponent-coded copy built once per checkpoint (`PackedWeights`, see
-  [Decode, second pass](#decode-second-pass-2026-10-22)).
-- `Sources/DramaEngine/Kernels`: zero-centered RMSNorm, a bf16 GEMV and its
-  exponent-coded variant for decode
-  and a simdgroup-matrix GEMM for prefill, the Gated DeltaNet depthwise conv and
-  recurrence, GQA attention with an online softmax over an fp32 KV cache,
-  partial RoPE (NeoX for the backbone, interleaved for the tower), the MoE
-  router and expert-major FP8 kernels that dispatch only over active experts
-  (one-row kernels for decode, tiled simdgroup-matrix kernels for prefill),
-  the GPU sampler, and the codebook tower's embedding mixing. Tile shapes,
-  threadgroup sizes and the attention key split are fields of a
-  `KernelSchedule` that `Autotune` fills per machine (see below).
-- `Sources/DramaEngine/Model`: the backbone and tower runners, the reference's
-  sampler (top-k, top-p, exponential-noise argmax, repetition-aware retry of the
-  main token) on the CPU and as Metal kernels that reproduce its picks and
-  generator stream bit for bit, prefill and decode sessions, and the chunked
-  frame generator. A decode frame is one command buffer, with the next frame's
-  buffer committed before the current one is waited for.
-- `Sources/DramaEngine/Prompt`: the `reference-bracket-v1` prompt builder, the
-  reference's chunker and history policy, plus a sentence-per-turn mode.
-- `Sources/DramaEngine/Tokenizer`: a byte-level BPE tokenizer that matches
-  Hugging Face `tokenizers` on a 661-case corpus.
-- `Sources/DramaEngine/Codec`: Core ML wrappers for the DAC encoder (reference
-  clips to codes) and decoder (codes to 44.1 kHz audio), both exported at one
-  static 512-frame shape and run in windows with 256 frames of left context,
-  plus the same decoder at a 64-frame shape for the optional silence stop's
-  probe (off by default).
+- `Sources/DramaEngine/Drama3`: `DramaSynthesizer`'s bridge to DramaTTS, the
+  Swift and Metal port of Fish Audio Drama 3. DramaTTS holds the
+  memory-mapped weights, the Metal kernels and their autotune, the backbone
+  and tower runners, the sampler, the prompt builder and chunker, the
+  tokenizer and the Core ML codec, and its `eval/` checks the engine against
+  the fish-speech reference.
+  `DramaCodec` wraps DramaTTS's codec, and DramaEngine's public API names no
+  DramaTTS type.
 - `Sources/DramaEngine/Verification`: the word check, Apple's on-device
   transcriber plus the independent `drama-word-recognizer` (Whisper), and the
   acceptance policy.
@@ -1217,48 +1198,22 @@ Drama Studio adds the layer that makes both engines take the same requests.
   over stdio, proxying the HTTP API.
 - `App/DramaStudio`: the SwiftUI app, with the API server and the menu bar
   extra in `App/DramaStudio/Server`.
-- `eval/`: the faithfulness suite (see `docs/EVAL.md`).
 
 The sections from [Faithfulness](#faithfulness) to
-[Kernel autotune](#kernel-autotune) are about Drama 3. Historical engine
-experiments below record their original configurations; they are not current
-latency guarantees.
+[Kernel autotune](#kernel-autotune) are about Drama 3, apart from the Ming
+comparison under Performance. Historical engine experiments below record
+their original configurations; they are not current latency guarantees.
 
 Design notes and decisions are in `docs/DESIGN.md`; the decision trail of the
 build is `.audit/drama-studio.tsv`.
 
 ## Faithfulness
 
-The engine is checked against the fish-speech v3.0.0-beta PyTorch
-implementation running on the CPU in float32, teacher-forced on the same
-prompt and frames. Numbers from `eval/compare.py`, measured 2026-10-15, before
-the fused decode dispatches (2026-10-22) and packed decode weights
-(2026-10-23); the second pass reported hidden 1.2e-6 relative L2 at most and
-top-1 1.0 after those changes:
-
-| quantity | relative L2 vs float32 oracle | top-1 agreement | mean KL |
-| --- | --- | --- | --- |
-| backbone hidden state, 121 positions (worst position 1.3e-6) | 5.7e-7 | | |
-| main-token candidate logits | 3.0e-7 | 1.000 | 1.3e-12 |
-| nine tower head logits | 4.4e-7 | 1.000 | 4.2e-12 |
-| residual stream after each of the 40 layers, and each of the 13 tower layers, at the first step | under 2e-6 each | | |
-
-For scale, the same oracle run in bfloat16 on the CPU, on a shorter 12-frame
-prompt, differs from its float32 run by a relative L2 of 5.2e-2 on the hidden state with a top-1 agreement of
-0.846. The Metal engine sits at float32 precision; it keeps the FP8 expert
-weights exact and widens everything else, so it does not reproduce the
-CUDA release's W8A8 activation quantization, and no claim is made about that.
-
-The sampler is checked separately: over 1174 sampled picks, none falls outside
-the reference's top-k / top-p set, and the count of rank-0 picks matches the
-expected value within noise.
-
-End-to-end, the sentences the model does speak transcribe cleanly under
-Whisper, but with the reference's chunking it often stops after the first
-sentence of a two-sentence prompt or trails into silence, and the reference
-PyTorch implementation does the same on the same text and seeds. The
-sentence-per-turn mode and the retry rule below exist for that reason.
-See `eval/README.md` for how to reproduce every number.
+DramaTTS checks the Drama 3 engine against the fish-speech v3.0.0-beta
+PyTorch implementation running on the CPU, teacher-forced on the same prompt
+and frames. The suite and the commands that reproduce it are in
+[DramaTTS](https://github.com/maralski/drama-tts), under `eval/` and
+`docs/EVAL.md`.
 
 ## Core ML codec execution
 
@@ -1288,7 +1243,7 @@ for the decoders (the encoder always runs on the CPU), for anyone who wants to r
 
 ## Speech quality hill-climb
 
-Measured with `eval/e2e.py` on six texts, plain and cloned, three seeds each
+Measured with DramaTTS's `eval/e2e.py` on six texts, plain and cloned, three seeds each
 (36 runs per row), measured 2026-10-15, before the word check, the cue and
 loop guards, and the removal of the default silence stop. Scored by Whisper
 small.en word error rate, whether the model
@@ -1301,8 +1256,8 @@ reference clip for the cloned runs.
 | one sentence per turn | 0.063 | 86% | 100% | 30 frames | 0.867 |
 | sentence per turn, silence stop, short-chunk retry (previous defaults) | 0.016 | 92% | 100% | 2 frames | 0.867 |
 
-The app uses the shipped chunking and retry policies. The `drama` CLI exposes
-`--chunking` for unchecked comparisons; checked generation always uses sentence
+The app uses the shipped chunking and retry policies. DramaTTS's
+`drama-tts generate` exposes `--chunking` for unchecked comparisons; checked generation always uses sentence
 turns. `--no-retry` and `--max-frames` remain available.
 
 Uncloned outputs score 0.54 to 0.56 against the reference clip, so the cloned
@@ -1312,7 +1267,7 @@ every other run transcribes exactly. The retry rule's threshold was chosen on
 the same 72 runs of the first two rows and then applied to the third, so treat
 it as tuned to this sentence set. The word error rates above use the PyTorch
 codec to decode. Decoding the second row's 36 frame sequences with the shipped Core ML
-fp16 decoder instead (`eval/coreml_vs_pytorch_wer.py`) gives the same mean
+fp16 decoder instead (DramaTTS's `eval/coreml_vs_pytorch_wer.py`) gives the same mean
 word error rate, 0.063 against 0.063, with no run scoring worse.
 
 ## Performance (M3 Max, 128 GB)
@@ -1349,143 +1304,17 @@ maximum resident set size from
 `/usr/bin/time -l` around `drama serve`. The scripts that ran these
 measurements are not in the repository.
 
+The Drama 3 engine's own measurements (prefill and decode GPU time, the
+decode passes, and the tools that take them: `drama-tts bench`, `profile`,
+`kbench` and DramaTTS's `eval/perf_ab.sh`) are in
+[DramaTTS](https://github.com/maralski/drama-tts).
 
-The rest of this section measures Drama 3.
-
-First pass, 2026-10-16. The decode rows are superseded by the
-[second pass](#decode-second-pass-2026-10-22): a decode frame is now 18.1 ms
-of GPU time and sustained decode 35 frames/s. Medians of five interleaved runs
-against the previous engine on an idle machine (`eval/perf_ab.sh`; raw runs
-were kept locally under the gitignored `eval/out/`). GPU
-times come from `drama bench`; the end-to-end rows are wall time from
-`drama generate --warm` on a 324-row prompt (a 10 s reference clip plus text)
-and 600 frames.
-
-| step | before | now |
-| --- | --- | --- |
-| weights mapped and kernels compiled | 0.4 to 0.7 s | 0.4 to 0.7 s |
-| warm-up (page walk, pipelines, first command buffer) | 4 s cold, then a 0.37 s first forward | 4 s cold; the first forward then costs 0.05 s |
-| backbone prefill, 128 rows | 647 ms GPU | 213 ms GPU |
-| tower prefill, 128 rows | 171 ms GPU | 38 ms GPU |
-| backbone plus tower prefill, 300 rows in one chunk | three 128-row chunks | 382 plus 93 ms GPU |
-| end-to-end prefill of a 324-row prompt | 2.44 s | 0.72 s |
-| backbone decode, one frame | 17 to 18 ms GPU | 17 to 18 ms GPU |
-| tower decode, one frame | 6.7 ms GPU | 6.7 ms GPU |
-| decode, one frame | ten command buffers, sampling on the CPU between tower layers | one command buffer, 25.6 to 27.0 ms GPU, the next frame's buffer committed before the current one is waited for |
-| end-to-end decode | 31.5 frames/s (range 28.7 to 31.6) | 38.5 frames/s (range 37.0 to 39.1), 1.8x real time |
-
-Prefill runs dense projections through a simdgroup-matrix GEMM and the FP8
-experts through tiled kernels that dequantize each weight tile once; at 128
-rows nearly every expert is active, so a chunk reads all 30 GB of expert
-weights once and the chunk is 512 rows so a 10 s reference clip is one pass.
-Small chunks pay for that choice: an 8-row chunk takes 66 ms instead of 42,
-because one tile shape serves every row count so that a row's result is the
-same in any chunk (the prefix cache depends on it). Decode is bound by weight
-bandwidth: the one-row backbone forward reads about 3.4 GB of weights in 17
-to 18 ms, about 200 GB/s averaged over its 600 small dispatches, and the
-`no-experts` bench delta puts the eight active experts at about 250 GB/s.
-`drama profile --rows N` prints the GPU time of each kernel group on the real
-weights (one layer repeated, so its numbers can be cache-warm), and
-`drama kbench` times the GEMM tile shapes and the expert kernels on synthetic
-data. The before column comes from the same session as the now column; the
-same baseline binary measured 583 to 586 ms for the 128-row prefill in two
-earlier series that day, so day-to-day drift of about 10 percent is normal.
-
-The kernel changes keep every fp32 product and change only summation orders;
-the faithfulness table above is from the new engine (hidden 5.7e-7, candidate
-logits 3.0e-7, tower logits 4.4e-7 relative L2, top-1 1.0; it was 6.5e-7,
-3.3e-7 and 5.0e-7 before). The GPU sampler reproduces the CPU sampler's picks
-and generator stream: 160,000 chained picks identical in the long parity run
-on the pre-merge code (`DRAMA_SAMPLER_PARITY_SAMPLES=20000`), 16,000 in the
-default run on the merged code, and every generation compared between the
-CPU and GPU samplers on the previous kernels produced the same frames.
-Reordered sums do change the result on some prompts: in the end-to-end suite
-28 of 36 runs produced the same frames as before, one differed only in where
-the codec silence probe stopped it, and 7 differed deterministically, with
-the summary metrics unchanged (mean word error rate 0.016 in both, eos
-reached in all runs, speaker similarity 0.870 against 0.867). On the one such
-prompt examined (`eval/specs/qshort.json`), the two engines agree to 2e-7
-through layer 29 and part at layer 35, the shape of a discrete routing change
-on a near-tie (the router ids themselves were not dumped). A fresh float32
-oracle dump of that prompt takes the new engine's side: 9.5e-7 on the hidden
-state, where the previous engine was off by 3.9e-3 and failed the suite's
-thresholds. That holds for this one prompt only; the faithfulness gate above
-runs on a single prompt and would not catch the same kind of divergence on
-another.
-
-### Decode, second pass (2026-10-22)
-
-A second round on the decode frame, run as a hillclimb: seven experiments in
-small synthetic settings first, then one change at a time into the real
-frame, each kept only when the output stayed bit-identical and the frame got
-measurably shorter. The decision log is `.audit/hillclimb.tsv`.
-
-What the experiments established before anything changed. A decode frame was
-1312 dispatches streaming 5.94 GB of weights in 21.7 ms, and its large GEMVs
-already ran at 346 to 378 GB/s against a measured read ceiling of 383 GB/s.
-At that rate the bytes alone take 15.5 ms, so the 30 percent target of this
-round (14.6 ms) sits below what any kernel change can reach; fewer bytes per
-frame were the only route, and the only route that keeps the output exact is
-lossless compression. The bf16 mantissas carry 6.97 of 7 bits and are
-incompressible; the exponents carry about 2.8 bits of 8, so a 3-bit exponent
-code with a per-tile window and byte escapes packs a weight into 11.3 bits
-with exact round trip. The kernel that unpacks it is compute-bound at about
-285 GB/s of physical reads, so it wins only on the K=2048 shapes with wide N.
-
-What shipped, every step with a byte-identical dump and the faithfulness
-table unchanged (hidden 1.2e-6 relative L2 at most, top-1 1.0):
-
-| step | change | frame (bench rows 1, backbone + tower), under load | quiet GPU, 2026-10-23 |
-| --- | --- | --- | --- |
-| baseline | | 21.1 ms | 21.0 ms (15.0 + 6.0) |
-| MoE layer | one decode row's mixture of experts as three dispatches (bf16 router and shared pass, routing plus routed gate-up, routed down plus shared down plus combine), FP8 decoded with integer ops instead of the lookup table | 20.2 | 20.1 |
-| encoder | a concurrent compute encoder with a barrier before every dispatch except the later members of a sibling group (the four GDN input projections, q k v, w1 and w3, and so on); q/k norm, rope and the KV writes in one dispatch | 19.7 | 19.5 |
-| samplers | 256-thread sampling kernels in place of one 1024-thread threadgroup; no change on a quiet GPU, and 47 to 22 ms per frame when another GPU client is active, which is what a user with an animating window sees; on a quiet GPU the kernels cost 0.67 ms per frame, about 0.2 ms more than the old shape, and the old shape stalls under the window server alone | 19.7 | not re-benched |
-| tower | embedding plus both concat norms in one dispatch, attention split over 8 threadgroups with an in-order combine and the gate folded in, the residual adds folded into wo and w2, w1 and w3 as one dispatch with the SiLU | 19.6 | not re-benched |
-| packed weights | eight weight families (GDN qkv and z, attention q, the semantic lm-head slice, tower wqkv, heads, w1 and w3) read from an exponent-coded copy at one row, 0.94 GB fewer bytes per frame | 18.2 | 18.1 (12.9 + 5.2) |
-
-Reverted: a multi-matrix GEMV that grouped sibling projections into one
-dispatch (within noise once the concurrent encoder had taken the same gaps),
-more threadgroups for the MoE down kernel (each doubling cost 3 to 9 us per
-layer in its prologue), and the load folds of norms, gates and SiLU into the
-GEMVs (no gain on the tuned schedule). The frame went from 1312 dispatches
-to 759.
-
-The packed copy lives under `~/Library/Application Support/DramaStudio/Packed/`,
-2.1 GB per checkpoint, built on the first load in about two seconds across
-all cores and verified by a full unpack before it is used; a cache that fails
-to build or load falls back to bf16 with the reason logged, and
-`DRAMA_PACKED=0` turns it off without a rebuild. Prefill, chunk invariance
-and the prefix cache never touch it: every path with more than one row reads
-the bf16 shards as before.
-
-Caveats, and what a quiet session settled (2026-10-23). Every number in the
-hillclimb was taken while another process held the GPU (the window server
-and a virtual machine), so the ranges carried stalls and no end-to-end figure
-was quoted. A second session rechecked the round with the virtual machine
-stopped and the app quit, one job at a time. The `ioreg` utilization counter
-reads 100 percent under the window server alone and is no gate; the gate was
-the sampler stages of a traced 120-frame generation (`eval/quiet_label.sh`),
-0.7 ms per frame when the GPU is free, taken before and inside every batch.
-The tune was redone there: the decode GEMV moved to 8 simdgroups, the narrow
-GEMV kept its tile this time, the MoE prefill tile went to 32x32x32, and the
-128-row forward went from 233 to 189 ms. The quiet column above is a
-10-round interleaved bench per pair except the baseline, 5 rounds. The
-concurrent encoder stays: against a serial-encoder build of the same code it
-is 0.5 ms shorter on the bench line and 0.0 to 1.2 ms shorter per frame over
-three interleaved 300-frame traces, with a fatter tail (p99 39 to 41 ms
-against 33 to 35). The parked
-multi-matrix GEMV was rebased (branch `hill/step3-gemv-decode-quiet`) and
-measured again: 0.1 ms, inside the A/A gap of the bench, so it stays parked.
-End to end, `eval/perf_ab.sh` over five 425-frame generations: 35.1 frames
-per second [31.7..36.4] against 20.7 for the baseline, whose 1024-thread
-samplers stall under the window server alone. Short runs after idle reach
-48 to 50 frames per second (19.2 to 19.7 ms per frame); the sustained figure
-is lower because this Mac slows bandwidth-bound work by 20 to 40 percent
-after minutes of GPU load and recovers over minutes of idle, so absolute
-decode numbers depend on the GPU's recent history while interleaved A/B
-deltas hold. The remaining ideas are small: the MoE down kernel's prologue,
-and the w2 and 4096x2048 families in the packed path.
+One-row decode reads eight bf16 weight families from a lossless
+exponent-coded copy. The app keeps that copy under
+`~/Library/Application Support/DramaStudio/Packed/`, 2.1 GB per checkpoint,
+built on the first load and verified by a full unpack before it is used; a
+cache that fails to build or load falls back to bf16 with the reason logged,
+and `DRAMA_PACKED=0` turns it off without a rebuild.
 
 ## Streaming
 
@@ -1563,13 +1392,13 @@ chunk's last frames decode while the next chunk prefills and generates. The
 optional silence stop reads fixed frame checkpoints through the 64-frame probe
 shape. Each reading completes before generation samples another frame. Readings
 start after the voice-aware expected duration plus the configured silent tail.
-`drama generate --probe-every N` and `--probe-after-expected no` explicitly enable
+`drama-tts generate --probe-every N` and `--probe-after-expected no` explicitly enable
 the probe for measurement. In sentence mode, each attempt's full audio is decoded
 once at its end.
 
 The measurements below describe the earlier asynchronous streaming implementation.
 They predate universal retry buffering and the removal of silence stopping from
-normal generation. `eval/reliability/REPORT.md` records the earlier probe timing
+normal generation. DramaTTS's `eval/reliability/REPORT.md` records the earlier probe timing
 experiments.
 
 Measured on the M3 Max (16 cores, 12 performance), with the same two-sentence
@@ -1647,82 +1476,14 @@ same numbers are `X-Drama-Estimated-Seconds` and the `estimate` field of
 
 ## Kernel autotune
 
-Kernel schedule parameters (the GEMV token tile and rows per threadgroup, the
-packed decode GEMV's shape, the GEMM tile, the MoE tile and K step, the
-attention key split, the GDN threads per state column) are not constants any
-more. On the first load for a given (chip, macOS version, kernel source
-digest, model snapshot, packed or bf16 decode weights, schedule layout) the
-engine times each kernel family's
-real workload on the resident weights, rotated over ten layers, for every
-value in its declared domain, keeps a candidate only when its output is within
-a relative L2 of 1e-5 of the default's on the same inputs and it is at least 5
-percent faster over five interleaved rounds, then times whole forwards of 128
-and 300 rows and of one row on both schedules and drops a side's choices
-unless the tuned one wins by 2 percent at every row count. It stops after a
-60 s budget (`drama tune --budget`), and entries it has not reached keep their
-defaults. The result is a
-JSON report under `~/Library/Application Support/DramaStudio/Tuning/`; every
-later load reads it and measures nothing. `drama tune` runs it from the
-command line and prints the table (about 30 s to a minute); the app shows
-"Tuning kernels for this Mac" once; `drama schedule-ab` times any two schedule files
-against each other inside one process. The idea is Magnitude's (tune,
-validate, cache per device); the kernels, the domains and the measurement scripts are
-this project's. Nothing in the numerics changes beyond summation order: the
-tuned engine scores hidden 5.8e-7, candidate logits 3.0e-7 and tower logits
-4.4e-7 against the float32 oracle with top-1 1.0,
-and the A/B prompt below produced byte-identical frames with and without the
-tuned schedule in all fourteen compared runs.
-
-The results below were measured on 2026-10-16, before the decode MoE layer
-became three dispatches (2026-10-22) and decode moved to packed weights
-(2026-10-23); both changed the kernels being tuned, and the one-row backbone
-has since dropped to 12.9 ms. The decision trail is rows 20 to 23 of
-`.audit/autotune.tsv`.
-
-What it shipped on this M3 Max then: two decode
-changes, a token tile of 1 with two simdgroups per threadgroup for the one-row
-GEMVs (27 percent faster per kernel) and a 16-way key split for one-row
-attention (27 percent). Everything on the prefill side stayed at the
-hand-picked values: the GEMM tile, the MoE tile and the GDN split never
-cleared the 5 percent bar, and the narrow-projection GEMV tile and the 4-way
-prefill attention split, 80 and 5 percent faster per kernel, moved the whole
-128- and 300-row forwards by 1.2 and 0.4 percent, under the margin, so the
-whole-forward check reverted them. Two earlier versions of the measurement script would
-have shipped a slower prefill: random activations route evenly over the 256
-experts and favour a small MoE row tile that was 9 percent faster in the
-measurement script and 5 to 12 percent slower in the real prefill, and a 2 percent
-minimum gain measured at 128 and 32 rows let through a tile that lost 9
-percent at 300 rows. Both are in `.audit/autotune.tsv`.
-
-Measured, with the shipped schedule against the default:
-
-| measurement | untuned | tuned |
-| --- | --- | --- |
-| backbone forward, one row, GPU, `drama schedule-ab` in one process, 7 interleaved rounds | 19.2 ms [18.4..19.5] | 15.3 ms [14.8..15.5], faster in 7 of 7 |
-| same, `drama bench` in separate processes, two five-run series | 18.0 [17.2..18.3], 17.9 [17.5..18.2] | 15.1 [14.7..15.8], 15.4 [14.8..16.7] |
-| tower decode, one row, GPU, `drama bench` | 6.9, 6.8 ms | 6.1, 6.2 ms |
-| end-to-end decode, 425 frames after a 324-row prompt, `drama generate`, five-run medians | 32.9 [15.0..37.1], 29.7 [21.8..33.1] frames/s | 33.5 [14.9..42.2], 35.1 [32.3..36.8] frames/s |
-| same, GPU ms per frame, the three rounds of the first series where neither side was disturbed, then all five of the second | 26.9, 27.9, 30.4; 46.0, 34.6, 32.9, 33.7, 30.2 | 24.6, 23.7, 29.8; 31.0, 28.5, 27.2, 27.7, 29.7 |
-| backbone prefill, 128 and 300 rows | unchanged: the shipped schedule runs the same kernels (`schedule-ab` 196.9 against 201.0 and 382.9 against 382.0 ms, the instrument's own spread) | |
-
-The one-row forward is the solid number: about 20 percent less GPU time in
-four series (the two bench series, the in-process A/B and the tuner's own
-check at 17.1 against 14.6 ms), ranges not overlapping, from the decode GEMV
-tile and the attention split, both of which put more and smaller threadgroups
-on the same bytes. The end-to-end frames-per-second rows are softer: the two
-`drama generate` series ran on a machine that was not idle (other sessions'
-test jobs and the window server busy; load average 4.8 to 12), their ranges
-are wide, and in the first series two of five rounds were disturbed on both
-sides for a reason the load averages do not show, so the five-run medians
-move only 2 and 18 percent while the per-frame GPU time is lower on the tuned
-side in every round where neither side was disturbed. Those two series ran
-with an earlier cache whose decode fields equal the shipped ones and whose
-prefill fields have since been reverted. Prefill has no measured change and
-none is expected: with the reverted fields the schedule is the default there.
-To redo the end-to-end table on an idle machine, with a reference dump at
-`eval/out/perf/ref_215.npy`: `eval/tune_ab.sh
-.build/release/drama 5 eval/out/perf/ab_tune_idle` then
-`eval/.venv/bin/python -I eval/perf_ab_summary.py eval/out/perf/ab_tune_idle`.
+On the first load for a new chip, macOS version, kernel source or model
+snapshot, the Drama 3 engine times its kernel families on the resident
+weights, and keeps a tuned value only where its output stays within a
+relative L2 of 1e-5 of the default's and it is faster. It stops after a 60 s budget. The result is a JSON report under
+`~/Library/Application Support/DramaStudio/Tuning/`; every later load reads it
+and measures nothing. The app shows "Tuning kernels for this Mac" once.
+DramaTTS's `drama-tts tune` runs the tuner from the command line, and
+`drama-tts schedule-ab` times two schedule files against each other.
 
 ## License
 
@@ -1774,10 +1535,13 @@ can't select it, and the API answers `400` to a request that names it. The
 command-line `drama` tool, including `drama serve`, is for developers
 building from source and does not ask.
 
-The fish-speech reference code copied under `eval/oracle/` and
-`Sources/DramaEngine/CodecConversion/dac_reference/`, the parts of DramaEngine
-reimplemented from it, the converted Core ML codec, and the example cast from
-Fish Audio's Drama 3 Space stay under the Fish Audio Community License as well;
+Drama Studio links [DramaTTS](https://github.com/maralski/drama-tts), Peter
+Marelas's Swift and Metal port of the Drama 3 inference path, under the
+Apache License 2.0. The fish-speech reference code that DramaTTS copies into
+`CodecConversion/dac_reference/` and Drama Studio ships in DramaTTS's resource
+bundle, the parts of DramaTTS reimplemented from fish-speech, the converted
+Core ML codec, and the example cast from Fish Audio's Drama 3 Space stay under
+the Fish Audio Community License as well;
 [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES) lists each one and what changed.
 descript-audio-codec code keeps its MIT notice there. This project is not
 affiliated with or endorsed by Fish Audio.

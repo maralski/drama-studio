@@ -649,7 +649,7 @@ final class WordCoverageTests: XCTestCase {
         let config = try JSONDecoder().decode(GenerationConfig.self, from: old)
         XCTAssertEqual(config.wordVerification, .required)
         XCTAssertEqual(config.maxRetries, 0)
-        XCTAssertEqual(try GenerationPlan(text: "Hello.", references: [], config: config).streaming, .sentence)
+        XCTAssertEqual(try GenerationPlan(SpeechRequest(text: "Hello.", config: config)).streaming, .sentence)
         XCTAssertEqual(GenerationConfig.make(expressiveness: 0.5).wordVerification, .required)
     }
 

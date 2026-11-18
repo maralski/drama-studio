@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import Foundation
 import Metal
+internal import DramaTTS
 internal import WordRecognitionProtocol
 
 /// One part of an install the engine needs, and whether it is in place.
@@ -162,17 +163,17 @@ public enum DramaSetup: Sendable {
         return "uv venv --python 3.12 \(shellQuoted(venv.path)) && uv pip install --python \(shellQuoted(python.path)) \"torch==2.7.1\" coremltools \"numpy<2.4\" einops soundfile"
     }
 
-    /// `convert_codec.py` inside DramaEngine's resource bundle; nil when the
+    /// `convert_codec.py` inside DramaTTS's resource bundle; nil when the
     /// bundle is missing.
     public static var conversionScript: URL? {
-        EngineResources.bundle().url(forResource: "CodecConversion", withExtension: nil)?.appending(path: "convert_codec.py")
+        DramaResources.codecConversionScript
     }
 
     /// The shell command that builds the codec models from `location`'s
     /// `codec.pth` into `codecDirectory` with `python`. It takes a few minutes
     /// on the CPU.
     public static func codecConversionCommand(python: URL, location: ModelLocation, codecDirectory: URL = DramaCodec.defaultDirectory) -> String {
-        let script = conversionScript?.path ?? "Sources/DramaEngine/CodecConversion/convert_codec.py"
+        let script = conversionScript?.path ?? "convert_codec.py"
         return [python.path, "-I", "-B", script, "--codec", codecCheckpoint(location).path, "--out", codecDirectory.path]
             .map(shellQuoted).joined(separator: " ")
     }
@@ -343,22 +344,24 @@ public enum DramaSetup: Sendable {
 
     static func tuningItem(location: ModelLocation?, tuningDirectory: URL) -> SetupItem {
         let later = SetupItem.State.builtOnFirstLoad(fix: "The first load tunes the kernels for this Mac, about 30 s, and caches the result. DramaSetup.prepare does it ahead of time.")
-        guard let device = MTLCreateSystemDefaultDevice() else {
+        guard MTLCreateSystemDefaultDevice() != nil else {
             return SetupItem(component: .tuning, state: .missing(fix: "Run on a Mac with Apple silicon."), url: nil, summary: "No Metal device.")
         }
-        let source: String
-        do { source = try MetalContext.kernelSources() } catch {
-            return SetupItem(component: .tuning, state: .missing(fix: "Ship DramaEngine's resource bundle, \(EngineResources.bundleName), with the app."),
-                             url: nil, summary: "The Metal kernel sources are missing: \(error).")
-        }
-        guard let location, let key = try? TuningKey(chip: device.name, kernelDigest: MetalContext.digest(source), location: location) else {
+        let status: DramaTuningStatus
+        do {
+            // An unreadable snapshot throws badModel like a missing one: both leave nothing to key the schedule by.
+            status = try DramaTuningStatus.read(checkpoint: location?.checkpoint ?? DramaCheckpoint(directory: URL(filePath: "/nonexistent")), tuningDirectory: tuningDirectory)
+        } catch DramaEngineError.missingKernel(let what) {
+            return SetupItem(component: .tuning, state: .missing(fix: "Ship the engine's resource bundle, \(DramaResources.bundleName), with the app."),
+                             url: nil, summary: "The Metal kernel sources are missing: \(EngineError.missingKernel(what)).")
+        } catch {
             return SetupItem(component: .tuning, state: later, url: nil, summary: "Not checked: the weights are missing.")
         }
-        guard let (report, url) = TuningCache.load(key: key, directory: tuningDirectory) else {
-            return SetupItem(component: .tuning, state: later, url: tuningDirectory, summary: "No kernel schedule tuned for \(device.name) on macOS \(key.os) yet.")
+        guard let url = status.scheduleURL, let created = status.created else {
+            return SetupItem(component: .tuning, state: later, url: tuningDirectory, summary: "No kernel schedule tuned for \(status.chip) on macOS \(status.os) yet.")
         }
         return SetupItem(component: .tuning, state: .ready, url: url,
-                         summary: "Kernels tuned for \(device.name) on macOS \(key.os), \(report.created.formatted(date: .abbreviated, time: .omitted)).")
+                         summary: "Kernels tuned for \(status.chip) on macOS \(status.os), \(created.formatted(date: .abbreviated, time: .omitted)).")
     }
 
     /// The English model is the one ``SetupItem/Component/wordRecognizer``
@@ -382,7 +385,7 @@ public enum DramaSetup: Sendable {
     static func runConversion(python: URL, location: ModelLocation, codecDirectory: URL, progress: @escaping @Sendable (String) -> Void) async throws {
         let command = codecConversionCommand(python: python, location: location, codecDirectory: codecDirectory)
         guard let script = conversionScript else {
-            throw DramaSetupError.conversionFailed(command: command, status: -1, output: "convert_codec.py is missing from \(EngineResources.bundleName).")
+            throw DramaSetupError.conversionFailed(command: command, status: -1, output: "convert_codec.py is missing from \(DramaResources.bundleName).")
         }
         let run = ConversionRun(progress: progress)
         run.process.executableURL = python

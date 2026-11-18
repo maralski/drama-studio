@@ -1,5 +1,6 @@
 .build/
 .swiftpm/
+# Evaluation data from before the evaluation moved to DramaTTS.
 eval/.venv/
 eval/out/
 eval/data/

@@ -32,8 +32,8 @@ def main():
         subprocess.run(["/usr/bin/install_name_tool", "-add_rpath", "@executable_path/../Frameworks", str(helper)], check=True)
     if args.cli:
         shutil.copy2(args.bin / "drama", args.cli / "drama")
-        subprocess.run(["/usr/bin/ditto", str(args.bin / "DramaStudio_DramaEngine.bundle"),
-                        str(args.cli / "DramaStudio_DramaEngine.bundle")], check=True)
+        for bundle in ("DramaStudio_DramaEngine.bundle", "DramaTTS_DramaTTS.bundle"):
+            subprocess.run(["/usr/bin/ditto", str(args.bin / bundle), str(args.cli / bundle)], check=True)
         for notice in ("LICENSE", "NOTICE", "LICENSE-FISH-AUDIO", "THIRD_PARTY_NOTICES"):
             shutil.copy2(ROOT / notice, args.cli / notice)
     models = resources / ASSETS["modelDirectory"]

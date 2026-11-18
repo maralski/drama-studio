@@ -12,6 +12,12 @@ The app also runs a second engine, inclusionAI's Ming-3.0-tts-0.5B, through
 the MingTTS package. Most of this document is about Drama 3. "Two engines"
 below covers how Ming fits in.
 
+The Drama 3 engine is now its own Swift package,
+[DramaTTS](https://github.com/maralski/drama-tts), which DramaEngine wraps.
+The model facts, data shapes, kernels and sampling below describe that engine,
+and the engine files they name (`Engine/...`, `Generation/...`) are under
+`Sources/DramaTTS` in that repository.
+
 ## Model facts (from `config.json` and fish-speech v3.0.0-beta)
 
 Backbone `FishOmniTextModel`, hidden 2048, vocab 252288, 40 layers.
@@ -78,16 +84,14 @@ bytes and previous chunks are fed back as history turns.
 ## Components
 
 ```
-Sources/DramaEngine        Swift library: loader, tokenizer, Metal graph, sampler
+Sources/DramaEngine        Swift library: requests, setup, the word check, voices
+Sources/DramaEngine/Drama3    bridge to DramaTTS: loader, tokenizer, Metal graph, sampler, kernels and codec live there
 Sources/DramaEngine/Engines   engine registry, capability and install tables, request outline
 Sources/DramaEngine/Ming      Ming adapter over MingTTS: cue table, voice encoding, synthesizer
-Sources/DramaEngine/Kernels/*.metal
-Sources/drama              CLI: generate, dump (for the eval suite), bench, tune, profile, kbench, decode, serve
+Sources/drama              CLI: serve, setup, check-words (the engine subcommands are DramaTTS's drama-tts CLI)
 Sources/DramaServer        Loopback HTTP API and voice/take storage
 Sources/DramaMCP           MCP client bridge and drama-say support
 App/DramaStudio            SwiftUI app target (SwiftPM executable, bundled by tools/make_app.sh)
-eval/                      Python oracle (vendored fish-speech modules) and the faithfulness suite
-Sources/DramaEngine/CodecConversion   coremltools export of the DAC encoder and decoder (convert_codec.py, dac_reference), shipped as an engine resource
 ```
 
 ## Data shapes (decided before any logic)
@@ -112,8 +116,8 @@ Sources/DramaEngine/CodecConversion   coremltools export of the DAC encoder and 
 The generic kernels below also support prefill and diagnostics. The current
 one-row decode path uses fused MoE and tower operations, concurrent dispatch
 with dependency barriers, and losslessly packed projections where supported.
-See `Model/TowerDecode.swift`, `Model/PackedWeights.swift` and the README's
-"Decode, second pass" measurements for those paths.
+See `Engine/TowerDecode.swift` and `Engine/PackedWeights.swift` for those
+paths.
 
 Elementwise and norms: `rmsnorm_zc` (also per-head for q/k), `gated_rmsnorm`,
 `silu_mul`, `sigmoid_gate_mul`, `residual_add`, `embed_mix`.
@@ -146,14 +150,14 @@ prefill chunk reads all 30 GB of expert weights once; the prefill chunk is 512
 rows so a 10 s reference clip is one chunk.
 Head: the candidate logits are two `gemv_bf16` calls over the lm_head rows of
 eos and the semantic band, into one 4097-float buffer.
-Kernel schedule: `KernelSchedule` (`Model/KernelSchedule.swift`) holds one value
+Kernel schedule: `KernelSchedule` (`Engine/KernelSchedule.swift`) holds one value
 per process for each of these choices, with the domain of each written next
 to its kernel: the GEMV token tile and simdgroups per threadgroup (one pair
 for decode, one for narrow prefill projections), the GEMM tile, the MoE tile,
 the MoE row-kernel simdgroups, the attention split (decode and prefill) and
 the GDN parts (decode and prefill). Path choice between kernel families
 depends on M == 1 against M > 1 and on N only, so the prefix-cache invariant
-holds whatever the schedule. `Autotune` (`Autotune.swift`) fills it on first
+holds whatever the schedule. `Autotune` (`Engine/Autotune.swift`) fills it on first
 load for a (chip, macOS version, kernel source digest, model snapshot) key:
 nine entries, each one kernel family's real workload on the resident weights
 rotated over ten layers, every candidate validated against the default at a
@@ -164,7 +168,7 @@ the default by 5 percent. Then a whole-forward check times 128- and 300-row
 and one-row forwards on both schedules and reverts a side unless the tuned
 schedule wins by 2 percent at every row count. `TuningCache` stores the
 report as JSON under `~/Library/Application Support/DramaStudio/Tuning/`; a
-hit measures nothing. `drama schedule-ab` compares schedule files in one
+hit measures nothing. `drama-tts schedule-ab` compares schedule files in one
 process, the instrument for isolating one field.
 Sampling: `sample_main` and `sample_tower` (one threadgroup per draw) run the
 reference's sort / mask / exponential-noise argmax on the GPU with the same
@@ -188,7 +192,7 @@ never observed, as on the CPU.
 ## Verification
 
 Faithfulness is measured against the fish-speech PyTorch code running on the
-CPU (oracle). Levels:
+CPU (oracle). DramaTTS's `eval/` and `docs/EVAL.md` hold the suite. Levels:
 
 1. Tokenizer: Swift BPE vs `tokenizers` on a corpus, exact match.
 2. Kernels: each kernel against a NumPy/PyTorch formula on random inputs.

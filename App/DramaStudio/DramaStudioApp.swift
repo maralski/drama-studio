@@ -103,8 +103,8 @@ struct DramaStudioApp: App {
     private static func checkResources() -> Int32 {
         do {
             try WordCoverage.prepare()
-            let context = try MetalContext()
-            print("DramaEngine resources OK; kernels compiled for \(context.device.name)")
+            let device = try EngineResources.compileKernels()
+            print("DramaEngine resources OK; kernels compiled for \(device)")
             return 0
         } catch {
             print("DramaEngine resources failed: \(error)")

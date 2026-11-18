@@ -7,7 +7,9 @@ Run Fish Audio's Drama 3 or inclusionAI's Ming-3.0-tts text-to-speech model on A
 DramaEngine is the inference engine behind Drama Studio, packaged as a Swift library.
 It loads the released Drama 3 weights in place, clones a voice from a short clip,
 and streams speech as it generates. The 35B mixture-of-experts backbone and the
-codebook tower run on hand-written Metal compute kernels. The DAC audio codec runs
+codebook tower run on hand-written Metal compute kernels, through
+[DramaTTS](https://github.com/maralski/drama-tts), a Swift and Metal port of
+Drama 3 that the package depends on. The DAC audio codec runs
 through Core ML. Nothing runs through MLX or PyTorch at run time.
 
 The model weights are under the

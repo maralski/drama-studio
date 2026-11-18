@@ -5,8 +5,8 @@
 model loads never overlap: one `drama` process, one benchmark, one test binary
 that loads the model, at a time.
 
-  tools/with-gpu-lock .build/release/drama bench
-  tools/with-gpu-lock swift test --filter KernelParityTests
+  tools/with-gpu-lock tools/make_app.sh
+  tools/with-gpu-lock swift test --filter AppRealModelCheck
 
 Waits for the lock (prints a line while waiting), runs the command with this
 process's stdin, stdout and stderr, and exits with the command's status. The

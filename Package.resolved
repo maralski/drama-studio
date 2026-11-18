@@ -1,6 +1,15 @@
 {
-  "originHash" : "e1b494d974a516d8b77f8ed837c27f4c2cb69c10114f40276a7e40292d07938c",
+  "originHash" : "8908ff43bbc42c95c2610e45bd385e53b9af853c62ef5a55be1d80976c958e5e",
   "pins" : [
+    {
+      "identity" : "drama-tts",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/maralski/drama-tts.git",
+      "state" : {
+        "revision" : "dab788860de33569d50057bd20c4feed2c0227b1",
+        "version" : "0.1.0"
+      }
+    },
     {
       "identity" : "ming-tts",
       "kind" : "remoteSourceControl",

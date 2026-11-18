@@ -24,7 +24,9 @@ swift build -c release --product DramaStudio
 swift build -c release --product drama-mcp
 swift build -c release --product drama-say
 bin=$(swift build -c release --show-bin-path)
-resources="DramaStudio_DramaEngine.bundle"
+# DramaEngine's bundle holds the word-check data; DramaTTS's holds the Metal
+# kernel sources and convert_codec.py.
+resources=(DramaStudio_DramaEngine.bundle DramaTTS_DramaTTS.bundle)
 
 app="$root/dist/DramaStudio.app"
 rm -rf "$app"
@@ -34,7 +36,7 @@ cp "$bin/drama-mcp" "$app/Contents/MacOS/drama-mcp"
 cp "$bin/drama-say" "$app/Contents/MacOS/drama-say"
 python3 tools/stage_word_recognition.py --bin "$bin" --app "$app"
 
-cp -R "$bin/$resources" "$app/Contents/Resources/$resources"
+for bundle in $resources; do cp -R "$bin/$bundle" "$app/Contents/Resources/$bundle"; done
 cp LICENSE NOTICE LICENSE-FISH-AUDIO THIRD_PARTY_NOTICES "$app/Contents/Resources/"
 cp App/Icon/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
 
@@ -179,9 +181,10 @@ codesign --verify --deep --strict "$app"
 
 # SwiftPM's generated Bundle.module looks only at the .app root, where
 # codesign forbids content, and then at the absolute build directory. Hide the
-# build copy so this check proves resolution from inside the app.
-mv "$bin/$resources" "$bin/$resources.hidden"
-trap 'mv "$bin/$resources.hidden" "$bin/$resources"' EXIT
+# build copies so this check proves resolution from inside the app.
+restore_bundles() { for bundle in $resources; do [[ -e "$bin/$bundle.hidden" ]] && mv "$bin/$bundle.hidden" "$bin/$bundle"; done; return 0 }
+trap restore_bundles EXIT
+for bundle in $resources; do mv "$bin/$bundle" "$bin/$bundle.hidden"; done
 if "$app/Contents/MacOS/DramaStudio" --check-resources 2>/dev/null; then
     python3 tools/check_word_recognition.py --app "$app" --audio Tests/DramaEngineTests/Fixtures/terminal-monday.wav --expect-transcript "The meeting begins on Monday."
     python3 tools/check_word_recognition.py --app "$app" --audio Tests/DramaEngineTests/Fixtures/golden-instead-of-garden.wav --expect-transcript "The Gordon gate is closed."
@@ -192,6 +195,6 @@ if "$app/Contents/MacOS/DramaStudio" --check-resources 2>/dev/null; then
     fi
     print "Built and checked $app"
 else
-    print -u2 "ERROR: DramaEngine's kernels or word-verification resources do not resolve inside the signed app."
+    print -u2 "ERROR: DramaTTS's kernels or DramaEngine's word-verification resources do not resolve inside the signed app."
     exit 1
 fi

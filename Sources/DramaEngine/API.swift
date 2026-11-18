@@ -442,21 +442,11 @@ public struct VoiceDesign: Sendable, Codable, Hashable {
         self.scene = scene
     }
 
-    package var systemPrompt: String {
-        var lines: [String] = []
-        if let scene = scene.map(UnicodeWhitespace.strip), !scene.isEmpty { lines.append("Scene: \(scene)") }
-        lines.append("Characters:")
-        lines.append("- \(Drama3Prompt.designSpeakerTag): \(UnicodeWhitespace.strip(description))")
-        lines.append("Voice every line of the script in order, with \(Drama3Prompt.audioSeparator) between consecutive lines.")
-        return lines.joined(separator: "\n")
-    }
+    package var systemPrompt: String { drama.systemPrompt }
 
-    package func turn(_ text: String) -> String { "\(UnicodeWhitespace.strip(name)): \(text)" }
+    package func turn(_ text: String) -> String { drama.turn(text) }
 
-    package func removingName(from text: String) -> String {
-        let prefix = turn("")
-        return text.hasPrefix(prefix) ? String(text.dropFirst(prefix.count)) : text
-    }
+    package func removingName(from text: String) -> String { drama.removingName(from: text) }
 }
 
 /// One thing to speak, in one voice, with one configuration.

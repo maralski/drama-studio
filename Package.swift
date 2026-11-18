@@ -13,6 +13,12 @@ let mingPackage: Package.Dependency = mingPackagePath.map { .package(path: $0) }
     ?? .package(url: "https://github.com/maralski/ming-tts.git", exact: "0.2.1")
 let mingPackageName = mingPackagePath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "ming-tts"
 
+// DRAMA_TTS_PACKAGE_PATH builds against a local DramaTTS checkout instead of the release.
+let dramaPackagePath = Context.environment["DRAMA_TTS_PACKAGE_PATH"]
+let dramaPackage: Package.Dependency = dramaPackagePath.map { .package(path: $0) }
+    ?? .package(url: "https://github.com/maralski/drama-tts.git", exact: "0.1.0")
+let dramaPackageName = dramaPackagePath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "drama-tts"
+
 let package = Package(
     name: "DramaStudio",
     platforms: [.macOS(.v15)],
@@ -27,6 +33,7 @@ let package = Package(
     ],
     dependencies: [
         mingPackage,
+        dramaPackage,
     ],
     targets: [
         // Run tools/bootstrap_word_recognition.py before a clean build.
@@ -35,18 +42,18 @@ let package = Package(
         .executableTarget(name: "drama-word-recognizer", dependencies: ["WordRecognitionProtocol", "whisper"]),
         .target(
             name: "DramaEngine",
-            dependencies: ["WordRecognitionProtocol", .product(name: "MingTTS", package: mingPackageName)],
+            dependencies: ["WordRecognitionProtocol", .product(name: "MingTTS", package: mingPackageName), .product(name: "DramaTTS", package: dramaPackageName)],
             path: "Sources/DramaEngine",
-            resources: [.copy("Kernels"), .copy("CodecConversion"), .copy("Verification/EnglishSpokenForms.json")]
+            resources: [.copy("Verification/EnglishSpokenForms.json")]
         ),
         .target(name: "DramaServer", dependencies: ["DramaEngine"], path: "Sources/DramaServer"),
         .target(name: "DramaMCP", path: "Sources/DramaMCP"),
         .executableTarget(name: "drama-mcp", dependencies: ["DramaMCP"], path: "Sources/drama-mcp"),
         .executableTarget(name: "drama-say", dependencies: ["DramaMCP"], path: "Sources/drama-say"),
         .executableTarget(name: "drama", dependencies: ["DramaEngine", "DramaServer"], path: "Sources/drama"),
-        .executableTarget(name: "word-check-lab", dependencies: ["DramaEngine"], path: "Sources/word-check-lab"),
+        .executableTarget(name: "word-check-lab", dependencies: ["DramaEngine", .product(name: "DramaTTS", package: dramaPackageName)], path: "Sources/word-check-lab"),
         .executableTarget(name: "DramaStudio", dependencies: ["DramaEngine", "DramaServer"], path: "App/DramaStudio"),
-        .testTarget(name: "DramaEngineTests", dependencies: ["DramaEngine", "WordRecognitionProtocol"], path: "Tests/DramaEngineTests", resources: [.copy("Fixtures")]),
+        .testTarget(name: "DramaEngineTests", dependencies: ["DramaEngine", "WordRecognitionProtocol", .product(name: "DramaTTS", package: dramaPackageName)], path: "Tests/DramaEngineTests", resources: [.copy("Fixtures")]),
         .testTarget(name: "DramaServerTests", dependencies: ["DramaServer", "DramaEngine"], path: "Tests/DramaServerTests"),
         .testTarget(name: "DramaMCPTests", dependencies: ["DramaMCP"], path: "Tests/DramaMCPTests"),
         .testTarget(name: "DramaStudioTests", dependencies: ["DramaStudio", "DramaEngine", "DramaServer"], path: "Tests/DramaStudioTests", resources: [.copy("Fixtures/FormatV4")]),

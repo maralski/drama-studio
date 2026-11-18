@@ -7,6 +7,16 @@ adds one, and a patch release changes neither.
 
 ## Unreleased
 
+- DramaEngine builds on DramaTTS 0.1.0, a Swift package that now holds the
+  Fish Audio Drama 3 engine: the weights loader, the Metal kernels and their
+  tuning, the sampler, the tokenizer, the prompt builder and the Core ML
+  codec. Before, DramaEngine kept that code itself. The public API is
+  unchanged. The `drama` CLI keeps `serve`, `setup` and `check-words`. The
+  engine subcommands, such as `generate`, `bench`, `tune` and `dump`, moved to
+  DramaTTS's `drama-tts` CLI with the same flags, and so did the evaluation
+  (`eval/` and `docs/EVAL.md`). An app, CLI folder or framework built on
+  DramaEngine ships two resource bundles, `DramaStudio_DramaEngine.bundle`
+  and `DramaTTS_DramaTTS.bundle`.
 - Ming clones a voice from the speech in a clip, without the silence at its
   ends. Before, **Add Voice** and `POST /v1/voices` encoded the whole clip,
   and a clip that ended in silence could make Ming stop a line early: with

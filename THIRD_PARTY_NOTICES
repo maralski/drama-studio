@@ -8,22 +8,27 @@ fish-speech (Fish Audio)
 https://github.com/fishaudio/fish-speech, tag v3.0.0-beta
 (commit 1ff3c3ed2f80d3106a83909dd25b83129c3d816f)
 
+Drama Studio links DramaTTS (see below), which holds the copied and derived
+parts. The paths are in the DramaTTS repository, and the app, the drama CLI
+and DramaEngine.xcframework ship them in DramaTTS_DramaTTS.bundle or in the
+DramaTTS code linked into DramaEngine.
+
 Copied, with the edits stated beside each copy:
-  eval/oracle/ (fish_omni/, errors.py, sampling.py, dac/), the PyTorch
-    reference the faithfulness suite runs; edits in eval/oracle/LICENSE_NOTE.md
-  Sources/DramaEngine/CodecConversion/dac_reference/modded_dac.py, rvq.py,
+  Sources/DramaTTS/CodecConversion/dac_reference/modded_dac.py, rvq.py,
     modded_dac_vq.yaml, the codec reference the Core ML conversion traces;
-    edits in Sources/DramaEngine/CodecConversion/dac_reference/README.md
+    edits in Sources/DramaTTS/CodecConversion/dac_reference/README.md
 
 Derived (reimplemented in Swift and Metal from the reference code):
-  Sources/DramaEngine/Model/ and Sources/DramaEngine/Kernels/, the Drama 3
+  Sources/DramaTTS/Engine/ and Sources/DramaTTS/Kernels/, the Drama 3
     backbone, codebook tower and their kernels, following
     fish_speech/models/text2semantic/fish_omni/
-  Sources/DramaEngine/Prompt/, the prompt layout, chunking and reference
-    history, following fish_omni/generate.py and chunking.py
-  Sources/DramaEngine/Model/Sampler.swift and Kernels/Sampling.metal, the
+  Sources/DramaTTS/Text/PromptBuilder.swift and Chunking.swift and
+    Sources/DramaTTS/Generation/GenerationPlan.swift, the prompt layout,
+    chunking and reference history, following fish_omni/generate.py and
+    chunking.py
+  Sources/DramaTTS/Generation/Sampler.swift and Kernels/Sampling.metal, the
     sampling recipe and repetition-aware redraw of fish_omni/tower.py
-  Sources/DramaEngine/CodecConversion/convert_codec.py and the Core ML codec
+  Sources/DramaTTS/CodecConversion/convert_codec.py and the Core ML codec
     models it produces, converted from the codec checkpoint
 
 Fish Audio Drama 3 Space
@@ -32,8 +37,8 @@ https://huggingface.co/spaces/fishaudio/Drama-3
 Derived:
   App/DramaStudio/Script/Examples.swift and the performance cue palette, the
     example cast, lines and cues from studio_content.json
-  Sources/DramaEngine/Prompt/DirectorsNote.swift, the director's-note retake
-    recipe and the voice-design prompt layout
+  Sources/DramaTTS/Text/DirectorsNote.swift in DramaTTS, the director's-note
+    retake recipe and the voice-design prompt layout
 ================================================================================
 
 These Fish Audio Materials are licensed under the Fish Audio Community
@@ -42,6 +47,84 @@ License, Version 1.0. Copyright © 39 AI, INC. All Rights Reserved.
 The full agreement is in LICENSE-FISH-AUDIO. The copied and derived parts
 above remain subject to it in addition to the Apache License that covers the
 rest of Drama Studio.
+
+================================================================================
+DramaTTS 0.1.0
+https://github.com/maralski/drama-tts, tag 0.1.0
+(commit dab788860de33569d50057bd20c4feed2c0227b1)
+
+Linked into DramaEngine and every program built on it through SwiftPM.
+Licensed under the Apache License, Version 2.0; the license text is the same
+as Drama Studio's own, in LICENSE. DramaTTS is a Swift and Metal port of the
+Fish Audio Drama 3 inference path. The parts of it copied or derived from
+fish-speech are listed under fish-speech above and remain subject to the Fish
+Audio Community License, Version 1.0. Its NOTICE file reads:
+
+    DramaTTS
+    Copyright 2026 Peter Marelas
+
+    DramaTTS's own code is licensed under the Apache License, Version 2.0
+    (see LICENSE).
+
+    Built with Fish Audio.
+
+    DramaTTS is a Swift and Metal port of the inference path of Drama 3 by
+    Fish Audio:
+
+    - Code: https://github.com/fishaudio/fish-speech
+    - Model: https://huggingface.co/fishaudio/drama-3
+
+    THE MODEL WEIGHTS ARE NOT APACHE-LICENSED AND ARE NOT INCLUDED
+
+    This repository does not include the Drama 3 model weights, the tokenizer
+    or the codec checkpoint. Download them from Fish Audio's Hugging Face
+    repository (fishaudio/drama-3). They are licensed by Fish Audio under the
+    Fish Audio Community License, Version 1.0, a copy of which is in
+    LICENSE-FISH-AUDIO. That license, not the Apache License, governs the
+    model, the codec, the Core ML codec models you convert from the codec
+    checkpoint, and what you may do with the audio they produce. The Apache
+    License of this code grants no right to use the model.
+
+    These Fish Audio Materials are licensed under the Fish Audio Community
+    License, Version 1.0. Copyright © 39 AI, INC. All Rights Reserved.
+
+    The attribution above applies to the Fish Audio Materials in this
+    repository and to the parts of DramaTTS derived from them, listed in
+    THIRD_PARTY_NOTICES with how each was changed:
+
+    - eval/oracle/ and Sources/DramaTTS/CodecConversion/dac_reference/ hold
+      copies of fish-speech v3.0.0-beta source files, edited only as stated in
+      eval/oracle/LICENSE_NOTE.md and dac_reference/README.md.
+    - DramaTTS reimplements the Drama 3 inference path of fish-speech in Swift
+      and Metal.
+    - The Core ML codec models that convert_codec.py builds are converted from
+      Fish Audio's codec checkpoint.
+
+    Those copied and derived parts remain subject to the Fish Audio Community
+    License in addition to the Apache License that covers the rest of DramaTTS.
+
+    Use restrictions that come with the model. By using DramaTTS with Drama 3
+    you agree to the Fish Audio Community License, including its Section IV(b).
+    In short, you may not use the model or its output to:
+
+    - imitate the voice of an identifiable person without that person's consent
+      (or, for a minor, a parent's or guardian's, and for a deceased person, the
+      rights holder's), or another legal right to do so;
+    - impersonate a person or organization to deceive, defraud or harass, or place
+      calls that break telemarketing or robocall laws;
+    - generate sexual content involving a minor or a voice presented as a minor's,
+      or use any real person's voice without their consent;
+    - remove or obscure any watermark or provenance signal the model applies;
+    - create, train, distill or improve another speech, audio or voice generation
+      model or a foundational generative model.
+
+    Commercial use is licensed by Fish Audio only while your annual revenue is
+    below USD 500,000, and offering text to speech or voice cloning to others as a
+    hosted service always needs a separate license from Fish Audio. Read
+    LICENSE-FISH-AUDIO for the binding terms.
+
+    Fish Audio and Drama 3 are names of 39 AI, INC. This project is not
+    affiliated with or endorsed by Fish Audio.
 
 ================================================================================
 MingTTS 0.1.0
@@ -107,9 +190,9 @@ as Drama Studio's own, in LICENSE. Its NOTICE file reads:
 descript-audio-codec
 https://github.com/descriptinc/descript-audio-codec, version 1.0.0
 
-Used in: Sources/DramaEngine/CodecConversion/dac_reference/dac_nn.py (merged
-copy of dac/nn/layers.py and dac/nn/quantize.py; docstrings, from_latents and
-the demo removed).
+Used in: DramaTTS's Sources/DramaTTS/CodecConversion/dac_reference/dac_nn.py
+(merged copy of dac/nn/layers.py and dac/nn/quantize.py; docstrings,
+from_latents and the demo removed), shipped in DramaTTS_DramaTTS.bundle.
 ================================================================================
 
 MIT License

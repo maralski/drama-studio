@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import Foundation
 import Synchronization
+internal import DramaTTS
 
 /// The Drama 3 engine: the Metal backbone and tower, the Core ML codec, and
 /// the Swift tokenizer.
@@ -21,9 +22,16 @@ public actor DramaSynthesizer: SpeechSynthesizer {
     /// version, kernel source and snapshot.
     public let tuningDirectory: URL
     /// `~/Library/Application Support/DramaStudio/Tuning`.
-    public static var defaultTuningDirectory: URL { TuningCache.defaultDirectory }
+    public static var defaultTuningDirectory: URL { applicationSupport("Tuning") }
+    /// `~/Library/Application Support/DramaStudio/Packed`, where the packed
+    /// form of the weights is built on a snapshot's first load.
+    package static var packedDirectory: URL { applicationSupport("Packed") }
+    private static func applicationSupport(_ folder: String) -> URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("DramaStudio/\(folder)", isDirectory: true)
+    }
     private var model: DramaModel?
-    private var tokenizer: Tokenizer?
+    private var tokenizer: DramaTokenizer?
     private var codec: DramaCodec?
     private var loading: Task<Void, Error>?
 
@@ -71,13 +79,15 @@ public actor DramaSynthesizer: SpeechSynthesizer {
         if let loading { return try await loading.value }
         let task = Task { [location, codecDirectory, tuningDirectory] in
             let codec = try await DramaCodec(directory: codecDirectory)
-            let tokenizer = try Tokenizer(url: location.directory.appendingPathComponent("tokenizer.json"))
-            let model = try DramaModel(location: location, tuningDirectory: tuningDirectory)
-            model.warmUp()
-            if model.scheduleSource == .default {
+            let (tokenizer, model) = try Drama3Errors.translating {
+                (try DramaTokenizer(url: location.directory.appendingPathComponent("tokenizer.json")),
+                 try DramaModel(checkpoint: location.checkpoint, tuningDirectory: tuningDirectory, packedDirectory: Self.packedDirectory))
+            }
+            model.warmUpKernels()
+            if model.needsTuning {
                 onPhase("Tuning kernels for this Mac, about a minute")
                 do {
-                    try Autotune.tune(model: model, cacheDirectory: tuningDirectory)
+                    try model.tune(cacheDirectory: tuningDirectory)
                 } catch {
                     FileHandle.standardError.write("kernel autotune failed, keeping the default schedule: \(error)\n".data(using: .utf8)!)
                 }
@@ -89,11 +99,11 @@ public actor DramaSynthesizer: SpeechSynthesizer {
         try await task.value
     }
 
-    private func install(model: DramaModel, tokenizer: Tokenizer, codec: DramaCodec) {
+    private func install(model: DramaModel, tokenizer: DramaTokenizer, codec: DramaCodec) {
         self.model = model
         self.tokenizer = tokenizer
         self.codec = codec
-        let fromCache = if case .cache = model.scheduleSource { true } else { false }
+        let fromCache = model.hasTunedSchedule
         tuned.withLock { $0 = fromCache }
     }
 
@@ -109,47 +119,13 @@ public actor DramaSynthesizer: SpeechSynthesizer {
     }
 
     /// A 2048-sample frame whose RMS is under this is silent.
-    package nonisolated static let silenceThreshold: Float = 0.01
+    package nonisolated static let silenceThreshold = DramaSilence.threshold
 
     /// Whether one frame of samples is silent: its RMS is under ``silenceThreshold``.
-    package nonisolated static func isSilent(_ frame: ArraySlice<Float>) -> Bool {
-        var energy: Float = 0
-        for x in frame { energy += x * x }
-        return (energy / Float(frame.count)).squareRoot() < silenceThreshold
-    }
+    package nonisolated static func isSilent(_ frame: ArraySlice<Float>) -> Bool { DramaSilence.isSilent(frame) }
 
     /// Seconds of trailing audio whose frames are all silent.
-    package nonisolated static func trailingSilenceSeconds(_ samples: [Float]) -> Double {
-        let n = ModelConstants.samplesPerFrame
-        var silentFrames = 0
-        var end = samples.count / n * n
-        while end >= n, isSilent(samples[(end - n) ..< end]) {
-            silentFrames += 1
-            end -= n
-        }
-        return Double(silentFrames * n) / Double(ModelConstants.sampleRate)
-    }
-
-    /// Runs a codec decode from synchronous generator code.
-    package nonisolated static func decodeBlocking(_ codec: DramaCodec, codes: [[Int32]]) throws -> [Float] {
-        try blocking { try await codec.decode(codes: codes) }
-    }
-
-    package nonisolated static func decodeBlocking(_ codec: DramaCodec, codes: [[Int32]], window: DecodeWindow) throws -> [Float] {
-        try blocking { try await codec.decode(codes: codes, window: window) }
-    }
-
-    private nonisolated static func blocking(_ work: @escaping @Sendable () async throws -> [Float]) throws -> [Float] {
-        let group = DispatchGroup()
-        group.enter()
-        nonisolated(unsafe) var result: Result<[Float], Error> = .failure(EngineError.badModel("codec did not answer"))
-        Task.detached {
-            do { result = .success(try await work()) } catch { result = .failure(error) }
-            group.leave()
-        }
-        group.wait()
-        return try result.get()
-    }
+    package nonisolated static func trailingSilenceSeconds(_ samples: [Float]) -> Double { DramaSilence.trailingSeconds(samples) }
 
     /// Speaks `request`, streaming ``SpeechEvent``s that end with
     /// ``SpeechEvent/finished(_:)``. Loads the engine first if needed, which
@@ -173,15 +149,24 @@ public actor DramaSynthesizer: SpeechSynthesizer {
 
     private func run(_ request: SpeechRequest, continuation: AsyncThrowingStream<SpeechEvent, Error>.Continuation) async throws {
         let plan = try GenerationPlan(request)
+        let options = request.config.drama
         let outline = try SpeechOutline(request, engine: .drama3)
         let verifier = try LocalWordVerifier.prepare(lines: plan.chunks.map(\.line), language: request.language, config: request.config, shouldContinue: { !Task.isCancelled })
         continuation.yield(.loadingModel(progress: 0, detail: "Mapping weights"))
         try await load { detail in continuation.yield(.loadingModel(progress: 0, detail: detail)) }
         continuation.yield(.loadingModel(progress: 1, detail: "Ready"))
         let generator = FrameGenerator(model: model!, tokenizer: tokenizer!)
-        let codec = self.codec!
-        generator.codec = { codes, window in try Self.decodeBlocking(codec, codes: codes, window: window) }
-        let results = try generator.generate(plan: plan, config: request.config, verifier: verifier, shouldContinue: { !Task.isCancelled }) { event in
+        let codec = self.codec!.audioCodec
+        generator.codec = { codes, window in try codec.decodeBlocking(codes: codes, window: window) }
+        generator.onDiscardedAttempt = { attempt in
+            SpeechAttemptAudit.record(samples: attempt.samples, line: attempt.line, reason: attempt.reason, frames: attempt.frames, error: attempt.error)
+        }
+        var chain = VerifiedChunkChain(verifier)
+        let review = verifier.map { _ in
+            DramaAttemptReview(accept: { samples, index in try chain.accept(samples, at: index, shouldContinue: { !Task.isCancelled }) },
+                               commit: { try chain.commit() })
+        }
+        let results = try Drama3Errors.translating { try generator.generate(plan: plan, config: options, review: review, shouldContinue: { !Task.isCancelled }) { event in
             switch event {
             case .chunkStarted(let i, let n, let text): continuation.yield(.chunkStarted(index: i, count: n, text: text))
             case .prefilled(let rows): continuation.yield(.prefill(rows: rows))
@@ -190,9 +175,9 @@ public actor DramaSynthesizer: SpeechSynthesizer {
             case .partialAudio(let samples, let i, let frames): continuation.yield(.partialAudio(samples: samples, chunkIndex: i, frameRange: frames))
             case .chunkFinished(let r): if !r.samples.isEmpty { continuation.yield(.audio(samples: r.samples, chunkIndex: r.index)) }
             }
-        }
+        } }
         try Task.checkCancellation()
-        let timings = generator.timings
+        let timings = SpeechTimings(generator.timings)
         let allFrames = results.flatMap(\.frames)
         let allSamples = results.flatMap(\.samples)
         let eos = results.allSatisfy(\.finishedByEOS)

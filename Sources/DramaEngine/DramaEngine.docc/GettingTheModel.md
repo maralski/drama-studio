@@ -42,9 +42,10 @@ downloaded. To keep the snapshot elsewhere, pass the folder that holds
 ### Build the codec models
 
 The conversion runs PyTorch on the CPU once, for a few minutes, and needs a
-Python with torch 2.7.1 and coremltools. DramaEngine ships the script,
-`convert_codec.py`, and the reference codec code it imports, in its resource
-bundle. ``DramaSetup/conversionScript`` is its location.
+Python with torch 2.7.1 and coremltools. DramaTTS, the package that holds the
+Drama 3 engine, ships the script, `convert_codec.py`, and the reference codec
+code it imports, in its resource bundle, `DramaTTS_DramaTTS.bundle`.
+``DramaSetup/conversionScript`` is its location.
 
 1. Create a Python environment with the packages:
 
@@ -65,8 +66,10 @@ bundle. ``DramaSetup/conversionScript`` is its location.
 never downloads Python. Without a `python` it throws
 ``DramaSetupError/pythonRequired(command:)`` with the exact shell commands,
 which ``DramaSetup/codecConversionCommand(python:location:codecDirectory:)``
-also returns. In a checkout of the repository the same script runs as
-`Sources/DramaEngine/CodecConversion/convert_codec.py --codec <snapshot>/codec.pth`.
+also returns. In a checkout of
+[DramaTTS](https://github.com/maralski/drama-tts) the same script is
+`Sources/DramaTTS/CodecConversion/convert_codec.py`; pass `--out` with the
+codec directory, since its default folder is DramaTTS's own.
 
 ### Tune the kernels
 
